@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, send_from_directory
 import os
 import sqlite3
 import uuid
@@ -8,25 +8,26 @@ import io
 from datetime import datetime, timedelta
 import traceback
 import json
+import atexit
 
 # Initialize Flask app first
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-123456')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-123')
 
 # Configure upload folder
 UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Database configuration - Render uses /tmp for free tier
-DB_NAME = '/tmp/utility_bills.db' if 'RENDER' in os.environ else 'utility_bills.db'
+# Database configuration - Use absolute path for Render
+DB_NAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'utility_bills.db')
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_db_connection():
     """Get SQLite database connection"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -116,8 +117,15 @@ def init_database():
         )
     ''')
     
+    # Create indexes for better performance with 153 schools + 32 departments
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_utility_type ON utility_bills(utility_type)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_entity_type ON utility_bills(entity_type)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_entity_id ON utility_bills(entity_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_month_year ON utility_bills(month, year)')
+    
     conn.commit()
     conn.close()
+    print("Database initialized successfully")
 
 # Number formatting function
 def format_currency(amount):
@@ -187,7 +195,6 @@ def api_budget():
             
             # Get the raw JSON data
             data = request.get_json()
-            print("Raw data received:", data)
             
             if not data:
                 return jsonify({'error': 'No data received'}), 400
@@ -198,10 +205,7 @@ def api_budget():
             electricity_allocated = float(data.get('electricityAllocated', 0))
             telephone_allocated = float(data.get('telephoneAllocated', 0))
             
-            print(f"Parsed values - Total: {total_allocated}, Water: {water_allocated}, Electricity: {electricity_allocated}, Telephone: {telephone_allocated}")
-            
             # Check if budget exists
-            print("Checking for existing budget...")
             cursor.execute("SELECT * FROM budgets LIMIT 1")
             existing_budget = cursor.fetchone()
             
@@ -210,7 +214,6 @@ def api_budget():
             if existing_budget:
                 # Update existing budget
                 budget_id = existing_budget['id']
-                print(f"Updating existing budget with ID: {budget_id}")
                 
                 cursor.execute('''
                     UPDATE budgets SET 
@@ -223,28 +226,22 @@ def api_budget():
                 ''', (total_allocated, water_allocated, electricity_allocated, telephone_allocated, current_time, budget_id))
                 
                 conn.commit()
-                print("Budget updated successfully!")
                 return jsonify({'message': 'Budget updated successfully'})
             else:
                 # Create new budget
-                print("Creating new budget...")
-                
                 cursor.execute('''
                     INSERT INTO budgets (total_allocated, water_allocated, electricity_allocated, telephone_allocated, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                 ''', (total_allocated, water_allocated, electricity_allocated, telephone_allocated, current_time, current_time))
                 
                 conn.commit()
-                print("Budget created successfully!")
                 return jsonify({'message': 'Budget created successfully'})
         
         # GET method - retrieve budget
-        print("Fetching budget data...")
         cursor.execute("SELECT * FROM budgets LIMIT 1")
         budget = cursor.fetchone()
         
         if budget:
-            print("Found existing budget:", dict(budget))
             return jsonify({
                 'totalAllocated': budget['total_allocated'],
                 'waterAllocated': budget['water_allocated'],
@@ -253,7 +250,6 @@ def api_budget():
             })
         else:
             # Return default budget if none exists
-            print("No budget found, returning defaults")
             return jsonify({
                 'totalAllocated': 60000,
                 'waterAllocated': 15000,
@@ -264,7 +260,6 @@ def api_budget():
     except Exception as e:
         error_msg = f"Budget operation failed: {str(e)}"
         print("ERROR:", error_msg)
-        traceback.print_exc()
         return jsonify({'error': error_msg}), 500
     finally:
         conn.close()
@@ -274,7 +269,6 @@ def api_budget():
 def init_budget():
     """Initialize a default budget if none exists"""
     try:
-        print("Initializing default budget...")
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -289,10 +283,8 @@ def init_budget():
             ''', (60000, 15000, 35000, 10000, current_time, current_time))
             
             conn.commit()
-            print("Default budget initialized successfully")
             return jsonify({'message': 'Default budget initialized'})
         else:
-            print("Budget already exists")
             return jsonify({'message': 'Budget already exists'})
             
     except Exception as e:
@@ -558,7 +550,7 @@ def api_schools():
         
         if request.method == 'GET':
             # Get all schools
-            cursor.execute("SELECT * FROM schools")
+            cursor.execute("SELECT * FROM schools ORDER BY name")
             schools = cursor.fetchall()
             schools_list = [dict(school) for school in schools]
             return jsonify(schools_list)
@@ -659,7 +651,7 @@ def api_departments():
         
         if request.method == 'GET':
             # Get all departments
-            cursor.execute("SELECT * FROM departments")
+            cursor.execute("SELECT * FROM departments ORDER BY name")
             departments = cursor.fetchall()
             departments_list = [dict(dept) for dept in departments]
             return jsonify(departments_list)
@@ -786,6 +778,7 @@ def api_utility_bills():
                 query += " AND year = ?"
                 params.append(year)
             
+            query += " ORDER BY year DESC, month DESC"
             cursor.execute(query, params)
             bills = cursor.fetchall()
             
@@ -946,7 +939,7 @@ def upload_bill_image():
 # Serve uploaded files
 @app.route('/static/uploads/<filename>')
 def uploaded_file(filename):
-    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # Entities API (Schools and Departments)
 @app.route('/api/entities')
@@ -958,9 +951,9 @@ def api_entities():
         entity_type = request.args.get('type')
         
         if entity_type == 'school':
-            cursor.execute("SELECT id, name FROM schools")
+            cursor.execute("SELECT id, name FROM schools ORDER BY name")
         elif entity_type == 'department':
-            cursor.execute("SELECT id, name FROM departments")
+            cursor.execute("SELECT id, name FROM departments ORDER BY name")
         else:
             return jsonify({'error': 'Invalid entity type'}), 400
         
@@ -993,6 +986,7 @@ def api_entity_accounts():
             SELECT DISTINCT account_number 
             FROM utility_bills 
             WHERE entity_type = ? AND entity_id = ? AND utility_type = ? AND account_number IS NOT NULL AND account_number != ''
+            ORDER BY account_number
         ''', (entity_type, entity_id, utility_type))
         
         accounts = [row['account_number'] for row in cursor.fetchall()]
@@ -1030,6 +1024,7 @@ def generate_report():
             query += " AND entity_type = ?"
             params.append(entity_type)
         
+        query += " ORDER BY year DESC, month DESC, entity_type, entity_id"
         cursor.execute(query, params)
         bills = cursor.fetchall()
         
@@ -1082,6 +1077,7 @@ def export_data():
             query += " AND utility_type = ?"
             params.append(utility_type)
         
+        query += " ORDER BY year DESC, month DESC, entity_type, entity_id"
         cursor.execute(query, params)
         bills = cursor.fetchall()
         
@@ -1185,16 +1181,25 @@ def backup_data():
     finally:
         conn.close()
 
-# Initialize database when app starts
-@app.before_first_request
-def initialize():
+# Initialize database on startup
+def initialize_app():
+    """Initialize directories and database"""
     # Create directories
     os.makedirs('static/uploads', exist_ok=True)
     os.makedirs('backups', exist_ok=True)
     
     # Initialize database
     init_database()
-    print("Database initialized successfully")
+    print("Application initialized successfully")
+
+# Call initialization
+initialize_app()
+
+# Cleanup on exit
+def cleanup():
+    print("Application shutting down...")
+
+atexit.register(cleanup)
 
 # Error handler
 @app.errorhandler(500)
