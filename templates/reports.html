@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports & Print - Utility Bills Management</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #3f37c9;
+            --success: #4cc9f0;
+            --danger: #f72585;
+            --warning: #f8961e;
+            --info: #4895ef;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --gray: #6c757d;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fb;
+            color: var(--dark);
+        }
+        
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 0 20px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+        
+        .logo span {
+            margin-left: 10px;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            list-style: none;
+        }
+        
+        .nav-tabs li {
+            margin: 0 5px;
+        }
+        
+        .nav-tabs a {
+            text-decoration: none;
+            color: var(--gray);
+            padding: 10px 20px;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .nav-tabs a:hover, .nav-tabs a.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .container {
+            margin-top: 90px;
+            padding: 20px;
+        }
+        
+        .page-title {
+            color: var(--dark);
+            font-size: 1.8rem;
+            margin-bottom: 30px;
+        }
+        
+        .report-controls {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+        
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--dark);
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+            background: white;
+        }
+        
+        .form-control[multiple] {
+            height: 120px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--secondary);
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #3aa8d0;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #e1146e;
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background: #e0861b;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+        }
+        
+        .report-results {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .results-title {
+            font-size: 1.4rem;
+            color: var(--dark);
+        }
+        
+        .data-table-container {
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1200px;
+        }
+        
+        .data-table th {
+            background: var(--primary);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            font-weight: 600;
+        }
+        
+        .data-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .data-table tr:hover {
+            background: #f9f9f9;
+        }
+        
+        .badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .badge-school {
+            background: #e3f2fd;
+            color: var(--info);
+        }
+        
+        .badge-department {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        
+        .badge-water {
+            background: #e3f2fd;
+            color: var(--info);
+        }
+        
+        .badge-electricity {
+            background: #fff3e0;
+            color: var(--warning);
+        }
+        
+        .badge-telephone {
+            background: #e8f5e8;
+            color: var(--success);
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: var(--gray);
+            font-style: italic;
+        }
+        
+        .print-only {
+            display: none;
+        }
+        
+        .entity-selection {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .entity-selection.active {
+            display: block;
+        }
+        
+        .entity-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .selection-options {
+            margin-bottom: 15px;
+        }
+        
+        .selection-option {
+            display: inline-block;
+            margin-right: 20px;
+        }
+        
+        .selection-option input {
+            margin-right: 5px;
+        }
+        
+        @media print {
+            @page {
+                size: landscape;
+                margin: 0.5in;
+            }
+            
+            .navbar, .report-controls, .action-buttons, .summary-cards, .period-column {
+                display: none !important;
+            }
+            
+            .container {
+                margin-top: 0;
+                padding: 0;
+            }
+            
+            .print-only {
+                display: block;
+            }
+            
+            .report-results {
+                box-shadow: none;
+                padding: 0;
+            }
+            
+            .data-table {
+                min-width: auto;
+                width: 100%;
+            }
+            
+            .data-table th, .data-table td {
+                padding: 8px 10px;
+            }
+            
+            body {
+                background: white;
+                font-size: 12px;
+            }
+        }
+        
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .summary-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+        
+        .summary-label {
+            font-size: 0.9rem;
+            color: var(--gray);
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">
+            <span>Utility Bills Management</span>
+        </div>
+        <ul class="nav-tabs">
+            <li><a href="/dashboard">Dashboard</a></li>
+            <li><a href="/departments">Departments</a></li>
+            <li><a href="/schools">Schools</a></li>
+            <li><a href="/water">Water</a></li>
+            <li><a href="/electricity">Electricity</a></li>
+            <li><a href="/telephone">Telephone</a></li>
+            <li><a href="/reports" class="active">Reports & Print</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h1 class="page-title">Reports & Print Center</h1>
+        
+        <div class="report-controls">
+            <h3 style="margin-bottom: 20px; color: var(--dark);">Filter Report Data</h3>
+            
+            <div class="selection-options">
+                <div class="selection-option">
+                    <input type="radio" id="entityTypeSelection" name="selectionType" value="entityType" checked>
+                    <label for="entityTypeSelection">By Entity Type</label>
+                </div>
+                <div class="selection-option">
+                    <input type="radio" id="specificEntitiesSelection" name="selectionType" value="specificEntities">
+                    <label for="specificEntitiesSelection">By Specific Entities</label>
+                </div>
+            </div>
+            
+            <div class="controls-grid">
+                <div class="form-group">
+                    <label class="form-label">Entity Type</label>
+                    <select class="form-control" id="entityType">
+                        <option value="all">All Entities</option>
+                        <option value="school">Schools Only</option>
+                        <option value="department">Departments Only</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Utility Type</label>
+                    <select class="form-control" id="utilityType">
+                        <option value="all">All Utilities</option>
+                        <option value="water">Water Only</option>
+                        <option value="electricity">Electricity Only</option>
+                        <option value="telephone">Telephone Only</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Month</label>
+                    <select class="form-control" id="month">
+                        <option value="all">All Months</option>
+                        <option value="1">January</option>
+                        <option value="2">February</option>
+                        <option value="3">March</option>
+                        <option value="4">April</option>
+                        <option value="5">May</option>
+                        <option value="6">June</option>
+                        <option value="7">July</option>
+                        <option value="8">August</option>
+                        <option value="9">September</option>
+                        <option value="10">October</option>
+                        <option value="11">November</option>
+                        <option value="12">December</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Year</label>
+                    <input type="number" class="form-control" id="year" min="2000" max="2050" placeholder="Enter year">
+                </div>
+            </div>
+            
+            <div class="entity-selection" id="specificEntitiesSection">
+                <h4 style="margin-bottom: 15px; color: var(--dark);">Select Specific Entities</h4>
+                <div class="entity-columns">
+                    <div class="form-group">
+                        <label class="form-label">Schools</label>
+                        <select class="form-control" id="schoolsSelect" multiple>
+                            <option value="">Loading schools...</option>
+                        </select>
+                        <div style="margin-top: 5px; font-size: 0.8rem; color: var(--gray);">
+                            Hold Ctrl/Cmd to select multiple schools
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Departments</label>
+                        <select class="form-control" id="departmentsSelect" multiple>
+                            <option value="">Loading departments...</option>
+                        </select>
+                        <div style="margin-top: 5px; font-size: 0.8rem; color: var(--gray);">
+                            Hold Ctrl/Cmd to select multiple departments
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="generateReport">Generate Report</button>
+                <button class="btn btn-success" id="printReport" style="display: none;">Print Report</button>
+                <button class="btn btn-danger" id="exportPDF" style="display: none;">Export as PDF</button>
+                <button class="btn btn-warning" id="exportExcel" style="display: none;">Export as Excel</button>
+            </div>
+        </div>
+        
+        <div class="loading" id="loadingIndicator">
+            <h3>Generating PDF, please wait...</h3>
+        </div>
+        
+        <div class="report-results" id="reportResults" style="display: none;">
+            <div class="results-header">
+                <h3 class="results-title" id="reportTitle">Report Results</h3>
+                <div class="print-only">
+                    <h4>Ministry of Education Brunei - Utility Bills Report</h4>
+                    <p id="reportDate">Generated on: </p>
+                </div>
+            </div>
+            
+            <div class="summary-cards" id="summaryCards">
+                <!-- Summary cards will be populated by JavaScript -->
+            </div>
+            
+            <div class="data-table-container">
+                <table class="data-table" id="reportTable">
+                    <thead>
+                        <tr>
+                            <th>Entity</th>
+                            <th>Type</th>
+                            <th>Utility</th>
+                            <th>Account No.</th>
+                            <th>Meter/Tel No.</th>
+                            <th>Consumption</th>
+                            <th>Current Charges</th>
+                            <th>Late Charges</th>
+                            <th>Unsettled Charges</th>
+                            <th class="period-column">Period</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportData">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set current year as default
+        document.getElementById('year').value = new Date().getFullYear();
+        
+        // Load schools and departments for selection
+        function loadEntitiesForSelection() {
+            // Load schools
+            fetch('/api/entities?type=school')
+                .then(response => response.json())
+                .then(data => {
+                    const schoolsSelect = document.getElementById('schoolsSelect');
+                    schoolsSelect.innerHTML = '';
+                    data.forEach(school => {
+                        const option = document.createElement('option');
+                        option.value = school.id;
+                        option.textContent = school.name + (school.cluster ? ` (Cluster ${school.cluster})` : '');
+                        schoolsSelect.appendChild(option);
+                    });
+                });
+            
+            // Load departments
+            fetch('/api/entities?type=department')
+                .then(response => response.json())
+                .then(data => {
+                    const departmentsSelect = document.getElementById('departmentsSelect');
+                    departmentsSelect.innerHTML = '';
+                    data.forEach(department => {
+                        const option = document.createElement('option');
+                        option.value = department.id;
+                        option.textContent = department.name + (department.address ? ` (${department.address})` : '');
+                        departmentsSelect.appendChild(option);
+                    });
+                });
+        }
+        
+        // Handle selection type change
+        document.querySelectorAll('input[name="selectionType"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const specificEntitiesSection = document.getElementById('specificEntitiesSection');
+                if (this.value === 'specificEntities') {
+                    specificEntitiesSection.classList.add('active');
+                    // Load entities if not already loaded
+                    if (document.getElementById('schoolsSelect').children.length <= 1) {
+                        loadEntitiesForSelection();
+                    }
+                } else {
+                    specificEntitiesSection.classList.remove('active');
+                }
+            });
+        });
+        
+        // Generate Report Function
+        document.getElementById('generateReport').addEventListener('click', function() {
+            const selectionType = document.querySelector('input[name="selectionType"]:checked').value;
+            const entityType = document.getElementById('entityType').value;
+            const utilityType = document.getElementById('utilityType').value;
+            const month = document.getElementById('month').value;
+            const year = document.getElementById('year').value;
+            
+            // Get selected schools and departments if specific entities is selected
+            let schoolIds = [];
+            let departmentIds = [];
+            
+            if (selectionType === 'specificEntities') {
+                const schoolsSelect = document.getElementById('schoolsSelect');
+                const departmentsSelect = document.getElementById('departmentsSelect');
+                
+                // Get selected school IDs
+                for (let i = 0; i < schoolsSelect.options.length; i++) {
+                    if (schoolsSelect.options[i].selected) {
+                        schoolIds.push(schoolsSelect.options[i].value);
+                    }
+                }
+                
+                // Get selected department IDs
+                for (let i = 0; i < departmentsSelect.options.length; i++) {
+                    if (departmentsSelect.options[i].selected) {
+                        departmentIds.push(departmentsSelect.options[i].value);
+                    }
+                }
+                
+                // Check if at least one entity is selected
+                if (schoolIds.length === 0 && departmentIds.length === 0) {
+                    alert('Please select at least one school or department.');
+                    return;
+                }
+            }
+            
+            // Show loading state
+            const generateBtn = document.getElementById('generateReport');
+            generateBtn.textContent = 'Generating...';
+            generateBtn.disabled = true;
+            
+            // Prepare request data
+            const requestData = {
+                selection_type: selectionType,
+                utility_type: utilityType,
+                month: month,
+                year: year
+            };
+            
+            // Add entity type or specific IDs based on selection
+            if (selectionType === 'entityType') {
+                requestData.entity_type = entityType;
+            } else {
+                requestData.school_ids = schoolIds;
+                requestData.department_ids = departmentIds;
+            }
+            
+            fetch('/api/generate-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayReportResults(data, selectionType, entityType, utilityType, month, year, schoolIds, departmentIds);
+                generateBtn.textContent = 'Generate Report';
+                generateBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error generating report. Please try again.');
+                generateBtn.textContent = 'Generate Report';
+                generateBtn.disabled = false;
+            });
+        });
+        
+        // Display Report Results
+        function displayReportResults(data, selectionType, entityType, utilityType, month, year, schoolIds, departmentIds) {
+            const resultsDiv = document.getElementById('reportResults');
+            const reportTitle = document.getElementById('reportTitle');
+            const reportData = document.getElementById('reportData');
+            const summaryCards = document.getElementById('summaryCards');
+            const printBtn = document.getElementById('printReport');
+            const exportPDFBtn = document.getElementById('exportPDF');
+            const exportExcelBtn = document.getElementById('exportExcel');
+            const reportDate = document.getElementById('reportDate');
+            
+            // Set report title
+            let title = 'Utility Bills Report - ';
+            
+            if (selectionType === 'entityType') {
+                if (utilityType !== 'all') title += utilityType.charAt(0).toUpperCase() + utilityType.slice(1) + ' ';
+                if (entityType !== 'all') title += entityType.charAt(0).toUpperCase() + entityType.slice(1) + 's ';
+            } else {
+                title += 'Selected Entities ';
+                if (utilityType !== 'all') title += utilityType.charAt(0).toUpperCase() + utilityType.slice(1) + ' ';
+            }
+            
+            if (month !== 'all') title += getMonthName(month) + ' ';
+            if (year && year !== 'all') title += year;
+            if (title.endsWith(' - ')) title = 'All Utility Bills Report';
+            
+            reportTitle.textContent = title;
+            reportDate.textContent = 'Generated on: ' + new Date().toLocaleDateString();
+            
+            // Calculate summary statistics
+            const totalBills = data.length;
+            const totalCurrent = data.reduce((sum, bill) => sum + bill.current_charges, 0);
+            const totalLate = data.reduce((sum, bill) => sum + bill.late_charges, 0);
+            const totalUnsettled = data.reduce((sum, bill) => sum + bill.unsettled_charges, 0);
+            
+            // Display summary cards
+            summaryCards.innerHTML = `
+                <div class="summary-card">
+                    <div class="summary-value">${totalBills}</div>
+                    <div class="summary-label">Total Bills</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value">$${totalCurrent.toFixed(2)}</div>
+                    <div class="summary-label">Total Current Charges</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value">$${totalLate.toFixed(2)}</div>
+                    <div class="summary-label">Total Late Charges</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value">$${totalUnsettled.toFixed(2)}</div>
+                    <div class="summary-label">Total Unsettled</div>
+                </div>
+            `;
+            
+            // Display report data
+            if (data.length === 0) {
+                reportData.innerHTML = '<tr><td colspan="10" class="no-results">No data found for the selected criteria</td></tr>';
+            } else {
+                reportData.innerHTML = '';
+                data.forEach(bill => {
+                    const row = document.createElement('tr');
+                    
+                    // Determine consumption value
+                    let consumption = '-';
+                    if (bill.utility_type === 'water' && bill.consumption_m3) {
+                        consumption = bill.consumption_m3 + ' M³';
+                    } else if (bill.utility_type === 'electricity' && bill.consumption_kwh) {
+                        consumption = bill.consumption_kwh + ' kWh';
+                    } else if (bill.utility_type === 'telephone') {
+                        consumption = 'N/A';
+                    }
+                    
+                    // Determine meter/telephone number
+                    let meterTelNo = '-';
+                    if (bill.utility_type === 'telephone') {
+                        meterTelNo = bill.telephone_number || '-';
+                    } else {
+                        meterTelNo = bill.meter_number || '-';
+                    }
+                    
+                    row.innerHTML = `
+                        <td>${bill.entity_name}</td>
+                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
+                        <td><span class="badge badge-${bill.utility_type}">${bill.utility_type}</span></td>
+                        <td>${bill.account_number || '-'}</td>
+                        <td>${meterTelNo}</td>
+                        <td>${consumption}</td>
+                        <td>$${bill.current_charges.toFixed(2)}</td>
+                        <td>$${bill.late_charges.toFixed(2)}</td>
+                        <td>$${bill.unsettled_charges.toFixed(2)}</td>
+                        <td class="period-column">${getMonthName(bill.month)} ${bill.year}</td>
+                    `;
+                    
+                    reportData.appendChild(row);
+                });
+            }
+            
+            // Store data for exports
+            window.reportData = data;
+            window.reportTitle = title;
+            window.reportSelectionType = selectionType;
+            window.reportSchoolIds = schoolIds;
+            window.reportDepartmentIds = departmentIds;
+            
+            // Show results and action buttons
+            resultsDiv.style.display = 'block';
+            printBtn.style.display = 'inline-block';
+            exportPDFBtn.style.display = 'inline-block';
+            exportExcelBtn.style.display = 'inline-block';
+            
+            // Scroll to results
+            resultsDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Print Report Function
+        document.getElementById('printReport').addEventListener('click', function() {
+            window.print();
+        });
+        
+        // Export as PDF Function
+        document.getElementById('exportPDF').addEventListener('click', function() {
+            if (!window.reportData || window.reportData.length === 0) {
+                alert('No data to export. Please generate a report first.');
+                return;
+            }
+            
+            // Show loading indicator
+            document.getElementById('loadingIndicator').style.display = 'block';
+            
+            // Use setTimeout to allow the UI to update before generating PDF
+            setTimeout(() => {
+                exportToPDF(window.reportData, window.reportTitle);
+                document.getElementById('loadingIndicator').style.display = 'none';
+            }, 100);
+        });
+        
+        // Export as Excel Function
+        document.getElementById('exportExcel').addEventListener('click', function() {
+            if (!window.reportData || window.reportData.length === 0) {
+                alert('No data to export. Please generate a report first.');
+                return;
+            }
+            
+            exportToExcel(window.reportData);
+        });
+        
+        // Helper function to export data as PDF
+        function exportToPDF(data, title) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: 'a4'
+            });
+            
+            // Add title
+            doc.setFontSize(16);
+            doc.setTextColor(40);
+            doc.text(title, 14, 15);
+            
+            // Add generation date
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text('Generated on: ' + new Date().toLocaleDateString(), 14, 22);
+            
+            // Add selection info if specific entities were selected
+            if (window.reportSelectionType === 'specificEntities') {
+                let selectionInfo = 'Selected: ';
+                if (window.reportSchoolIds.length > 0) {
+                    selectionInfo += window.reportSchoolIds.length + ' school(s)';
+                }
+                if (window.reportDepartmentIds.length > 0) {
+                    if (window.reportSchoolIds.length > 0) selectionInfo += ', ';
+                    selectionInfo += window.reportDepartmentIds.length + ' department(s)';
+                }
+                doc.text(selectionInfo, 14, 28);
+            }
+            
+            // Prepare table data
+            const tableData = data.map(bill => {
+                // Determine consumption value
+                let consumption = '';
+                if (bill.utility_type === 'water' && bill.consumption_m3) {
+                    consumption = bill.consumption_m3 + ' M³';
+                } else if (bill.utility_type === 'electricity' && bill.consumption_kwh) {
+                    consumption = bill.consumption_kwh + ' kWh';
+                } else if (bill.utility_type === 'telephone') {
+                    consumption = 'N/A';
+                }
+                
+                // Determine meter/telephone number
+                let meterTelNo = '';
+                if (bill.utility_type === 'telephone') {
+                    meterTelNo = bill.telephone_number || '';
+                } else {
+                    meterTelNo = bill.meter_number || '';
+                }
+                
+                return [
+                    bill.entity_name,
+                    bill.entity_type,
+                    bill.utility_type,
+                    bill.account_number || '-',
+                    meterTelNo,
+                    consumption,
+                    '$' + bill.current_charges.toFixed(2),
+                    '$' + bill.late_charges.toFixed(2),
+                    '$' + bill.unsettled_charges.toFixed(2),
+                    getMonthName(bill.month) + ' ' + bill.year
+                ];
+            });
+            
+            // Calculate start Y position based on content
+            let startY = 35;
+            if (window.reportSelectionType === 'specificEntities') {
+                startY = 40;
+            }
+            
+            // Add table
+            doc.autoTable({
+                startY: startY,
+                head: [['Entity', 'Type', 'Utility', 'Account No.', 'Meter/Tel No.', 'Consumption', 'Current Charges', 'Late Charges', 'Unsettled Charges', 'Period']],
+                body: tableData,
+                theme: 'grid',
+                headStyles: {
+                    fillColor: [67, 97, 238],
+                    textColor: 255,
+                    fontStyle: 'bold'
+                },
+                styles: {
+                    fontSize: 8,
+                    cellPadding: 3
+                },
+                margin: { left: 14, right: 14 }
+            });
+            
+            // Add summary
+            const totalCurrent = data.reduce((sum, bill) => sum + bill.current_charges, 0);
+            const totalLate = data.reduce((sum, bill) => sum + bill.late_charges, 0);
+            const totalUnsettled = data.reduce((sum, bill) => sum + bill.unsettled_charges, 0);
+            
+            const finalY = doc.lastAutoTable.finalY + 10;
+            doc.setFontSize(10);
+            doc.setTextColor(40);
+            doc.text(`Summary: ${data.length} bills, Total Current: $${totalCurrent.toFixed(2)}, Total Late: $${totalLate.toFixed(2)}, Total Unsettled: $${totalUnsettled.toFixed(2)}`, 14, finalY);
+            
+            // Save the PDF
+            const currentDate = new Date().toISOString().slice(0, 10);
+            doc.save(`utility_bills_report_${currentDate}.pdf`);
+        }
+        
+        // Helper function to export data as Excel
+        function exportToExcel(data) {
+            // Create CSV content
+            let csvContent = "Entity,Type,Utility,Account No.,Meter/Tel No.,Consumption,Current Charges,Late Charges,Unsettled Charges,Period\n";
+            
+            data.forEach(bill => {
+                // Determine consumption value
+                let consumption = '';
+                if (bill.utility_type === 'water' && bill.consumption_m3) {
+                    consumption = bill.consumption_m3 + ' M³';
+                } else if (bill.utility_type === 'electricity' && bill.consumption_kwh) {
+                    consumption = bill.consumption_kwh + ' kWh';
+                } else if (bill.utility_type === 'telephone') {
+                    consumption = 'N/A';
+                }
+                
+                // Determine meter/telephone number
+                let meterTelNo = '';
+                if (bill.utility_type === 'telephone') {
+                    meterTelNo = bill.telephone_number || '';
+                } else {
+                    meterTelNo = bill.meter_number || '';
+                }
+                
+                // Add row to CSV
+                csvContent += `"${bill.entity_name}","${bill.entity_type}","${bill.utility_type}","${bill.account_number || ''}","${meterTelNo}","${consumption}","${bill.current_charges}","${bill.late_charges}","${bill.unsettled_charges}","${getMonthName(bill.month)} ${bill.year}"\n`;
+            });
+            
+            // Create and download the file
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const currentDate = new Date().toISOString().slice(0, 10);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `utility_bills_report_${currentDate}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // Helper function to get month name
+        function getMonthName(month) {
+            const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+            return months[month - 1] || 'Unknown';
+        }
+        
+        // Set current date in report
+        document.getElementById('reportDate').textContent = 'Generated on: ' + new Date().toLocaleDateString();
+        
+        // Load entities for selection on page load
+        loadEntitiesForSelection();
+    </script>
+</body>
+</html>
