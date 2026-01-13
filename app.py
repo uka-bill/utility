@@ -50,8 +50,8 @@ print("=" * 50)
 
 try:
     # Your Supabase project: uka-bill
-    SUPABASE_URL = os.environ.get('SUPABASE_URL', "https://aqsjuaescqmbzyhwnlbv.supabase.co")
-    SUPABASE_KEY = os.environ.get('SUPABASE_KEY', "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxc2p1YWVzY3FtYnp5aHdubGJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzMjY3MzIsImV4cCI6MjA3ODkwMjczMn0.D_5_HnrsPBUK4UNI3BT8y6aeUF897r_JHoG5r9WeUOo")
+    SUPABASE_URL = os.environ.get('SUPABASE_URL', "https://skzhqbynrpdsxersdxnp.supabase.co")
+    SUPABASE_KEY = os.environ.get('SUPABASE_KEY', "sb_publishable_AE2qcaokUU-NKxaC1AtyAA_kjhqzzwn")
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("✅ Supabase connected successfully to UKA-BILL project!")
     print(f"📊 URL: {SUPABASE_URL}")
