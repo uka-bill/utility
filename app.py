@@ -22,20 +22,39 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# Number formatting functions
+def format_currency(amount):
+    try:
+        if amount is None:
+            return "0.00"
+        return "{:,.2f}".format(float(amount))
+    except (ValueError, TypeError):
+        return "0.00"
+
+def format_number(number):
+    try:
+        if number is None:
+            return "0"
+        return "{:,.0f}".format(float(number))
+    except (ValueError, TypeError):
+        return "0"
+
 # Initialize Supabase
 print("=" * 60)
-print("Ministry of Education Brunei - Utility Bills System 2026")
+print("Ministry of Education Brunei - Utility Bills System")
 print("Starting up...")
 print("=" * 60)
 
-# Your Supabase credentials - FIXED WITH YOUR NEW KEYS
-SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://skzhqbynrpdsxersdxnp.supabase.co')
-SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNremhxYnlucnBkc3hlcnNkeG5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNjU3MDksImV4cCI6MjA4Mzg0MTcwOX0.xXfYc5O-Oua_Lug8kq-L-Pysq4r1C2mZtysosldzTKc')
-
 try:
-    print(f"🔗 Connecting to Supabase: {SUPABASE_URL}")
+    # Get Supabase credentials from environment
+    SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://skzhqbynrpdsxersdxnp.supabase.co')
+    SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNremhxYnlucnBkc3hlcnNkeG5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNjU3MDksImV4cCI6MjA4Mzg0MTcwOX0.xXfYc5O-Oua_Lug8kq-L-Pysq4r1C2mZtysosldzTKc')
+    
+    print(f"Supabase URL: {SUPABASE_URL}")
+    
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("✅ Supabase connected successfully!")
+        
 except Exception as e:
     print(f"❌ Supabase connection error: {e}")
     supabase = None
@@ -51,15 +70,15 @@ def create_directories():
 def test_supabase_connection():
     if supabase:
         try:
-            response = supabase.table("budgets").select("count", count="exact").execute()
-            print(f"✅ Supabase test query successful: {len(response.data) if response.data else 0} budgets found")
+            response = supabase.table("budgets").select("*").limit(1).execute()
+            print(f"✅ Supabase test query successful: {len(response.data)} budgets found")
             return True
         except Exception as e:
             print(f"❌ Supabase test query failed: {e}")
             return False
     return False
 
-# ============ FIXED ROUTES ============
+# ============ ROUTES ============
 
 @app.route('/')
 def splash():
@@ -97,101 +116,52 @@ def reports():
 def export_page():
     return render_template('export.html')
 
-# ============ FIXED API ROUTES ============
+# ============ API ROUTES ============
 
-@app.route('/api/init-database', methods=['POST'])
-def init_database():
-    """Initialize all tables if they don't exist"""
+@app.route('/api/test-connection')
+def test_connection():
+    """Test API endpoint"""
     try:
-        print("🔧 Initializing database tables...")
-        
-        # Create budgets table if not exists
-        try:
-            supabase.table("budgets").insert({
-                "total_allocated": 60000.00,
-                "water_allocated": 15000.00,
-                "electricity_allocated": 35000.00,
-                "telephone_allocated": 10000.00,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
-            }).execute()
-            print("✅ Budgets table initialized")
-        except:
-            print("✅ Budgets table already exists")
-        
-        return jsonify({
-            'message': 'Database initialized successfully',
-            'status': 'success'
-        })
+        if supabase:
+            return jsonify({
+                'status': 'success',
+                'message': 'Backend and Supabase connection working',
+                'supabase_connected': True
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Supabase not connected',
+                'supabase_connected': False
+            })
     except Exception as e:
-        print(f"❌ Database initialization error: {e}")
         return jsonify({
-            'error': str(e),
-            'status': 'error'
+            'status': 'error',
+            'message': str(e)
         }), 500
 
-@app.route('/api/budget', methods=['GET', 'POST'])
-def api_budget():
+@app.route('/api/budget', methods=['GET'])
+def get_budget():
+    """Get budget data"""
     try:
-        if request.method == 'POST':
-            print("📝 POST /api/budget - Updating budget...")
-            data = request.get_json()
-            print(f"📝 Data received: {data}")
-            
-            total_allocated = float(data.get('totalAllocated', 60000))
-            water_allocated = float(data.get('waterAllocated', 15000))
-            electricity_allocated = float(data.get('electricityAllocated', 35000))
-            telephone_allocated = float(data.get('telephoneAllocated', 10000))
-            
-            budget_data = {
-                "total_allocated": total_allocated,
-                "water_allocated": water_allocated,
-                "electricity_allocated": electricity_allocated,
-                "telephone_allocated": telephone_allocated,
-                "updated_at": datetime.now().isoformat()
-            }
-            
-            print(f"📝 Budget data to save: {budget_data}")
-            
-            # Check if budget exists
-            response = supabase.table("budgets").select("*").execute()
-            
-            if response.data and len(response.data) > 0:
-                # Update existing
-                budget_id = response.data[0]['id']
-                print(f"📝 Updating budget ID: {budget_id}")
-                update_response = supabase.table("budgets").update(budget_data).eq("id", budget_id).execute()
-                
-                if update_response.data:
-                    print("✅ Budget updated successfully!")
-                    return jsonify({'message': 'Budget updated successfully for 2026'})
-            else:
-                # Create new
-                budget_data["created_at"] = datetime.now().isoformat()
-                print("📝 Creating new budget...")
-                insert_response = supabase.table("budgets").insert(budget_data).execute()
-                
-                if insert_response.data:
-                    print("✅ Budget created successfully!")
-                    return jsonify({'message': 'Budget created successfully for 2026'})
-            
-            return jsonify({'error': 'Budget operation failed'}), 500
+        print("📊 GET /api/budget called")
         
-        # GET method
-        print("📊 GET /api/budget - Fetching budget...")
+        if not supabase:
+            return jsonify({
+                'error': 'Database not connected'
+            }), 500
+        
         response = supabase.table("budgets").select("*").execute()
         
         if response.data and len(response.data) > 0:
             budget = response.data[0]
-            print(f"📊 Found budget: {budget}")
             return jsonify({
-                'totalAllocated': budget.get('total_allocated', 60000),
-                'waterAllocated': budget.get('water_allocated', 15000),
-                'electricityAllocated': budget.get('electricity_allocated', 35000),
-                'telephoneAllocated': budget.get('telephone_allocated', 10000)
+                'totalAllocated': float(budget.get('total_allocated', 60000)),
+                'waterAllocated': float(budget.get('water_allocated', 15000)),
+                'electricityAllocated': float(budget.get('electricity_allocated', 35000)),
+                'telephoneAllocated': float(budget.get('telephone_allocated', 10000))
             })
         else:
-            print("📊 No budget found, returning defaults")
             return jsonify({
                 'totalAllocated': 60000,
                 'waterAllocated': 15000,
@@ -200,258 +170,487 @@ def api_budget():
             })
             
     except Exception as e:
-        print(f"❌ Budget error: {e}")
-        traceback.print_exc()
-        return jsonify({'error': f'Budget operation failed: {str(e)}'}), 500
+        print(f"❌ Budget GET error: {e}")
+        return jsonify({
+            'error': 'Failed to load budget'
+        }), 500
 
-@app.route('/api/schools', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@app.route('/api/budget', methods=['POST'])
+def update_budget():
+    """Update budget data"""
+    try:
+        print("📊 POST /api/budget called")
+        
+        if not supabase:
+            return jsonify({
+                'error': 'Database not connected'
+            }), 500
+        
+        data = request.get_json()
+        print(f"📊 Received budget data: {data}")
+        
+        total_allocated = float(data.get('totalAllocated', 60000))
+        water_allocated = float(data.get('waterAllocated', 15000))
+        electricity_allocated = float(data.get('electricityAllocated', 35000))
+        telephone_allocated = float(data.get('telephoneAllocated', 10000))
+        
+        budget_data = {
+            "total_allocated": total_allocated,
+            "water_allocated": water_allocated,
+            "electricity_allocated": electricity_allocated,
+            "telephone_allocated": telephone_allocated,
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        # Check if budget exists
+        response = supabase.table("budgets").select("*").execute()
+        
+        if response.data and len(response.data) > 0:
+            # Update existing budget
+            budget_id = response.data[0]['id']
+            update_response = supabase.table("budgets").update(budget_data).eq("id", budget_id).execute()
+            
+            if update_response.data:
+                return jsonify({'message': 'Budget updated successfully'})
+            else:
+                return jsonify({'error': 'Update failed'}), 500
+        else:
+            # Create new budget
+            budget_data["created_at"] = datetime.now().isoformat()
+            insert_response = supabase.table("budgets").insert(budget_data).execute()
+            
+            if insert_response.data:
+                return jsonify({'message': 'Budget created successfully'})
+            else:
+                return jsonify({'error': 'Create failed'}), 500
+            
+    except Exception as e:
+        print(f"❌ Budget POST error: {e}")
+        print(traceback.format_exc())
+        return jsonify({
+            'error': 'Failed to update budget'
+        }), 500
+
+@app.route('/api/init-budget', methods=['POST'])
+def init_budget():
+    """Initialize default budget"""
+    try:
+        print("📊 POST /api/init-budget called")
+        
+        if not supabase:
+            return jsonify({
+                'error': 'Database not connected'
+            }), 500
+        
+        response = supabase.table("budgets").select("*").execute()
+        
+        if not response.data or len(response.data) == 0:
+            default_budget = {
+                "total_allocated": 60000.00,
+                "water_allocated": 15000.00,
+                "electricity_allocated": 35000.00,
+                "telephone_allocated": 10000.00,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            result = supabase.table("budgets").insert(default_budget).execute()
+            if result.data:
+                return jsonify({'message': 'Default budget initialized'})
+            else:
+                return jsonify({'error': 'Failed to initialize budget'}), 500
+        else:
+            return jsonify({'message': 'Budget already exists'})
+            
+    except Exception as e:
+        print(f"❌ Init budget error: {e}")
+        return jsonify({
+            'error': 'Failed to initialize budget'
+        }), 500
+
+@app.route('/api/schools', methods=['GET'])
 def api_schools():
+    """Get all schools"""
     try:
-        if request.method == 'GET':
-            response = supabase.table("schools").select("*").execute()
-            return jsonify(response.data if response.data else [])
+        print("🏫 GET /api/schools called")
         
-        elif request.method == 'POST':
-            data = request.get_json()
-            school_data = {
-                "name": data.get('name'),
-                "code": data.get('code', ''),
-                "address": data.get('address', ''),
-                "contact_person": data.get('contact_person', ''),
-                "phone": data.get('phone', ''),
-                "email": data.get('email', ''),
-                "created_at": datetime.now().isoformat()
-            }
-            
-            response = supabase.table("schools").insert(school_data).execute()
-            if response.data:
-                return jsonify({'message': 'School created successfully', 'school': response.data[0]})
-            else:
-                return jsonify({'error': 'Failed to create school'}), 500
+        if not supabase:
+            return jsonify({'data': []}), 500
         
-        elif request.method == 'PUT':
-            data = request.get_json()
-            school_id = data.get('id')
-            school_data = {
-                "name": data.get('name'),
-                "code": data.get('code', ''),
-                "address": data.get('address', ''),
-                "contact_person": data.get('contact_person', ''),
-                "phone": data.get('phone', ''),
-                "email": data.get('email', ''),
-                "updated_at": datetime.now().isoformat()
-            }
-            
-            response = supabase.table("schools").update(school_data).eq("id", school_id).execute()
-            if response.data:
-                return jsonify({'message': 'School updated successfully', 'school': response.data[0]})
-            else:
-                return jsonify({'error': 'Failed to update school'}), 500
+        response = supabase.table("schools").select("*").execute()
+        return jsonify(response.data if response.data else [])
         
-        elif request.method == 'DELETE':
-            school_id = request.args.get('id')
-            response = supabase.table("schools").delete().eq("id", school_id).execute()
-            if response.data:
-                return jsonify({'message': 'School deleted successfully'})
-            else:
-                return jsonify({'error': 'Failed to delete school'}), 500
-                
     except Exception as e:
-        print(f"Schools API error: {e}")
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Schools GET error: {e}")
+        return jsonify({'data': []}), 500
 
-@app.route('/api/departments', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@app.route('/api/schools', methods=['POST'])
+def create_school():
+    """Create a new school"""
+    try:
+        data = request.get_json()
+        school_data = {
+            "name": data.get('name'),
+            "code": data.get('code'),
+            "address": data.get('address'),
+            "contact_person": data.get('contact_person'),
+            "contact_phone": data.get('contact_phone'),
+            "email": data.get('email'),
+            "created_at": datetime.now().isoformat()
+        }
+        
+        response = supabase.table("schools").insert(school_data).execute()
+        if response.data:
+            return jsonify({
+                'message': 'School created successfully',
+                'school': response.data[0]
+            })
+        else:
+            return jsonify({'error': 'Failed to create school'}), 500
+        
+    except Exception as e:
+        print(f"❌ Create school error: {e}")
+        return jsonify({'error': 'Failed to create school'}), 500
+
+@app.route('/api/schools', methods=['PUT'])
+def update_school():
+    """Update a school"""
+    try:
+        data = request.get_json()
+        school_id = data.get('id')
+        school_data = {
+            "name": data.get('name'),
+            "code": data.get('code'),
+            "address": data.get('address'),
+            "contact_person": data.get('contact_person'),
+            "contact_phone": data.get('contact_phone'),
+            "email": data.get('email'),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        response = supabase.table("schools").update(school_data).eq("id", school_id).execute()
+        if response.data:
+            return jsonify({
+                'message': 'School updated successfully',
+                'school': response.data[0]
+            })
+        else:
+            return jsonify({'error': 'Failed to update school'}), 500
+        
+    except Exception as e:
+        print(f"❌ Update school error: {e}")
+        return jsonify({'error': 'Failed to update school'}), 500
+
+@app.route('/api/schools', methods=['DELETE'])
+def delete_school():
+    """Delete a school"""
+    try:
+        school_id = request.args.get('id')
+        response = supabase.table("schools").delete().eq("id", school_id).execute()
+        if response.data:
+            return jsonify({'message': 'School deleted successfully'})
+        else:
+            return jsonify({'error': 'Failed to delete school'}), 500
+        
+    except Exception as e:
+        print(f"❌ Delete school error: {e}")
+        return jsonify({'error': 'Failed to delete school'}), 500
+
+@app.route('/api/departments', methods=['GET'])
 def api_departments():
+    """Get all departments"""
     try:
-        if request.method == 'GET':
-            response = supabase.table("departments").select("*").execute()
-            return jsonify(response.data if response.data else [])
+        print("🏢 GET /api/departments called")
         
-        elif request.method == 'POST':
-            data = request.get_json()
-            department_data = {
-                "name": data.get('name'),
-                "code": data.get('code', ''),
-                "description": data.get('description', ''),
-                "contact_person": data.get('contact_person', ''),
-                "phone": data.get('phone', ''),
-                "created_at": datetime.now().isoformat()
-            }
-            
-            response = supabase.table("departments").insert(department_data).execute()
-            if response.data:
-                return jsonify({'message': 'Department created successfully', 'department': response.data[0]})
-            else:
-                return jsonify({'error': 'Failed to create department'}), 500
+        if not supabase:
+            return jsonify({'data': []}), 500
         
-        elif request.method == 'PUT':
-            data = request.get_json()
-            department_id = data.get('id')
-            department_data = {
-                "name": data.get('name'),
-                "code": data.get('code', ''),
-                "description": data.get('description', ''),
-                "contact_person": data.get('contact_person', ''),
-                "phone": data.get('phone', ''),
-                "updated_at": datetime.now().isoformat()
-            }
-            
-            response = supabase.table("departments").update(department_data).eq("id", department_id).execute()
-            if response.data:
-                return jsonify({'message': 'Department updated successfully', 'department': response.data[0]})
-            else:
-                return jsonify({'error': 'Failed to update department'}), 500
+        response = supabase.table("departments").select("*").execute()
+        return jsonify(response.data if response.data else [])
         
-        elif request.method == 'DELETE':
-            department_id = request.args.get('id')
-            response = supabase.table("departments").delete().eq("id", department_id).execute()
-            if response.data:
-                return jsonify({'message': 'Department deleted successfully'})
-            else:
-                return jsonify({'error': 'Failed to delete department'}), 500
-                
     except Exception as e:
-        print(f"Departments API error: {e}")
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Departments GET error: {e}")
+        return jsonify({'data': []}), 500
 
-@app.route('/api/utility-bills', methods=['GET', 'POST', 'PUT', 'DELETE'])
-def api_utility_bills():
+@app.route('/api/departments', methods=['POST'])
+def create_department():
+    """Create a new department"""
     try:
-        if request.method == 'GET':
-            # FIXED: Get utility bills WITHOUT JOIN (since foreign keys not set up)
-            utility_type = request.args.get('utility_type')
-            entity_type = request.args.get('entity_type')
-            entity_id = request.args.get('entity_id')
-            month = request.args.get('month')
-            year = request.args.get('year')
-            
-            # Simple query without joins
-            query = supabase.table("utility_bills").select("*")
-            
-            if utility_type:
-                query = query.eq("utility_type", utility_type)
-            if entity_type:
-                query = query.eq("entity_type", entity_type)
-            if entity_id:
-                query = query.eq("entity_id", entity_id)
-            if month:
-                query = query.eq("month", month)
-            if year:
-                query = query.eq("year", year)
-            
-            response = query.execute()
-            
-            bills = []
-            if response.data:
-                for bill in response.data:
-                    bill_data = dict(bill)
-                    
-                    # Get entity name separately
-                    entity_name = 'Unknown'
-                    if bill['entity_type'] == 'school':
-                        # Fetch school name separately
-                        school_response = supabase.table("schools").select("name").eq("id", bill['entity_id']).execute()
-                        if school_response.data:
-                            entity_name = school_response.data[0]['name']
-                    elif bill['entity_type'] == 'department':
-                        # Fetch department name separately
-                        dept_response = supabase.table("departments").select("name").eq("id", bill['entity_id']).execute()
-                        if dept_response.data:
-                            entity_name = dept_response.data[0]['name']
-                    
-                    bill_data['entity_name'] = entity_name
-                    bills.append(bill_data)
-            
-            return jsonify(bills)
+        data = request.get_json()
+        department_data = {
+            "name": data.get('name'),
+            "code": data.get('code'),
+            "description": data.get('description'),
+            "contact_person": data.get('contact_person'),
+            "contact_phone": data.get('contact_phone'),
+            "created_at": datetime.now().isoformat()
+        }
         
-        elif request.method == 'POST':
-            data = request.get_json()
-            bill_data = {
-                "utility_type": data.get('utility_type'),
-                "entity_type": data.get('entity_type'),
-                "entity_id": int(data.get('entity_id')),
-                "account_number": data.get('account_number', ''),
-                "meter_number": data.get('meter_number', ''),
-                "phone_number": data.get('phone_number', ''),
-                "current_charges": float(data.get('current_charges', 0)),
-                "late_charges": float(data.get('late_charges', 0)),
-                "unsettled_charges": float(data.get('unsettled_charges', 0)),
-                "amount_paid": float(data.get('amount_paid', 0)),
-                "consumption_m3": float(data.get('consumption_m3', 0)) if data.get('consumption_m3') else None,
-                "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
-                "month": int(data.get('month', datetime.now().month)),
-                "year": int(data.get('year', datetime.now().year)),
-                "bill_image": data.get('bill_image', ''),
-                "created_at": datetime.now().isoformat()
-            }
-            
-            response = supabase.table("utility_bills").insert(bill_data).execute()
-            if response.data:
-                return jsonify({'message': 'Utility bill created successfully', 'bill': response.data[0]})
-            else:
-                return jsonify({'error': 'Failed to create utility bill'}), 500
+        response = supabase.table("departments").insert(department_data).execute()
+        if response.data:
+            return jsonify({
+                'message': 'Department created successfully',
+                'department': response.data[0]
+            })
+        else:
+            return jsonify({'error': 'Failed to create department'}), 500
         
-        elif request.method == 'PUT':
-            data = request.get_json()
-            bill_id = data.get('id')
-            bill_data = {
-                "utility_type": data.get('utility_type'),
-                "entity_type": data.get('entity_type'),
-                "entity_id": int(data.get('entity_id')),
-                "account_number": data.get('account_number', ''),
-                "meter_number": data.get('meter_number', ''),
-                "phone_number": data.get('phone_number', ''),
-                "current_charges": float(data.get('current_charges', 0)),
-                "late_charges": float(data.get('late_charges', 0)),
-                "unsettled_charges": float(data.get('unsettled_charges', 0)),
-                "amount_paid": float(data.get('amount_paid', 0)),
-                "consumption_m3": float(data.get('consumption_m3', 0)) if data.get('consumption_m3') else None,
-                "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
-                "month": int(data.get('month', datetime.now().month)),
-                "year": int(data.get('year', datetime.now().year)),
-                "bill_image": data.get('bill_image', ''),
-                "updated_at": datetime.now().isoformat()
-            }
-            
-            response = supabase.table("utility_bills").update(bill_data).eq("id", bill_id).execute()
-            if response.data:
-                return jsonify({'message': 'Utility bill updated successfully', 'bill': response.data[0]})
-            else:
-                return jsonify({'error': 'Failed to update utility bill'}), 500
-        
-        elif request.method == 'DELETE':
-            bill_id = request.args.get('id')
-            response = supabase.table("utility_bills").delete().eq("id", bill_id).execute()
-            if response.data:
-                return jsonify({'message': 'Utility bill deleted successfully'})
-            else:
-                return jsonify({'error': 'Failed to delete utility bill'}), 500
-                
     except Exception as e:
-        print(f"Utility bills API error: {e}")
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Create department error: {e}")
+        return jsonify({'error': 'Failed to create department'}), 500
+
+@app.route('/api/departments', methods=['PUT'])
+def update_department():
+    """Update a department"""
+    try:
+        data = request.get_json()
+        department_id = data.get('id')
+        department_data = {
+            "name": data.get('name'),
+            "code": data.get('code'),
+            "description": data.get('description'),
+            "contact_person": data.get('contact_person'),
+            "contact_phone": data.get('contact_phone'),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        response = supabase.table("departments").update(department_data).eq("id", department_id).execute()
+        if response.data:
+            return jsonify({
+                'message': 'Department updated successfully',
+                'department': response.data[0]
+            })
+        else:
+            return jsonify({'error': 'Failed to update department'}), 500
+        
+    except Exception as e:
+        print(f"❌ Update department error: {e}")
+        return jsonify({'error': 'Failed to update department'}), 500
+
+@app.route('/api/departments', methods=['DELETE'])
+def delete_department():
+    """Delete a department"""
+    try:
+        department_id = request.args.get('id')
+        response = supabase.table("departments").delete().eq("id", department_id).execute()
+        if response.data:
+            return jsonify({'message': 'Department deleted successfully'})
+        else:
+            return jsonify({'error': 'Failed to delete department'}), 500
+        
+    except Exception as e:
+        print(f"❌ Delete department error: {e}")
+        return jsonify({'error': 'Failed to delete department'}), 500
+
+@app.route('/api/utility-bills', methods=['GET'])
+def api_utility_bills():
+    """Get utility bills with filters"""
+    try:
+        print("💡 GET /api/utility-bills called")
+        
+        if not supabase:
+            return jsonify({'data': []}), 500
+        
+        utility_type = request.args.get('utility_type')
+        entity_type = request.args.get('entity_type')
+        entity_id = request.args.get('entity_id')
+        month = request.args.get('month')
+        year = request.args.get('year')
+        
+        print(f"💡 Filters - utility: {utility_type}, entity: {entity_type}")
+        
+        # First, get all utility bills with filters
+        query = supabase.table("utility_bills").select("*")
+        
+        if utility_type:
+            query = query.eq("utility_type", utility_type)
+        if entity_type:
+            query = query.eq("entity_type", entity_type)
+        if entity_id:
+            query = query.eq("entity_id", int(entity_id))
+        if month:
+            query = query.eq("month", int(month))
+        if year:
+            query = query.eq("year", int(year))
+        
+        response = query.execute()
+        
+        bills = []
+        if response.data:
+            for bill in response.data:
+                bill_data = dict(bill)
+                
+                # Get entity name based on entity type
+                if bill_data['entity_type'] == 'school':
+                    # Get school name
+                    school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
+                    if school_response.data and len(school_response.data) > 0:
+                        bill_data['entity_name'] = school_response.data[0]['name']
+                    else:
+                        bill_data['entity_name'] = 'Unknown School'
+                elif bill_data['entity_type'] == 'department':
+                    # Get department name
+                    dept_response = supabase.table("departments").select("name").eq("id", bill_data['entity_id']).execute()
+                    if dept_response.data and len(dept_response.data) > 0:
+                        bill_data['entity_name'] = dept_response.data[0]['name']
+                    else:
+                        bill_data['entity_name'] = 'Unknown Department'
+                else:
+                    bill_data['entity_name'] = 'Unknown'
+                
+                bills.append(bill_data)
+        
+        print(f"💡 Found {len(bills)} bills")
+        return jsonify(bills)
+        
+    except Exception as e:
+        print(f"❌ Utility bills GET error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'data': []}), 500
+
+@app.route('/api/utility-bills', methods=['POST'])
+def create_utility_bill():
+    """Create a new utility bill"""
+    try:
+        data = request.get_json()
+        print(f"📝 Creating utility bill with data: {data}")
+        
+        # Get entity name
+        entity_name = ""
+        if data.get('entity_type') == 'school':
+            school_response = supabase.table("schools").select("name").eq("id", data.get('entity_id')).execute()
+            if school_response.data and len(school_response.data) > 0:
+                entity_name = school_response.data[0]['name']
+        elif data.get('entity_type') == 'department':
+            dept_response = supabase.table("departments").select("name").eq("id", data.get('entity_id')).execute()
+            if dept_response.data and len(dept_response.data) > 0:
+                entity_name = dept_response.data[0]['name']
+        
+        bill_data = {
+            "utility_type": data.get('utility_type'),
+            "entity_type": data.get('entity_type'),
+            "entity_id": int(data.get('entity_id')),
+            "entity_name": entity_name,
+            "account_number": data.get('account_number'),
+            "meter_number": data.get('meter_number'),
+            "phone_number": data.get('phone_number'),
+            "current_charges": float(data.get('current_charges', 0)),
+            "late_charges": float(data.get('late_charges', 0)),
+            "unsettled_charges": float(data.get('unsettled_charges', 0)),
+            "amount_paid": float(data.get('amount_paid', 0)),
+            "consumption_m3": float(data.get('consumption_m3', 0)) if data.get('consumption_m3') else None,
+            "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
+            "month": int(data.get('month', datetime.now().month)),
+            "year": int(data.get('year', datetime.now().year)),
+            "bill_image": data.get('bill_image'),
+            "created_at": datetime.now().isoformat()
+        }
+        
+        response = supabase.table("utility_bills").insert(bill_data).execute()
+        if response.data:
+            return jsonify({
+                'message': 'Utility bill created successfully',
+                'bill': response.data[0]
+            })
+        else:
+            return jsonify({'error': 'Failed to create utility bill'}), 500
+        
+    except Exception as e:
+        print(f"❌ Create utility bill error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': 'Failed to create utility bill'}), 500
+
+@app.route('/api/utility-bills', methods=['PUT'])
+def update_utility_bill():
+    """Update a utility bill"""
+    try:
+        data = request.get_json()
+        bill_id = data.get('id')
+        
+        # Get entity name
+        entity_name = ""
+        if data.get('entity_type') == 'school':
+            school_response = supabase.table("schools").select("name").eq("id", data.get('entity_id')).execute()
+            if school_response.data and len(school_response.data) > 0:
+                entity_name = school_response.data[0]['name']
+        elif data.get('entity_type') == 'department':
+            dept_response = supabase.table("departments").select("name").eq("id", data.get('entity_id')).execute()
+            if dept_response.data and len(dept_response.data) > 0:
+                entity_name = dept_response.data[0]['name']
+        
+        bill_data = {
+            "utility_type": data.get('utility_type'),
+            "entity_type": data.get('entity_type'),
+            "entity_id": int(data.get('entity_id')),
+            "entity_name": entity_name,
+            "account_number": data.get('account_number'),
+            "meter_number": data.get('meter_number'),
+            "phone_number": data.get('phone_number'),
+            "current_charges": float(data.get('current_charges', 0)),
+            "late_charges": float(data.get('late_charges', 0)),
+            "unsettled_charges": float(data.get('unsettled_charges', 0)),
+            "amount_paid": float(data.get('amount_paid', 0)),
+            "consumption_m3": float(data.get('consumption_m3', 0)) if data.get('consumption_m3') else None,
+            "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
+            "month": int(data.get('month', datetime.now().month)),
+            "year": int(data.get('year', datetime.now().year)),
+            "bill_image": data.get('bill_image')
+        }
+        
+        response = supabase.table("utility_bills").update(bill_data).eq("id", bill_id).execute()
+        if response.data:
+            return jsonify({
+                'message': 'Utility bill updated successfully',
+                'bill': response.data[0]
+            })
+        else:
+            return jsonify({'error': 'Failed to update utility bill'}), 500
+        
+    except Exception as e:
+        print(f"❌ Update utility bill error: {e}")
+        return jsonify({'error': 'Failed to update utility bill'}), 500
+
+@app.route('/api/utility-bills', methods=['DELETE'])
+def delete_utility_bill():
+    """Delete a utility bill"""
+    try:
+        bill_id = request.args.get('id')
+        response = supabase.table("utility_bills").delete().eq("id", bill_id).execute()
+        if response.data:
+            return jsonify({'message': 'Utility bill deleted successfully'})
+        else:
+            return jsonify({'error': 'Failed to delete utility bill'}), 500
+        
+    except Exception as e:
+        print(f"❌ Delete utility bill error: {e}")
+        return jsonify({'error': 'Failed to delete utility bill'}), 500
 
 @app.route('/api/entities')
 def api_entities():
-    """Get schools or departments for dropdowns - FIXED"""
+    """Get schools or departments for dropdowns"""
     try:
         entity_type = request.args.get('type')
+        print(f"📋 GET /api/entities called for type: {entity_type}")
+        
+        if not supabase:
+            return jsonify({'data': []}), 500
         
         if entity_type == 'school':
             response = supabase.table("schools").select("id, name").execute()
         elif entity_type == 'department':
             response = supabase.table("departments").select("id, name").execute()
         else:
-            return jsonify({'error': 'Invalid entity type'}), 400
+            return jsonify({'error': 'Invalid entity type', 'data': []}), 400
         
         return jsonify(response.data if response.data else [])
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Entities GET error: {e}")
+        return jsonify({'data': []}), 500
 
 @app.route('/api/entity-accounts')
 def api_entity_accounts():
+    """Get account numbers for an entity"""
     try:
         entity_type = request.args.get('entity_type')
         entity_id = request.args.get('entity_id')
@@ -467,6 +666,7 @@ def api_entity_accounts():
         return jsonify(accounts)
         
     except Exception as e:
+        print(f"❌ Entity accounts error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/upload-bill-image', methods=['POST'])
@@ -493,6 +693,7 @@ def upload_bill_image():
             return jsonify({'error': 'File type not allowed'}), 400
             
     except Exception as e:
+        print(f"❌ Upload image error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/uploads/<filename>')
@@ -505,6 +706,10 @@ def dashboard_data():
         current_month = datetime.now().month
         current_year = datetime.now().year
         
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        # Get current month bills
         response = supabase.table("utility_bills").select("*").eq("month", current_month).eq("year", current_year).execute()
         
         water_total = 0
@@ -527,6 +732,7 @@ def dashboard_data():
                 total_unsettled += float(bill['unsettled_charges'] or 0)
                 total_paid += float(bill.get('amount_paid') or 0)
         
+        # Get budget
         budget_response = supabase.table("budgets").select("*").execute()
         
         if budget_response.data and len(budget_response.data) > 0:
@@ -556,178 +762,31 @@ def dashboard_data():
             'total_balance': total_allocated - total_current
         }
         
-        def format_currency_local(amount):
-            try:
-                if amount is None:
-                    return "0.00"
-                return "{:,.2f}".format(float(amount))
-            except:
-                return "0.00"
-        
-        formatted_budget = {k: format_currency_local(v) for k, v in budget_calculations.items()}
+        formatted_budget = {k: format_currency(v) for k, v in budget_calculations.items()}
         formatted_current = {
-            'water': format_currency_local(water_total),
-            'electricity': format_currency_local(electricity_total),
-            'telephone': format_currency_local(telephone_total),
-            'total': format_currency_local(total_current),
-            'unsettled': format_currency_local(total_unsettled),
-            'paid': format_currency_local(total_paid)
+            'water': format_currency(water_total),
+            'electricity': format_currency(electricity_total),
+            'telephone': format_currency(telephone_total),
+            'total': format_currency(total_current),
+            'unsettled': format_currency(total_unsettled),
+            'paid': format_currency(total_paid)
         }
         
         return jsonify({
             'budget_data': formatted_budget,
-            'current_totals': formatted_current,
-            'status': 'success'
+            'current_totals': formatted_current
         })
     except Exception as e:
-        print(f"Dashboard data error: {e}")
-        return jsonify({
-            'error': str(e),
-            'status': 'error',
-            'budget_data': {},
-            'current_totals': {}
-        }), 500
-
-@app.route('/api/generate-report', methods=['POST'])
-def generate_report():
-    try:
-        data = request.get_json()
-        report_type = data.get('report_type', 'monthly')
-        utility_type = data.get('utility_type')
-        entity_type = data.get('entity_type')
-        month = data.get('month')
-        year = data.get('year', datetime.now().year)
-        
-        query = supabase.table("utility_bills").select("*")
-        
-        if utility_type:
-            query = query.eq("utility_type", utility_type)
-        if entity_type:
-            query = query.eq("entity_type", entity_type)
-        if month:
-            query = query.eq("month", month)
-        if year:
-            query = query.eq("year", year)
-        
-        response = query.execute()
-        
-        report_data = []
-        if response.data:
-            for bill in response.data:
-                bill_data = dict(bill)
-                
-                # Get entity name
-                entity_name = 'Unknown'
-                if bill['entity_type'] == 'school':
-                    school_response = supabase.table("schools").select("name").eq("id", bill['entity_id']).execute()
-                    if school_response.data:
-                        entity_name = school_response.data[0]['name']
-                elif bill['entity_type'] == 'department':
-                    dept_response = supabase.table("departments").select("name").eq("id", bill['entity_id']).execute()
-                    if dept_response.data:
-                        entity_name = dept_response.data[0]['name']
-                
-                bill_data['entity_name'] = entity_name
-                report_data.append(bill_data)
-        
-        return jsonify({
-            'report_type': report_type,
-            'generated_at': datetime.now().isoformat(),
-            'year': year,
-            'month': month if month else 'All',
-            'data': report_data,
-            'count': len(report_data)
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/export-data')
-def export_data():
-    try:
-        export_type = request.args.get('type', 'csv')
-        utility_type = request.args.get('utility_type')
-        
-        query = supabase.table("utility_bills").select("*")
-        if utility_type:
-            query = query.eq("utility_type", utility_type)
-        
-        response = query.execute()
-        
-        bills = []
-        if response.data:
-            for bill in response.data:
-                bill_data = dict(bill)
-                
-                # Get entity name
-                entity_name = 'Unknown'
-                if bill['entity_type'] == 'school':
-                    school_response = supabase.table("schools").select("name").eq("id", bill['entity_id']).execute()
-                    if school_response.data:
-                        entity_name = school_response.data[0]['name']
-                elif bill['entity_type'] == 'department':
-                    dept_response = supabase.table("departments").select("name").eq("id", bill['entity_id']).execute()
-                    if dept_response.data:
-                        entity_name = dept_response.data[0]['name']
-                
-                bill_data['entity_name'] = entity_name
-                bills.append(bill_data)
-        
-        if export_type == 'csv':
-            output = io.StringIO()
-            writer = csv.writer(output)
-            
-            if bills:
-                writer.writerow(bills[0].keys())
-                
-                for bill in bills:
-                    writer.writerow(bill.values())
-            
-            output.seek(0)
-            return send_file(
-                io.BytesIO(output.getvalue().encode()),
-                mimetype='text/csv',
-                as_attachment=True,
-                download_name=f'uka_bill_utility_export_2026_{datetime.now().strftime("%Y%m%d")}.csv'
-            )
-        else:
-            return jsonify(bills)
-            
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/backup-data')
-def backup_data():
-    try:
-        tables = ['schools', 'departments', 'utility_bills', 'budgets']
-        backup_data = {}
-        
-        for table in tables:
-            response = supabase.table(table).select("*").execute()
-            backup_data[table] = response.data if response.data else []
-        
-        backup_filename = f"uka_bill_backup_2026_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        backup_path = os.path.join('backups', backup_filename)
-        
-        os.makedirs('backups', exist_ok=True)
-        
-        with open(backup_path, 'w') as f:
-            json.dump(backup_data, f, indent=2, default=str)
-        
-        return jsonify({
-            'message': 'UKA-BILL backup created successfully',
-            'filename': backup_filename,
-            'project': 'uka-bill',
-            'year': 2026
-        })
-        
-    except Exception as e:
+        print(f"❌ Dashboard data error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/yearly-budget-data')
 def yearly_budget_data():
     try:
-        current_year = 2026
+        current_year = datetime.now().year
+        
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
         
         budget_response = supabase.table("budgets").select("*").execute()
         
@@ -744,7 +803,7 @@ def yearly_budget_data():
             telephone_allocated = 10000
         
         yearly_data = []
-        for year in [2025, 2026, 2027]:
+        for year in [current_year - 1, current_year, current_year + 1]:
             response = supabase.table("utility_bills").select("*").eq("year", year).execute()
             
             water_used = 0
@@ -773,37 +832,145 @@ def yearly_budget_data():
         
         return jsonify(yearly_data)
     except Exception as e:
+        print(f"❌ Yearly budget data error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generate-report', methods=['POST'])
+def generate_report():
+    try:
+        data = request.get_json()
+        utility_type = data.get('utility_type')
+        entity_type = data.get('entity_type')
+        
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        query = supabase.table("utility_bills").select("*")
+        
+        if utility_type and utility_type != 'all':
+            query = query.eq("utility_type", utility_type)
+        if entity_type and entity_type != 'all':
+            query = query.eq("entity_type", entity_type)
+        
+        response = query.execute()
+        
+        report_data = []
+        if response.data:
+            for bill in response.data:
+                bill_data = dict(bill)
+                report_data.append(bill_data)
+        
+        return jsonify({
+            'generated_at': datetime.now().isoformat(),
+            'data': report_data
+        })
+        
+    except Exception as e:
+        print(f"❌ Generate report error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export-data')
+def export_data():
+    try:
+        export_type = request.args.get('type', 'csv')
+        utility_type = request.args.get('utility_type')
+        
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        query = supabase.table("utility_bills").select("*")
+        if utility_type and utility_type != 'all':
+            query = query.eq("utility_type", utility_type)
+        
+        response = query.execute()
+        
+        bills = []
+        if response.data:
+            bills = response.data
+        
+        if export_type == 'csv':
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            if bills:
+                writer.writerow(bills[0].keys())
+                
+                for bill in bills:
+                    writer.writerow(bill.values())
+            
+            output.seek(0)
+            return send_file(
+                io.BytesIO(output.getvalue().encode()),
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f'utility_bills_export_{datetime.now().strftime("%Y%m%d")}.csv'
+            )
+        else:
+            return jsonify(bills)
+            
+    except Exception as e:
+        print(f"❌ Export data error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/backup-data')
+def backup_data():
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        tables = ['schools', 'departments', 'utility_bills', 'budgets']
+        backup_data = {}
+        
+        for table in tables:
+            response = supabase.table(table).select("*").execute()
+            backup_data[table] = response.data if response.data else []
+        
+        backup_filename = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        backup_path = os.path.join('backups', backup_filename)
+        
+        os.makedirs('backups', exist_ok=True)
+        
+        with open(backup_path, 'w') as f:
+            json.dump(backup_data, f, indent=2, default=str)
+        
+        return jsonify({
+            'message': 'Backup created successfully',
+            'filename': backup_filename
+        })
+        
+    except Exception as e:
+        print(f"❌ Backup data error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # Health check endpoint
 @app.route('/health')
 def health_check():
+    connection_status = test_supabase_connection()
+    
     return jsonify({
-        'status': 'healthy',
-        'project': 'uka-bill',
-        'year': 2026,
-        'contact': 'aka.sazali@gmail.com',
+        'status': 'healthy' if connection_status else 'degraded',
         'timestamp': datetime.now().isoformat(),
-        'supabase_connected': supabase is not None
+        'supabase_connected': connection_status,
+        'service': 'UKA-BILL Utility System'
     })
+
+@app.route('/api/test')
+def api_test():
+    return jsonify({'message': 'API is working'})
 
 # Error handlers
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({
         'error': 'Page not found',
-        'message': 'The requested URL was not found on the server.',
-        'status': 404,
-        'project': 'uka-bill'
+        'message': 'The requested URL was not found on the server.'
     }), 404
 
 @app.errorhandler(500)
 def internal_error(error):
     return jsonify({
         'error': 'Internal server error',
-        'message': 'Something went wrong on our end. Please try again later.',
-        'status': 500,
-        'project': 'uka-bill'
+        'message': 'Something went wrong on our end. Please try again later.'
     }), 500
 
 # Application startup
@@ -811,25 +978,18 @@ if __name__ == '__main__':
     create_directories()
     
     print("\n" + "="*60)
-    print("🚀 UKA-BILL Utility System 2026 - Starting...")
-    print("📁 Project: uka-bill/utility")
+    print("🚀 UKA-BILL Utility System Starting")
     print("👤 Contact: aka.sazali@gmail.com")
-    print("🔗 Supabase: https://skzhqbynrpdsxersdxnp.supabase.co")
     print("="*60 + "\n")
     
-    # Initialize database
-    try:
-        init_response = init_database()
-        print("✅ Database initialization completed")
-    except:
-        print("⚠️  Database initialization skipped")
+    # Test connection on startup
+    print("🔗 Testing Supabase connection...")
+    if test_supabase_connection():
+        print("✅ All systems ready!")
+    else:
+        print("⚠️  Warning: Supabase connection failed")
     
     port = int(os.environ.get('PORT', 5000))
     print(f"🌐 Server will run on port: {port}")
-    print(f"🔗 Health check: http://localhost:{port}/health")
-    print(f"📊 Dashboard: http://localhost:{port}/dashboard")
-    print("\n" + "="*60)
-    print("✅ UKA-BILL System Ready!")
-    print("="*60 + "\n")
     
     app.run(host='0.0.0.0', port=port, debug=False)
