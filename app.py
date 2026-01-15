@@ -78,7 +78,52 @@ def test_supabase_connection():
             return False
     return False
 
-# ============ ROUTES ============
+# ============ SIMPLE TEST ENDPOINTS ============
+
+@app.route('/test')
+def test():
+    """Simple test page"""
+    return "Test page is working! ✅"
+
+@app.route('/api/test')
+def api_test():
+    """Simple test API endpoint"""
+    return jsonify({
+        'status': 'success',
+        'message': 'API is working',
+        'timestamp': datetime.now().isoformat(),
+        'project': 'uka-bill',
+        'contact': 'aka.sazali@gmail.com'
+    })
+
+@app.route('/api/test-connection')
+def test_connection():
+    """Test Supabase connection"""
+    try:
+        if supabase:
+            # Try a simple query
+            response = supabase.table("budgets").select("count", count="exact").execute()
+            return jsonify({
+                'status': 'success',
+                'message': 'Backend and Supabase connection working',
+                'supabase_connected': True,
+                'budget_count': response.count if hasattr(response, 'count') else 'unknown'
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Supabase not connected',
+                'supabase_connected': False,
+                'error': 'Check SUPABASE_URL and SUPABASE_KEY environment variables'
+            })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'supabase_connected': False
+        }), 500
+
+# ============ MAIN ROUTES ============
 
 @app.route('/')
 def splash():
@@ -117,28 +162,6 @@ def export_page():
     return render_template('export.html')
 
 # ============ API ROUTES ============
-
-@app.route('/api/test-connection')
-def test_connection():
-    """Test API endpoint"""
-    try:
-        if supabase:
-            return jsonify({
-                'status': 'success',
-                'message': 'Backend and Supabase connection working',
-                'supabase_connected': True
-            })
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': 'Supabase not connected',
-                'supabase_connected': False
-            })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
 
 @app.route('/api/budget', methods=['GET'])
 def get_budget():
@@ -479,25 +502,6 @@ def api_utility_bills():
         if response.data:
             for bill in response.data:
                 bill_data = dict(bill)
-                
-                # Get entity name based on entity type
-                if bill_data['entity_type'] == 'school':
-                    # Get school name
-                    school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
-                    if school_response.data and len(school_response.data) > 0:
-                        bill_data['entity_name'] = school_response.data[0]['name']
-                    else:
-                        bill_data['entity_name'] = 'Unknown School'
-                elif bill_data['entity_type'] == 'department':
-                    # Get department name
-                    dept_response = supabase.table("departments").select("name").eq("id", bill_data['entity_id']).execute()
-                    if dept_response.data and len(dept_response.data) > 0:
-                        bill_data['entity_name'] = dept_response.data[0]['name']
-                    else:
-                        bill_data['entity_name'] = 'Unknown Department'
-                else:
-                    bill_data['entity_name'] = 'Unknown'
-                
                 bills.append(bill_data)
         
         print(f"💡 Found {len(bills)} bills")
@@ -953,10 +957,6 @@ def health_check():
         'supabase_connected': connection_status,
         'service': 'UKA-BILL Utility System'
     })
-
-@app.route('/api/test')
-def api_test():
-    return jsonify({'message': 'API is working'})
 
 # Error handlers
 @app.errorhandler(404)
