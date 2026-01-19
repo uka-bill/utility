@@ -468,6 +468,35 @@
             color: var(--primary);
             font-weight: bold;
         }
+        
+        .year-display {
+            font-size: 1.4rem;
+            color: var(--primary);
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .year-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .year-nav {
+            background: var(--light);
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+            color: var(--primary);
+            font-weight: 600;
+        }
+        
+        .year-nav:hover {
+            background: var(--primary);
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -498,6 +527,18 @@
         <!-- Loading Indicator -->
         <div class="loading" id="loadingIndicator">
             Loading dashboard data...
+        </div>
+        
+        <!-- Year Selector -->
+        <div class="filters-container" id="yearSelectorContainer" style="display: none;">
+            <div class="year-display" id="currentYearDisplay">Year: 2024</div>
+            <div class="year-selector">
+                <button class="year-nav" id="prevYearBtn">◀ Previous Year</button>
+                <select class="filter-select" id="yearSelect" style="flex: 1;">
+                    <!-- Years will be populated by JavaScript -->
+                </select>
+                <button class="year-nav" id="nextYearBtn">Next Year ▶</button>
+            </div>
         </div>
         
         <!-- Charges Display Filter -->
@@ -611,7 +652,7 @@
             
             <div class="budget-container">
                 <div class="section-title">
-                    <span>Budget Allocation</span>
+                    <span id="budgetYearTitle">Budget Allocation (2024)</span>
                     <button class="btn btn-primary btn-sm" id="editBudgetBtn">Edit Budget</button>
                 </div>
                 
@@ -684,6 +725,11 @@
             
             <form id="budgetForm">
                 <div class="form-group">
+                    <label class="form-label">Budget Year</label>
+                    <input type="number" class="form-control" id="budgetYear" min="2000" max="2100" required>
+                </div>
+                
+                <div class="form-group">
                     <label class="form-label">Total Budget Allocation ($)</label>
                     <input type="number" step="0.01" class="form-control" id="totalAllocated" required>
                 </div>
@@ -715,11 +761,14 @@
         // Chart variable
         let budgetUsageChart = null;
         let currentYear = new Date().getFullYear();
+        let selectedYear = currentYear;
         let dashboardData = null;
+        let availableYears = [];
 
         // Show loading indicator
         function showLoading() {
             document.getElementById('loadingIndicator').style.display = 'block';
+            document.getElementById('yearSelectorContainer').style.display = 'none';
             document.getElementById('filtersContainer').style.display = 'none';
             document.getElementById('dashboardStats').style.display = 'none';
             document.getElementById('dashboardGrid').style.display = 'none';
@@ -728,16 +777,93 @@
         // Hide loading indicator
         function hideLoading() {
             document.getElementById('loadingIndicator').style.display = 'none';
+            document.getElementById('yearSelectorContainer').style.display = 'block';
             document.getElementById('filtersContainer').style.display = 'block';
             document.getElementById('dashboardStats').style.display = 'grid';
             document.getElementById('dashboardGrid').style.display = 'grid';
         }
 
-        // Load dashboard data
+        // Load available budget years
+        async function loadBudgetYears() {
+            try {
+                const response = await fetch('/api/budgets/years');
+                const data = await response.json();
+                
+                if (response.ok && data.years) {
+                    availableYears = data.years;
+                    populateYearDropdowns();
+                    
+                    // If current year is not in available years, add it
+                    if (!availableYears.includes(currentYear)) {
+                        availableYears.push(currentYear);
+                        availableYears.sort((a, b) => b - a); // Sort descending
+                    }
+                    
+                    // Set selected year to current year or most recent available
+                    if (availableYears.length > 0) {
+                        selectedYear = availableYears.includes(currentYear) ? currentYear : availableYears[0];
+                    }
+                    
+                    updateYearDisplay();
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('Error loading budget years:', error);
+                return false;
+            }
+        }
+
+        // Populate year dropdowns
+        function populateYearDropdowns() {
+            // Populate year selector
+            const yearSelect = document.getElementById('yearSelect');
+            yearSelect.innerHTML = '';
+            
+            availableYears.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                if (year == selectedYear) option.selected = true;
+                yearSelect.appendChild(option);
+            });
+            
+            // Populate charges year dropdown
+            const chargesYear = document.getElementById('chargesYear');
+            chargesYear.innerHTML = '<option value="all">All Years</option>';
+            
+            availableYears.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                if (year == selectedYear) option.selected = true;
+                chargesYear.appendChild(option);
+            });
+            
+            // Populate chart year dropdown
+            const chartYear = document.getElementById('chartYear');
+            chartYear.innerHTML = '<option value="all">All Years</option>';
+            
+            availableYears.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                if (year == selectedYear) option.selected = true;
+                chartYear.appendChild(option);
+            });
+        }
+
+        // Update year display
+        function updateYearDisplay() {
+            document.getElementById('currentYearDisplay').textContent = `Year: ${selectedYear}`;
+            document.getElementById('budgetYearTitle').textContent = `Budget Allocation (${selectedYear})`;
+        }
+
+        // Load dashboard data for selected year
         async function loadDashboardData() {
             try {
                 showLoading();
-                console.log("Loading dashboard data...");
+                console.log(`Loading dashboard data for year ${selectedYear}...`);
                 
                 const response = await fetch('/api/dashboard-data');
                 const data = await response.json();
@@ -746,7 +872,13 @@
                 
                 if (response.ok && !data.error) {
                     dashboardData = data;
-                    updateDashboard(data);
+                    
+                    // Update budget display
+                    updateBudgetDisplay(data.budget_data, data.current_totals);
+                    
+                    // Load specific year budget data
+                    await loadYearBudgetData();
+                    
                     updateChargesDisplay();
                     loadYearlyBudgetData();
                 } else {
@@ -758,6 +890,50 @@
                 alert('Error loading dashboard data. Please check console for details.');
             } finally {
                 hideLoading();
+            }
+        }
+
+        // Load budget data for specific year
+        async function loadYearBudgetData() {
+            try {
+                console.log(`Loading budget data for year ${selectedYear}...`);
+                
+                // First, try to get budget for selected year
+                let response = await fetch(`/api/budget?year=${selectedYear}`);
+                
+                if (!response.ok) {
+                    // If no budget for selected year, get current year's budget
+                    response = await fetch('/api/budget');
+                }
+                
+                const budgetData = await response.json();
+                
+                if (response.ok && !budgetData.error) {
+                    console.log(`Budget data for ${selectedYear}:`, budgetData);
+                    
+                    // Update modal with current values
+                    document.getElementById('budgetYear').value = budgetData.year || selectedYear;
+                    document.getElementById('totalAllocated').value = budgetData.totalAllocated || 60000;
+                    document.getElementById('waterAllocated').value = budgetData.waterAllocated || 15000;
+                    document.getElementById('electricityAllocated').value = budgetData.electricityAllocated || 35000;
+                    document.getElementById('telephoneAllocated').value = budgetData.telephoneAllocated || 10000;
+                    
+                    // Update budget display
+                    const budgetContainer = document.querySelector('.budget-container');
+                    
+                    document.getElementById('totalBudget').textContent = `$${formatCurrency(budgetData.totalAllocated || 60000)}`;
+                    document.getElementById('waterBudget').textContent = `$${formatCurrency(budgetData.waterAllocated || 15000)}`;
+                    document.getElementById('electricityBudget').textContent = `$${formatCurrency(budgetData.electricityAllocated || 35000)}`;
+                    document.getElementById('telephoneBudget').textContent = `$${formatCurrency(budgetData.telephoneAllocated || 10000)}`;
+                    
+                    // Update budget year title
+                    document.getElementById('budgetYearTitle').textContent = `Budget Allocation (${budgetData.year || selectedYear})`;
+                    
+                } else {
+                    console.error('Error loading year budget data:', budgetData.error);
+                }
+            } catch (error) {
+                console.error('Error loading year budget data:', error);
             }
         }
 
@@ -1079,30 +1255,6 @@
             });
         }
 
-        // Load current budget values for modal
-        async function loadBudgetValues() {
-            try {
-                console.log("Loading budget values for modal...");
-                const response = await fetch('/api/budget');
-                const budget = await response.json();
-                
-                console.log("Budget values loaded:", budget);
-                
-                if (response.ok) {
-                    document.getElementById('totalAllocated').value = budget.totalAllocated;
-                    document.getElementById('waterAllocated').value = budget.waterAllocated;
-                    document.getElementById('electricityAllocated').value = budget.electricityAllocated;
-                    document.getElementById('telephoneAllocated').value = budget.telephoneAllocated;
-                } else {
-                    console.error('Error loading budget values:', budget.error);
-                    alert('Error loading current budget values');
-                }
-            } catch (error) {
-                console.error('Error loading budget values:', error);
-                alert('Error loading current budget values. Please check console for details.');
-            }
-        }
-
         // Save budget
         async function saveBudget(budgetData) {
             try {
@@ -1120,10 +1272,13 @@
                 console.log('Budget save response:', result);
                 
                 if (response.ok) {
-                    alert('Budget updated successfully!');
+                    alert(`Budget for year ${budgetData.year} updated successfully!`);
                     document.getElementById('budgetModal').style.display = 'none';
-                    // Reload dashboard data to show updated budget
-                    await loadDashboardData();
+                    
+                    // Reload budget years and data
+                    await loadBudgetYears();
+                    await loadYearBudgetData();
+                    loadYearlyBudgetData();
                 } else {
                     alert('Error updating budget: ' + (result.error || 'Unknown error'));
                     console.error('Budget update error:', result.error);
@@ -1153,45 +1308,17 @@
             return months[month - 1] || 'Unknown';
         }
 
-        function populateYearDropdowns() {
-            const currentYear = new Date().getFullYear();
-            const years = [currentYear - 1, currentYear, currentYear + 1];
-            
-            // Populate charges year dropdown
-            const chargesYear = document.getElementById('chargesYear');
-            chargesYear.innerHTML = '<option value="all">All Years</option>';
-            years.forEach(year => {
-                const option = document.createElement('option');
-                option.value = year;
-                option.textContent = year;
-                if (year === currentYear) option.selected = true;
-                chargesYear.appendChild(option);
-            });
-            
-            // Populate chart year dropdown
-            const chartYear = document.getElementById('chartYear');
-            chartYear.innerHTML = '<option value="all">All Years</option>';
-            years.forEach(year => {
-                const option = document.createElement('option');
-                option.value = year;
-                option.textContent = year;
-                if (year === currentYear) option.selected = true;
-                chartYear.appendChild(option);
-            });
-        }
-
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
             console.log("Dashboard page loaded");
-            
-            // Initialize year dropdowns
-            populateYearDropdowns();
             
             // Show loading initially
             showLoading();
             
             // Load initial data
-            loadDashboardData();
+            loadBudgetYears().then(() => {
+                loadDashboardData();
+            });
             
             // Budget modal functionality
             const budgetModal = document.getElementById('budgetModal');
@@ -1201,9 +1328,13 @@
             const budgetForm = document.getElementById('budgetForm');
             const refreshBtn = document.getElementById('refreshBtn');
             
+            // Year navigation
+            const prevYearBtn = document.getElementById('prevYearBtn');
+            const nextYearBtn = document.getElementById('nextYearBtn');
+            const yearSelect = document.getElementById('yearSelect');
+            
             editBudgetBtn.addEventListener('click', function() {
                 console.log("Edit budget button clicked");
-                loadBudgetValues();
                 budgetModal.style.display = 'flex';
             });
             
@@ -1223,7 +1354,8 @@
                     totalAllocated: parseFloat(document.getElementById('totalAllocated').value),
                     waterAllocated: parseFloat(document.getElementById('waterAllocated').value),
                     electricityAllocated: parseFloat(document.getElementById('electricityAllocated').value),
-                    telephoneAllocated: parseFloat(document.getElementById('telephoneAllocated').value)
+                    telephoneAllocated: parseFloat(document.getElementById('telephoneAllocated').value),
+                    year: parseInt(document.getElementById('budgetYear').value)
                 };
                 
                 console.log("Saving budget data:", budgetData);
@@ -1233,6 +1365,37 @@
             refreshBtn.addEventListener('click', function() {
                 console.log("Refresh button clicked");
                 loadDashboardData();
+            });
+            
+            // Year navigation event listeners
+            prevYearBtn.addEventListener('click', function() {
+                if (availableYears.length > 0) {
+                    const currentIndex = availableYears.indexOf(selectedYear);
+                    if (currentIndex < availableYears.length - 1) {
+                        selectedYear = availableYears[currentIndex + 1];
+                        updateYearDisplay();
+                        yearSelect.value = selectedYear;
+                        loadYearBudgetData();
+                    }
+                }
+            });
+            
+            nextYearBtn.addEventListener('click', function() {
+                if (availableYears.length > 0) {
+                    const currentIndex = availableYears.indexOf(selectedYear);
+                    if (currentIndex > 0) {
+                        selectedYear = availableYears[currentIndex - 1];
+                        updateYearDisplay();
+                        yearSelect.value = selectedYear;
+                        loadYearBudgetData();
+                    }
+                }
+            });
+            
+            yearSelect.addEventListener('change', function() {
+                selectedYear = parseInt(this.value);
+                updateYearDisplay();
+                loadYearBudgetData();
             });
             
             // Charges display filter event listeners
