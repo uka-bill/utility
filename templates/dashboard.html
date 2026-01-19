@@ -407,6 +407,7 @@
             margin-bottom: 20px;
         }
 
+        /* New styles for filters */
         .filters-container {
             background: white;
             border-radius: 10px;
@@ -464,21 +465,8 @@
             display: none;
             text-align: center;
             padding: 20px;
-        }
-        
-        .loading-spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--primary);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            color: var(--primary);
+            font-weight: bold;
         }
     </style>
 </head>
@@ -507,14 +495,13 @@
             </div>
         </div>
         
-        <!-- Loading indicator -->
+        <!-- Loading Indicator -->
         <div class="loading" id="loadingIndicator">
-            <div class="loading-spinner"></div>
-            <p>Loading dashboard data...</p>
+            Loading dashboard data...
         </div>
         
         <!-- Charges Display Filter -->
-        <div class="filters-container">
+        <div class="filters-container" id="filtersContainer" style="display: none;">
             <h3 style="margin-bottom: 15px;">Charges Display Options</h3>
             <div class="filter-row">
                 <div class="filter-group">
@@ -556,7 +543,7 @@
             </div>
         </div>
         
-        <div class="dashboard-stats">
+        <div class="dashboard-stats" id="dashboardStats" style="display: none;">
             <div class="stat-card water">
                 <h3>Water Charges</h3>
                 <div class="value" id="waterCharges">$0.00</div>
@@ -582,7 +569,7 @@
             </div>
         </div>
         
-        <div class="dashboard-grid">
+        <div class="dashboard-grid" id="dashboardGrid" style="display: none;">
             <div class="chart-container">
                 <div class="section-title">
                     <span>Budget Usage Trend</span>
@@ -691,7 +678,7 @@
     <div class="modal" id="budgetModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">Edit Budget Allocation</h3>
+                <h3 class="modal-title" id="modalTitle">Edit Budget Allocation</h3>
                 <button class="close-modal" id="closeBudgetModal">&times;</button>
             </div>
             
@@ -728,197 +715,98 @@
         // Chart variable
         let budgetUsageChart = null;
         let currentYear = new Date().getFullYear();
-        let allBillsData = {};
+        let dashboardData = null;
 
         // Show loading indicator
         function showLoading() {
             document.getElementById('loadingIndicator').style.display = 'block';
+            document.getElementById('filtersContainer').style.display = 'none';
+            document.getElementById('dashboardStats').style.display = 'none';
+            document.getElementById('dashboardGrid').style.display = 'none';
         }
 
         // Hide loading indicator
         function hideLoading() {
             document.getElementById('loadingIndicator').style.display = 'none';
-        }
-
-        // Initialize budget when page loads
-        async function initializeBudget() {
-            try {
-                showLoading();
-                const response = await fetch('/api/init-budget', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                const result = await response.json();
-                console.log('Budget initialization:', result);
-                hideLoading();
-            } catch (error) {
-                console.error('Error initializing budget:', error);
-                hideLoading();
-            }
+            document.getElementById('filtersContainer').style.display = 'block';
+            document.getElementById('dashboardStats').style.display = 'grid';
+            document.getElementById('dashboardGrid').style.display = 'grid';
         }
 
         // Load dashboard data
         async function loadDashboardData() {
             try {
                 showLoading();
-                console.log('📊 Loading dashboard data...');
+                console.log("Loading dashboard data...");
+                
                 const response = await fetch('/api/dashboard-data');
                 const data = await response.json();
                 
-                if (response.ok) {
-                    console.log('✅ Dashboard data loaded:', data);
-                    allBillsData = data;
+                console.log("Dashboard data received:", data);
+                
+                if (response.ok && !data.error) {
+                    dashboardData = data;
                     updateDashboard(data);
                     updateChargesDisplay();
+                    loadYearlyBudgetData();
                 } else {
-                    console.error('❌ Error loading dashboard data:', data.error);
+                    console.error('Error loading dashboard data:', data.error);
                     alert('Error loading dashboard data: ' + (data.error || 'Unknown error'));
                 }
-                hideLoading();
             } catch (error) {
-                console.error('❌ Error loading dashboard data:', error);
-                alert('Error loading dashboard data. Please check console.');
+                console.error('Error loading dashboard data:', error);
+                alert('Error loading dashboard data. Please check console for details.');
+            } finally {
                 hideLoading();
             }
         }
 
-        // Load budget values for modal
-        async function loadBudgetValues() {
+        // Load yearly budget data for chart
+        async function loadYearlyBudgetData() {
             try {
-                showLoading();
-                console.log('📊 Loading budget values for modal...');
-                const response = await fetch('/api/budget');
-                const budget = await response.json();
+                console.log("Loading yearly budget data...");
+                const response = await fetch('/api/yearly-budget-data');
+                const data = await response.json();
                 
-                if (response.ok) {
-                    console.log('✅ Budget values loaded:', budget);
-                    document.getElementById('totalAllocated').value = budget.totalAllocated;
-                    document.getElementById('waterAllocated').value = budget.waterAllocated;
-                    document.getElementById('electricityAllocated').value = budget.electricityAllocated;
-                    document.getElementById('telephoneAllocated').value = budget.telephoneAllocated;
+                if (response.ok && !data.error) {
+                    console.log("Yearly budget data received:", data);
+                    updateBudgetUsageChart(data);
+                    updateYearlyBudgetTrend(data);
                 } else {
-                    console.error('❌ Error loading budget values:', budget.error);
-                    alert('Error loading budget values: ' + (budget.error || 'Unknown error'));
+                    console.error('Error loading yearly budget data:', data.error);
                 }
-                hideLoading();
             } catch (error) {
-                console.error('❌ Error loading budget values:', error);
-                alert('Error loading budget values. Please check console.');
-                hideLoading();
+                console.error('Error loading yearly budget data:', error);
             }
         }
 
-        // Save budget
-        async function saveBudget(budgetData) {
-            try {
-                showLoading();
-                console.log('💾 Saving budget:', budgetData);
-                
-                const response = await fetch('/api/budget', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(budgetData)
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    console.log('✅ Budget saved successfully:', result);
-                    alert('Budget updated successfully!');
-                    document.getElementById('budgetModal').style.display = 'none';
-                    
-                    // IMPORTANT: Reload dashboard data to show updated budget
-                    await loadDashboardData();
-                    
-                } else {
-                    console.error('❌ Budget update error:', result.error);
-                    alert('Error updating budget: ' + (result.error || 'Unknown error'));
-                }
-                hideLoading();
-            } catch (error) {
-                console.error('❌ Error saving budget:', error);
-                alert('Error updating budget. Please check the console for details.');
-                hideLoading();
-            }
-        }
-
-        // Update charges display based on selected filters
+        // Update charges display
         function updateChargesDisplay() {
+            if (!dashboardData || !dashboardData.current_totals) return;
+            
             const displayType = document.getElementById('chargesDisplayType').value;
             const month = document.getElementById('chargesMonth').value;
             const year = document.getElementById('chargesYear').value;
             
-            let waterAmount = 0;
-            let electricityAmount = 0;
-            let telephoneAmount = 0;
-            let totalAmount = 0;
-            
             let subtitle = '';
             
-            // Filter bills based on month and year
-            let filteredBills = allBillsData.monthly_data || [];
-            
-            if (month !== 'all') {
-                filteredBills = filteredBills.filter(item => item.month == month);
+            if (displayType === 'current_monthly') {
+                subtitle = month !== 'all' ? `Month: ${getMonthName(month)}` : 'All Months';
+            } else if (displayType === 'current_total') {
+                subtitle = 'Total Current Charges';
+            } else if (displayType === 'unsettled_monthly') {
+                subtitle = month !== 'all' ? `Unsettled - ${getMonthName(month)}` : 'Unsettled - All Months';
+            } else if (displayType === 'unsettled_total') {
+                subtitle = 'Total Unsettled Charges';
+            } else if (displayType === 'total_charges') {
+                subtitle = 'Total All Charges';
             }
             
-            if (year !== 'all') {
-                filteredBills = filteredBills.filter(item => item.year == year);
-            }
-            
-            // Calculate amounts based on display type
-            switch(displayType) {
-                case 'current_monthly':
-                    subtitle = month !== 'all' ? `Month: ${getMonthName(month)}` : 'All Months';
-                    filteredBills.forEach(item => {
-                        waterAmount += parseFloat(item.water_charges || 0);
-                        electricityAmount += parseFloat(item.electricity_charges || 0);
-                        telephoneAmount += parseFloat(item.telephone_charges || 0);
-                    });
-                    totalAmount = waterAmount + electricityAmount + telephoneAmount;
-                    break;
-                    
-                case 'current_total':
-                    subtitle = 'Total Current Charges';
-                    if (allBillsData.current_totals) {
-                        waterAmount = parseFloat(allBillsData.current_totals.water.replace(/[$,]/g, '') || 0);
-                        electricityAmount = parseFloat(allBillsData.current_totals.electricity.replace(/[$,]/g, '') || 0);
-                        telephoneAmount = parseFloat(allBillsData.current_totals.telephone.replace(/[$,]/g, '') || 0);
-                        totalAmount = parseFloat(allBillsData.current_totals.total.replace(/[$,]/g, '') || 0);
-                    }
-                    break;
-                    
-                case 'unsettled_monthly':
-                    subtitle = month !== 'all' ? `Unsettled - ${getMonthName(month)}` : 'Unsettled - All Months';
-                    // Note: Unsettled charges would need to be added to monthly_data structure
-                    break;
-                    
-                case 'unsettled_total':
-                    subtitle = 'Total Unsettled Charges';
-                    if (allBillsData.current_totals) {
-                        totalAmount = parseFloat(allBillsData.current_totals.unsettled.replace(/[$,]/g, '') || 0);
-                    }
-                    break;
-                    
-                case 'total_charges':
-                    subtitle = 'Total All Charges';
-                    if (allBillsData.current_totals) {
-                        const currentTotal = parseFloat(allBillsData.current_totals.total.replace(/[$,]/g, '') || 0);
-                        const unsettledTotal = parseFloat(allBillsData.current_totals.unsettled.replace(/[$,]/g, '') || 0);
-                        totalAmount = currentTotal + unsettledTotal;
-                    }
-                    break;
-            }
-            
-            // Update the display
-            document.getElementById('waterCharges').textContent = `$${formatCurrency(waterAmount)}`;
-            document.getElementById('electricityCharges').textContent = `$${formatCurrency(electricityAmount)}`;
-            document.getElementById('telephoneCharges').textContent = `$${formatCurrency(telephoneAmount)}`;
-            document.getElementById('totalCharges').textContent = `$${formatCurrency(totalAmount)}`;
+            // Update the display with current totals
+            document.getElementById('waterCharges').textContent = `$${dashboardData.current_totals.water}`;
+            document.getElementById('electricityCharges').textContent = `$${dashboardData.current_totals.electricity}`;
+            document.getElementById('telephoneCharges').textContent = `$${dashboardData.current_totals.telephone}`;
+            document.getElementById('totalCharges').textContent = `$${dashboardData.current_totals.total}`;
             
             // Update subtitles
             document.getElementById('waterSubtitle').textContent = subtitle;
@@ -929,64 +817,61 @@
 
         // Update dashboard with data
         function updateDashboard(data) {
-            console.log('🔄 Updating dashboard with data:', data);
+            console.log("Updating dashboard with data:", data);
+            
+            if (!data.budget_data) {
+                console.error("No budget data in response");
+                return;
+            }
             
             // Update budget information
             updateBudgetDisplay(data.budget_data, data.current_totals);
-            
-            // Update yearly budget trend and chart
-            if (data.yearly_data) {
-                updateYearlyBudgetTrend(data.yearly_data);
-                updateBudgetUsageChart(data.yearly_data, data.budget_data);
-            }
-            
-            // Update charges display
-            updateChargesDisplay();
         }
 
         // Update budget display with progress bars
         function updateBudgetDisplay(budgetData, currentData) {
-            console.log('💰 Updating budget display:', budgetData);
-            
-            // Extract numeric values from formatted strings
-            const totalAllocated = parseFloat(budgetData.total_allocated.replace(/[$,]/g, '') || 60000);
-            const waterAllocated = parseFloat(budgetData.water_allocated.replace(/[$,]/g, '') || 15000);
-            const electricityAllocated = parseFloat(budgetData.electricity_allocated.replace(/[$,]/g, '') || 35000);
-            const telephoneAllocated = parseFloat(budgetData.telephone_allocated.replace(/[$,]/g, '') || 10000);
-            
-            const totalUsed = parseFloat(budgetData.total_used.replace(/[$,]/g, '') || 0);
-            const waterUsed = parseFloat(budgetData.water_used.replace(/[$,]/g, '') || 0);
-            const electricityUsed = parseFloat(budgetData.electricity_used.replace(/[$,]/g, '') || 0);
-            const telephoneUsed = parseFloat(budgetData.telephone_used.replace(/[$,]/g, '') || 0);
-            
-            const totalBalance = parseFloat(budgetData.total_balance.replace(/[$,]/g, '') || 0);
-            const waterBalance = parseFloat(budgetData.water_balance.replace(/[$,]/g, '') || 0);
-            const electricityBalance = parseFloat(budgetData.electricity_balance.replace(/[$,]/g, '') || 0);
-            const telephoneBalance = parseFloat(budgetData.telephone_balance.replace(/[$,]/g, '') || 0);
+            console.log("Updating budget display:", budgetData);
             
             // Update budget amounts
-            document.getElementById('totalBudget').textContent = `$${formatCurrency(totalAllocated)}`;
-            document.getElementById('waterBudget').textContent = `$${formatCurrency(waterAllocated)}`;
-            document.getElementById('electricityBudget').textContent = `$${formatCurrency(electricityAllocated)}`;
-            document.getElementById('telephoneBudget').textContent = `$${formatCurrency(telephoneAllocated)}`;
+            document.getElementById('totalBudget').textContent = `$${budgetData.total_allocated}`;
+            document.getElementById('waterBudget').textContent = `$${budgetData.water_allocated}`;
+            document.getElementById('electricityBudget').textContent = `$${budgetData.electricity_allocated}`;
+            document.getElementById('telephoneBudget').textContent = `$${budgetData.telephone_allocated}`;
             
             // Update used amounts
-            document.getElementById('totalUsed').textContent = `$${formatCurrency(totalUsed)}`;
-            document.getElementById('waterUsed').textContent = `$${formatCurrency(waterUsed)}`;
-            document.getElementById('electricityUsed').textContent = `$${formatCurrency(electricityUsed)}`;
-            document.getElementById('telephoneUsed').textContent = `$${formatCurrency(telephoneUsed)}`;
+            document.getElementById('totalUsed').textContent = `$${budgetData.total_used}`;
+            document.getElementById('waterUsed').textContent = `$${budgetData.water_used}`;
+            document.getElementById('electricityUsed').textContent = `$${budgetData.electricity_used}`;
+            document.getElementById('telephoneUsed').textContent = `$${budgetData.telephone_used}`;
             
             // Update remaining amounts
-            document.getElementById('totalRemaining').textContent = `Remaining: $${formatCurrency(totalBalance)}`;
-            document.getElementById('waterRemaining').textContent = `Remaining: $${formatCurrency(waterBalance)}`;
-            document.getElementById('electricityRemaining').textContent = `Remaining: $${formatCurrency(electricityBalance)}`;
-            document.getElementById('telephoneRemaining').textContent = `Remaining: $${formatCurrency(telephoneBalance)}`;
+            document.getElementById('totalRemaining').textContent = `Remaining: $${budgetData.total_balance}`;
+            document.getElementById('waterRemaining').textContent = `Remaining: $${budgetData.water_balance}`;
+            document.getElementById('electricityRemaining').textContent = `Remaining: $${budgetData.electricity_balance}`;
+            document.getElementById('telephoneRemaining').textContent = `Remaining: $${budgetData.telephone_balance}`;
             
-            // Update progress bars
-            const totalPercentage = Math.min(100, (totalUsed / totalAllocated) * 100) || 0;
-            const waterPercentage = Math.min(100, (waterUsed / waterAllocated) * 100) || 0;
-            const electricityPercentage = Math.min(100, (electricityUsed / electricityAllocated) * 100) || 0;
-            const telephonePercentage = Math.min(100, (telephoneUsed / telephoneAllocated) * 100) || 0;
+            // Calculate and update progress bars
+            const totalAllocated = parseFloat(budgetData.total_allocated.replace(/,/g, ''));
+            const waterAllocated = parseFloat(budgetData.water_allocated.replace(/,/g, ''));
+            const electricityAllocated = parseFloat(budgetData.electricity_allocated.replace(/,/g, ''));
+            const telephoneAllocated = parseFloat(budgetData.telephone_allocated.replace(/,/g, ''));
+            
+            const totalUsed = parseFloat(budgetData.total_used.replace(/,/g, ''));
+            const waterUsed = parseFloat(budgetData.water_used.replace(/,/g, ''));
+            const electricityUsed = parseFloat(budgetData.electricity_used.replace(/,/g, ''));
+            const telephoneUsed = parseFloat(budgetData.telephone_used.replace(/,/g, ''));
+            
+            const totalPercentage = totalAllocated > 0 ? Math.min(100, (totalUsed / totalAllocated) * 100) : 0;
+            const waterPercentage = waterAllocated > 0 ? Math.min(100, (waterUsed / waterAllocated) * 100) : 0;
+            const electricityPercentage = electricityAllocated > 0 ? Math.min(100, (electricityUsed / electricityAllocated) * 100) : 0;
+            const telephonePercentage = telephoneAllocated > 0 ? Math.min(100, (telephoneUsed / telephoneAllocated) * 100) : 0;
+            
+            console.log("Progress percentages:", {
+                total: totalPercentage,
+                water: waterPercentage,
+                electricity: electricityPercentage,
+                telephone: telephonePercentage
+            });
             
             document.getElementById('totalProgressBar').style.width = `${totalPercentage}%`;
             document.getElementById('waterProgressBar').style.width = `${waterPercentage}%`;
@@ -994,35 +879,30 @@
             document.getElementById('telephoneProgressBar').style.width = `${telephonePercentage}%`;
             
             // Add warning classes if over budget
+            const totalBalance = parseFloat(budgetData.total_balance.replace(/,/g, ''));
+            const waterBalance = parseFloat(budgetData.water_balance.replace(/,/g, ''));
+            const electricityBalance = parseFloat(budgetData.electricity_balance.replace(/,/g, ''));
+            const telephoneBalance = parseFloat(budgetData.telephone_balance.replace(/,/g, ''));
+            
             if (totalBalance < 0) {
                 document.getElementById('totalRemaining').className = 'budget-exceeded';
                 document.getElementById('totalRemaining').textContent = 'Exceeded!';
-            } else {
-                document.getElementById('totalRemaining').className = 'budget-remaining';
             }
             
             if (waterBalance < 0) {
                 document.getElementById('waterRemaining').className = 'budget-exceeded';
                 document.getElementById('waterRemaining').textContent = 'Exceeded!';
-            } else {
-                document.getElementById('waterRemaining').className = 'budget-remaining';
             }
             
             if (electricityBalance < 0) {
                 document.getElementById('electricityRemaining').className = 'budget-exceeded';
                 document.getElementById('electricityRemaining').textContent = 'Exceeded!';
-            } else {
-                document.getElementById('electricityRemaining').className = 'budget-remaining';
             }
             
             if (telephoneBalance < 0) {
                 document.getElementById('telephoneRemaining').className = 'budget-exceeded';
                 document.getElementById('telephoneRemaining').textContent = 'Exceeded!';
-            } else {
-                document.getElementById('telephoneRemaining').className = 'budget-remaining';
             }
-            
-            console.log('✅ Budget display updated successfully');
         }
 
         // Update yearly budget trend list
@@ -1030,7 +910,7 @@
             const trendList = document.getElementById('yearlyBudgetList');
             trendList.innerHTML = '';
             
-            if (yearlyData.length === 0) {
+            if (!yearlyData || yearlyData.length === 0) {
                 trendList.innerHTML = `
                     <div style="text-align: center; padding: 20px; color: var(--gray);">
                         No yearly budget data available.
@@ -1057,7 +937,7 @@
         }
 
         // Update budget usage chart
-        function updateBudgetUsageChart(yearlyData, budgetData) {
+        function updateBudgetUsageChart(yearlyData) {
             const ctx = document.getElementById('budgetUsageChart').getContext('2d');
             const utilityType = document.getElementById('chartUtilityType').value;
             const selectedYear = document.getElementById('chartYear').value;
@@ -1073,7 +953,7 @@
                 filteredData = yearlyData.filter(item => item.year == selectedYear);
             }
             
-            if (filteredData.length === 0) {
+            if (!filteredData || filteredData.length === 0) {
                 // Show placeholder if no data
                 document.getElementById('budgetUsageChart').style.display = 'none';
                 const chartWrapper = document.querySelector('.chart-wrapper');
@@ -1199,10 +1079,65 @@
             });
         }
 
+        // Load current budget values for modal
+        async function loadBudgetValues() {
+            try {
+                console.log("Loading budget values for modal...");
+                const response = await fetch('/api/budget');
+                const budget = await response.json();
+                
+                console.log("Budget values loaded:", budget);
+                
+                if (response.ok) {
+                    document.getElementById('totalAllocated').value = budget.totalAllocated;
+                    document.getElementById('waterAllocated').value = budget.waterAllocated;
+                    document.getElementById('electricityAllocated').value = budget.electricityAllocated;
+                    document.getElementById('telephoneAllocated').value = budget.telephoneAllocated;
+                } else {
+                    console.error('Error loading budget values:', budget.error);
+                    alert('Error loading current budget values');
+                }
+            } catch (error) {
+                console.error('Error loading budget values:', error);
+                alert('Error loading current budget values. Please check console for details.');
+            }
+        }
+
+        // Save budget
+        async function saveBudget(budgetData) {
+            try {
+                console.log('Saving budget:', budgetData);
+                
+                const response = await fetch('/api/budget', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(budgetData)
+                });
+                
+                const result = await response.json();
+                console.log('Budget save response:', result);
+                
+                if (response.ok) {
+                    alert('Budget updated successfully!');
+                    document.getElementById('budgetModal').style.display = 'none';
+                    // Reload dashboard data to show updated budget
+                    await loadDashboardData();
+                } else {
+                    alert('Error updating budget: ' + (result.error || 'Unknown error'));
+                    console.error('Budget update error:', result.error);
+                }
+            } catch (error) {
+                alert('Error updating budget. Please check the console for details.');
+                console.error('Error saving budget:', error);
+            }
+        }
+
         // Helper functions
         function formatCurrency(amount) {
             try {
-                if (amount === null || amount === undefined || isNaN(amount)) return "0.00";
+                if (amount === null || amount === undefined) return "0.00";
                 return parseFloat(amount).toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
@@ -1247,13 +1182,15 @@
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Dashboard page loaded');
+            console.log("Dashboard page loaded");
             
             // Initialize year dropdowns
             populateYearDropdowns();
             
-            // Initialize budget and load data
-            initializeBudget();
+            // Show loading initially
+            showLoading();
+            
+            // Load initial data
             loadDashboardData();
             
             // Budget modal functionality
@@ -1265,7 +1202,7 @@
             const refreshBtn = document.getElementById('refreshBtn');
             
             editBudgetBtn.addEventListener('click', function() {
-                console.log('✏️ Opening budget editor');
+                console.log("Edit budget button clicked");
                 loadBudgetValues();
                 budgetModal.style.display = 'flex';
             });
@@ -1280,7 +1217,7 @@
             
             budgetForm.addEventListener('submit', function(e) {
                 e.preventDefault();
-                console.log('💾 Submitting budget form');
+                console.log("Budget form submitted");
                 
                 const budgetData = {
                     totalAllocated: parseFloat(document.getElementById('totalAllocated').value),
@@ -1289,12 +1226,12 @@
                     telephoneAllocated: parseFloat(document.getElementById('telephoneAllocated').value)
                 };
                 
-                console.log('📊 Budget data to save:', budgetData);
+                console.log("Saving budget data:", budgetData);
                 saveBudget(budgetData);
             });
             
             refreshBtn.addEventListener('click', function() {
-                console.log('🔄 Refreshing dashboard data');
+                console.log("Refresh button clicked");
                 loadDashboardData();
             });
             
@@ -1305,14 +1242,14 @@
             
             // Chart filter event listeners
             document.getElementById('chartUtilityType').addEventListener('change', function() {
-                if (allBillsData.yearly_data) {
-                    updateBudgetUsageChart(allBillsData.yearly_data, allBillsData.budget_data);
+                if (dashboardData && dashboardData.yearly_data) {
+                    updateBudgetUsageChart(dashboardData.yearly_data);
                 }
             });
             
             document.getElementById('chartYear').addEventListener('change', function() {
-                if (allBillsData.yearly_data) {
-                    updateBudgetUsageChart(allBillsData.yearly_data, allBillsData.budget_data);
+                if (dashboardData && dashboardData.yearly_data) {
+                    updateBudgetUsageChart(dashboardData.yearly_data);
                 }
             });
             
@@ -1322,6 +1259,19 @@
                     budgetModal.style.display = 'none';
                 }
             });
+            
+            // Test API connection on load
+            fetch('/api/test-connection')
+                .then(response => response.json())
+                .then(data => {
+                    console.log("API connection test:", data);
+                    if (!data.supabase_connected) {
+                        console.warn("Supabase connection test failed");
+                    }
+                })
+                .catch(error => {
+                    console.error("API connection test failed:", error);
+                });
         });
     </script>
 </body>
