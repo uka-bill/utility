@@ -120,52 +120,61 @@ def export_page():
 
 @app.route('/api/budget', methods=['GET'])
 def get_budget():
-    """Get budget data - FIXED for dashboard display"""
+    """Get budget data for current year"""
     try:
         print("📊 GET /api/budget called")
         
         if not supabase:
             print("❌ Supabase not connected")
+            current_year = datetime.now().year
             return jsonify({
                 'totalAllocated': 60000,
                 'waterAllocated': 15000,
                 'electricityAllocated': 35000,
-                'telephoneAllocated': 10000
+                'telephoneAllocated': 10000,
+                'year': current_year
             })
         
-        response = supabase.table("budgets").select("*").execute()
+        current_year = datetime.now().year
+        
+        # Check if budget exists for current year
+        response = supabase.table("budgets").select("*").eq("year", current_year).execute()
         
         if response.data and len(response.data) > 0:
             budget = response.data[0]
-            print(f"📊 Found budget in DB: {budget}")
+            print(f"📊 Found budget in DB for year {current_year}: {budget}")
             
             return jsonify({
                 'totalAllocated': float(budget.get('total_allocated', 60000)),
                 'waterAllocated': float(budget.get('water_allocated', 15000)),
                 'electricityAllocated': float(budget.get('electricity_allocated', 35000)),
-                'telephoneAllocated': float(budget.get('telephone_allocated', 10000))
+                'telephoneAllocated': float(budget.get('telephone_allocated', 10000)),
+                'year': int(budget.get('year', current_year))
             })
         else:
-            print("📊 No budget found in DB, returning defaults")
+            print(f"📊 No budget found for year {current_year}, returning defaults")
             return jsonify({
                 'totalAllocated': 60000,
                 'waterAllocated': 15000,
                 'electricityAllocated': 35000,
-                'telephoneAllocated': 10000
+                'telephoneAllocated': 10000,
+                'year': current_year
             })
             
     except Exception as e:
         print(f"❌ Budget GET error: {e}")
+        current_year = datetime.now().year
         return jsonify({
             'totalAllocated': 60000,
             'waterAllocated': 15000,
             'electricityAllocated': 35000,
-            'telephoneAllocated': 10000
+            'telephoneAllocated': 10000,
+            'year': current_year
         })
 
 @app.route('/api/budget', methods=['POST'])
 def update_budget():
-    """Update budget data - FIXED with proper response"""
+    """Update budget data for a specific year"""
     try:
         print("📊 POST /api/budget called")
         
@@ -181,54 +190,56 @@ def update_budget():
         water_allocated = float(data.get('waterAllocated', 15000))
         electricity_allocated = float(data.get('electricityAllocated', 35000))
         telephone_allocated = float(data.get('telephoneAllocated', 10000))
+        year = int(data.get('year', datetime.now().year))
         
-        print(f"📊 Parsed values - Total: {total_allocated}, Water: {water_allocated}, Electricity: {electricity_allocated}, Telephone: {telephone_allocated}")
+        print(f"📊 Parsed values - Year: {year}, Total: {total_allocated}, Water: {water_allocated}, Electricity: {electricity_allocated}, Telephone: {telephone_allocated}")
         
         budget_data = {
             "total_allocated": total_allocated,
             "water_allocated": water_allocated,
             "electricity_allocated": electricity_allocated,
             "telephone_allocated": telephone_allocated,
+            "year": year,
             "updated_at": datetime.now().isoformat()
         }
         
         print(f"📊 Budget data to save: {budget_data}")
         
-        # Check if budget exists
-        response = supabase.table("budgets").select("*").execute()
+        # Check if budget exists for this year
+        response = supabase.table("budgets").select("*").eq("year", year).execute()
         
         if response.data and len(response.data) > 0:
-            # Update existing budget
+            # Update existing budget for this year
             budget_id = response.data[0]['id']
-            print(f"📊 Updating existing budget ID: {budget_id}")
+            print(f"📊 Updating existing budget ID: {budget_id} for year {year}")
             
             update_response = supabase.table("budgets").update(budget_data).eq("id", budget_id).execute()
             
             if update_response.data:
-                print("✅ Budget updated successfully in database")
+                print(f"✅ Budget for year {year} updated successfully in database")
                 return jsonify({
-                    'message': 'Budget updated successfully',
+                    'message': f'Budget for year {year} updated successfully',
                     'budget': update_response.data[0]
                 })
             else:
-                print("❌ Budget update failed")
-                return jsonify({'error': 'Failed to update budget in database'}), 500
+                print(f"❌ Budget update failed for year {year}")
+                return jsonify({'error': f'Failed to update budget for year {year}'}), 500
         else:
-            # Create new budget
-            print("📊 Creating new budget")
+            # Create new budget for this year
+            print(f"📊 Creating new budget for year {year}")
             budget_data["created_at"] = datetime.now().isoformat()
             
             insert_response = supabase.table("budgets").insert(budget_data).execute()
             
             if insert_response.data:
-                print("✅ Budget created successfully in database")
+                print(f"✅ Budget for year {year} created successfully in database")
                 return jsonify({
-                    'message': 'Budget created successfully',
+                    'message': f'Budget for year {year} created successfully',
                     'budget': insert_response.data[0]
                 })
             else:
-                print("❌ Budget creation failed")
-                return jsonify({'error': 'Failed to create budget in database'}), 500
+                print(f"❌ Budget creation failed for year {year}")
+                return jsonify({'error': f'Failed to create budget for year {year}'}), 500
             
     except Exception as e:
         print(f"❌ Budget POST error: {e}")
@@ -236,6 +247,26 @@ def update_budget():
         return jsonify({
             'error': f'Failed to update budget: {str(e)}'
         }), 500
+
+@app.route('/api/budgets/years')
+def get_budget_years():
+    """Get all years that have budgets"""
+    try:
+        if not supabase:
+            return jsonify({'data': []}), 500
+        
+        response = supabase.table("budgets").select("year").order("year", desc=True).execute()
+        
+        years = []
+        if response.data:
+            years = list(set([budget['year'] for budget in response.data]))
+            years.sort(reverse=True)
+        
+        return jsonify({'years': years})
+        
+    except Exception as e:
+        print(f"❌ Get budget years error: {e}")
+        return jsonify({'years': []}), 500
 
 @app.route('/api/dashboard-data')
 def dashboard_data():
@@ -272,8 +303,8 @@ def dashboard_data():
                 total_unsettled += float(bill['unsettled_charges'] or 0)
                 total_paid += float(bill.get('amount_paid') or 0)
         
-        # Get budget data
-        budget_response = supabase.table("budgets").select("*").execute()
+        # Get budget data for current year
+        budget_response = supabase.table("budgets").select("*").eq("year", current_year).execute()
         
         if budget_response.data and len(budget_response.data) > 0:
             budget_data = budget_response.data[0]
@@ -300,13 +331,17 @@ def dashboard_data():
             'water_balance': water_allocated - water_total,
             'electricity_balance': electricity_allocated - electricity_total,
             'telephone_balance': telephone_allocated - telephone_total,
-            'total_balance': total_allocated - total_current
+            'total_balance': total_allocated - total_current,
+            'year': current_year
         }
         
         # Format numbers for display
         formatted_budget = {}
         for key, value in budget_calculations.items():
-            formatted_budget[key] = format_currency(value)
+            if key == 'year':
+                formatted_budget[key] = value
+            else:
+                formatted_budget[key] = format_currency(value)
         
         formatted_current = {
             'water': format_currency(water_total),
@@ -318,6 +353,7 @@ def dashboard_data():
         }
         
         print(f"📈 Dashboard data prepared:")
+        print(f"   Year: {current_year}")
         print(f"   Budget: Total=${total_allocated}, Water=${water_allocated}, Electricity=${electricity_allocated}, Telephone=${telephone_allocated}")
         print(f"   Used: Total=${total_current}, Water=${water_total}, Electricity=${electricity_total}, Telephone=${telephone_total}")
         
@@ -340,6 +376,66 @@ def dashboard_data():
     except Exception as e:
         print(f"❌ Dashboard data error: {e}")
         print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/yearly-budget-data')
+def yearly_budget_data():
+    try:
+        current_year = datetime.now().year
+        
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        # Get budgets for multiple years
+        years_to_fetch = [current_year - 1, current_year, current_year + 1]
+        yearly_data = []
+        
+        for year in years_to_fetch:
+            # Get budget for this year
+            budget_response = supabase.table("budgets").select("*").eq("year", year).execute()
+            
+            if budget_response.data and len(budget_response.data) > 0:
+                budget_data = budget_response.data[0]
+                total_allocated = float(budget_data.get('total_allocated', 60000))
+                water_allocated = float(budget_data.get('water_allocated', 15000))
+                electricity_allocated = float(budget_data.get('electricity_allocated', 35000))
+                telephone_allocated = float(budget_data.get('telephone_allocated', 10000))
+            else:
+                total_allocated = 60000
+                water_allocated = 15000
+                electricity_allocated = 35000
+                telephone_allocated = 10000
+            
+            # Get bills for this year
+            response = supabase.table("utility_bills").select("*").eq("year", year).execute()
+            
+            water_used = 0
+            electricity_used = 0
+            telephone_used = 0
+            
+            if response.data:
+                for bill in response.data:
+                    if bill['utility_type'] == 'water':
+                        water_used += float(bill['current_charges'] or 0)
+                    elif bill['utility_type'] == 'electricity':
+                        electricity_used += float(bill['current_charges'] or 0)
+                    elif bill['utility_type'] == 'telephone':
+                        telephone_used += float(bill['current_charges'] or 0)
+            
+            yearly_data.append({
+                'year': year,
+                'water_used': water_used,
+                'electricity_used': electricity_used,
+                'telephone_used': telephone_used,
+                'water_budget': water_allocated,
+                'electricity_budget': electricity_allocated,
+                'telephone_budget': telephone_allocated,
+                'total_budget': total_allocated
+            })
+        
+        return jsonify(yearly_data)
+    except Exception as e:
+        print(f"❌ Yearly budget data error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ============ OTHER API ROUTES ============
@@ -368,7 +464,7 @@ def test_connection():
 
 @app.route('/api/init-budget', methods=['POST'])
 def init_budget():
-    """Initialize default budget"""
+    """Initialize default budget for current year"""
     try:
         print("📊 POST /api/init-budget called")
         
@@ -377,7 +473,8 @@ def init_budget():
                 'error': 'Database not connected'
             }), 500
         
-        response = supabase.table("budgets").select("*").execute()
+        current_year = datetime.now().year
+        response = supabase.table("budgets").select("*").eq("year", current_year).execute()
         
         if not response.data or len(response.data) == 0:
             default_budget = {
@@ -385,17 +482,18 @@ def init_budget():
                 "water_allocated": 15000.00,
                 "electricity_allocated": 35000.00,
                 "telephone_allocated": 10000.00,
+                "year": current_year,
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
             }
             
             result = supabase.table("budgets").insert(default_budget).execute()
             if result.data:
-                return jsonify({'message': 'Default budget initialized'})
+                return jsonify({'message': f'Default budget for {current_year} initialized'})
             else:
                 return jsonify({'error': 'Failed to initialize budget'}), 500
         else:
-            return jsonify({'message': 'Budget already exists'})
+            return jsonify({'message': 'Budget already exists for this year'})
             
     except Exception as e:
         print(f"❌ Init budget error: {e}")
@@ -427,11 +525,11 @@ def create_school():
         data = request.get_json()
         school_data = {
             "name": data.get('name'),
-            "code": data.get('code'),
+            "cluster_number": data.get('cluster_number'),
+            "school_number": data.get('school_number'),
+            "bmo_phone": data.get('bmo_phone'),
+            "principal_name": data.get('principal_name'),
             "address": data.get('address'),
-            "contact_person": data.get('contact_person'),
-            "contact_phone": data.get('contact_phone'),
-            "email": data.get('email'),
             "created_at": datetime.now().isoformat()
         }
         
@@ -456,11 +554,11 @@ def update_school():
         school_id = data.get('id')
         school_data = {
             "name": data.get('name'),
-            "code": data.get('code'),
+            "cluster_number": data.get('cluster_number'),
+            "school_number": data.get('school_number'),
+            "bmo_phone": data.get('bmo_phone'),
+            "principal_name": data.get('principal_name'),
             "address": data.get('address'),
-            "contact_person": data.get('contact_person'),
-            "contact_phone": data.get('contact_phone'),
-            "email": data.get('email'),
             "updated_at": datetime.now().isoformat()
         }
         
@@ -515,11 +613,13 @@ def create_department():
     try:
         data = request.get_json()
         department_data = {
-            "name": data.get('name'),
-            "code": data.get('code'),
-            "description": data.get('description'),
-            "contact_person": data.get('contact_person'),
-            "contact_phone": data.get('contact_phone'),
+            "name": data.get('unit_name'),
+            "division_name": data.get('division_name'),
+            "department_name": data.get('department_name'),
+            "unit_name": data.get('unit_name'),
+            "hotline_numbers": data.get('hotline_numbers'),
+            "address": data.get('address'),
+            "notes": data.get('notes'),
             "created_at": datetime.now().isoformat()
         }
         
@@ -543,11 +643,13 @@ def update_department():
         data = request.get_json()
         department_id = data.get('id')
         department_data = {
-            "name": data.get('name'),
-            "code": data.get('code'),
-            "description": data.get('description'),
-            "contact_person": data.get('contact_person'),
-            "contact_phone": data.get('contact_phone'),
+            "name": data.get('unit_name'),
+            "division_name": data.get('division_name'),
+            "department_name": data.get('department_name'),
+            "unit_name": data.get('unit_name'),
+            "hotline_numbers": data.get('hotline_numbers'),
+            "address": data.get('address'),
+            "notes": data.get('notes'),
             "updated_at": datetime.now().isoformat()
         }
         
@@ -837,61 +939,6 @@ def upload_bill_image():
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-
-@app.route('/api/yearly-budget-data')
-def yearly_budget_data():
-    try:
-        current_year = datetime.now().year
-        
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        
-        budget_response = supabase.table("budgets").select("*").execute()
-        
-        if budget_response.data and len(budget_response.data) > 0:
-            budget_data = budget_response.data[0]
-            total_allocated = float(budget_data.get('total_allocated', 60000))
-            water_allocated = float(budget_data.get('water_allocated', 15000))
-            electricity_allocated = float(budget_data.get('electricity_allocated', 35000))
-            telephone_allocated = float(budget_data.get('telephone_allocated', 10000))
-        else:
-            total_allocated = 60000
-            water_allocated = 15000
-            electricity_allocated = 35000
-            telephone_allocated = 10000
-        
-        yearly_data = []
-        for year in [current_year - 1, current_year, current_year + 1]:
-            response = supabase.table("utility_bills").select("*").eq("year", year).execute()
-            
-            water_used = 0
-            electricity_used = 0
-            telephone_used = 0
-            
-            if response.data:
-                for bill in response.data:
-                    if bill['utility_type'] == 'water':
-                        water_used += float(bill['current_charges'] or 0)
-                    elif bill['utility_type'] == 'electricity':
-                        electricity_used += float(bill['current_charges'] or 0)
-                    elif bill['utility_type'] == 'telephone':
-                        telephone_used += float(bill['current_charges'] or 0)
-            
-            yearly_data.append({
-                'year': year,
-                'water_used': water_used,
-                'electricity_used': electricity_used,
-                'telephone_used': telephone_used,
-                'water_budget': water_allocated,
-                'electricity_budget': electricity_allocated,
-                'telephone_budget': telephone_allocated,
-                'total_budget': total_allocated
-            })
-        
-        return jsonify(yearly_data)
-    except Exception as e:
-        print(f"❌ Yearly budget data error: {e}")
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/generate-report', methods=['POST'])
 def generate_report():
