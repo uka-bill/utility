@@ -146,18 +146,10 @@ def create_financial_year():
         data = request.get_json()
         print(f"📅 Received financial year data: {data}")
         
-        # Extract and convert data with proper error handling
-        financial_year = data.get('financialYear')
-        start_year = data.get('startYear')
-        end_year = data.get('endYear')
-        
-        if not start_year or not end_year:
-            return jsonify({'error': 'Start year and end year are required'}), 400
-        
         financial_year_data = {
-            "financial_year": financial_year,
-            "start_year": int(start_year),
-            "end_year": int(end_year),
+            "financial_year": data.get('financialYear'),
+            "start_year": int(data.get('startYear')),
+            "end_year": int(data.get('endYear')),
             "total_allocated": float(data.get('totalAllocated', 60000)),
             "water_allocated": float(data.get('waterAllocated', 15000)),
             "electricity_allocated": float(data.get('electricityAllocated', 35000)),
@@ -242,24 +234,33 @@ def update_financial_year(fy_id):
         data = request.get_json()
         print(f"📅 Update financial year data: {data}")
         
-        # Extract data with proper validation
-        financial_year = data.get('financialYear')
-        start_year = data.get('startYear')
-        end_year = data.get('endYear')
+        # Create update data dictionary with only provided fields
+        financial_year_data = {}
         
-        if not start_year or not end_year:
-            return jsonify({'error': 'Start year and end year are required'}), 400
+        if data.get('financialYear'):
+            financial_year_data["financial_year"] = data.get('financialYear')
         
-        financial_year_data = {
-            "financial_year": financial_year,
-            "start_year": int(start_year),
-            "end_year": int(end_year),
-            "total_allocated": float(data.get('totalAllocated', 60000)),
-            "water_allocated": float(data.get('waterAllocated', 15000)),
-            "electricity_allocated": float(data.get('electricityAllocated', 35000)),
-            "telephone_allocated": float(data.get('telephoneAllocated', 10000)),
-            "updated_at": datetime.now().isoformat()
-        }
+        if data.get('startYear') is not None:
+            financial_year_data["start_year"] = int(data.get('startYear'))
+        
+        if data.get('endYear') is not None:
+            financial_year_data["end_year"] = int(data.get('endYear'))
+        
+        if data.get('totalAllocated') is not None:
+            financial_year_data["total_allocated"] = float(data.get('totalAllocated', 60000))
+        
+        if data.get('waterAllocated') is not None:
+            financial_year_data["water_allocated"] = float(data.get('waterAllocated', 15000))
+        
+        if data.get('electricityAllocated') is not None:
+            financial_year_data["electricity_allocated"] = float(data.get('electricityAllocated', 35000))
+        
+        if data.get('telephoneAllocated') is not None:
+            financial_year_data["telephone_allocated"] = float(data.get('telephoneAllocated', 10000))
+        
+        financial_year_data["updated_at"] = datetime.now().isoformat()
+        
+        print(f"📅 Final update data: {financial_year_data}")
         
         response = supabase.table("financial_years").update(financial_year_data).eq("id", fy_id).execute()
         
@@ -548,7 +549,7 @@ def create_school():
             "bmo_phone": data.get('bmoPhone'),
             "principal_name": data.get('principalName'),
             "address": data.get('address'),
-            "notes": data.get('notes'),  # Added notes field
+            "notes": data.get('notes'),
             "created_at": datetime.now().isoformat()
         }
         
@@ -578,7 +579,7 @@ def update_school():
             "bmo_phone": data.get('bmoPhone'),
             "principal_name": data.get('principalName'),
             "address": data.get('address'),
-            "notes": data.get('notes'),  # Added notes field
+            "notes": data.get('notes'),
             "updated_at": datetime.now().isoformat()
         }
         
@@ -786,6 +787,9 @@ def create_utility_bill():
             if dept_response.data and len(dept_response.data) > 0:
                 entity_name = dept_response.data[0]['name']
         
+        # Get current date for default values
+        current_date = datetime.now()
+        
         bill_data = {
             "utility_type": data.get('utility_type'),
             "entity_type": data.get('entity_type'),
@@ -800,10 +804,10 @@ def create_utility_bill():
             "amount_paid": float(data.get('amount_paid', 0)),
             "consumption_m3": float(data.get('consumption_m3', 0)) if data.get('consumption_m3') else None,
             "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
-            "month": int(data.get('month', datetime.now().month)),
-            "year": int(data.get('year', datetime.now().year)),
-            "bill_month": int(data.get('bill_month', data.get('month', datetime.now().month))),  # Month of the bill
-            "bill_year": int(data.get('bill_year', data.get('year', datetime.now().year))),  # Year of the bill
+            "month": int(data.get('month', current_date.month)),  # Month for filtering
+            "year": int(data.get('year', current_date.year)),  # Year for filtering
+            "bill_month": int(data.get('bill_month', current_date.month)),  # Month of the bill
+            "bill_year": int(data.get('bill_year', current_date.year)),  # Year of the bill
             "bill_image": data.get('bill_image'),
             "created_at": datetime.now().isoformat()
         }
@@ -840,6 +844,9 @@ def update_utility_bill():
             if dept_response.data and len(dept_response.data) > 0:
                 entity_name = dept_response.data[0]['name']
         
+        # Get current date for default values
+        current_date = datetime.now()
+        
         bill_data = {
             "utility_type": data.get('utility_type'),
             "entity_type": data.get('entity_type'),
@@ -854,11 +861,12 @@ def update_utility_bill():
             "amount_paid": float(data.get('amount_paid', 0)),
             "consumption_m3": float(data.get('consumption_m3', 0)) if data.get('consumption_m3') else None,
             "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
-            "month": int(data.get('month', datetime.now().month)),
-            "year": int(data.get('year', datetime.now().year)),
-            "bill_month": int(data.get('bill_month', data.get('month', datetime.now().month))),  # Month of the bill
-            "bill_year": int(data.get('bill_year', data.get('year', datetime.now().year))),  # Year of the bill
-            "bill_image": data.get('bill_image')
+            "month": int(data.get('month', current_date.month)),  # Month for filtering
+            "year": int(data.get('year', current_date.year)),  # Year for filtering
+            "bill_month": int(data.get('bill_month', current_date.month)),  # Month of the bill
+            "bill_year": int(data.get('bill_year', current_date.year)),  # Year of the bill
+            "bill_image": data.get('bill_image'),
+            "updated_at": datetime.now().isoformat()
         }
         
         response = supabase.table("utility_bills").update(bill_data).eq("id", bill_id).execute()
