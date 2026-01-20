@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
 import os
 from supabase import create_client, Client
@@ -146,10 +147,18 @@ def create_financial_year():
         data = request.get_json()
         print(f"📅 Received financial year data: {data}")
         
+        # Extract and convert data with proper error handling
+        financial_year = data.get('financialYear')
+        start_year = data.get('startYear')
+        end_year = data.get('endYear')
+        
+        if not start_year or not end_year:
+            return jsonify({'error': 'Start year and end year are required'}), 400
+        
         financial_year_data = {
-            "financial_year": data.get('financialYear'),
-            "start_year": int(data.get('startYear')),
-            "end_year": int(data.get('endYear')),
+            "financial_year": financial_year,
+            "start_year": int(start_year),
+            "end_year": int(end_year),
             "total_allocated": float(data.get('totalAllocated', 60000)),
             "water_allocated": float(data.get('waterAllocated', 15000)),
             "electricity_allocated": float(data.get('electricityAllocated', 35000)),
@@ -234,10 +243,18 @@ def update_financial_year(fy_id):
         data = request.get_json()
         print(f"📅 Update financial year data: {data}")
         
+        # Extract data with proper validation
+        financial_year = data.get('financialYear')
+        start_year = data.get('startYear')
+        end_year = data.get('endYear')
+        
+        if not start_year or not end_year:
+            return jsonify({'error': 'Start year and end year are required'}), 400
+        
         financial_year_data = {
-            "financial_year": data.get('financialYear'),
-            "start_year": int(data.get('startYear')),
-            "end_year": int(data.get('endYear')),
+            "financial_year": financial_year,
+            "start_year": int(start_year),
+            "end_year": int(end_year),
             "total_allocated": float(data.get('totalAllocated', 60000)),
             "water_allocated": float(data.get('waterAllocated', 15000)),
             "electricity_allocated": float(data.get('electricityAllocated', 35000)),
@@ -532,7 +549,7 @@ def create_school():
             "bmo_phone": data.get('bmoPhone'),
             "principal_name": data.get('principalName'),
             "address": data.get('address'),
-            "notes": data.get('notes'),
+            "notes": data.get('notes'),  # Added notes field
             "created_at": datetime.now().isoformat()
         }
         
@@ -562,7 +579,7 @@ def update_school():
             "bmo_phone": data.get('bmoPhone'),
             "principal_name": data.get('principalName'),
             "address": data.get('address'),
-            "notes": data.get('notes'),
+            "notes": data.get('notes'),  # Added notes field
             "updated_at": datetime.now().isoformat()
         }
         
@@ -786,8 +803,8 @@ def create_utility_bill():
             "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
             "month": int(data.get('month', datetime.now().month)),
             "year": int(data.get('year', datetime.now().year)),
-            "bill_month": int(data.get('bill_month', datetime.now().month)),  # Month of the bill
-            "bill_year": int(data.get('bill_year', datetime.now().year)),  # Year of the bill
+            "bill_month": int(data.get('bill_month', data.get('month', datetime.now().month))),  # Month of the bill
+            "bill_year": int(data.get('bill_year', data.get('year', datetime.now().year))),  # Year of the bill
             "bill_image": data.get('bill_image'),
             "created_at": datetime.now().isoformat()
         }
@@ -840,8 +857,8 @@ def update_utility_bill():
             "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
             "month": int(data.get('month', datetime.now().month)),
             "year": int(data.get('year', datetime.now().year)),
-            "bill_month": int(data.get('bill_month', datetime.now().month)),  # Month of the bill
-            "bill_year": int(data.get('bill_year', datetime.now().year)),  # Year of the bill
+            "bill_month": int(data.get('bill_month', data.get('month', datetime.now().month))),  # Month of the bill
+            "bill_year": int(data.get('bill_year', data.get('year', datetime.now().year))),  # Year of the bill
             "bill_image": data.get('bill_image')
         }
         
