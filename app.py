@@ -1,4 +1,3 @@
-app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
 import os
 from supabase import create_client, Client
@@ -119,27 +118,93 @@ def export_page():
 
 # ============ API ROUTES ============
 
-@app.route('/api/budget-years', methods=['GET'])
-def get_budget_years():
+@app.route('/api/financial-years', methods=['GET'])
+def get_financial_years():
     """Get all financial years"""
     try:
-        print("📊 GET /api/budget-years called")
+        print("📅 GET /api/financial-years called")
+        
+        if not supabase:
+            return jsonify({'data': []}), 500
+        
+        response = supabase.table("financial_years").select("*").order("start_year", desc=True).execute()
+        return jsonify(response.data if response.data else [])
+        
+    except Exception as e:
+        print(f"❌ Financial years GET error: {e}")
+        return jsonify({'data': []}), 500
+
+@app.route('/api/financial-years', methods=['POST'])
+def create_financial_year():
+    """Create a new financial year"""
+    try:
+        print("📅 POST /api/financial-years called")
         
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        response = supabase.table("financial_years").select("*").order("year", desc=True).execute()
+        data = request.get_json()
+        print(f"📅 Received financial year data: {data}")
+        
+        financial_year_data = {
+            "financial_year": data.get('financialYear'),
+            "start_year": int(data.get('startYear')),
+            "end_year": int(data.get('endYear')),
+            "total_allocated": float(data.get('totalAllocated', 60000)),
+            "water_allocated": float(data.get('waterAllocated', 15000)),
+            "electricity_allocated": float(data.get('electricityAllocated', 35000)),
+            "telephone_allocated": float(data.get('telephoneAllocated', 10000)),
+            "created_at": datetime.now().isoformat()
+        }
+        
+        response = supabase.table("financial_years").insert(financial_year_data).execute()
         
         if response.data:
-            return jsonify(response.data)
+            print("✅ Financial year created successfully")
+            return jsonify({
+                'message': 'Financial year created successfully',
+                'financial_year': response.data[0]
+            })
         else:
-            # Create current year if none exists
-            current_year = datetime.now().year
-            default_year = {
-                "year": current_year,
-                "display_name": f"{current_year}-{current_year+1}",
-                "start_date": f"{current_year}-04-01",
-                "end_date": f"{current_year+1}-03-31",
+            print("❌ Financial year creation failed")
+            return jsonify({'error': 'Failed to create financial year'}), 500
+            
+    except Exception as e:
+        print(f"❌ Financial year POST error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to create financial year: {str(e)}'}), 500
+
+@app.route('/api/financial-years/current')
+def get_current_financial_year():
+    """Get current financial year based on date"""
+    try:
+        print("📅 GET /api/financial-years/current called")
+        
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        current_date = datetime.now()
+        current_year = current_date.year
+        current_month = current_date.month
+        
+        # Financial year is April to March (April = 4, March = 3)
+        if current_month >= 4:  # April or later
+            start_year = current_year
+            end_year = current_year + 1
+        else:  # January to March
+            start_year = current_year - 1
+            end_year = current_year
+        
+        response = supabase.table("financial_years").select("*").eq("start_year", start_year).eq("end_year", end_year).execute()
+        
+        if response.data and len(response.data) > 0:
+            return jsonify(response.data[0])
+        else:
+            # Create a default financial year if none exists
+            default_financial_year = {
+                "financial_year": f"{start_year}-{end_year}",
+                "start_year": start_year,
+                "end_year": end_year,
                 "total_allocated": 60000.00,
                 "water_allocated": 15000.00,
                 "electricity_allocated": 35000.00,
@@ -147,117 +212,114 @@ def get_budget_years():
                 "created_at": datetime.now().isoformat()
             }
             
-            result = supabase.table("financial_years").insert(default_year).execute()
-            return jsonify([default_year])
-            
+            create_response = supabase.table("financial_years").insert(default_financial_year).execute()
+            if create_response.data:
+                return jsonify(create_response.data[0])
+            else:
+                return jsonify({'error': 'Failed to create default financial year'}), 500
+        
     except Exception as e:
-        print(f"❌ Budget years GET error: {e}")
+        print(f"❌ Current financial year error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/budget-years', methods=['POST'])
-def create_budget_year():
-    """Create a new financial year"""
+@app.route('/api/financial-years/<int:fy_id>', methods=['PUT'])
+def update_financial_year(fy_id):
+    """Update a financial year"""
     try:
-        print("📊 POST /api/budget-years called")
+        print(f"📅 PUT /api/financial-years/{fy_id} called")
         
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
         data = request.get_json()
-        year = int(data.get('year'))
-        display_name = data.get('display_name', f"{year}-{year+1}")
-        total_allocated = float(data.get('total_allocated', 60000))
-        water_allocated = float(data.get('water_allocated', 15000))
-        electricity_allocated = float(data.get('electricity_allocated', 35000))
-        telephone_allocated = float(data.get('telephone_allocated', 10000))
+        print(f"📅 Update financial year data: {data}")
         
-        # Set financial year dates (April 1 to March 31)
-        start_date = f"{year}-04-01"
-        end_date = f"{year+1}-03-31"
-        
-        budget_year_data = {
-            "year": year,
-            "display_name": display_name,
-            "start_date": start_date,
-            "end_date": end_date,
-            "total_allocated": total_allocated,
-            "water_allocated": water_allocated,
-            "electricity_allocated": electricity_allocated,
-            "telephone_allocated": telephone_allocated,
-            "created_at": datetime.now().isoformat()
-        }
-        
-        response = supabase.table("financial_years").insert(budget_year_data).execute()
-        
-        if response.data:
-            return jsonify({
-                'message': 'Financial year created successfully',
-                'budget_year': response.data[0]
-            })
-        else:
-            return jsonify({'error': 'Failed to create financial year'}), 500
-            
-    except Exception as e:
-        print(f"❌ Create budget year error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/budget-years/<int:year>', methods=['PUT'])
-def update_budget_year(year):
-    """Update a financial year budget"""
-    try:
-        print(f"📊 PUT /api/budget-years/{year} called")
-        
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        
-        data = request.get_json()
-        
-        budget_year_data = {
-            "display_name": data.get('display_name'),
-            "total_allocated": float(data.get('total_allocated', 60000)),
-            "water_allocated": float(data.get('water_allocated', 15000)),
-            "electricity_allocated": float(data.get('electricity_allocated', 35000)),
-            "telephone_allocated": float(data.get('telephone_allocated', 10000)),
+        financial_year_data = {
+            "financial_year": data.get('financialYear'),
+            "start_year": int(data.get('startYear')),
+            "end_year": int(data.get('endYear')),
+            "total_allocated": float(data.get('totalAllocated', 60000)),
+            "water_allocated": float(data.get('waterAllocated', 15000)),
+            "electricity_allocated": float(data.get('electricityAllocated', 35000)),
+            "telephone_allocated": float(data.get('telephoneAllocated', 10000)),
             "updated_at": datetime.now().isoformat()
         }
         
-        response = supabase.table("financial_years").update(budget_year_data).eq("year", year).execute()
+        response = supabase.table("financial_years").update(financial_year_data).eq("id", fy_id).execute()
         
         if response.data:
+            print("✅ Financial year updated successfully")
             return jsonify({
-                'message': 'Budget updated successfully',
-                'budget_year': response.data[0]
+                'message': 'Financial year updated successfully',
+                'financial_year': response.data[0]
             })
         else:
-            return jsonify({'error': 'Failed to update budget'}), 500
+            print("❌ Financial year update failed")
+            return jsonify({'error': 'Failed to update financial year'}), 500
             
     except Exception as e:
-        print(f"❌ Update budget year error: {e}")
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Financial year PUT error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to update financial year: {str(e)}'}), 500
 
 @app.route('/api/dashboard-data')
 def dashboard_data():
-    """Get dashboard data with budget and current usage"""
+    """Get dashboard data with financial year budget and current usage"""
     try:
         print("📈 GET /api/dashboard-data called")
         
-        current_month = datetime.now().month
-        current_year = datetime.now().year
-        
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        
         # Get current financial year
-        financial_year_response = supabase.table("financial_years").select("*").order("year", desc=True).limit(1).execute()
+        fy_response = supabase.table("financial_years").select("*").order("start_year", desc=True).limit(1).execute()
         
-        if not financial_year_response.data or len(financial_year_response.data) == 0:
-            return jsonify({'error': 'No financial year found'}), 400
+        if not fy_response.data or len(fy_response.data) == 0:
+            # Create a default financial year
+            current_date = datetime.now()
+            current_year = current_date.year
+            current_month = current_date.month
+            
+            if current_month >= 4:  # April or later
+                start_year = current_year
+                end_year = current_year + 1
+            else:  # January to March
+                start_year = current_year - 1
+                end_year = current_year
+            
+            default_fy = {
+                "financial_year": f"{start_year}-{end_year}",
+                "start_year": start_year,
+                "end_year": end_year,
+                "total_allocated": 60000.00,
+                "water_allocated": 15000.00,
+                "electricity_allocated": 35000.00,
+                "telephone_allocated": 10000.00,
+                "created_at": datetime.now().isoformat()
+            }
+            
+            fy_create_response = supabase.table("financial_years").insert(default_fy).execute()
+            if fy_create_response.data:
+                current_fy = fy_create_response.data[0]
+            else:
+                current_fy = {
+                    'financial_year': f'{start_year}-{end_year}',
+                    'start_year': start_year,
+                    'end_year': end_year,
+                    'total_allocated': 60000.00,
+                    'water_allocated': 15000.00,
+                    'electricity_allocated': 35000.00,
+                    'telephone_allocated': 10000.00
+                }
+        else:
+            current_fy = fy_response.data[0]
         
-        current_financial_year = financial_year_response.data[0]
-        financial_year = current_financial_year['year']
+        print(f"📈 Current financial year: {current_fy['financial_year']}")
         
-        # Get all bills for current financial year
-        response = supabase.table("utility_bills").select("*").eq("financial_year", financial_year).execute()
+        # Get bills for current financial year (April to March)
+        start_year = current_fy['start_year']
+        end_year = current_fy['end_year']
+        
+        # Get all bills between April start_year and March end_year
+        query = supabase.table("utility_bills").select("*")
+        response = query.execute()
         
         water_total = 0
         electricity_total = 0
@@ -268,33 +330,45 @@ def dashboard_data():
         
         if response.data:
             for bill in response.data:
-                if bill['utility_type'] == 'water':
-                    water_total += float(bill['current_charges'] or 0)
-                elif bill['utility_type'] == 'electricity':
-                    electricity_total += float(bill['current_charges'] or 0)
-                elif bill['utility_type'] == 'telephone':
-                    telephone_total += float(bill['current_charges'] or 0)
+                bill_year = bill['year']
+                bill_month = bill['month']
                 
-                total_current += float(bill['current_charges'] or 0)
-                total_unsettled += float(bill['unsettled_charges'] or 0)
-                total_paid += float(bill.get('amount_paid') or 0)
+                # Check if bill falls within the financial year
+                # Financial year: April (4) start_year to March (3) end_year
+                if bill_year == start_year and bill_month >= 4:  # April to Dec start_year
+                    include_bill = True
+                elif bill_year == end_year and bill_month <= 3:  # Jan to March end_year
+                    include_bill = True
+                else:
+                    include_bill = False
+                
+                if include_bill:
+                    if bill['utility_type'] == 'water':
+                        water_total += float(bill['current_charges'] or 0)
+                    elif bill['utility_type'] == 'electricity':
+                        electricity_total += float(bill['current_charges'] or 0)
+                    elif bill['utility_type'] == 'telephone':
+                        telephone_total += float(bill['current_charges'] or 0)
+                    
+                    total_current += float(bill['current_charges'] or 0)
+                    total_unsettled += float(bill['unsettled_charges'] or 0)
+                    total_paid += float(bill.get('amount_paid') or 0)
         
         # Calculate budget usage and remaining
         budget_calculations = {
-            'financial_year': financial_year,
-            'display_name': current_financial_year['display_name'],
-            'total_allocated': float(current_financial_year.get('total_allocated', 60000)),
-            'water_allocated': float(current_financial_year.get('water_allocated', 15000)),
-            'electricity_allocated': float(current_financial_year.get('electricity_allocated', 35000)),
-            'telephone_allocated': float(current_financial_year.get('telephone_allocated', 10000)),
+            'financial_year': current_fy['financial_year'],
+            'total_allocated': float(current_fy.get('total_allocated', 60000)),
+            'water_allocated': float(current_fy.get('water_allocated', 15000)),
+            'electricity_allocated': float(current_fy.get('electricity_allocated', 35000)),
+            'telephone_allocated': float(current_fy.get('telephone_allocated', 10000)),
             'water_used': water_total,
             'electricity_used': electricity_total,
             'telephone_used': telephone_total,
             'total_used': total_current,
-            'water_balance': float(current_financial_year.get('water_allocated', 15000)) - water_total,
-            'electricity_balance': float(current_financial_year.get('electricity_allocated', 35000)) - electricity_total,
-            'telephone_balance': float(current_financial_year.get('telephone_allocated', 10000)) - telephone_total,
-            'total_balance': float(current_financial_year.get('total_allocated', 60000)) - total_current
+            'water_balance': float(current_fy.get('water_allocated', 15000)) - water_total,
+            'electricity_balance': float(current_fy.get('electricity_allocated', 35000)) - electricity_total,
+            'telephone_balance': float(current_fy.get('telephone_allocated', 10000)) - telephone_total,
+            'total_balance': float(current_fy.get('total_allocated', 60000)) - total_current
         }
         
         # Format numbers for display
@@ -314,7 +388,10 @@ def dashboard_data():
             'paid': format_currency(total_paid)
         }
         
-        print(f"📈 Dashboard data prepared for financial year {financial_year}")
+        print(f"📈 Dashboard data prepared:")
+        print(f"   FY: {current_fy['financial_year']}")
+        print(f"   Budget: Total=${current_fy.get('total_allocated', 60000)}, Water=${current_fy.get('water_allocated', 15000)}, Electricity=${current_fy.get('electricity_allocated', 35000)}, Telephone=${current_fy.get('telephone_allocated', 10000)}")
+        print(f"   Used: Total=${total_current}, Water=${water_total}, Electricity=${electricity_total}, Telephone=${telephone_total}")
         
         return jsonify({
             'budget_data': formatted_budget,
@@ -339,52 +416,65 @@ def dashboard_data():
 
 @app.route('/api/yearly-budget-data')
 def yearly_budget_data():
-    """Get budget data for all financial years"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
         # Get all financial years
-        financial_years_response = supabase.table("financial_years").select("*").order("year", desc=True).execute()
+        fy_response = supabase.table("financial_years").select("*").order("start_year", desc=True).execute()
         
-        if not financial_years_response.data:
+        if not fy_response.data or len(fy_response.data) == 0:
             return jsonify([])
         
         yearly_data = []
         
-        for financial_year in financial_years_response.data:
-            year = financial_year['year']
+        for fy in fy_response.data:
+            start_year = fy['start_year']
+            end_year = fy['end_year']
             
             # Get bills for this financial year
-            bills_response = supabase.table("utility_bills").select("*").eq("financial_year", year).execute()
+            query = supabase.table("utility_bills").select("*")
+            response = query.execute()
             
             water_used = 0
             electricity_used = 0
             telephone_used = 0
             
-            if bills_response.data:
-                for bill in bills_response.data:
-                    if bill['utility_type'] == 'water':
-                        water_used += float(bill['current_charges'] or 0)
-                    elif bill['utility_type'] == 'electricity':
-                        electricity_used += float(bill['current_charges'] or 0)
-                    elif bill['utility_type'] == 'telephone':
-                        telephone_used += float(bill['current_charges'] or 0)
+            if response.data:
+                for bill in response.data:
+                    bill_year = bill['year']
+                    bill_month = bill['month']
+                    
+                    # Check if bill falls within the financial year
+                    if bill_year == start_year and bill_month >= 4:  # April to Dec start_year
+                        include_bill = True
+                    elif bill_year == end_year and bill_month <= 3:  # Jan to March end_year
+                        include_bill = True
+                    else:
+                        include_bill = False
+                    
+                    if include_bill:
+                        if bill['utility_type'] == 'water':
+                            water_used += float(bill['current_charges'] or 0)
+                        elif bill['utility_type'] == 'electricity':
+                            electricity_used += float(bill['current_charges'] or 0)
+                        elif bill['utility_type'] == 'telephone':
+                            telephone_used += float(bill['current_charges'] or 0)
             
             yearly_data.append({
-                'year': year,
-                'display_name': financial_year['display_name'],
+                'financial_year': fy['financial_year'],
+                'start_year': start_year,
+                'end_year': end_year,
                 'water_used': water_used,
                 'electricity_used': electricity_used,
                 'telephone_used': telephone_used,
-                'water_budget': float(financial_year.get('water_allocated', 0)),
-                'electricity_budget': float(financial_year.get('electricity_allocated', 0)),
-                'telephone_budget': float(financial_year.get('telephone_allocated', 0)),
-                'total_budget': float(financial_year.get('total_allocated', 0))
+                'water_budget': float(fy.get('water_allocated', 15000)),
+                'electricity_budget': float(fy.get('electricity_allocated', 35000)),
+                'telephone_budget': float(fy.get('telephone_allocated', 10000)),
+                'total_budget': float(fy.get('total_allocated', 60000))
             })
         
         return jsonify(yearly_data)
-        
     except Exception as e:
         print(f"❌ Yearly budget data error: {e}")
         return jsonify({'error': str(e)}), 500
@@ -437,10 +527,10 @@ def create_school():
         data = request.get_json()
         school_data = {
             "name": data.get('name'),
-            "cluster_number": data.get('cluster_number'),
-            "school_number": data.get('school_number'),
-            "bmo_phone": data.get('bmo_phone'),
-            "principal_name": data.get('principal_name'),
+            "cluster_number": data.get('clusterNumber'),
+            "school_number": data.get('schoolNumber'),
+            "bmo_phone": data.get('bmoPhone'),
+            "principal_name": data.get('principalName'),
             "address": data.get('address'),
             "notes": data.get('notes'),
             "created_at": datetime.now().isoformat()
@@ -467,10 +557,10 @@ def update_school():
         school_id = data.get('id')
         school_data = {
             "name": data.get('name'),
-            "cluster_number": data.get('cluster_number'),
-            "school_number": data.get('school_number'),
-            "bmo_phone": data.get('bmo_phone'),
-            "principal_name": data.get('principal_name'),
+            "cluster_number": data.get('clusterNumber'),
+            "school_number": data.get('schoolNumber'),
+            "bmo_phone": data.get('bmoPhone'),
+            "principal_name": data.get('principalName'),
             "address": data.get('address'),
             "notes": data.get('notes'),
             "updated_at": datetime.now().isoformat()
@@ -527,11 +617,11 @@ def create_department():
     try:
         data = request.get_json()
         department_data = {
-            "name": data.get('unit_name'),  # Use unit_name as main name
-            "division_name": data.get('division_name'),
-            "department_name": data.get('department_name'),
-            "unit_name": data.get('unit_name'),
-            "hotline_numbers": data.get('hotline_numbers'),
+            "name": data.get('unitName'),  # Unit Name is the main name
+            "unit_name": data.get('unitName'),
+            "division_name": data.get('divisionName'),
+            "department_name": data.get('departmentName'),
+            "hotline_numbers": data.get('hotlineNumbers'),
             "address": data.get('address'),
             "notes": data.get('notes'),
             "created_at": datetime.now().isoformat()
@@ -557,11 +647,11 @@ def update_department():
         data = request.get_json()
         department_id = data.get('id')
         department_data = {
-            "name": data.get('unit_name'),  # Use unit_name as main name
-            "division_name": data.get('division_name'),
-            "department_name": data.get('department_name'),
-            "unit_name": data.get('unit_name'),
-            "hotline_numbers": data.get('hotline_numbers'),
+            "name": data.get('unitName'),  # Unit Name is the main name
+            "unit_name": data.get('unitName'),
+            "division_name": data.get('divisionName'),
+            "department_name": data.get('departmentName'),
+            "hotline_numbers": data.get('hotlineNumbers'),
             "address": data.get('address'),
             "notes": data.get('notes'),
             "updated_at": datetime.now().isoformat()
@@ -610,7 +700,6 @@ def api_utility_bills():
         entity_id = request.args.get('entity_id')
         month = request.args.get('month')
         year = request.args.get('year')
-        financial_year = request.args.get('financial_year')
         
         print(f"💡 Filters - utility: {utility_type}, entity: {entity_type}")
         
@@ -627,8 +716,6 @@ def api_utility_bills():
             query = query.eq("month", int(month))
         if year:
             query = query.eq("year", int(year))
-        if financial_year:
-            query = query.eq("financial_year", int(financial_year))
         
         response = query.execute()
         
@@ -699,7 +786,8 @@ def create_utility_bill():
             "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
             "month": int(data.get('month', datetime.now().month)),
             "year": int(data.get('year', datetime.now().year)),
-            "financial_year": int(data.get('financial_year', datetime.now().year)),
+            "bill_month": int(data.get('bill_month', datetime.now().month)),  # Month of the bill
+            "bill_year": int(data.get('bill_year', datetime.now().year)),  # Year of the bill
             "bill_image": data.get('bill_image'),
             "created_at": datetime.now().isoformat()
         }
@@ -752,7 +840,8 @@ def update_utility_bill():
             "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
             "month": int(data.get('month', datetime.now().month)),
             "year": int(data.get('year', datetime.now().year)),
-            "financial_year": int(data.get('financial_year', datetime.now().year)),
+            "bill_month": int(data.get('bill_month', datetime.now().month)),  # Month of the bill
+            "bill_year": int(data.get('bill_year', datetime.now().year)),  # Year of the bill
             "bill_image": data.get('bill_image')
         }
         
