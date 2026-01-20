@@ -1290,38 +1290,46 @@
             }
         }
 
-        // Save budget
-        async function saveBudget(budgetData) {
-            try {
-                console.log('Saving budget:', budgetData);
-                
-                const response = await fetch(`/api/financial-years/${budgetData.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(budgetData)
-                });
-                
-                const result = await response.json();
-                console.log('Budget save response:', result);
-                
-                if (response.ok) {
-                    alert('Budget updated successfully!');
-                    document.getElementById('budgetModal').style.display = 'none';
-                    // Reload financial years and dashboard data
-                    await loadFinancialYears();
-                    await loadDashboardData();
-                } else {
-                    alert('Error updating budget: ' + (result.error || 'Unknown error'));
-                    console.error('Budget update error:', result.error);
-                }
-            } catch (error) {
-                alert('Error updating budget. Please check the console for details.');
-                console.error('Error saving budget:', error);
-            }
-        }
+        // In the dashboard.html JavaScript section, update the saveBudget function:
 
+// Save budget
+async function saveBudget(budgetData) {
+    try {
+        console.log('Saving budget:', budgetData);
+        
+        const response = await fetch(`/api/financial-years/${budgetData.id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                financialYear: budgetData.financialYear,
+                totalAllocated: budgetData.totalAllocated,
+                waterAllocated: budgetData.waterAllocated,
+                electricityAllocated: budgetData.electricityAllocated,
+                telephoneAllocated: budgetData.telephoneAllocated
+                // Don't send startYear and endYear when updating
+            })
+        });
+        
+        const result = await response.json();
+        console.log('Budget save response:', result);
+        
+        if (response.ok) {
+            alert('Budget updated successfully!');
+            document.getElementById('budgetModal').style.display = 'none';
+            // Reload financial years and dashboard data
+            await loadFinancialYears();
+            await loadDashboardData();
+        } else {
+            alert('Error updating budget: ' + (result.error || 'Unknown error'));
+            console.error('Budget update error:', result.error);
+        }
+    } catch (error) {
+        alert('Error updating budget. Please check the console for details.');
+        console.error('Error saving budget:', error);
+    }
+}
         // Create new financial year
         async function createFinancialYear(financialYearData) {
             try {
@@ -1571,3 +1579,4 @@
     </script>
 </body>
 </html>
+
