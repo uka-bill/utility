@@ -190,6 +190,24 @@
             background: var(--secondary);
         }
         
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #3aa8d0;
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background: #e0861b;
+        }
+        
         .btn-sm {
             padding: 5px 10px;
             font-size: 0.8rem;
@@ -469,54 +487,11 @@
             font-weight: bold;
         }
         
-        .financial-year-banner {
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
+        .budget-info {
+            background: #f8f9fa;
             padding: 15px;
-            border-radius: 10px;
+            border-radius: 8px;
             margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .financial-year-banner h3 {
-            margin: 0;
-            font-size: 1.2rem;
-        }
-        
-        .financial-year-banner .btn {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        
-        .financial-year-banner .btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
-        .financial-year-select {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .financial-year-select select {
-            padding: 8px 12px;
-            border-radius: 5px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-        }
-        
-        .financial-year-select option {
-            color: #333;
-        }
-        
-        .budget-actions {
-            display: flex;
-            gap: 10px;
-            align-items: center;
         }
     </style>
 </head>
@@ -542,20 +517,6 @@
             <h1 class="page-title">Dashboard Overview</h1>
             <div>
                 <button class="btn btn-primary" id="refreshBtn">Refresh Data</button>
-            </div>
-        </div>
-        
-        <!-- Financial Year Banner -->
-        <div class="financial-year-banner" id="financialYearBanner">
-            <div>
-                <h3 id="currentFinancialYear">Financial Year: Loading...</h3>
-                <div style="font-size: 0.9rem; opacity: 0.9;">(April to March)</div>
-            </div>
-            <div class="financial-year-select">
-                <select id="financialYearSelect">
-                    <option value="">Loading years...</option>
-                </select>
-                <button class="btn btn-sm" id="editBudgetBtn">Edit Budget</button>
             </div>
         </div>
         
@@ -611,32 +572,32 @@
             <div class="stat-card water">
                 <h3>Water Charges</h3>
                 <div class="value" id="waterCharges">$0.00</div>
-                <div class="sub-value" id="waterSubtitle">Current Financial Year</div>
+                <div class="sub-value" id="waterSubtitle">Current Month</div>
             </div>
             
             <div class="stat-card electricity">
                 <h3>Electricity Charges</h3>
                 <div class="value" id="electricityCharges">$0.00</div>
-                <div class="sub-value" id="electricitySubtitle">Current Financial Year</div>
+                <div class="sub-value" id="electricitySubtitle">Current Month</div>
             </div>
             
             <div class="stat-card telephone">
                 <h3>Telephone Charges</h3>
                 <div class="value" id="telephoneCharges">$0.00</div>
-                <div class="sub-value" id="telephoneSubtitle">Current Financial Year</div>
+                <div class="sub-value" id="telephoneSubtitle">Current Month</div>
             </div>
             
             <div class="stat-card total">
                 <h3>Total Charges</h3>
                 <div class="value" id="totalCharges">$0.00</div>
-                <div class="sub-value" id="totalSubtitle">Current Financial Year</div>
+                <div class="sub-value" id="totalSubtitle">Current Month</div>
             </div>
         </div>
         
         <div class="dashboard-grid" id="dashboardGrid" style="display: none;">
             <div class="chart-container">
                 <div class="section-title">
-                    <span>Budget Usage Trend (By Financial Year)</span>
+                    <span>Budget Usage Trend</span>
                 </div>
                 
                 <!-- Chart Controls -->
@@ -648,6 +609,13 @@
                             <option value="water">Water</option>
                             <option value="electricity">Electricity</option>
                             <option value="telephone">Telephone</option>
+                        </select>
+                    </div>
+                    
+                    <div class="chart-control-group">
+                        <label class="filter-label">Financial Year</label>
+                        <select class="filter-select" id="chartFinancialYear">
+                            <!-- Financial years will be populated by JavaScript -->
                         </select>
                     </div>
                 </div>
@@ -668,16 +636,33 @@
             
             <div class="budget-container">
                 <div class="section-title">
-                    <span>Budget Allocation - <span id="budgetFinancialYear">2024-2025</span></span>
-                    <div class="budget-actions">
-                        <button class="btn btn-primary btn-sm" id="editBudgetBtn2">Edit Budget</button>
+                    <span>Financial Year Budget Allocation</span>
+                    <div style="display: flex; gap: 10px;">
+                        <select class="filter-select" id="financialYearSelect" style="width: 150px;">
+                            <!-- Financial years will be populated by JavaScript -->
+                        </select>
+                        <button class="btn btn-primary btn-sm" id="editBudgetBtn">Edit Budget</button>
+                        <button class="btn btn-success btn-sm" id="addFinancialYearBtn">New FY</button>
+                    </div>
+                </div>
+                
+                <div class="budget-info" id="financialYearInfo">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4 style="margin: 0; color: var(--primary);" id="currentFinancialYear">Financial Year: 2024-2025</h4>
+                            <p style="margin: 5px 0 0 0; color: var(--gray); font-size: 0.9em;" id="financialYearPeriod">Period: April 2024 - March 2025</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 1.2rem; font-weight: 700; color: var(--primary);" id="totalBudgetHeader">$60,000.00</div>
+                            <div style="font-size: 0.9rem; color: var(--gray);">Total Allocated Budget</div>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="budget-item budget-total">
                     <div class="budget-header">
                         <div class="budget-title">Total Budget</div>
-                        <div class="budget-amount" id="totalBudget">$60,000.00</div>
+                        <div class="budget-amount" id="totalBudgetAmount">$60,000.00</div>
                     </div>
                     <div class="budget-progress">
                         <div class="budget-progress-bar" id="totalProgressBar" style="width: 0%"></div>
@@ -737,15 +722,16 @@
     <div class="modal" id="budgetModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title" id="modalTitle">Edit Budget Allocation</h3>
+                <h3 class="modal-title" id="modalTitle">Edit Financial Year Budget</h3>
                 <button class="close-modal" id="closeBudgetModal">&times;</button>
             </div>
             
             <form id="budgetForm">
+                <input type="hidden" id="financialYearId">
+                
                 <div class="form-group">
-                    <label class="form-label">Financial Year (April to March)</label>
-                    <input type="text" class="form-control" id="financialYear" required placeholder="e.g., 2024-2025">
-                    <small style="color: var(--gray); font-size: 0.8rem;">Format: YYYY-YYYY (e.g., 2024-2025 for April 2024 to March 2025)</small>
+                    <label class="form-label">Financial Year</label>
+                    <input type="text" class="form-control" id="financialYear" required readonly>
                 </div>
                 
                 <div class="form-group">
@@ -775,13 +761,67 @@
             </form>
         </div>
     </div>
+    
+    <!-- Add Financial Year Modal -->
+    <div class="modal" id="financialYearModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Add New Financial Year</h3>
+                <button class="close-modal" id="closeFinancialYearModal">&times;</button>
+            </div>
+            
+            <form id="financialYearForm">
+                <div class="form-group">
+                    <label class="form-label">Financial Year (e.g., 2024-2025)</label>
+                    <input type="text" class="form-control" id="newFinancialYear" required placeholder="e.g., 2024-2025">
+                </div>
+                
+                <div class="form-row" style="display: flex; gap: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label">Start Year (April)</label>
+                        <input type="number" class="form-control" id="startYear" min="2000" max="2100" required>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label">End Year (March)</label>
+                        <input type="number" class="form-control" id="endYear" min="2000" max="2100" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Total Budget Allocation ($)</label>
+                    <input type="number" step="0.01" class="form-control" id="newTotalAllocated" value="60000" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Water Budget Allocation ($)</label>
+                    <input type="number" step="0.01" class="form-control" id="newWaterAllocated" value="15000" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Electricity Budget Allocation ($)</label>
+                    <input type="number" step="0.01" class="form-control" id="newElectricityAllocated" value="35000" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Telephone Budget Allocation ($)</label>
+                    <input type="number" step="0.01" class="form-control" id="newTelephoneAllocated" value="10000" required>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelFinancialYearBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Financial Year</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script>
         // Chart variable
         let budgetUsageChart = null;
-        let currentFinancialYear = '';
-        let selectedFinancialYear = '';
+        let currentYear = new Date().getFullYear();
         let dashboardData = null;
+        let currentFinancialYear = null;
+        let allFinancialYears = [];
 
         // Show loading indicator
         function showLoading() {
@@ -799,34 +839,73 @@
             document.getElementById('dashboardGrid').style.display = 'grid';
         }
 
-        // Load financial years for dropdown
+        // Load financial years
         async function loadFinancialYears() {
             try {
-                const response = await fetch('/api/get-financial-years');
+                console.log("Loading financial years...");
+                const response = await fetch('/api/financial-years');
                 const data = await response.json();
                 
-                if (response.ok && !data.error) {
-                    const select = document.getElementById('financialYearSelect');
-                    select.innerHTML = '';
+                if (response.ok) {
+                    allFinancialYears = data;
+                    populateFinancialYearDropdowns(data);
                     
-                    data.forEach(year => {
-                        const option = document.createElement('option');
-                        option.value = year;
-                        option.textContent = `FY ${year}`;
-                        if (year === currentFinancialYear) {
-                            option.selected = true;
-                            selectedFinancialYear = year;
-                        }
-                        select.appendChild(option);
-                    });
+                    // Set current financial year if available
+                    if (data.length > 0) {
+                        currentFinancialYear = data[0];
+                        updateFinancialYearInfo(currentFinancialYear);
+                    }
                     
-                    // Update banner with current financial year
-                    document.getElementById('currentFinancialYear').textContent = `Financial Year: ${currentFinancialYear}`;
-                    document.getElementById('budgetFinancialYear').textContent = currentFinancialYear;
+                    return data;
+                } else {
+                    console.error('Error loading financial years:', data.error);
+                    return [];
                 }
             } catch (error) {
                 console.error('Error loading financial years:', error);
+                return [];
             }
+        }
+
+        // Populate financial year dropdowns
+        function populateFinancialYearDropdowns(financialYears) {
+            const financialYearSelect = document.getElementById('financialYearSelect');
+            const chartFinancialYear = document.getElementById('chartFinancialYear');
+            
+            financialYearSelect.innerHTML = '';
+            chartFinancialYear.innerHTML = '';
+            
+            if (financialYears.length === 0) {
+                const currentYear = new Date().getFullYear();
+                const startYear = new Date().getMonth() >= 3 ? currentYear : currentYear - 1;
+                const endYear = startYear + 1;
+                const defaultFY = `${startYear}-${endYear}`;
+                
+                financialYearSelect.innerHTML = `<option value="${defaultFY}">${defaultFY}</option>`;
+                chartFinancialYear.innerHTML = `<option value="${defaultFY}">${defaultFY}</option>`;
+                return;
+            }
+            
+            financialYears.forEach(fy => {
+                const option1 = document.createElement('option');
+                option1.value = fy.id;
+                option1.textContent = fy.financial_year;
+                if (fy.is_current) option1.selected = true;
+                financialYearSelect.appendChild(option1);
+                
+                const option2 = document.createElement('option');
+                option2.value = fy.id;
+                option2.textContent = fy.financial_year;
+                if (fy.is_current) option2.selected = true;
+                chartFinancialYear.appendChild(option2);
+            });
+        }
+
+        // Update financial year info display
+        function updateFinancialYearInfo(financialYear) {
+            document.getElementById('currentFinancialYear').textContent = `Financial Year: ${financialYear.financial_year}`;
+            document.getElementById('financialYearPeriod').textContent = `Period: April ${financialYear.start_year} - March ${financialYear.end_year}`;
+            document.getElementById('totalBudgetHeader').textContent = `$${formatCurrency(financialYear.total_allocated)}`;
         }
 
         // Load dashboard data
@@ -834,12 +913,6 @@
             try {
                 showLoading();
                 console.log("Loading dashboard data...");
-                
-                // Get current financial year first
-                await getCurrentFinancialYear();
-                
-                // Load financial years for dropdown
-                await loadFinancialYears();
                 
                 const response = await fetch('/api/dashboard-data');
                 const data = await response.json();
@@ -860,38 +933,6 @@
                 alert('Error loading dashboard data. Please check console for details.');
             } finally {
                 hideLoading();
-            }
-        }
-
-        // Get current financial year
-        async function getCurrentFinancialYear() {
-            try {
-                const response = await fetch('/api/budget');
-                const data = await response.json();
-                
-                if (response.ok) {
-                    currentFinancialYear = data.financialYear || '2024-2025';
-                    selectedFinancialYear = currentFinancialYear;
-                } else {
-                    // Calculate current financial year based on current date
-                    const now = new Date();
-                    const currentYear = now.getFullYear();
-                    const currentMonth = now.getMonth() + 1; // JavaScript months are 0-indexed
-                    
-                    if (currentMonth >= 4) {
-                        currentFinancialYear = `${currentYear}-${currentYear + 1}`;
-                    } else {
-                        currentFinancialYear = `${currentYear - 1}-${currentYear}`;
-                    }
-                    selectedFinancialYear = currentFinancialYear;
-                }
-            } catch (error) {
-                console.error('Error getting current financial year:', error);
-                // Default to current year
-                const now = new Date();
-                const currentYear = now.getFullYear();
-                currentFinancialYear = `${currentYear}-${currentYear + 1}`;
-                selectedFinancialYear = currentFinancialYear;
             }
         }
 
@@ -942,12 +983,11 @@
             document.getElementById('telephoneCharges').textContent = `$${dashboardData.current_totals.telephone}`;
             document.getElementById('totalCharges').textContent = `$${dashboardData.current_totals.total}`;
             
-            // Update subtitles to show financial year
-            const fySubtitle = `Financial Year: ${selectedFinancialYear}`;
-            document.getElementById('waterSubtitle').textContent = fySubtitle;
-            document.getElementById('electricitySubtitle').textContent = fySubtitle;
-            document.getElementById('telephoneSubtitle').textContent = fySubtitle;
-            document.getElementById('totalSubtitle').textContent = fySubtitle;
+            // Update subtitles
+            document.getElementById('waterSubtitle').textContent = subtitle;
+            document.getElementById('electricitySubtitle').textContent = subtitle;
+            document.getElementById('telephoneSubtitle').textContent = subtitle;
+            document.getElementById('totalSubtitle').textContent = subtitle;
         }
 
         // Update dashboard with data
@@ -959,11 +999,6 @@
                 return;
             }
             
-            // Update financial year display
-            const financialYear = data.budget_data.financial_year || currentFinancialYear;
-            document.getElementById('currentFinancialYear').textContent = `Financial Year: ${financialYear}`;
-            document.getElementById('budgetFinancialYear').textContent = financialYear;
-            
             // Update budget information
             updateBudgetDisplay(data.budget_data, data.current_totals);
         }
@@ -972,8 +1007,19 @@
         function updateBudgetDisplay(budgetData, currentData) {
             console.log("Updating budget display:", budgetData);
             
+            // Update financial year info
+            if (budgetData.financial_year) {
+                document.getElementById('currentFinancialYear').textContent = `Financial Year: ${budgetData.financial_year}`;
+                
+                // Calculate financial year period
+                const startYear = budgetData.financial_year.split('-')[0];
+                const endYear = budgetData.financial_year.split('-')[1];
+                document.getElementById('financialYearPeriod').textContent = `Period: April ${startYear} - March ${endYear}`;
+            }
+            
             // Update budget amounts
-            document.getElementById('totalBudget').textContent = `$${budgetData.total_allocated}`;
+            document.getElementById('totalBudgetHeader').textContent = `$${budgetData.total_allocated}`;
+            document.getElementById('totalBudgetAmount').textContent = `$${budgetData.total_allocated}`;
             document.getElementById('waterBudget').textContent = `$${budgetData.water_allocated}`;
             document.getElementById('electricityBudget').textContent = `$${budgetData.electricity_allocated}`;
             document.getElementById('telephoneBudget').textContent = `$${budgetData.telephone_allocated}`;
@@ -1059,13 +1105,6 @@
                 return;
             }
             
-            // Sort by financial year (newest first)
-            yearlyData.sort((a, b) => {
-                const aYear = parseInt(a.financial_year.split('-')[0]);
-                const bYear = parseInt(b.financial_year.split('-')[0]);
-                return bYear - aYear;
-            });
-            
             yearlyData.forEach(yearData => {
                 const trendItem = document.createElement('div');
                 trendItem.className = 'trend-item';
@@ -1075,7 +1114,7 @@
                 const usagePercentage = totalBudget > 0 ? (totalUsed / totalBudget * 100).toFixed(1) : 0;
                 
                 trendItem.innerHTML = `
-                    <div class="trend-month">FY ${yearData.financial_year}</div>
+                    <div class="trend-month">${yearData.financial_year}</div>
                     <div class="trend-amount">$${formatCurrency(totalUsed)} / $${formatCurrency(totalBudget)} (${usagePercentage}%)</div>
                 `;
                 
@@ -1087,17 +1126,24 @@
         function updateBudgetUsageChart(yearlyData) {
             const ctx = document.getElementById('budgetUsageChart').getContext('2d');
             const utilityType = document.getElementById('chartUtilityType').value;
+            const selectedFinancialYear = document.getElementById('chartFinancialYear').value;
             
             // Destroy existing chart if it exists
             if (budgetUsageChart) {
                 budgetUsageChart.destroy();
             }
             
-            if (!yearlyData || yearlyData.length === 0) {
+            // Filter data by selected financial year
+            let filteredData = yearlyData;
+            if (selectedFinancialYear !== 'all') {
+                filteredData = yearlyData.filter(item => item.id == selectedFinancialYear);
+            }
+            
+            if (!filteredData || filteredData.length === 0) {
                 // Show placeholder if no data
                 document.getElementById('budgetUsageChart').style.display = 'none';
                 const chartWrapper = document.querySelector('.chart-wrapper');
-                chartWrapper.innerHTML = '<div class="chart-placeholder">No budget usage data available for financial years.</div>';
+                chartWrapper.innerHTML = '<div class="chart-placeholder">No budget usage data available for the selected criteria.</div>';
                 return;
             }
             
@@ -1107,15 +1153,8 @@
                 chartWrapper.innerHTML = '<canvas id="budgetUsageChart"></canvas>';
             }
             
-            // Sort data by financial year
-            yearlyData.sort((a, b) => {
-                const aYear = parseInt(a.financial_year.split('-')[0]);
-                const bYear = parseInt(b.financial_year.split('-')[0]);
-                return aYear - bYear;
-            });
-            
             // Extract data for chart based on utility type
-            const financialYears = yearlyData.map(item => `FY ${item.financial_year}`);
+            const years = filteredData.map(item => item.financial_year);
             let datasets = [];
             
             const colors = {
@@ -1128,7 +1167,7 @@
             if (utilityType === 'all' || utilityType === 'water') {
                 datasets.push({
                     label: 'Water Budget Used',
-                    data: yearlyData.map(item => parseFloat(item.water_used || 0)),
+                    data: filteredData.map(item => parseFloat(item.water_used || 0)),
                     borderColor: colors.water.border,
                     backgroundColor: colors.water.background,
                     borderWidth: 2,
@@ -1140,7 +1179,7 @@
             if (utilityType === 'all' || utilityType === 'electricity') {
                 datasets.push({
                     label: 'Electricity Budget Used',
-                    data: yearlyData.map(item => parseFloat(item.electricity_used || 0)),
+                    data: filteredData.map(item => parseFloat(item.electricity_used || 0)),
                     borderColor: colors.electricity.border,
                     backgroundColor: colors.electricity.background,
                     borderWidth: 2,
@@ -1152,7 +1191,7 @@
             if (utilityType === 'all' || utilityType === 'telephone') {
                 datasets.push({
                     label: 'Telephone Budget Used',
-                    data: yearlyData.map(item => parseFloat(item.telephone_used || 0)),
+                    data: filteredData.map(item => parseFloat(item.telephone_used || 0)),
                     borderColor: colors.telephone.border,
                     backgroundColor: colors.telephone.background,
                     borderWidth: 2,
@@ -1165,7 +1204,7 @@
             budgetUsageChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: financialYears,
+                    labels: years,
                     datasets: datasets
                 },
                 options: {
@@ -1227,45 +1266,27 @@
         }
 
         // Load current budget values for modal
-        async function loadBudgetValues() {
+        async function loadBudgetValues(financialYearId) {
             try {
-                console.log("Loading budget values for modal...");
+                console.log("Loading budget values for financial year:", financialYearId);
                 
-                // Determine which financial year to load
-                const financialYearToLoad = selectedFinancialYear || currentFinancialYear;
+                // Find the financial year in our list
+                const financialYear = allFinancialYears.find(fy => fy.id == financialYearId);
                 
-                // Try to get budget for the selected financial year
-                const response = await fetch('/api/budget');
-                const budget = await response.json();
-                
-                console.log("Budget values loaded:", budget);
-                
-                if (response.ok) {
-                    // Set financial year in modal
-                    document.getElementById('financialYear').value = financialYearToLoad;
-                    
-                    // Only load amounts if this is the current financial year
-                    if (budget.financialYear === financialYearToLoad) {
-                        document.getElementById('totalAllocated').value = budget.totalAllocated;
-                        document.getElementById('waterAllocated').value = budget.waterAllocated;
-                        document.getElementById('electricityAllocated').value = budget.electricityAllocated;
-                        document.getElementById('telephoneAllocated').value = budget.telephoneAllocated;
-                    } else {
-                        // Clear amounts for new financial year
-                        document.getElementById('totalAllocated').value = '';
-                        document.getElementById('waterAllocated').value = '';
-                        document.getElementById('electricityAllocated').value = '';
-                        document.getElementById('telephoneAllocated').value = '';
-                    }
+                if (financialYear) {
+                    document.getElementById('financialYearId').value = financialYear.id;
+                    document.getElementById('financialYear').value = financialYear.financial_year;
+                    document.getElementById('totalAllocated').value = financialYear.total_allocated;
+                    document.getElementById('waterAllocated').value = financialYear.water_allocated;
+                    document.getElementById('electricityAllocated').value = financialYear.electricity_allocated;
+                    document.getElementById('telephoneAllocated').value = financialYear.telephone_allocated;
                 } else {
-                    console.error('Error loading budget values:', budget.error);
-                    // Set default financial year
-                    document.getElementById('financialYear').value = financialYearToLoad;
+                    console.error('Financial year not found:', financialYearId);
+                    alert('Error loading budget values');
                 }
             } catch (error) {
                 console.error('Error loading budget values:', error);
-                // Set default financial year
-                document.getElementById('financialYear').value = selectedFinancialYear || currentFinancialYear;
+                alert('Error loading budget values. Please check console for details.');
             }
         }
 
@@ -1274,8 +1295,8 @@
             try {
                 console.log('Saving budget:', budgetData);
                 
-                const response = await fetch('/api/budget', {
-                    method: 'POST',
+                const response = await fetch(`/api/financial-years/${budgetData.id}`, {
+                    method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
                     },
@@ -1286,21 +1307,50 @@
                 console.log('Budget save response:', result);
                 
                 if (response.ok) {
-                    alert('Budget saved successfully for FY ' + budgetData.financialYear + '!');
+                    alert('Budget updated successfully!');
                     document.getElementById('budgetModal').style.display = 'none';
-                    
-                    // Update selected financial year
-                    selectedFinancialYear = budgetData.financialYear;
-                    
-                    // Reload dashboard data to show updated budget
+                    // Reload financial years and dashboard data
+                    await loadFinancialYears();
                     await loadDashboardData();
                 } else {
-                    alert('Error saving budget: ' + (result.error || 'Unknown error'));
-                    console.error('Budget save error:', result.error);
+                    alert('Error updating budget: ' + (result.error || 'Unknown error'));
+                    console.error('Budget update error:', result.error);
                 }
             } catch (error) {
-                alert('Error saving budget. Please check the console for details.');
+                alert('Error updating budget. Please check the console for details.');
                 console.error('Error saving budget:', error);
+            }
+        }
+
+        // Create new financial year
+        async function createFinancialYear(financialYearData) {
+            try {
+                console.log('Creating financial year:', financialYearData);
+                
+                const response = await fetch('/api/financial-years', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(financialYearData)
+                });
+                
+                const result = await response.json();
+                console.log('Financial year create response:', result);
+                
+                if (response.ok) {
+                    alert('Financial year created successfully!');
+                    document.getElementById('financialYearModal').style.display = 'none';
+                    // Reload financial years and dashboard data
+                    await loadFinancialYears();
+                    await loadDashboardData();
+                } else {
+                    alert('Error creating financial year: ' + (result.error || 'Unknown error'));
+                    console.error('Financial year create error:', result.error);
+                }
+            } catch (error) {
+                alert('Error creating financial year. Please check the console for details.');
+                console.error('Error creating financial year:', error);
             }
         }
 
@@ -1350,27 +1400,45 @@
             showLoading();
             
             // Load initial data
-            loadDashboardData();
+            loadFinancialYears().then(() => {
+                loadDashboardData();
+            });
             
             // Budget modal functionality
             const budgetModal = document.getElementById('budgetModal');
             const editBudgetBtn = document.getElementById('editBudgetBtn');
-            const editBudgetBtn2 = document.getElementById('editBudgetBtn2');
             const closeBudgetModal = document.getElementById('closeBudgetModal');
             const cancelBudgetBtn = document.getElementById('cancelBudgetBtn');
             const budgetForm = document.getElementById('budgetForm');
+            
+            // Financial year modal functionality
+            const financialYearModal = document.getElementById('financialYearModal');
+            const addFinancialYearBtn = document.getElementById('addFinancialYearBtn');
+            const closeFinancialYearModal = document.getElementById('closeFinancialYearModal');
+            const cancelFinancialYearBtn = document.getElementById('cancelFinancialYearBtn');
+            const financialYearForm = document.getElementById('financialYearForm');
+            
             const refreshBtn = document.getElementById('refreshBtn');
-            const financialYearSelect = document.getElementById('financialYearSelect');
+            
+            // Financial year selection change
+            document.getElementById('financialYearSelect').addEventListener('change', async function() {
+                const selectedId = this.value;
+                console.log("Financial year changed to:", selectedId);
+                
+                // Find the selected financial year
+                const selectedFY = allFinancialYears.find(fy => fy.id == selectedId);
+                if (selectedFY) {
+                    currentFinancialYear = selectedFY;
+                    updateFinancialYearInfo(selectedFY);
+                    // Reload dashboard data for the selected financial year
+                    await loadDashboardData();
+                }
+            });
             
             editBudgetBtn.addEventListener('click', function() {
                 console.log("Edit budget button clicked");
-                loadBudgetValues();
-                budgetModal.style.display = 'flex';
-            });
-            
-            editBudgetBtn2.addEventListener('click', function() {
-                console.log("Edit budget button 2 clicked");
-                loadBudgetValues();
+                const selectedId = document.getElementById('financialYearSelect').value;
+                loadBudgetValues(selectedId);
                 budgetModal.style.display = 'flex';
             });
             
@@ -1387,6 +1455,7 @@
                 console.log("Budget form submitted");
                 
                 const budgetData = {
+                    id: parseInt(document.getElementById('financialYearId').value),
                     financialYear: document.getElementById('financialYear').value,
                     totalAllocated: parseFloat(document.getElementById('totalAllocated').value),
                     waterAllocated: parseFloat(document.getElementById('waterAllocated').value),
@@ -1398,18 +1467,64 @@
                 saveBudget(budgetData);
             });
             
-            refreshBtn.addEventListener('click', function() {
-                console.log("Refresh button clicked");
-                loadDashboardData();
+            addFinancialYearBtn.addEventListener('click', function() {
+                console.log("Add financial year button clicked");
+                
+                // Set default values
+                const currentYear = new Date().getFullYear();
+                const currentMonth = new Date().getMonth() + 1; // January is 0
+                
+                let startYear, endYear;
+                if (currentMonth >= 4) { // April or later
+                    startYear = currentYear;
+                    endYear = currentYear + 1;
+                } else { // January to March
+                    startYear = currentYear - 1;
+                    endYear = currentYear;
+                }
+                
+                document.getElementById('newFinancialYear').value = `${startYear}-${endYear}`;
+                document.getElementById('startYear').value = startYear;
+                document.getElementById('endYear').value = endYear;
+                document.getElementById('newTotalAllocated').value = 60000;
+                document.getElementById('newWaterAllocated').value = 15000;
+                document.getElementById('newElectricityAllocated').value = 35000;
+                document.getElementById('newTelephoneAllocated').value = 10000;
+                
+                financialYearModal.style.display = 'flex';
             });
             
-            // Financial year select change
-            financialYearSelect.addEventListener('change', function() {
-                selectedFinancialYear = this.value;
-                console.log("Financial year changed to:", selectedFinancialYear);
+            closeFinancialYearModal.addEventListener('click', function() {
+                financialYearModal.style.display = 'none';
+            });
+            
+            cancelFinancialYearBtn.addEventListener('click', function() {
+                financialYearModal.style.display = 'none';
+            });
+            
+            financialYearForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                console.log("Financial year form submitted");
                 
-                // Reload dashboard data for selected financial year
-                loadDashboardData();
+                const financialYearData = {
+                    financialYear: document.getElementById('newFinancialYear').value,
+                    startYear: parseInt(document.getElementById('startYear').value),
+                    endYear: parseInt(document.getElementById('endYear').value),
+                    totalAllocated: parseFloat(document.getElementById('newTotalAllocated').value),
+                    waterAllocated: parseFloat(document.getElementById('newWaterAllocated').value),
+                    electricityAllocated: parseFloat(document.getElementById('newElectricityAllocated').value),
+                    telephoneAllocated: parseFloat(document.getElementById('newTelephoneAllocated').value)
+                };
+                
+                console.log("Creating financial year data:", financialYearData);
+                createFinancialYear(financialYearData);
+            });
+            
+            refreshBtn.addEventListener('click', function() {
+                console.log("Refresh button clicked");
+                loadFinancialYears().then(() => {
+                    loadDashboardData();
+                });
             });
             
             // Charges display filter event listeners
@@ -1424,10 +1539,19 @@
                 }
             });
             
-            // Close modal when clicking outside
+            document.getElementById('chartFinancialYear').addEventListener('change', function() {
+                if (dashboardData && dashboardData.yearly_data) {
+                    updateBudgetUsageChart(dashboardData.yearly_data);
+                }
+            });
+            
+            // Close modals when clicking outside
             window.addEventListener('click', function(e) {
                 if (e.target === budgetModal) {
                     budgetModal.style.display = 'none';
+                }
+                if (e.target === financialYearModal) {
+                    financialYearModal.style.display = 'none';
                 }
             });
             
