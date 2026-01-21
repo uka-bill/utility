@@ -273,21 +273,6 @@
             content: " *";
             color: var(--danger);
         }
-        
-        .error-message {
-            color: var(--danger);
-            font-size: 0.9rem;
-            margin-top: 5px;
-            display: none;
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 10px;
-            color: var(--primary);
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
@@ -344,13 +329,10 @@
             <form id="departmentForm">
                 <input type="hidden" id="departmentId">
                 
-                <div class="loading" id="formLoading">Saving department...</div>
-                
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label required">Unit Name</label>
                         <input type="text" class="form-control" id="unitName" required placeholder="Enter unit name">
-                        <div class="error-message" id="unitNameError">Please enter unit name</div>
                     </div>
                 </div>
                 
@@ -358,7 +340,6 @@
                     <div class="form-group">
                         <label class="form-label required">Division Name</label>
                         <input type="text" class="form-control" id="divisionName" required placeholder="Enter division name">
-                        <div class="error-message" id="divisionNameError">Please enter division name</div>
                     </div>
                 </div>
                 
@@ -366,7 +347,6 @@
                     <div class="form-group">
                         <label class="form-label required">Department Name</label>
                         <input type="text" class="form-control" id="departmentName" required placeholder="Enter department name">
-                        <div class="error-message" id="departmentNameError">Please enter department name</div>
                     </div>
                 </div>
                 
@@ -387,7 +367,7 @@
                 
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="saveBtn">Save Department</button>
+                    <button type="submit" class="btn btn-primary">Save Department</button>
                 </div>
             </form>
         </div>
@@ -410,8 +390,6 @@
             const cancelBtn = document.getElementById('cancelBtn');
             const departmentForm = document.getElementById('departmentForm');
             const modalTitle = document.getElementById('modalTitle');
-            const saveBtn = document.getElementById('saveBtn');
-            const formLoading = document.getElementById('formLoading');
             
             let editingDepartment = null;
 
@@ -419,9 +397,6 @@
                 editingDepartment = null;
                 modalTitle.textContent = 'Add Department';
                 departmentForm.reset();
-                hideAllErrorMessages();
-                formLoading.style.display = 'none';
-                saveBtn.disabled = false;
                 departmentModal.style.display = 'flex';
             });
             
@@ -434,60 +409,35 @@
             });
             
             // Form submission
-            departmentForm.addEventListener('submit', async (e) => {
+            departmentForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                await saveDepartment();
+                saveDepartment();
             });
             
             // Initial load
             loadDepartments();
         }
         
-        function hideAllErrorMessages() {
-            document.querySelectorAll('.error-message').forEach(error => {
-                error.style.display = 'none';
-            });
-        }
-        
-        function showError(elementId, message) {
-            const errorElement = document.getElementById(elementId + 'Error');
-            if (errorElement) {
-                errorElement.textContent = message;
-                errorElement.style.display = 'block';
-            }
-        }
-        
-        function hideError(elementId) {
-            const errorElement = document.getElementById(elementId + 'Error');
-            if (errorElement) {
-                errorElement.style.display = 'none';
-            }
-        }
-        
-        function showLoading() {
-            document.getElementById('formLoading').style.display = 'block';
-            document.getElementById('saveBtn').disabled = true;
-        }
-        
-        function hideLoading() {
-            document.getElementById('formLoading').style.display = 'none';
-            document.getElementById('saveBtn').disabled = false;
-        }
-        
         // Load departments
-        async function loadDepartments() {
-            try {
-                const response = await fetch('/api/departments');
-                if (!response.ok) {
-                    throw new Error('Failed to fetch departments');
-                }
-                const data = await response.json();
-                allDepartments = data;
-                renderDepartmentsTable(data);
-            } catch (error) {
-                console.error('Error loading departments:', error);
-                alert('Error loading departments. Please try again.');
-            }
+        function loadDepartments() {
+            console.log('Loading departments...');
+            fetch('/api/departments')
+                .then(response => {
+                    console.log('Departments response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch departments');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Departments data received:', data);
+                    allDepartments = data;
+                    renderDepartmentsTable(data);
+                })
+                .catch(error => {
+                    console.error('Error loading departments:', error);
+                    alert('Error loading departments. Please try again.');
+                });
         }
         
         function renderDepartmentsTable(departments) {
@@ -559,14 +509,10 @@
             document.getElementById('departmentAddress').value = department.address || '';
             document.getElementById('notes').value = department.notes || '';
             
-            hideAllErrorMessages();
             document.getElementById('departmentModal').style.display = 'flex';
         }
         
-        async function saveDepartment() {
-            // Hide all error messages first
-            hideAllErrorMessages();
-            
+        function saveDepartment() {
             // Get form values
             const unitName = document.getElementById('unitName').value.trim();
             const divisionName = document.getElementById('divisionName').value.trim();
@@ -576,29 +522,20 @@
             const notes = document.getElementById('notes').value.trim();
             
             // Validate required fields
-            let hasError = false;
-            
             if (!unitName) {
-                showError('unitName', 'Please enter a unit name');
-                hasError = true;
-            }
-            
-            if (!divisionName) {
-                showError('divisionName', 'Please enter a division name');
-                hasError = true;
-            }
-            
-            if (!departmentName) {
-                showError('departmentName', 'Please enter a department name');
-                hasError = true;
-            }
-            
-            if (hasError) {
+                alert('Please enter a unit name');
                 return;
             }
             
-            // Show loading indicator
-            showLoading();
+            if (!divisionName) {
+                alert('Please enter a division name');
+                return;
+            }
+            
+            if (!departmentName) {
+                alert('Please enter a department name');
+                return;
+            }
             
             const departmentData = {
                 unitName: unitName,
@@ -620,90 +557,86 @@
             console.log('Saving department data:', departmentData);
             console.log('Using URL:', url, 'Method:', method);
             
-            try {
-                const response = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify(departmentData)
-                });
-                
+            // Show loading state
+            const saveButton = document.querySelector('#departmentForm button[type="submit"]');
+            const originalText = saveButton.textContent;
+            saveButton.textContent = 'Saving...';
+            saveButton.disabled = true;
+            
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(departmentData)
+            })
+            .then(response => {
                 console.log('Response status:', response.status);
-                
-                const data = await response.json();
-                console.log('Response data:', data);
-                
-                if (response.ok) {
-                    if (data.message) {
-                        alert(data.message);
-                        document.getElementById('departmentModal').style.display = 'none';
-                        document.getElementById('departmentForm').reset();
-                        await loadDepartments();
-                    } else {
-                        throw new Error('No message in response');
-                    }
-                } else {
-                    throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+                console.log('Response headers:', response.headers);
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        console.error('Error response text:', text);
+                        try {
+                            return JSON.parse(text);
+                        } catch {
+                            throw new Error(text || 'Unknown error');
+                        }
+                    }).then(err => { throw err; });
                 }
-            } catch (error) {
-                console.error('Error saving department:', error);
-                
-                // Check for common errors
-                if (error.message.includes('Failed to fetch')) {
-                    alert('Network error: Cannot connect to server. Please check your internet connection and try again.');
-                } else if (error.message.includes('Unexpected token')) {
-                    alert('Server error: Invalid response from server. Please check server logs.');
+                return response.json();
+            })
+            .then(data => {
+                console.log('Save response data:', data);
+                if (data.message) {
+                    alert(data.message);
+                    document.getElementById('departmentModal').style.display = 'none';
+                    document.getElementById('departmentForm').reset();
+                    loadDepartments();
+                } else if (data.error) {
+                    alert('Error saving department: ' + data.error);
                 } else {
-                    alert('Error saving department: ' + error.message);
+                    alert('Department saved successfully!');
+                    document.getElementById('departmentModal').style.display = 'none';
+                    document.getElementById('departmentForm').reset();
+                    loadDepartments();
                 }
-            } finally {
-                // Hide loading indicator
-                hideLoading();
-            }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error saving department: ' + (error.message || 'Please check console for details'));
+            })
+            .finally(() => {
+                // Restore button state
+                saveButton.textContent = originalText;
+                saveButton.disabled = false;
+            });
         }
         
-        async function deleteDepartment(departmentId) {
+        function deleteDepartment(departmentId) {
             if (confirm('Are you sure you want to delete this department? This action cannot be undone.')) {
-                try {
-                    const response = await fetch(`/api/departments?id=${departmentId}`, {
-                        method: 'DELETE'
-                    });
-                    
+                fetch(`/api/departments?id=${departmentId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => {
                     if (!response.ok) {
                         throw new Error('Failed to delete department');
                     }
-                    
-                    const data = await response.json();
-                    
+                    return response.json();
+                })
+                .then(data => {
                     if (data.message) {
                         alert(data.message);
-                        await loadDepartments();
+                        loadDepartments();
                     } else {
                         alert('Error deleting department: ' + (data.error || 'Unknown error'));
                     }
-                } catch (error) {
+                })
+                .catch(error => {
                     console.error('Error:', error);
                     alert('Error deleting department. Please try again.');
-                }
+                });
             }
         }
-        
-        // Test API connection on load
-        window.addEventListener('load', async function() {
-            try {
-                const response = await fetch('/api/test-connection');
-                const data = await response.json();
-                console.log('API connection test:', data);
-                
-                if (!data.supabase_connected) {
-                    console.warn('⚠️ Supabase connection test failed');
-                }
-            } catch (error) {
-                console.error('API connection test failed:', error);
-            }
-        });
     </script>
 </body>
 </html>
