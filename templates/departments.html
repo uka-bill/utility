@@ -444,7 +444,7 @@
         </div>
     </div>
 
-    <script>
+        <script>
         // Global variables
         let allDepartments = [];
         let editingDepartment = null;
@@ -566,6 +566,8 @@
         // Load departments from API
         function loadDepartments() {
             console.log('Loading departments from API...');
+            showToast('Loading departments...', 'warning');
+            
             fetch('/api/departments')
                 .then(response => {
                     console.log('API response status:', response.status);
@@ -578,10 +580,15 @@
                     console.log('Departments data received:', data);
                     allDepartments = data;
                     renderDepartmentsTable(data);
+                    if (data.length === 0) {
+                        showToast('No departments found. Add your first department!', 'warning');
+                    } else {
+                        showToast(`Loaded ${data.length} departments`, 'success');
+                    }
                 })
                 .catch(error => {
                     console.error('Error loading departments:', error);
-                    showToast('Error loading departments. Please try again.', 'error');
+                    showToast('Error loading departments: ' + error.message, 'error');
                     renderDepartmentsTable([]);
                 });
         }
@@ -740,9 +747,21 @@
             })
             .then(response => {
                 console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
                 if (!response.ok) {
-                    return response.json().then(err => { 
-                        throw new Error(err.error || `Server error: ${response.status}`); 
+                    // Try to get error message from response
+                    return response.text().then(text => {
+                        console.error('Error response text:', text);
+                        let errorMsg = `Server error: ${response.status}`;
+                        try {
+                            const errorData = JSON.parse(text);
+                            errorMsg = errorData.error || errorData.message || errorMsg;
+                        } catch (e) {
+                            // If not JSON, use the text
+                            if (text) errorMsg = text;
+                        }
+                        throw new Error(errorMsg);
                     });
                 }
                 return response.json();
@@ -750,19 +769,31 @@
             .then(data => {
                 console.log('Save response:', data);
                 
-                if (data.success) {
-                    showToast(data.message || 'Department saved successfully!');
+                // Check for success flag or message
+                if (data.success === true || data.message) {
+                    showToast(data.message || 'Department saved successfully!', 'success');
                     document.getElementById('departmentModal').style.display = 'none';
                     document.getElementById('departmentForm').reset();
                     loadDepartments(); // Reload the table
                     editingDepartment = null;
+                } else if (data.error) {
+                    throw new Error(data.error);
                 } else {
-                    throw new Error(data.error || 'Unknown error occurred');
+                    // If no success flag but data was returned, assume success
+                    if (data.id || data.department) {
+                        showToast('Department saved successfully!', 'success');
+                        document.getElementById('departmentModal').style.display = 'none';
+                        document.getElementById('departmentForm').reset();
+                        loadDepartments();
+                        editingDepartment = null;
+                    } else {
+                        throw new Error('Unknown response format from server');
+                    }
                 }
             })
             .catch(error => {
                 console.error('Error saving department:', error);
-                showToast(error.message || 'Error saving department. Please try again.', 'error');
+                showToast('Error: ' + error.message, 'error');
             })
             .finally(() => {
                 // Hide loading state
@@ -778,15 +809,23 @@
                 })
                 .then(response => {
                     if (!response.ok) {
-                        return response.json().then(err => { 
-                            throw new Error(err.error || 'Failed to delete department'); 
+                        return response.text().then(text => {
+                            console.error('Delete error response:', text);
+                            let errorMsg = `Server error: ${response.status}`;
+                            try {
+                                const errorData = JSON.parse(text);
+                                errorMsg = errorData.error || errorData.message || errorMsg;
+                            } catch (e) {
+                                if (text) errorMsg = text;
+                            }
+                            throw new Error(errorMsg);
                         });
                     }
                     return response.json();
                 })
                 .then(data => {
-                    if (data.message) {
-                        showToast(data.message);
+                    if (data.message || data.success) {
+                        showToast(data.message || 'Department deleted successfully!', 'success');
                         loadDepartments();
                     } else {
                         throw new Error(data.error || 'Unknown error occurred');
@@ -794,10 +833,11 @@
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    showToast(error.message || 'Error deleting department. Please try again.', 'error');
+                    showToast('Error: ' + error.message, 'error');
                 });
             }
         }
     </script>
 </body>
 </html>
+
