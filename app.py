@@ -547,18 +547,18 @@ def create_school():
         
         # Validate required fields
         if not data.get('name'):
-            return jsonify({'error': 'School name is required'}), 400
+            return jsonify({'success': False, 'error': 'School name is required'}), 400
         if not data.get('clusterNumber'):
-            return jsonify({'error': 'Cluster number is required'}), 400
+            return jsonify({'success': False, 'error': 'Cluster number is required'}), 400
         if not data.get('schoolNumber'):
-            return jsonify({'error': 'School number is required'}), 400
+            return jsonify({'success': False, 'error': 'School number is required'}), 400
         
         school_data = {
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber'),
             "school_number": data.get('schoolNumber'),
-            "bmo_phone": data.get('bmoPhone', ''),  # This is the phone number field
-            "principal_name": data.get('principalName', ''),  # This is BMO Name
+            "bmo_phone": data.get('bmoPhone', ''),
+            "principal_name": data.get('principalName', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
             "created_at": datetime.now().isoformat()
@@ -568,20 +568,23 @@ def create_school():
         
         response = supabase.table("schools").insert(school_data).execute()
         
-        if response.data:
+        print(f"🏫 Supabase response: {response}")
+        
+        if hasattr(response, 'data') and response.data:
             print(f"✅ School created successfully: {response.data[0]}")
             return jsonify({
+                'success': True,
                 'message': 'School created successfully',
                 'school': response.data[0]
-            }), 201
+            })
         else:
             print("❌ School creation failed - no data returned")
-            return jsonify({'error': 'Failed to create school'}), 500
+            return jsonify({'success': False, 'error': 'Failed to create school'}), 500
         
     except Exception as e:
         print(f"❌ Create school error: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': f'Failed to create school: {str(e)}'}), 500
+        return jsonify({'success': False, 'error': f'Failed to create school: {str(e)}'}), 500
 
 @app.route('/api/schools', methods=['PUT'])
 def update_school():
@@ -589,44 +592,39 @@ def update_school():
     try:
         data = request.get_json()
         school_id = data.get('id')
+        
+        if not school_id:
+            return jsonify({'success': False, 'error': 'School ID is required'}), 400
+        
         school_data = {
             "name": data.get('name'),
-            "cluster_number": data.get('clusterNumber'),
-            "school_number": data.get('schoolNumber'),
-            "bmo_phone": data.get('bmoPhone'),
-            "principal_name": data.get('principalName'),
-            "address": data.get('address'),
-            "notes": data.get('notes'),
+            "cluster_number": data.get('clusterNumber', ''),
+            "school_number": data.get('schoolNumber', ''),
+            "bmo_phone": data.get('bmoPhone', ''),
+            "principal_name": data.get('principalName', ''),
+            "address": data.get('address', ''),
+            "notes": data.get('notes', ''),
             "updated_at": datetime.now().isoformat()
         }
         
+        print(f"🏫 Updating school {school_id} with data: {school_data}")
+        
         response = supabase.table("schools").update(school_data).eq("id", school_id).execute()
-        if response.data:
+        
+        print(f"🏫 Supabase update response: {response}")
+        
+        if hasattr(response, 'data') and response.data:
             return jsonify({
+                'success': True,
                 'message': 'School updated successfully',
                 'school': response.data[0]
             })
         else:
-            return jsonify({'error': 'Failed to update school'}), 500
+            return jsonify({'success': False, 'error': 'Failed to update school'}), 500
         
     except Exception as e:
         print(f"❌ Update school error: {e}")
-        return jsonify({'error': 'Failed to update school'}), 500
-
-@app.route('/api/schools', methods=['DELETE'])
-def delete_school():
-    """Delete a school"""
-    try:
-        school_id = request.args.get('id')
-        response = supabase.table("schools").delete().eq("id", school_id).execute()
-        if response.data:
-            return jsonify({'message': 'School deleted successfully'})
-        else:
-            return jsonify({'error': 'Failed to delete school'}), 500
-        
-    except Exception as e:
-        print(f"❌ Delete school error: {e}")
-        return jsonify({'error': 'Failed to delete school'}), 500
+        return jsonify({'success': False, 'error': f'Failed to update school: {str(e)}'}), 500
 
 # Departments API
 @app.route('/api/departments', methods=['GET'])
@@ -1160,6 +1158,7 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
