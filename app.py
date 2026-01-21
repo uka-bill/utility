@@ -652,14 +652,27 @@ def create_department():
         print(f"🏢 Received department data: {data}")
         
         # Validate required fields
-        if not data.get('unitName'):
-            return jsonify({'error': 'Unit Name is required'}), 400
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        unit_name = data.get('unitName')
+        division_name = data.get('divisionName')
+        department_name = data.get('departmentName')
+        
+        if not unit_name:
+            return jsonify({'success': False, 'error': 'Unit Name is required'}), 400
+        
+        if not division_name:
+            return jsonify({'success': False, 'error': 'Division Name is required'}), 400
+        
+        if not department_name:
+            return jsonify({'success': False, 'error': 'Department Name is required'}), 400
         
         department_data = {
-            "name": data.get('unitName'),  # Unit Name is the main name
-            "unit_name": data.get('unitName'),
-            "division_name": data.get('divisionName', ''),
-            "department_name": data.get('departmentName', ''),
+            "name": unit_name,
+            "unit_name": unit_name,
+            "division_name": division_name,
+            "department_name": department_name,
             "hotline_numbers": data.get('hotlineNumbers', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
@@ -670,20 +683,31 @@ def create_department():
         
         response = supabase.table("departments").insert(department_data).execute()
         
-        if response.data:
+        print(f"🏢 Supabase response type: {type(response)}")
+        print(f"🏢 Supabase response: {response}")
+        
+        # Check if response has data attribute
+        if hasattr(response, 'data') and response.data:
             print(f"✅ Department created successfully: {response.data[0]}")
             return jsonify({
+                'success': True,
                 'message': 'Department created successfully',
                 'department': response.data[0]
-            }), 201
+            })
         else:
             print("❌ Department creation failed - no data returned")
-            return jsonify({'error': 'Failed to create department'}), 500
+            return jsonify({
+                'success': False, 
+                'error': 'Failed to create department - no data returned from database'
+            }), 500
         
     except Exception as e:
         print(f"❌ Create department error: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': f'Failed to create department: {str(e)}'}), 500
+        return jsonify({
+            'success': False, 
+            'error': f'Failed to create department: {str(e)}'
+        }), 500
 
 @app.route('/api/departments', methods=['PUT'])
 def update_department():
@@ -691,29 +715,45 @@ def update_department():
     try:
         data = request.get_json()
         department_id = data.get('id')
+        
+        if not department_id:
+            return jsonify({'success': False, 'error': 'Department ID is required'}), 400
+        
         department_data = {
-            "name": data.get('unitName'),  # Unit Name is the main name
-            "unit_name": data.get('unitName'),
-            "division_name": data.get('divisionName'),
-            "department_name": data.get('departmentName'),
-            "hotline_numbers": data.get('hotlineNumbers'),
-            "address": data.get('address'),
-            "notes": data.get('notes'),
+            "name": data.get('unitName'),
+            "unit_name": data.get('unitName', ''),
+            "division_name": data.get('divisionName', ''),
+            "department_name": data.get('departmentName', ''),
+            "hotline_numbers": data.get('hotlineNumbers', ''),
+            "address": data.get('address', ''),
+            "notes": data.get('notes', ''),
             "updated_at": datetime.now().isoformat()
         }
         
+        print(f"🏢 Updating department {department_id} with data: {department_data}")
+        
         response = supabase.table("departments").update(department_data).eq("id", department_id).execute()
-        if response.data:
+        
+        print(f"🏢 Supabase update response: {response}")
+        
+        if hasattr(response, 'data') and response.data:
             return jsonify({
+                'success': True,
                 'message': 'Department updated successfully',
                 'department': response.data[0]
             })
         else:
-            return jsonify({'error': 'Failed to update department'}), 500
+            return jsonify({
+                'success': False, 
+                'error': 'Failed to update department - no data returned'
+            }), 500
         
     except Exception as e:
         print(f"❌ Update department error: {e}")
-        return jsonify({'error': 'Failed to update department'}), 500
+        return jsonify({
+            'success': False, 
+            'error': f'Failed to update department: {str(e)}'
+        }), 500
 
 @app.route('/api/departments', methods=['DELETE'])
 def delete_department():
@@ -1158,6 +1198,7 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
