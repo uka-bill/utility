@@ -633,6 +633,12 @@ def create_department():
     """Create a new department"""
     try:
         data = request.get_json()
+        print("📋 Creating department with data:", data)
+        
+        # Log all received data
+        for key, value in data.items():
+            print(f"   {key}: {value}")
+        
         department_data = {
             "name": data.get('unitName'),  # Unit Name is the main name
             "unit_name": data.get('unitName'),
@@ -644,18 +650,25 @@ def create_department():
             "created_at": datetime.now().isoformat()
         }
         
+        print("📋 Department data to insert:", department_data)
+        
         response = supabase.table("departments").insert(department_data).execute()
+        print("📋 Supabase response:", response)
+        
         if response.data:
+            print("✅ Department created successfully:", response.data[0])
             return jsonify({
                 'message': 'Department created successfully',
                 'department': response.data[0]
             })
         else:
+            print("❌ Department creation failed")
             return jsonify({'error': 'Failed to create department'}), 500
         
     except Exception as e:
         print(f"❌ Create department error: {e}")
-        return jsonify({'error': 'Failed to create department'}), 500
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to create department: {str(e)}'}), 500
 
 @app.route('/api/departments', methods=['PUT'])
 def update_department():
@@ -1130,3 +1143,4 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
