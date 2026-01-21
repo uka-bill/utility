@@ -541,30 +541,39 @@ def api_schools():
 def create_school():
     """Create a new school"""
     try:
+        print("🏫 POST /api/schools called")
         data = request.get_json()
+        print(f"🏫 Received school data: {data}")
+        
         school_data = {
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber'),
             "school_number": data.get('schoolNumber'),
             "bmo_phone": data.get('bmoPhone'),
-            "principal_name": data.get('principalName'),
+            "principal_name": data.get('principalName'),  # This is BMO Name
             "address": data.get('address'),
             "notes": data.get('notes'),
             "created_at": datetime.now().isoformat()
         }
         
+        print(f"🏫 School data to insert: {school_data}")
+        
         response = supabase.table("schools").insert(school_data).execute()
+        
         if response.data:
+            print(f"✅ School created successfully: {response.data[0]}")
             return jsonify({
                 'message': 'School created successfully',
                 'school': response.data[0]
             })
         else:
+            print("❌ School creation failed - no data returned")
             return jsonify({'error': 'Failed to create school'}), 500
         
     except Exception as e:
         print(f"❌ Create school error: {e}")
-        return jsonify({'error': 'Failed to create school'}), 500
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to create school: {str(e)}'}), 500
 
 @app.route('/api/schools', methods=['PUT'])
 def update_school():
@@ -632,12 +641,9 @@ def api_departments():
 def create_department():
     """Create a new department"""
     try:
+        print("🏢 POST /api/departments called")
         data = request.get_json()
-        print("📋 Creating department with data:", data)
-        
-        # Log all received data
-        for key, value in data.items():
-            print(f"   {key}: {value}")
+        print(f"🏢 Received department data: {data}")
         
         department_data = {
             "name": data.get('unitName'),  # Unit Name is the main name
@@ -650,19 +656,18 @@ def create_department():
             "created_at": datetime.now().isoformat()
         }
         
-        print("📋 Department data to insert:", department_data)
+        print(f"🏢 Department data to insert: {department_data}")
         
         response = supabase.table("departments").insert(department_data).execute()
-        print("📋 Supabase response:", response)
         
         if response.data:
-            print("✅ Department created successfully:", response.data[0])
+            print(f"✅ Department created successfully: {response.data[0]}")
             return jsonify({
                 'message': 'Department created successfully',
                 'department': response.data[0]
             })
         else:
-            print("❌ Department creation failed")
+            print("❌ Department creation failed - no data returned")
             return jsonify({'error': 'Failed to create department'}), 500
         
     except Exception as e:
@@ -1143,4 +1148,5 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
