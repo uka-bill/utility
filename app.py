@@ -545,14 +545,22 @@ def create_school():
         data = request.get_json()
         print(f"🏫 Received school data: {data}")
         
+        # Validate required fields
+        if not data.get('name'):
+            return jsonify({'error': 'School name is required'}), 400
+        if not data.get('clusterNumber'):
+            return jsonify({'error': 'Cluster number is required'}), 400
+        if not data.get('schoolNumber'):
+            return jsonify({'error': 'School number is required'}), 400
+        
         school_data = {
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber'),
             "school_number": data.get('schoolNumber'),
-            "bmo_phone": data.get('bmoPhone'),
-            "principal_name": data.get('principalName'),  # This is BMO Name
-            "address": data.get('address'),
-            "notes": data.get('notes'),
+            "bmo_phone": data.get('bmoPhone', ''),  # This is the phone number field
+            "principal_name": data.get('principalName', ''),  # This is BMO Name
+            "address": data.get('address', ''),
+            "notes": data.get('notes', ''),
             "created_at": datetime.now().isoformat()
         }
         
@@ -565,7 +573,7 @@ def create_school():
             return jsonify({
                 'message': 'School created successfully',
                 'school': response.data[0]
-            })
+            }), 201
         else:
             print("❌ School creation failed - no data returned")
             return jsonify({'error': 'Failed to create school'}), 500
@@ -645,14 +653,18 @@ def create_department():
         data = request.get_json()
         print(f"🏢 Received department data: {data}")
         
+        # Validate required fields
+        if not data.get('unitName'):
+            return jsonify({'error': 'Unit Name is required'}), 400
+        
         department_data = {
             "name": data.get('unitName'),  # Unit Name is the main name
             "unit_name": data.get('unitName'),
-            "division_name": data.get('divisionName'),
-            "department_name": data.get('departmentName'),
-            "hotline_numbers": data.get('hotlineNumbers'),
-            "address": data.get('address'),
-            "notes": data.get('notes'),
+            "division_name": data.get('divisionName', ''),
+            "department_name": data.get('departmentName', ''),
+            "hotline_numbers": data.get('hotlineNumbers', ''),
+            "address": data.get('address', ''),
+            "notes": data.get('notes', ''),
             "created_at": datetime.now().isoformat()
         }
         
@@ -665,7 +677,7 @@ def create_department():
             return jsonify({
                 'message': 'Department created successfully',
                 'department': response.data[0]
-            })
+            }), 201
         else:
             print("❌ Department creation failed - no data returned")
             return jsonify({'error': 'Failed to create department'}), 500
@@ -1148,5 +1160,6 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
