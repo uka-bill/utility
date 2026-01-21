@@ -280,6 +280,39 @@
             margin-top: 5px;
             display: none;
         }
+        
+        /* Add loading spinner */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            z-index: 3000;
+            display: none;
+        }
+        
+        .toast.error {
+            background: var(--danger);
+        }
     </style>
 </head>
 <body>
@@ -311,9 +344,9 @@
                         <th>ID</th>
                         <th>School Name</th>
                         <th>Cluster Number</th>
-                        <th>School Number</th>
-                        <th>BMO Name</th>
+                        <th>School Number(s)</th>
                         <th>BMO Phone Number</th>
+                        <th>BMO Name</th>
                         <th>Address</th>
                         <th>Notes</th>
                         <th>Actions</th>
@@ -325,6 +358,9 @@
             </table>
         </div>
     </div>
+    
+    <!-- Add toast notification -->
+    <div class="toast" id="toast"></div>
     
     <!-- Add/Edit School Modal -->
     <div class="modal" id="schoolModal">
@@ -353,9 +389,10 @@
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label required">School Number</label>
-                        <input type="text" class="form-control" id="schoolNumber" required placeholder="Enter school number">
-                        <div class="error-message" id="schoolNumberError">Please enter school number</div>
+                        <label class="form-label required">School Number(s)</label>
+                        <input type="text" class="form-control" id="schoolNumber" required 
+                               placeholder="Enter school numbers (separate with commas if multiple)">
+                        <div class="error-message" id="schoolNumberError">Please enter school number(s)</div>
                     </div>
                 </div>
                 
@@ -366,8 +403,9 @@
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label">BMO Phone Number</label>
-                        <input type="tel" class="form-control" id="bmoPhone" placeholder="Enter BMO phone number">
+                        <label class="form-label">BMO Phone Number(s)</label>
+                        <input type="text" class="form-control" id="bmoPhone" 
+                               placeholder="Enter BMO phone numbers (separate with commas if multiple)">
                     </div>
                 </div>
                 
@@ -392,6 +430,7 @@
     <script>
         // Store schools globally for editing
         let allSchools = [];
+        let editingSchool = null;
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
@@ -407,8 +446,6 @@
             const schoolForm = document.getElementById('schoolForm');
             const modalTitle = document.getElementById('modalTitle');
             
-            let editingSchool = null;
-
             addSchoolBtn.addEventListener('click', () => {
                 editingSchool = null;
                 modalTitle.textContent = 'Add School';
@@ -433,6 +470,18 @@
             
             // Initial load
             loadSchools();
+        }
+        
+        // Show toast message
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast' + (isError ? ' error' : '');
+            toast.style.display = 'block';
+            
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
         }
         
         function hideAllErrorMessages() {
@@ -471,7 +520,7 @@
                 })
                 .catch(error => {
                     console.error('Error loading schools:', error);
-                    alert('Error loading schools. Please try again.');
+                    showToast('Error loading schools. Please try again.', true);
                 });
         }
         
@@ -498,8 +547,8 @@
                     <td>${school.name || '-'}</td>
                     <td>${school.cluster_number || '-'}</td>
                     <td>${school.school_number || '-'}</td>
-                    <td>${school.principal_name || '-'}</td>
                     <td>${school.bmo_phone || '-'}</td>
+                    <td>${school.principal_name || '-'}</td>
                     <td>${school.address || '-'}</td>
                     <td>${school.notes || '-'}</td>
                     <td class="actions-cell">
@@ -531,7 +580,7 @@
             const school = allSchools.find(s => s.id == schoolId);
             
             if (!school) {
-                alert('School not found in local data. Please refresh the page and try again.');
+                showToast('School not found in local data. Please refresh the page and try again.', true);
                 return;
             }
             
@@ -541,8 +590,8 @@
             document.getElementById('schoolName').value = school.name || '';
             document.getElementById('clusterNumber').value = school.cluster_number || '';
             document.getElementById('schoolNumber').value = school.school_number || '';
-            document.getElementById('bmoName').value = school.principal_name || '';  // principal_name is now BMO Name
-            document.getElementById('bmoPhone').value = school.bmo_phone || '';
+            document.getElementById('bmoName').value = school.principal_name || '';  // This is BMO Name
+            document.getElementById('bmoPhone').value = school.bmo_phone || '';      // This is BMO Phone
             document.getElementById('schoolAddress').value = school.address || '';
             document.getElementById('notes').value = school.notes || '';
             
@@ -590,7 +639,7 @@
                 clusterNumber: clusterNumber,
                 schoolNumber: schoolNumber,
                 bmoPhone: bmoPhone,
-                principalName: bmoName,  // Note: principal_name field stores BMO Name
+                principalName: bmoName,  // This is BMO Name
                 address: address,
                 notes: notes
             };
@@ -606,6 +655,12 @@
             console.log('Saving school data:', schoolData);
             console.log('Using URL:', url, 'Method:', method);
             
+            // Show loading state
+            const saveButton = document.querySelector('#schoolForm button[type="submit"]');
+            const originalText = saveButton.textContent;
+            saveButton.innerHTML = '<span class="loading"></span> Saving...';
+            saveButton.disabled = true;
+            
             fetch(url, {
                 method: method,
                 headers: {
@@ -616,24 +671,32 @@
             .then(response => {
                 console.log('Response status:', response.status);
                 if (!response.ok) {
-                    return response.json().then(err => { throw err; });
+                    return response.json().then(err => { 
+                        throw new Error(err.error || 'Failed to save school'); 
+                    });
                 }
                 return response.json();
             })
             .then(data => {
                 console.log('Save response:', data);
                 if (data.message) {
-                    alert(data.message);
+                    showToast(data.message);
                     document.getElementById('schoolModal').style.display = 'none';
                     document.getElementById('schoolForm').reset();
                     loadSchools();
+                    editingSchool = null;
                 } else {
-                    alert('Error saving school: ' + (data.error || 'Unknown error'));
+                    throw new Error(data.error || 'Unknown error occurred');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error saving school. Please check the console for details. Error: ' + (error.message || 'Unknown error'));
+                showToast(error.message || 'Error saving school. Please try again.', true);
+            })
+            .finally(() => {
+                // Restore button state
+                saveButton.textContent = originalText;
+                saveButton.disabled = false;
             });
         }
         
@@ -644,21 +707,23 @@
                 })
                 .then(response => {
                     if (!response.ok) {
-                        return response.json().then(err => { throw err; });
+                        return response.json().then(err => { 
+                            throw new Error(err.error || 'Failed to delete school'); 
+                        });
                     }
                     return response.json();
                 })
                 .then(data => {
                     if (data.message) {
-                        alert(data.message);
+                        showToast(data.message);
                         loadSchools();
                     } else {
-                        alert('Error deleting school: ' + (data.error || 'Unknown error'));
+                        throw new Error(data.error || 'Unknown error occurred');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Error deleting school. Please try again.');
+                    showToast(error.message || 'Error deleting school. Please try again.', true);
                 });
             }
         }
