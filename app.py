@@ -683,10 +683,8 @@ def create_department():
         
         response = supabase.table("departments").insert(department_data).execute()
         
-        print(f"🏢 Supabase response type: {type(response)}")
         print(f"🏢 Supabase response: {response}")
         
-        # Check if response has data attribute
         if hasattr(response, 'data') and response.data:
             print(f"✅ Department created successfully: {response.data[0]}")
             return jsonify({
@@ -708,7 +706,7 @@ def create_department():
             'success': False, 
             'error': f'Failed to create department: {str(e)}'
         }), 500
-
+        
 @app.route('/api/departments', methods=['PUT'])
 def update_department():
     """Update a department"""
@@ -1211,6 +1209,7 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
