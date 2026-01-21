@@ -1,4 +1,3 @@
-departments.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -274,6 +273,13 @@ departments.html
             content: " *";
             color: var(--danger);
         }
+        
+        .error-message {
+            color: var(--danger);
+            font-size: 0.9rem;
+            margin-top: 5px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -334,20 +340,23 @@ departments.html
                     <div class="form-group">
                         <label class="form-label required">Unit Name</label>
                         <input type="text" class="form-control" id="unitName" required placeholder="Enter unit name">
+                        <div class="error-message" id="unitNameError">Please enter unit name</div>
                     </div>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Division Name</label>
-                        <input type="text" class="form-control" id="divisionName" placeholder="Enter division name">
+                        <label class="form-label required">Division Name</label>
+                        <input type="text" class="form-control" id="divisionName" required placeholder="Enter division name">
+                        <div class="error-message" id="divisionNameError">Please enter division name</div>
                     </div>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Department Name</label>
-                        <input type="text" class="form-control" id="departmentName" placeholder="Enter department name">
+                        <label class="form-label required">Department Name</label>
+                        <input type="text" class="form-control" id="departmentName" required placeholder="Enter department name">
+                        <div class="error-message" id="departmentNameError">Please enter department name</div>
                     </div>
                 </div>
                 
@@ -399,15 +408,18 @@ departments.html
                 editingDepartment = null;
                 modalTitle.textContent = 'Add Department';
                 departmentForm.reset();
+                hideAllErrors();
                 departmentModal.style.display = 'flex';
             });
             
             closeModal.addEventListener('click', () => {
                 departmentModal.style.display = 'none';
+                hideAllErrors();
             });
             
             cancelBtn.addEventListener('click', () => {
                 departmentModal.style.display = 'none';
+                hideAllErrors();
             });
             
             // Form submission
@@ -418,6 +430,18 @@ departments.html
             
             // Initial load
             loadDepartments();
+        }
+        
+        function hideAllErrors() {
+            document.querySelectorAll('.error-message').forEach(error => {
+                error.style.display = 'none';
+            });
+        }
+        
+        function showError(elementId, message) {
+            const errorElement = document.getElementById(elementId);
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
         }
         
         // Load departments
@@ -503,25 +527,49 @@ departments.html
             document.getElementById('departmentAddress').value = department.address || '';
             document.getElementById('notes').value = department.notes || '';
             
+            hideAllErrors();
             document.getElementById('departmentModal').style.display = 'flex';
         }
         
         function saveDepartment() {
+            // Hide all errors first
+            hideAllErrors();
+            
             const unitName = document.getElementById('unitName').value.trim();
+            const divisionName = document.getElementById('divisionName').value.trim();
+            const departmentName = document.getElementById('departmentName').value.trim();
+            
+            let hasError = false;
             
             if (!unitName) {
-                alert('Please enter a unit name');
+                showError('unitNameError', 'Please enter a unit name');
+                hasError = true;
+            }
+            
+            if (!divisionName) {
+                showError('divisionNameError', 'Please enter a division name');
+                hasError = true;
+            }
+            
+            if (!departmentName) {
+                showError('departmentNameError', 'Please enter a department name');
+                hasError = true;
+            }
+            
+            if (hasError) {
                 return;
             }
             
             const departmentData = {
-                unit_name: unitName,
-                division_name: document.getElementById('divisionName').value.trim(),
-                department_name: document.getElementById('departmentName').value.trim(),
-                hotline_numbers: document.getElementById('hotlineNumbers').value.trim(),
+                unitName: unitName,
+                divisionName: divisionName,
+                departmentName: departmentName,
+                hotlineNumbers: document.getElementById('hotlineNumbers').value.trim(),
                 address: document.getElementById('departmentAddress').value.trim(),
                 notes: document.getElementById('notes').value.trim()
             };
+            
+            console.log('Saving department data:', departmentData);
             
             let url = '/api/departments';
             let method = 'POST';
@@ -538,7 +586,14 @@ departments.html
                 },
                 body: JSON.stringify(departmentData)
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Failed to save department');
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.message) {
                     alert(data.message);
@@ -551,7 +606,7 @@ departments.html
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error saving department. Please try again.');
+                alert('Error saving department: ' + error.message);
             });
         }
         
