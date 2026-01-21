@@ -147,7 +147,7 @@
         .data-table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 1000px;
+            min-width: 1200px;
         }
         
         .data-table th {
@@ -273,6 +273,13 @@
             content: " *";
             color: var(--danger);
         }
+        
+        .error-message {
+            color: var(--danger);
+            font-size: 0.9rem;
+            margin-top: 5px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -305,8 +312,8 @@
                         <th>School Name</th>
                         <th>Cluster Number</th>
                         <th>School Number</th>
+                        <th>BMO Name</th>
                         <th>BMO Phone Number</th>
-                        <th>Principal Name</th>
                         <th>Address</th>
                         <th>Notes</th>
                         <th>Actions</th>
@@ -334,6 +341,7 @@
                     <div class="form-group">
                         <label class="form-label required">School Name</label>
                         <input type="text" class="form-control" id="schoolName" required placeholder="Enter school name">
+                        <div class="error-message" id="schoolNameError">Please enter school name</div>
                     </div>
                 </div>
                 
@@ -341,23 +349,25 @@
                     <div class="form-group">
                         <label class="form-label required">Cluster Number</label>
                         <input type="text" class="form-control" id="clusterNumber" required placeholder="Enter cluster number">
+                        <div class="error-message" id="clusterNumberError">Please enter cluster number</div>
                     </div>
                     
                     <div class="form-group">
                         <label class="form-label required">School Number</label>
                         <input type="text" class="form-control" id="schoolNumber" required placeholder="Enter school number">
+                        <div class="error-message" id="schoolNumberError">Please enter school number</div>
                     </div>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">BMO Phone Number</label>
-                        <input type="tel" class="form-control" id="bmoPhone" placeholder="Enter BMO phone number">
+                        <label class="form-label">BMO Name</label>
+                        <input type="text" class="form-control" id="bmoName" placeholder="Enter BMO name">
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label">Principal Name</label>
-                        <input type="text" class="form-control" id="principalName" placeholder="Enter principal name">
+                        <label class="form-label">BMO Phone Number</label>
+                        <input type="tel" class="form-control" id="bmoPhone" placeholder="Enter BMO phone number">
                     </div>
                 </div>
                 
@@ -404,15 +414,18 @@
                 editingSchool = null;
                 modalTitle.textContent = 'Add School';
                 schoolForm.reset();
+                hideAllErrors();
                 schoolModal.style.display = 'flex';
             });
             
             closeModal.addEventListener('click', () => {
                 schoolModal.style.display = 'none';
+                hideAllErrors();
             });
             
             cancelBtn.addEventListener('click', () => {
                 schoolModal.style.display = 'none';
+                hideAllErrors();
             });
             
             // Form submission
@@ -423,6 +436,18 @@
             
             // Initial load
             loadSchools();
+        }
+        
+        function hideAllErrors() {
+            document.querySelectorAll('.error-message').forEach(error => {
+                error.style.display = 'none';
+            });
+        }
+        
+        function showError(elementId, message) {
+            const errorElement = document.getElementById(elementId);
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
         }
         
         // Load schools
@@ -462,8 +487,8 @@
                     <td>${school.name || '-'}</td>
                     <td>${school.cluster_number || '-'}</td>
                     <td>${school.school_number || '-'}</td>
+                    <td>${school.principal_name || '-'}</td> <!-- BMO Name from principal_name -->
                     <td>${school.bmo_phone || '-'}</td>
-                    <td>${school.principal_name || '-'}</td>
                     <td>${school.address || '-'}</td>
                     <td>${school.notes || '-'}</td>
                     <td class="actions-cell">
@@ -505,43 +530,55 @@
             document.getElementById('schoolName').value = school.name || '';
             document.getElementById('clusterNumber').value = school.cluster_number || '';
             document.getElementById('schoolNumber').value = school.school_number || '';
+            document.getElementById('bmoName').value = school.principal_name || ''; // Map to BMO Name
             document.getElementById('bmoPhone').value = school.bmo_phone || '';
-            document.getElementById('principalName').value = school.principal_name || '';
             document.getElementById('schoolAddress').value = school.address || '';
             document.getElementById('notes').value = school.notes || '';
             
+            hideAllErrors();
             document.getElementById('schoolModal').style.display = 'flex';
         }
         
         function saveSchool() {
+            // Hide all errors first
+            hideAllErrors();
+            
             const schoolName = document.getElementById('schoolName').value.trim();
             const clusterNumber = document.getElementById('clusterNumber').value.trim();
             const schoolNumber = document.getElementById('schoolNumber').value.trim();
             
+            let hasError = false;
+            
             if (!schoolName) {
-                alert('Please enter a school name');
-                return;
+                showError('schoolNameError', 'Please enter a school name');
+                hasError = true;
             }
             
             if (!clusterNumber) {
-                alert('Please enter a cluster number');
-                return;
+                showError('clusterNumberError', 'Please enter a cluster number');
+                hasError = true;
             }
             
             if (!schoolNumber) {
-                alert('Please enter a school number');
+                showError('schoolNumberError', 'Please enter a school number');
+                hasError = true;
+            }
+            
+            if (hasError) {
                 return;
             }
             
             const schoolData = {
                 name: schoolName,
-                cluster_number: clusterNumber,
-                school_number: schoolNumber,
-                bmo_phone: document.getElementById('bmoPhone').value.trim(),
-                principal_name: document.getElementById('principalName').value.trim(),
+                clusterNumber: clusterNumber,
+                schoolNumber: schoolNumber,
+                principalName: document.getElementById('bmoName').value.trim(), // Map to BMO Name
+                bmoPhone: document.getElementById('bmoPhone').value.trim(),
                 address: document.getElementById('schoolAddress').value.trim(),
                 notes: document.getElementById('notes').value.trim()
             };
+            
+            console.log('Saving school data:', schoolData);
             
             let url = '/api/schools';
             let method = 'POST';
@@ -558,7 +595,14 @@
                 },
                 body: JSON.stringify(schoolData)
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Failed to save school');
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.message) {
                     alert(data.message);
@@ -571,7 +615,7 @@
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error saving school. Please try again.');
+                alert('Error saving school: ' + error.message);
             });
         }
         
