@@ -177,7 +177,7 @@
         .data-table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 1300px;
+            min-width: 1400px;
         }
         
         .data-table th {
@@ -232,7 +232,7 @@
             background: white;
             border-radius: 10px;
             width: 90%;
-            max-width: 800px;
+            max-width: 900px;
             max-height: 90vh;
             overflow-y: auto;
             padding: 30px;
@@ -482,7 +482,7 @@
                         <th>Amount Paid</th>
                         <th>Status</th>
                         <th>Bill Image</th>
-                        <th>Period</th>
+                        <th>Bill Period</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -584,7 +584,33 @@
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Month</label>
+                        <label class="form-label">Bill Month</label>
+                        <select class="form-control" id="billMonth" required>
+                            <option value="">Select Bill Month</option>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Bill Year</label>
+                        <input type="number" class="form-control" id="billYear" min="2000" max="2050" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Month (for filtering)</label>
                         <select class="form-control" id="month" required>
                             <option value="">Select Month</option>
                             <option value="1">January</option>
@@ -603,7 +629,7 @@
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label">Year</label>
+                        <label class="form-label">Year (for filtering)</label>
                         <input type="number" class="form-control" id="year" min="2000" max="2050" required>
                     </div>
                 </div>
@@ -666,6 +692,7 @@
                 modalTitle.textContent = 'Add Electricity Bill';
                 billForm.reset();
                 document.getElementById('imagePreview').innerHTML = '';
+                document.getElementById('billYear').value = currentYear;
                 document.getElementById('year').value = currentYear;
                 
                 // Enable all fields when adding new bill
@@ -853,8 +880,10 @@
                     unsettled_charges: parseFloat(document.getElementById('unsettledCharges').value),
                     amount_paid: parseFloat(document.getElementById('amountPaid').value),
                     consumption_kwh: parseFloat(document.getElementById('consumption').value),
-                    month: parseInt(document.getElementById('month').value),
-                    year: parseInt(document.getElementById('year').value),
+                    month: parseInt(document.getElementById('month').value),  // For filtering
+                    year: parseInt(document.getElementById('year').value),    // For filtering
+                    bill_month: parseInt(document.getElementById('billMonth').value),  // Actual bill month
+                    bill_year: parseInt(document.getElementById('billYear').value),    // Actual bill year
                     bill_image: imageUrl
                 };
                 
@@ -1177,6 +1206,10 @@
                         imageCell = `<a href="${bill.bill_image}" target="_blank">View Bill</a>`;
                     }
                     
+                    // Use bill_month and bill_year for display instead of month and year
+                    const displayMonth = bill.bill_month || bill.month;
+                    const displayYear = bill.bill_year || bill.year;
+                    
                     childRow.innerHTML = `
                         <td>${bill.entity_name}</td>
                         <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
@@ -1189,7 +1222,7 @@
                         <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
                         <td><span class="status-badge status-${status}">${statusText}</span></td>
                         <td>${imageCell}</td>
-                        <td>${getMonthName(bill.month)} ${bill.year}</td>
+                        <td>${getMonthName(displayMonth)} ${displayYear}</td>
                         <td class="actions-cell">
                             <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
                             <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
@@ -1249,6 +1282,7 @@
             document.getElementById('billId').value = bill.id;
             
             // Set current year as default
+            document.getElementById('billYear').value = currentYear;
             document.getElementById('year').value = currentYear;
             
             // Enable account fields when editing
@@ -1374,6 +1408,8 @@
             document.getElementById('amountPaid').value = bill.amount_paid || 0;
             document.getElementById('month').value = bill.month || '';
             document.getElementById('year').value = bill.year || currentYear;
+            document.getElementById('billMonth').value = bill.bill_month || bill.month || '';
+            document.getElementById('billYear').value = bill.bill_year || bill.year || currentYear;
             
             // Show existing image
             if (bill.bill_image) {
