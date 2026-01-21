@@ -274,29 +274,23 @@
             color: var(--danger);
         }
         
-        .error-message {
-            color: var(--danger);
-            font-size: 0.9rem;
-            margin-top: 5px;
-            display: none;
-        }
-        
-        /* Add loading spinner */
-        .loading {
+        /* Loading spinner */
+        .spinner {
             display: inline-block;
             width: 20px;
             height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid var(--primary);
+            border: 3px solid rgba(255,255,255,.3);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
         }
         
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
         }
         
+        /* Toast notification */
         .toast {
             position: fixed;
             top: 20px;
@@ -308,10 +302,33 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
             z-index: 3000;
             display: none;
+            animation: slideIn 0.3s ease;
         }
         
         .toast.error {
             background: var(--danger);
+        }
+        
+        .toast.warning {
+            background: var(--warning);
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .form-error {
+            color: var(--danger);
+            font-size: 0.9rem;
+            margin-top: 5px;
+            display: none;
         }
     </style>
 </head>
@@ -345,8 +362,8 @@
                         <th>School Name</th>
                         <th>Cluster Number</th>
                         <th>School Number(s)</th>
-                        <th>BMO Phone Number</th>
                         <th>BMO Name</th>
+                        <th>BMO Phone Number(s)</th>
                         <th>Address</th>
                         <th>Notes</th>
                         <th>Actions</th>
@@ -359,7 +376,7 @@
         </div>
     </div>
     
-    <!-- Add toast notification -->
+    <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
     
     <!-- Add/Edit School Modal -->
@@ -377,7 +394,7 @@
                     <div class="form-group">
                         <label class="form-label required">School Name</label>
                         <input type="text" class="form-control" id="schoolName" required placeholder="Enter school name">
-                        <div class="error-message" id="schoolNameError">Please enter school name</div>
+                        <div class="form-error" id="schoolNameError"></div>
                     </div>
                 </div>
                 
@@ -385,14 +402,14 @@
                     <div class="form-group">
                         <label class="form-label required">Cluster Number</label>
                         <input type="text" class="form-control" id="clusterNumber" required placeholder="Enter cluster number">
-                        <div class="error-message" id="clusterNumberError">Please enter cluster number</div>
+                        <div class="form-error" id="clusterNumberError"></div>
                     </div>
                     
                     <div class="form-group">
                         <label class="form-label required">School Number(s)</label>
                         <input type="text" class="form-control" id="schoolNumber" required 
                                placeholder="Enter school numbers (separate with commas if multiple)">
-                        <div class="error-message" id="schoolNumberError">Please enter school number(s)</div>
+                        <div class="form-error" id="schoolNumberError"></div>
                     </div>
                 </div>
                 
@@ -421,14 +438,16 @@
                 
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save School</button>
+                    <button type="submit" class="btn btn-primary" id="saveBtn">
+                        <span id="saveText">Save School</span>
+                        <span id="saveSpinner" class="spinner" style="display: none;"></span>
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
     <script>
-        // Store schools globally for editing
         let allSchools = [];
         let editingSchool = null;
 
@@ -450,7 +469,7 @@
                 editingSchool = null;
                 modalTitle.textContent = 'Add School';
                 schoolForm.reset();
-                hideAllErrorMessages();
+                hideAllErrors();
                 schoolModal.style.display = 'flex';
             });
             
@@ -473,10 +492,10 @@
         }
         
         // Show toast message
-        function showToast(message, isError = false) {
+        function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
             toast.textContent = message;
-            toast.className = 'toast' + (isError ? ' error' : '');
+            toast.className = 'toast ' + type;
             toast.style.display = 'block';
             
             setTimeout(() => {
@@ -484,24 +503,37 @@
             }, 3000);
         }
         
-        function hideAllErrorMessages() {
-            document.querySelectorAll('.error-message').forEach(error => {
-                error.style.display = 'none';
-            });
-        }
-        
-        function showError(elementId, message) {
-            const errorElement = document.getElementById(elementId + 'Error');
-            if (errorElement) {
-                errorElement.textContent = message;
-                errorElement.style.display = 'block';
+        // Show loading state
+        function showLoading(show) {
+            const saveText = document.getElementById('saveText');
+            const saveSpinner = document.getElementById('saveSpinner');
+            const saveBtn = document.getElementById('saveBtn');
+            
+            if (show) {
+                saveText.textContent = 'Saving...';
+                saveSpinner.style.display = 'inline-block';
+                saveBtn.disabled = true;
+            } else {
+                saveText.textContent = 'Save School';
+                saveSpinner.style.display = 'none';
+                saveBtn.disabled = false;
             }
         }
         
-        function hideError(elementId) {
-            const errorElement = document.getElementById(elementId + 'Error');
+        // Hide all error messages
+        function hideAllErrors() {
+            document.querySelectorAll('.form-error').forEach(error => {
+                error.style.display = 'none';
+                error.textContent = '';
+            });
+        }
+        
+        // Show error message
+        function showError(fieldId, message) {
+            const errorElement = document.getElementById(fieldId + 'Error');
             if (errorElement) {
-                errorElement.style.display = 'none';
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
             }
         }
         
@@ -520,7 +552,7 @@
                 })
                 .catch(error => {
                     console.error('Error loading schools:', error);
-                    showToast('Error loading schools. Please try again.', true);
+                    showToast('Error loading schools. Please try again.', 'error');
                 });
         }
         
@@ -547,8 +579,8 @@
                     <td>${school.name || '-'}</td>
                     <td>${school.cluster_number || '-'}</td>
                     <td>${school.school_number || '-'}</td>
-                    <td>${school.bmo_phone || '-'}</td>
                     <td>${school.principal_name || '-'}</td>
+                    <td>${school.bmo_phone || '-'}</td>
                     <td>${school.address || '-'}</td>
                     <td>${school.notes || '-'}</td>
                     <td class="actions-cell">
@@ -580,7 +612,7 @@
             const school = allSchools.find(s => s.id == schoolId);
             
             if (!school) {
-                showToast('School not found in local data. Please refresh the page and try again.', true);
+                showToast('School not found in local data. Please refresh the page and try again.', 'error');
                 return;
             }
             
@@ -595,13 +627,13 @@
             document.getElementById('schoolAddress').value = school.address || '';
             document.getElementById('notes').value = school.notes || '';
             
-            hideAllErrorMessages();
+            hideAllErrors();
             document.getElementById('schoolModal').style.display = 'flex';
         }
         
         function saveSchool() {
             // Hide all error messages first
-            hideAllErrorMessages();
+            hideAllErrors();
             
             // Get form values
             const schoolName = document.getElementById('schoolName').value.trim();
@@ -631,6 +663,7 @@
             }
             
             if (hasError) {
+                showToast('Please fill in all required fields', 'warning');
                 return;
             }
             
@@ -656,15 +689,13 @@
             console.log('Using URL:', url, 'Method:', method);
             
             // Show loading state
-            const saveButton = document.querySelector('#schoolForm button[type="submit"]');
-            const originalText = saveButton.textContent;
-            saveButton.innerHTML = '<span class="loading"></span> Saving...';
-            saveButton.disabled = true;
+            showLoading(true);
             
             fetch(url, {
                 method: method,
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify(schoolData)
             })
@@ -672,15 +703,16 @@
                 console.log('Response status:', response.status);
                 if (!response.ok) {
                     return response.json().then(err => { 
-                        throw new Error(err.error || 'Failed to save school'); 
+                        throw new Error(err.error || `Server error: ${response.status}`); 
                     });
                 }
                 return response.json();
             })
             .then(data => {
-                console.log('Save response:', data);
-                if (data.message) {
-                    showToast(data.message);
+                console.log('Save response data:', data);
+                
+                if (data.success) {
+                    showToast(data.message || 'School saved successfully!');
                     document.getElementById('schoolModal').style.display = 'none';
                     document.getElementById('schoolForm').reset();
                     loadSchools();
@@ -690,13 +722,12 @@
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
-                showToast(error.message || 'Error saving school. Please try again.', true);
+                console.error('Error saving school:', error);
+                showToast(error.message || 'Error saving school. Please try again.', 'error');
             })
             .finally(() => {
-                // Restore button state
-                saveButton.textContent = originalText;
-                saveButton.disabled = false;
+                // Hide loading state
+                showLoading(false);
             });
         }
         
@@ -723,7 +754,7 @@
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    showToast(error.message || 'Error deleting school. Please try again.', true);
+                    showToast(error.message || 'Error deleting school. Please try again.', 'error');
                 });
             }
         }
