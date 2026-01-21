@@ -164,6 +164,48 @@
             border-bottom: 1px solid #eee;
         }
         
+        /* Department group header row */
+        .department-group-header {
+            background-color: #f0f7ff !important;
+            border-left: 4px solid var(--primary) !important;
+            font-weight: 600;
+            color: var(--primary);
+            border-top: 2px solid #d0e3ff !important;
+        }
+        
+        .department-group-header td {
+            font-weight: 600;
+            color: var(--primary);
+        }
+        
+        /* Visual separator between department groups */
+        .department-separator {
+            height: 2px;
+            background-color: #d0e3ff;
+        }
+        
+        /* Unit rows within a department */
+        .unit-row td {
+            background-color: white;
+        }
+        
+        /* Indent unit rows */
+        .unit-row td:first-child {
+            padding-left: 30px;
+            position: relative;
+        }
+        
+        /* Connector line for unit rows */
+        .unit-row td:first-child::before {
+            content: "";
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            width: 10px;
+            height: 1px;
+            background-color: #ccc;
+        }
+        
         .data-table tr:hover {
             background: #f9f9f9;
         }
@@ -330,6 +372,82 @@
             margin-top: 5px;
             display: none;
         }
+        
+        /* Filter controls */
+        .filter-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+        }
+        
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+        }
+        
+        .filter-group {
+            flex: 1;
+        }
+        
+        .filter-label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .filter-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+        }
+        
+        .btn-outline:hover {
+            background: var(--primary);
+            color: white;
+        }
+        
+        /* Department summary */
+        .department-summary {
+            background: #f0f7ff;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .summary-stats {
+            display: flex;
+            gap: 30px;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--gray);
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -352,6 +470,39 @@
         <div class="page-header">
             <h1 class="page-title">Departments Management</h1>
             <button class="btn btn-primary" id="addDepartmentBtn">Add New Department</button>
+        </div>
+        
+        <div class="department-summary" id="departmentSummary" style="display: none;">
+            <div class="summary-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="totalDepartments">0</div>
+                    <div class="stat-label">Departments</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalUnits">0</div>
+                    <div class="stat-label">Units</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalDivisions">0</div>
+                    <div class="stat-label">Divisions</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-controls">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label class="filter-label">Search Departments/Units</label>
+                    <input type="text" class="filter-input" id="searchInput" placeholder="Type to search...">
+                </div>
+                <div class="filter-group" style="flex: 0.5;">
+                    <label class="filter-label">Filter by Division</label>
+                    <select class="filter-input" id="divisionFilter">
+                        <option value="">All Divisions</option>
+                    </select>
+                </div>
+                <button class="btn btn-outline" id="clearFiltersBtn">Clear Filters</button>
+            </div>
         </div>
         
         <div class="data-table-container">
@@ -394,12 +545,10 @@
             <form id="departmentForm">
                 <input type="hidden" id="departmentId">
                 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label required">Unit Name</label>
-                        <input type="text" class="form-control" id="unitName" required placeholder="Enter unit name">
-                        <div class="form-error" id="unitNameError"></div>
-                    </div>
+                <div class="form-group">
+                    <label class="form-label required">Department Name</label>
+                    <input type="text" class="form-control" id="departmentName" required placeholder="Enter department name (e.g., Curriculum, Administration)">
+                    <div class="form-error" id="departmentNameError"></div>
                 </div>
                 
                 <div class="form-row">
@@ -412,9 +561,9 @@
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label required">Department Name</label>
-                        <input type="text" class="form-control" id="departmentName" required placeholder="Enter department name">
-                        <div class="form-error" id="departmentNameError"></div>
+                        <label class="form-label required">Unit Name</label>
+                        <input type="text" class="form-control" id="unitName" required placeholder="Enter unit name">
+                        <div class="form-error" id="unitNameError"></div>
                     </div>
                 </div>
                 
@@ -444,10 +593,11 @@
         </div>
     </div>
 
-        <script>
+    <script>
         // Global variables
         let allDepartments = [];
         let editingDepartment = null;
+        let departmentGroups = {};
 
         // Initialize when page is fully loaded
         document.addEventListener('DOMContentLoaded', function() {
@@ -470,6 +620,9 @@
             const cancelBtn = document.getElementById('cancelBtn');
             const departmentForm = document.getElementById('departmentForm');
             const modalTitle = document.getElementById('modalTitle');
+            const searchInput = document.getElementById('searchInput');
+            const divisionFilter = document.getElementById('divisionFilter');
+            const clearFiltersBtn = document.getElementById('clearFiltersBtn');
             
             if (!addDepartmentBtn) {
                 console.error('Add Department button not found!');
@@ -504,6 +657,23 @@
                 e.preventDefault();
                 console.log('Form submitted');
                 saveDepartment();
+            });
+            
+            // Search input listener
+            searchInput.addEventListener('input', () => {
+                filterDepartments();
+            });
+            
+            // Division filter listener
+            divisionFilter.addEventListener('change', () => {
+                filterDepartments();
+            });
+            
+            // Clear filters button
+            clearFiltersBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                divisionFilter.value = '';
+                filterDepartments();
             });
             
             // Load departments data
@@ -579,11 +749,23 @@
                 .then(data => {
                     console.log('Departments data received:', data);
                     allDepartments = data;
+                    
+                    // Process department groups
+                    processDepartmentGroups(data);
+                    
+                    // Populate division filter
+                    populateDivisionFilter(data);
+                    
+                    // Update summary statistics
+                    updateSummaryStatistics(data);
+                    
+                    // Render departments table
                     renderDepartmentsTable(data);
+                    
                     if (data.length === 0) {
                         showToast('No departments found. Add your first department!', 'warning');
                     } else {
-                        showToast(`Loaded ${data.length} departments`, 'success');
+                        showToast(`Loaded ${data.length} units across ${Object.keys(departmentGroups).length} departments`, 'success');
                     }
                 })
                 .catch(error => {
@@ -593,7 +775,127 @@
                 });
         }
         
-        // Render departments table
+        // Process departments into groups by department_name
+        function processDepartmentGroups(departments) {
+            departmentGroups = {};
+            
+            departments.forEach(dept => {
+                const deptName = dept.department_name || 'Uncategorized';
+                
+                if (!departmentGroups[deptName]) {
+                    departmentGroups[deptName] = {
+                        name: deptName,
+                        units: []
+                    };
+                }
+                
+                departmentGroups[deptName].units.push(dept);
+            });
+            
+            // Sort departments alphabetically
+            departmentGroups = Object.fromEntries(
+                Object.entries(departmentGroups).sort(([a], [b]) => a.localeCompare(b))
+            );
+            
+            // Within each department, sort units by division then unit
+            Object.values(departmentGroups).forEach(group => {
+                group.units.sort((a, b) => {
+                    const divA = a.division_name || '';
+                    const divB = b.division_name || '';
+                    const unitA = a.unit_name || '';
+                    const unitB = b.unit_name || '';
+                    
+                    if (divA !== divB) {
+                        return divA.localeCompare(divB);
+                    }
+                    return unitA.localeCompare(unitB);
+                });
+            });
+        }
+        
+        // Populate division filter dropdown
+        function populateDivisionFilter(departments) {
+            const divisionFilter = document.getElementById('divisionFilter');
+            const divisions = new Set();
+            
+            departments.forEach(dept => {
+                if (dept.division_name) {
+                    divisions.add(dept.division_name);
+                }
+            });
+            
+            // Clear existing options except the first one
+            divisionFilter.innerHTML = '<option value="">All Divisions</option>';
+            
+            // Add division options
+            Array.from(divisions).sort().forEach(division => {
+                const option = document.createElement('option');
+                option.value = division;
+                option.textContent = division;
+                divisionFilter.appendChild(option);
+            });
+        }
+        
+        // Update summary statistics
+        function updateSummaryStatistics(departments) {
+            const summaryElement = document.getElementById('departmentSummary');
+            
+            if (departments.length === 0) {
+                summaryElement.style.display = 'none';
+                return;
+            }
+            
+            summaryElement.style.display = 'block';
+            
+            // Count unique departments
+            const uniqueDepartments = new Set(departments.map(d => d.department_name));
+            
+            // Count unique divisions
+            const uniqueDivisions = new Set(departments.map(d => d.division_name));
+            
+            // Update display
+            document.getElementById('totalDepartments').textContent = uniqueDepartments.size;
+            document.getElementById('totalUnits').textContent = departments.length;
+            document.getElementById('totalDivisions').textContent = uniqueDivisions.size;
+        }
+        
+        // Filter departments based on search input and division filter
+        function filterDepartments() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const selectedDivision = document.getElementById('divisionFilter').value;
+            
+            let filteredDepartments = allDepartments;
+            
+            // Apply search filter
+            if (searchTerm) {
+                filteredDepartments = filteredDepartments.filter(dept => {
+                    return (
+                        (dept.unit_name && dept.unit_name.toLowerCase().includes(searchTerm)) ||
+                        (dept.division_name && dept.division_name.toLowerCase().includes(searchTerm)) ||
+                        (dept.department_name && dept.department_name.toLowerCase().includes(searchTerm)) ||
+                        (dept.hotline_numbers && dept.hotline_numbers.toLowerCase().includes(searchTerm)) ||
+                        (dept.address && dept.address.toLowerCase().includes(searchTerm)) ||
+                        (dept.notes && dept.notes.toLowerCase().includes(searchTerm))
+                    );
+                });
+            }
+            
+            // Apply division filter
+            if (selectedDivision) {
+                filteredDepartments = filteredDepartments.filter(dept => 
+                    dept.division_name === selectedDivision
+                );
+            }
+            
+            // Process and render filtered departments
+            processDepartmentGroups(filteredDepartments);
+            renderDepartmentsTable(filteredDepartments);
+            
+            // Update summary with filtered data
+            updateSummaryStatistics(filteredDepartments);
+        }
+        
+        // Render departments table with grouping
         function renderDepartmentsTable(departments) {
             const tableBody = document.getElementById('departmentsTable');
             if (!tableBody) {
@@ -615,22 +917,53 @@
                 return;
             }
             
-            departments.forEach(department => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${department.id || '-'}</td>
-                    <td>${department.unit_name || '-'}</td>
-                    <td>${department.division_name || '-'}</td>
-                    <td>${department.department_name || '-'}</td>
-                    <td>${department.hotline_numbers || '-'}</td>
-                    <td>${department.address || '-'}</td>
-                    <td>${department.notes || '-'}</td>
-                    <td class="actions-cell">
-                        <button class="btn btn-warning btn-sm edit-btn" data-id="${department.id}">Edit</button>
-                        <button class="btn btn-danger btn-sm delete-btn" data-id="${department.id}">Delete</button>
+            let isFirstGroup = true;
+            
+            // Render each department group
+            Object.entries(departmentGroups).forEach(([deptName, group], groupIndex) => {
+                // Add department group header row
+                const headerRow = document.createElement('tr');
+                headerRow.className = 'department-group-header';
+                
+                // Count units in this department
+                const unitCount = group.units.length;
+                
+                headerRow.innerHTML = `
+                    <td colspan="8">
+                        ${deptName} <span style="font-weight: normal; color: var(--gray); font-size: 0.9em;">(${unitCount} unit${unitCount !== 1 ? 's' : ''})</span>
                     </td>
                 `;
-                tableBody.appendChild(row);
+                tableBody.appendChild(headerRow);
+                
+                // Add unit rows for this department
+                group.units.forEach((unit, unitIndex) => {
+                    const unitRow = document.createElement('tr');
+                    unitRow.className = 'unit-row';
+                    
+                    unitRow.innerHTML = `
+                        <td>${unit.id || '-'}</td>
+                        <td>${unit.unit_name || '-'}</td>
+                        <td>${unit.division_name || '-'}</td>
+                        <td>${unit.department_name || '-'}</td>
+                        <td>${unit.hotline_numbers || '-'}</td>
+                        <td>${unit.address || '-'}</td>
+                        <td>${unit.notes || '-'}</td>
+                        <td class="actions-cell">
+                            <button class="btn btn-warning btn-sm edit-btn" data-id="${unit.id}">Edit</button>
+                            <button class="btn btn-danger btn-sm delete-btn" data-id="${unit.id}">Delete</button>
+                        </td>
+                    `;
+                    tableBody.appendChild(unitRow);
+                });
+                
+                // Add visual separator between department groups (except after the last one)
+                if (groupIndex < Object.keys(departmentGroups).length - 1) {
+                    const separatorRow = document.createElement('tr');
+                    separatorRow.innerHTML = `
+                        <td colspan="8" class="department-separator"></td>
+                    `;
+                    tableBody.appendChild(separatorRow);
+                }
             });
             
             // Add event listeners to edit buttons
@@ -663,9 +996,9 @@
             editingDepartment = department;
             document.getElementById('modalTitle').textContent = 'Edit Department';
             document.getElementById('departmentId').value = department.id;
-            document.getElementById('unitName').value = department.unit_name || '';
-            document.getElementById('divisionName').value = department.division_name || '';
             document.getElementById('departmentName').value = department.department_name || '';
+            document.getElementById('divisionName').value = department.division_name || '';
+            document.getElementById('unitName').value = department.unit_name || '';
             document.getElementById('hotlineNumbers').value = department.hotline_numbers || '';
             document.getElementById('departmentAddress').value = department.address || '';
             document.getElementById('notes').value = department.notes || '';
@@ -682,9 +1015,9 @@
             hideAllErrors();
             
             // Get form values
-            const unitName = document.getElementById('unitName').value.trim();
-            const divisionName = document.getElementById('divisionName').value.trim();
             const departmentName = document.getElementById('departmentName').value.trim();
+            const divisionName = document.getElementById('divisionName').value.trim();
+            const unitName = document.getElementById('unitName').value.trim();
             const hotlineNumbers = document.getElementById('hotlineNumbers').value.trim();
             const address = document.getElementById('departmentAddress').value.trim();
             const notes = document.getElementById('notes').value.trim();
@@ -692,8 +1025,8 @@
             // Validate required fields
             let hasError = false;
             
-            if (!unitName) {
-                showError('unitName', 'Please enter a unit name');
+            if (!departmentName) {
+                showError('departmentName', 'Please enter a department name');
                 hasError = true;
             }
             
@@ -702,8 +1035,8 @@
                 hasError = true;
             }
             
-            if (!departmentName) {
-                showError('departmentName', 'Please enter a department name');
+            if (!unitName) {
+                showError('unitName', 'Please enter a unit name');
                 hasError = true;
             }
             
@@ -712,11 +1045,25 @@
                 return;
             }
             
+            // Check for duplicate unit in the same department and division
+            const isDuplicate = allDepartments.some(dept => {
+                return dept.department_name === departmentName && 
+                       dept.division_name === divisionName && 
+                       dept.unit_name === unitName &&
+                       (!editingDepartment || dept.id != editingDepartment.id);
+            });
+            
+            if (isDuplicate) {
+                showError('unitName', 'A unit with this name already exists in this department and division');
+                showToast('Duplicate unit found. Please use a different unit name or edit the existing one.', 'warning');
+                return;
+            }
+            
             // Prepare data
             const departmentData = {
-                unitName: unitName,
-                divisionName: divisionName,
                 departmentName: departmentName,
+                divisionName: divisionName,
+                unitName: unitName,
                 hotlineNumbers: hotlineNumbers,
                 address: address,
                 notes: notes
@@ -803,7 +1150,7 @@
         
         // Delete department
         function deleteDepartment(departmentId) {
-            if (confirm('Are you sure you want to delete this department? This action cannot be undone.')) {
+            if (confirm('Are you sure you want to delete this department unit? This action cannot be undone.')) {
                 fetch(`/api/departments?id=${departmentId}`, {
                     method: 'DELETE'
                 })
@@ -825,7 +1172,7 @@
                 })
                 .then(data => {
                     if (data.message || data.success) {
-                        showToast(data.message || 'Department deleted successfully!', 'success');
+                        showToast(data.message || 'Department unit deleted successfully!', 'success');
                         loadDepartments();
                     } else {
                         throw new Error(data.error || 'Unknown error occurred');
@@ -840,4 +1187,3 @@
     </script>
 </body>
 </html>
-
