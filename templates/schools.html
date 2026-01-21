@@ -147,7 +147,7 @@
         .data-table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 1200px;
+            min-width: 1000px;
         }
         
         .data-table th {
@@ -406,7 +406,6 @@
             const cancelBtn = document.getElementById('cancelBtn');
             const schoolForm = document.getElementById('schoolForm');
             const modalTitle = document.getElementById('modalTitle');
-            const schoolIdField = document.getElementById('schoolId');
             
             let editingSchool = null;
 
@@ -414,18 +413,16 @@
                 editingSchool = null;
                 modalTitle.textContent = 'Add School';
                 schoolForm.reset();
-                hideAllErrors();
+                hideAllErrorMessages();
                 schoolModal.style.display = 'flex';
             });
             
             closeModal.addEventListener('click', () => {
                 schoolModal.style.display = 'none';
-                hideAllErrors();
             });
             
             cancelBtn.addEventListener('click', () => {
                 schoolModal.style.display = 'none';
-                hideAllErrors();
             });
             
             // Form submission
@@ -438,22 +435,36 @@
             loadSchools();
         }
         
-        function hideAllErrors() {
+        function hideAllErrorMessages() {
             document.querySelectorAll('.error-message').forEach(error => {
                 error.style.display = 'none';
             });
         }
         
         function showError(elementId, message) {
-            const errorElement = document.getElementById(elementId);
-            errorElement.textContent = message;
-            errorElement.style.display = 'block';
+            const errorElement = document.getElementById(elementId + 'Error');
+            if (errorElement) {
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+            }
+        }
+        
+        function hideError(elementId) {
+            const errorElement = document.getElementById(elementId + 'Error');
+            if (errorElement) {
+                errorElement.style.display = 'none';
+            }
         }
         
         // Load schools
         function loadSchools() {
             fetch('/api/schools')
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch schools');
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     allSchools = data;
                     renderSchoolsTable(data);
@@ -487,7 +498,7 @@
                     <td>${school.name || '-'}</td>
                     <td>${school.cluster_number || '-'}</td>
                     <td>${school.school_number || '-'}</td>
-                    <td>${school.principal_name || '-'}</td> <!-- BMO Name from principal_name -->
+                    <td>${school.principal_name || '-'}</td>
                     <td>${school.bmo_phone || '-'}</td>
                     <td>${school.address || '-'}</td>
                     <td>${school.notes || '-'}</td>
@@ -530,37 +541,43 @@
             document.getElementById('schoolName').value = school.name || '';
             document.getElementById('clusterNumber').value = school.cluster_number || '';
             document.getElementById('schoolNumber').value = school.school_number || '';
-            document.getElementById('bmoName').value = school.principal_name || ''; // Map to BMO Name
+            document.getElementById('bmoName').value = school.principal_name || '';  // principal_name is now BMO Name
             document.getElementById('bmoPhone').value = school.bmo_phone || '';
             document.getElementById('schoolAddress').value = school.address || '';
             document.getElementById('notes').value = school.notes || '';
             
-            hideAllErrors();
+            hideAllErrorMessages();
             document.getElementById('schoolModal').style.display = 'flex';
         }
         
         function saveSchool() {
-            // Hide all errors first
-            hideAllErrors();
+            // Hide all error messages first
+            hideAllErrorMessages();
             
+            // Get form values
             const schoolName = document.getElementById('schoolName').value.trim();
             const clusterNumber = document.getElementById('clusterNumber').value.trim();
             const schoolNumber = document.getElementById('schoolNumber').value.trim();
+            const bmoName = document.getElementById('bmoName').value.trim();
+            const bmoPhone = document.getElementById('bmoPhone').value.trim();
+            const address = document.getElementById('schoolAddress').value.trim();
+            const notes = document.getElementById('notes').value.trim();
             
+            // Validate required fields
             let hasError = false;
             
             if (!schoolName) {
-                showError('schoolNameError', 'Please enter a school name');
+                showError('schoolName', 'Please enter a school name');
                 hasError = true;
             }
             
             if (!clusterNumber) {
-                showError('clusterNumberError', 'Please enter a cluster number');
+                showError('clusterNumber', 'Please enter a cluster number');
                 hasError = true;
             }
             
             if (!schoolNumber) {
-                showError('schoolNumberError', 'Please enter a school number');
+                showError('schoolNumber', 'Please enter a school number');
                 hasError = true;
             }
             
@@ -572,13 +589,11 @@
                 name: schoolName,
                 clusterNumber: clusterNumber,
                 schoolNumber: schoolNumber,
-                principalName: document.getElementById('bmoName').value.trim(), // Map to BMO Name
-                bmoPhone: document.getElementById('bmoPhone').value.trim(),
-                address: document.getElementById('schoolAddress').value.trim(),
-                notes: document.getElementById('notes').value.trim()
+                bmoPhone: bmoPhone,
+                principalName: bmoName,  // Note: principal_name field stores BMO Name
+                address: address,
+                notes: notes
             };
-            
-            console.log('Saving school data:', schoolData);
             
             let url = '/api/schools';
             let method = 'POST';
@@ -588,6 +603,9 @@
                 method = 'PUT';
             }
             
+            console.log('Saving school data:', schoolData);
+            console.log('Using URL:', url, 'Method:', method);
+            
             fetch(url, {
                 method: method,
                 headers: {
@@ -596,14 +614,14 @@
                 body: JSON.stringify(schoolData)
             })
             .then(response => {
+                console.log('Response status:', response.status);
                 if (!response.ok) {
-                    return response.json().then(err => {
-                        throw new Error(err.error || 'Failed to save school');
-                    });
+                    return response.json().then(err => { throw err; });
                 }
                 return response.json();
             })
             .then(data => {
+                console.log('Save response:', data);
                 if (data.message) {
                     alert(data.message);
                     document.getElementById('schoolModal').style.display = 'none';
@@ -615,7 +633,7 @@
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error saving school: ' + error.message);
+                alert('Error saving school. Please check the console for details. Error: ' + (error.message || 'Unknown error'));
             });
         }
         
@@ -624,7 +642,12 @@
                 fetch(`/api/schools?id=${schoolId}`, {
                     method: 'DELETE'
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.message) {
                         alert(data.message);
