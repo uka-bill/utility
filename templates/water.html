@@ -1,4 +1,3 @@
-water.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -233,7 +232,7 @@ water.html
             background: white;
             border-radius: 10px;
             width: 90%;
-            max-width: 800px;
+            max-width: 900px;
             max-height: 90vh;
             overflow-y: auto;
             padding: 30px;
@@ -583,12 +582,11 @@ water.html
                     </div>
                 </div>
                 
-                <!-- Bill Period (Month/Year of the bill) -->
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Bill Month</label>
                         <select class="form-control" id="billMonth" required>
-                            <option value="">Select Month</option>
+                            <option value="">Select Bill Month</option>
                             <option value="1">January</option>
                             <option value="2">February</option>
                             <option value="3">March</option>
@@ -610,10 +608,9 @@ water.html
                     </div>
                 </div>
                 
-                <!-- Entry Month/Year (when the bill is entered into system) -->
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Entry Month</label>
+                        <label class="form-label">Month (for filtering)</label>
                         <select class="form-control" id="month" required>
                             <option value="">Select Month</option>
                             <option value="1">January</option>
@@ -632,7 +629,7 @@ water.html
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label">Entry Year</label>
+                        <label class="form-label">Year (for filtering)</label>
                         <input type="number" class="form-control" id="year" min="2000" max="2050" required>
                     </div>
                 </div>
@@ -649,7 +646,6 @@ water.html
         // Store bills globally for editing
         let allBills = [];
         let currentYear = new Date().getFullYear();
-        let currentMonth = new Date().getMonth() + 1;
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
@@ -696,14 +692,8 @@ water.html
                 modalTitle.textContent = 'Add Water Bill';
                 billForm.reset();
                 document.getElementById('imagePreview').innerHTML = '';
-                
-                // Set current year and month as default for entry
-                document.getElementById('year').value = currentYear;
-                document.getElementById('month').value = currentMonth;
-                
-                // Set current year and month as default for bill period
                 document.getElementById('billYear').value = currentYear;
-                document.getElementById('billMonth').value = currentMonth;
+                document.getElementById('year').value = currentYear;
                 
                 // Enable all fields when adding new bill
                 document.getElementById('entityType').disabled = false;
@@ -890,10 +880,10 @@ water.html
                     unsettled_charges: parseFloat(document.getElementById('unsettledCharges').value),
                     amount_paid: parseFloat(document.getElementById('amountPaid').value),
                     consumption_m3: parseFloat(document.getElementById('consumption').value),
-                    month: parseInt(document.getElementById('month').value),
-                    year: parseInt(document.getElementById('year').value),
-                    bill_month: parseInt(document.getElementById('billMonth').value),
-                    bill_year: parseInt(document.getElementById('billYear').value),
+                    month: parseInt(document.getElementById('month').value),  // For filtering
+                    year: parseInt(document.getElementById('year').value),    // For filtering
+                    bill_month: parseInt(document.getElementById('billMonth').value),  // Actual bill month
+                    bill_year: parseInt(document.getElementById('billYear').value),    // Actual bill year
                     bill_image: imageUrl
                 };
                 
@@ -1216,10 +1206,9 @@ water.html
                         imageCell = `<a href="${bill.bill_image}" target="_blank">View Bill</a>`;
                     }
                     
-                    // Display bill period (bill_month and bill_year)
-                    const billPeriod = bill.bill_month && bill.bill_year ? 
-                        `${getMonthName(bill.bill_month)} ${bill.bill_year}` : 
-                        `${getMonthName(bill.month)} ${bill.year}`;
+                    // Use bill_month and bill_year for display instead of month and year
+                    const displayMonth = bill.bill_month || bill.month;
+                    const displayYear = bill.bill_year || bill.year;
                     
                     childRow.innerHTML = `
                         <td>${bill.entity_name}</td>
@@ -1233,7 +1222,7 @@ water.html
                         <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
                         <td><span class="status-badge status-${status}">${statusText}</span></td>
                         <td>${imageCell}</td>
-                        <td>${billPeriod}</td>
+                        <td>${getMonthName(displayMonth)} ${displayYear}</td>
                         <td class="actions-cell">
                             <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
                             <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
@@ -1292,7 +1281,8 @@ water.html
             document.getElementById('modalTitle').textContent = 'Edit Water Bill';
             document.getElementById('billId').value = bill.id;
             
-            // Set current year as default for entry
+            // Set current year as default
+            document.getElementById('billYear').value = currentYear;
             document.getElementById('year').value = currentYear;
             
             // Enable account fields when editing
@@ -1459,5 +1449,4 @@ water.html
         }
     </script>
 </body>
-
 </html>
