@@ -400,7 +400,6 @@
             const cancelBtn = document.getElementById('cancelBtn');
             const departmentForm = document.getElementById('departmentForm');
             const modalTitle = document.getElementById('modalTitle');
-            const departmentIdField = document.getElementById('departmentId');
             
             let editingDepartment = null;
 
@@ -408,18 +407,16 @@
                 editingDepartment = null;
                 modalTitle.textContent = 'Add Department';
                 departmentForm.reset();
-                hideAllErrors();
+                hideAllErrorMessages();
                 departmentModal.style.display = 'flex';
             });
             
             closeModal.addEventListener('click', () => {
                 departmentModal.style.display = 'none';
-                hideAllErrors();
             });
             
             cancelBtn.addEventListener('click', () => {
                 departmentModal.style.display = 'none';
-                hideAllErrors();
             });
             
             // Form submission
@@ -432,22 +429,36 @@
             loadDepartments();
         }
         
-        function hideAllErrors() {
+        function hideAllErrorMessages() {
             document.querySelectorAll('.error-message').forEach(error => {
                 error.style.display = 'none';
             });
         }
         
         function showError(elementId, message) {
-            const errorElement = document.getElementById(elementId);
-            errorElement.textContent = message;
-            errorElement.style.display = 'block';
+            const errorElement = document.getElementById(elementId + 'Error');
+            if (errorElement) {
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+            }
+        }
+        
+        function hideError(elementId) {
+            const errorElement = document.getElementById(elementId + 'Error');
+            if (errorElement) {
+                errorElement.style.display = 'none';
+            }
         }
         
         // Load departments
         function loadDepartments() {
             fetch('/api/departments')
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch departments');
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     allDepartments = data;
                     renderDepartmentsTable(data);
@@ -527,32 +538,37 @@
             document.getElementById('departmentAddress').value = department.address || '';
             document.getElementById('notes').value = department.notes || '';
             
-            hideAllErrors();
+            hideAllErrorMessages();
             document.getElementById('departmentModal').style.display = 'flex';
         }
         
         function saveDepartment() {
-            // Hide all errors first
-            hideAllErrors();
+            // Hide all error messages first
+            hideAllErrorMessages();
             
+            // Get form values
             const unitName = document.getElementById('unitName').value.trim();
             const divisionName = document.getElementById('divisionName').value.trim();
             const departmentName = document.getElementById('departmentName').value.trim();
+            const hotlineNumbers = document.getElementById('hotlineNumbers').value.trim();
+            const address = document.getElementById('departmentAddress').value.trim();
+            const notes = document.getElementById('notes').value.trim();
             
+            // Validate required fields
             let hasError = false;
             
             if (!unitName) {
-                showError('unitNameError', 'Please enter a unit name');
+                showError('unitName', 'Please enter a unit name');
                 hasError = true;
             }
             
             if (!divisionName) {
-                showError('divisionNameError', 'Please enter a division name');
+                showError('divisionName', 'Please enter a division name');
                 hasError = true;
             }
             
             if (!departmentName) {
-                showError('departmentNameError', 'Please enter a department name');
+                showError('departmentName', 'Please enter a department name');
                 hasError = true;
             }
             
@@ -564,12 +580,10 @@
                 unitName: unitName,
                 divisionName: divisionName,
                 departmentName: departmentName,
-                hotlineNumbers: document.getElementById('hotlineNumbers').value.trim(),
-                address: document.getElementById('departmentAddress').value.trim(),
-                notes: document.getElementById('notes').value.trim()
+                hotlineNumbers: hotlineNumbers,
+                address: address,
+                notes: notes
             };
-            
-            console.log('Saving department data:', departmentData);
             
             let url = '/api/departments';
             let method = 'POST';
@@ -579,6 +593,9 @@
                 method = 'PUT';
             }
             
+            console.log('Saving department data:', departmentData);
+            console.log('Using URL:', url, 'Method:', method);
+            
             fetch(url, {
                 method: method,
                 headers: {
@@ -587,14 +604,14 @@
                 body: JSON.stringify(departmentData)
             })
             .then(response => {
+                console.log('Response status:', response.status);
                 if (!response.ok) {
-                    return response.json().then(err => {
-                        throw new Error(err.error || 'Failed to save department');
-                    });
+                    return response.json().then(err => { throw err; });
                 }
                 return response.json();
             })
             .then(data => {
+                console.log('Save response:', data);
                 if (data.message) {
                     alert(data.message);
                     document.getElementById('departmentModal').style.display = 'none';
@@ -606,7 +623,7 @@
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error saving department: ' + error.message);
+                alert('Error saving department. Please check the console for details. Error: ' + (error.message || 'Unknown error'));
             });
         }
         
@@ -615,7 +632,12 @@
                 fetch(`/api/departments?id=${departmentId}`, {
                     method: 'DELETE'
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.message) {
                         alert(data.message);
