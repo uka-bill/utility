@@ -280,6 +280,14 @@
             margin-top: 5px;
             display: none;
         }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            color: var(--primary);
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -336,6 +344,8 @@
             <form id="departmentForm">
                 <input type="hidden" id="departmentId">
                 
+                <div class="loading" id="formLoading">Saving department...</div>
+                
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label required">Unit Name</label>
@@ -377,7 +387,7 @@
                 
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Department</button>
+                    <button type="submit" class="btn btn-primary" id="saveBtn">Save Department</button>
                 </div>
             </form>
         </div>
@@ -400,6 +410,8 @@
             const cancelBtn = document.getElementById('cancelBtn');
             const departmentForm = document.getElementById('departmentForm');
             const modalTitle = document.getElementById('modalTitle');
+            const saveBtn = document.getElementById('saveBtn');
+            const formLoading = document.getElementById('formLoading');
             
             let editingDepartment = null;
 
@@ -408,6 +420,8 @@
                 modalTitle.textContent = 'Add Department';
                 departmentForm.reset();
                 hideAllErrorMessages();
+                formLoading.style.display = 'none';
+                saveBtn.disabled = false;
                 departmentModal.style.display = 'flex';
             });
             
@@ -420,9 +434,9 @@
             });
             
             // Form submission
-            departmentForm.addEventListener('submit', (e) => {
+            departmentForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                saveDepartment();
+                await saveDepartment();
             });
             
             // Initial load
@@ -450,23 +464,30 @@
             }
         }
         
+        function showLoading() {
+            document.getElementById('formLoading').style.display = 'block';
+            document.getElementById('saveBtn').disabled = true;
+        }
+        
+        function hideLoading() {
+            document.getElementById('formLoading').style.display = 'none';
+            document.getElementById('saveBtn').disabled = false;
+        }
+        
         // Load departments
-        function loadDepartments() {
-            fetch('/api/departments')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch departments');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    allDepartments = data;
-                    renderDepartmentsTable(data);
-                })
-                .catch(error => {
-                    console.error('Error loading departments:', error);
-                    alert('Error loading departments. Please try again.');
-                });
+        async function loadDepartments() {
+            try {
+                const response = await fetch('/api/departments');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch departments');
+                }
+                const data = await response.json();
+                allDepartments = data;
+                renderDepartmentsTable(data);
+            } catch (error) {
+                console.error('Error loading departments:', error);
+                alert('Error loading departments. Please try again.');
+            }
         }
         
         function renderDepartmentsTable(departments) {
@@ -542,7 +563,7 @@
             document.getElementById('departmentModal').style.display = 'flex';
         }
         
-        function saveDepartment() {
+        async function saveDepartment() {
             // Hide all error messages first
             hideAllErrorMessages();
             
@@ -576,6 +597,9 @@
                 return;
             }
             
+            // Show loading indicator
+            showLoading();
+            
             const departmentData = {
                 unitName: unitName,
                 divisionName: divisionName,
@@ -596,62 +620,90 @@
             console.log('Saving department data:', departmentData);
             console.log('Using URL:', url, 'Method:', method);
             
-            fetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(departmentData)
-            })
-            .then(response => {
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(departmentData)
+                });
+                
                 console.log('Response status:', response.status);
-                if (!response.ok) {
-                    return response.json().then(err => { throw err; });
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Save response:', data);
-                if (data.message) {
-                    alert(data.message);
-                    document.getElementById('departmentModal').style.display = 'none';
-                    document.getElementById('departmentForm').reset();
-                    loadDepartments();
-                } else {
-                    alert('Error saving department: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error saving department. Please check the console for details. Error: ' + (error.message || 'Unknown error'));
-            });
-        }
-        
-        function deleteDepartment(departmentId) {
-            if (confirm('Are you sure you want to delete this department? This action cannot be undone.')) {
-                fetch(`/api/departments?id=${departmentId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        return response.json().then(err => { throw err; });
-                    }
-                    return response.json();
-                })
-                .then(data => {
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (response.ok) {
                     if (data.message) {
                         alert(data.message);
-                        loadDepartments();
+                        document.getElementById('departmentModal').style.display = 'none';
+                        document.getElementById('departmentForm').reset();
+                        await loadDepartments();
+                    } else {
+                        throw new Error('No message in response');
+                    }
+                } else {
+                    throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Error saving department:', error);
+                
+                // Check for common errors
+                if (error.message.includes('Failed to fetch')) {
+                    alert('Network error: Cannot connect to server. Please check your internet connection and try again.');
+                } else if (error.message.includes('Unexpected token')) {
+                    alert('Server error: Invalid response from server. Please check server logs.');
+                } else {
+                    alert('Error saving department: ' + error.message);
+                }
+            } finally {
+                // Hide loading indicator
+                hideLoading();
+            }
+        }
+        
+        async function deleteDepartment(departmentId) {
+            if (confirm('Are you sure you want to delete this department? This action cannot be undone.')) {
+                try {
+                    const response = await fetch(`/api/departments?id=${departmentId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to delete department');
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.message) {
+                        alert(data.message);
+                        await loadDepartments();
                     } else {
                         alert('Error deleting department: ' + (data.error || 'Unknown error'));
                     }
-                })
-                .catch(error => {
+                } catch (error) {
                     console.error('Error:', error);
                     alert('Error deleting department. Please try again.');
-                });
+                }
             }
         }
+        
+        // Test API connection on load
+        window.addEventListener('load', async function() {
+            try {
+                const response = await fetch('/api/test-connection');
+                const data = await response.json();
+                console.log('API connection test:', data);
+                
+                if (!data.supabase_connected) {
+                    console.warn('⚠️ Supabase connection test failed');
+                }
+            } catch (error) {
+                console.error('API connection test failed:', error);
+            }
+        });
     </script>
 </body>
 </html>
