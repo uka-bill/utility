@@ -760,15 +760,28 @@ def delete_department():
     """Delete a department"""
     try:
         department_id = request.args.get('id')
+        if not department_id:
+            return jsonify({'success': False, 'error': 'Department ID is required'}), 400
+        
         response = supabase.table("departments").delete().eq("id", department_id).execute()
-        if response.data:
-            return jsonify({'message': 'Department deleted successfully'})
+        
+        if hasattr(response, 'data') and response.data:
+            return jsonify({
+                'success': True,
+                'message': 'Department deleted successfully'
+            })
         else:
-            return jsonify({'error': 'Failed to delete department'}), 500
+            return jsonify({
+                'success': False, 
+                'error': 'Failed to delete department'
+            }), 500
         
     except Exception as e:
         print(f"❌ Delete department error: {e}")
-        return jsonify({'error': 'Failed to delete department'}), 500
+        return jsonify({
+            'success': False, 
+            'error': f'Failed to delete department: {str(e)}'
+        }), 500
 
 # Utility Bills API
 @app.route('/api/utility-bills', methods=['GET'])
@@ -1198,6 +1211,7 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
