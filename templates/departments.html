@@ -369,7 +369,12 @@
                     </tr>
                 </thead>
                 <tbody id="departmentsTable">
-                    <!-- Data will be populated by JavaScript -->
+                    <tr>
+                        <td colspan="8" class="empty-state">
+                            <h3>Loading departments...</h3>
+                            <p>Please wait while we load the data.</p>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -440,16 +445,25 @@
     </div>
 
     <script>
+        // Global variables
         let allDepartments = [];
         let editingDepartment = null;
 
-        // Initialize the application
+        // Initialize when page is fully loaded
         document.addEventListener('DOMContentLoaded', function() {
-            initializePage();
+            console.log('Departments page loaded');
+            try {
+                initializePage();
+            } catch (error) {
+                console.error('Error initializing page:', error);
+                showToast('Error loading page. Please refresh.', 'error');
+            }
         });
 
         function initializePage() {
-            // Modal functionality
+            console.log('Initializing departments page...');
+            
+            // Get DOM elements
             const addDepartmentBtn = document.getElementById('addDepartmentBtn');
             const departmentModal = document.getElementById('departmentModal');
             const closeModal = document.getElementById('closeModal');
@@ -457,7 +471,19 @@
             const departmentForm = document.getElementById('departmentForm');
             const modalTitle = document.getElementById('modalTitle');
             
+            if (!addDepartmentBtn) {
+                console.error('Add Department button not found!');
+                return;
+            }
+            
+            if (!departmentModal) {
+                console.error('Department modal not found!');
+                return;
+            }
+            
+            // Set up event listeners
             addDepartmentBtn.addEventListener('click', () => {
+                console.log('Add department button clicked');
                 editingDepartment = null;
                 modalTitle.textContent = 'Add Department';
                 departmentForm.reset();
@@ -476,16 +502,22 @@
             // Form submission
             departmentForm.addEventListener('submit', (e) => {
                 e.preventDefault();
+                console.log('Form submitted');
                 saveDepartment();
             });
             
-            // Initial load
+            // Load departments data
             loadDepartments();
         }
         
         // Show toast message
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
+            if (!toast) {
+                console.error('Toast element not found!');
+                alert(message); // Fallback to alert
+                return;
+            }
             toast.textContent = message;
             toast.className = 'toast ' + type;
             toast.style.display = 'block';
@@ -495,20 +527,22 @@
             }, 3000);
         }
         
-        // Show loading state
+        // Show loading state on save button
         function showLoading(show) {
             const saveText = document.getElementById('saveText');
             const saveSpinner = document.getElementById('saveSpinner');
             const saveBtn = document.getElementById('saveBtn');
             
-            if (show) {
-                saveText.textContent = 'Saving...';
-                saveSpinner.style.display = 'inline-block';
-                saveBtn.disabled = true;
-            } else {
-                saveText.textContent = 'Save Department';
-                saveSpinner.style.display = 'none';
-                saveBtn.disabled = false;
+            if (saveText && saveSpinner && saveBtn) {
+                if (show) {
+                    saveText.textContent = 'Saving...';
+                    saveSpinner.style.display = 'inline-block';
+                    saveBtn.disabled = true;
+                } else {
+                    saveText.textContent = 'Save Department';
+                    saveSpinner.style.display = 'none';
+                    saveBtn.disabled = false;
+                }
             }
         }
         
@@ -529,31 +563,40 @@
             }
         }
         
-        // Load departments
+        // Load departments from API
         function loadDepartments() {
-            console.log('Loading departments...');
+            console.log('Loading departments from API...');
             fetch('/api/departments')
                 .then(response => {
+                    console.log('API response status:', response.status);
                     if (!response.ok) {
-                        throw new Error('Failed to fetch departments');
+                        throw new Error(`Failed to fetch departments: ${response.status}`);
                     }
                     return response.json();
                 })
                 .then(data => {
+                    console.log('Departments data received:', data);
                     allDepartments = data;
                     renderDepartmentsTable(data);
                 })
                 .catch(error => {
                     console.error('Error loading departments:', error);
                     showToast('Error loading departments. Please try again.', 'error');
+                    renderDepartmentsTable([]);
                 });
         }
         
+        // Render departments table
         function renderDepartmentsTable(departments) {
             const tableBody = document.getElementById('departmentsTable');
+            if (!tableBody) {
+                console.error('Departments table body not found!');
+                return;
+            }
+            
             tableBody.innerHTML = '';
             
-            if (departments.length === 0) {
+            if (!departments || departments.length === 0) {
                 tableBody.innerHTML = `
                     <tr>
                         <td colspan="8" class="empty-state">
@@ -568,7 +611,7 @@
             departments.forEach(department => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${department.id}</td>
+                    <td>${department.id || '-'}</td>
                     <td>${department.unit_name || '-'}</td>
                     <td>${department.division_name || '-'}</td>
                     <td>${department.department_name || '-'}</td>
@@ -600,11 +643,13 @@
             });
         }
         
+        // Edit department
         function editDepartment(departmentId) {
+            console.log('Editing department:', departmentId);
             const department = allDepartments.find(d => d.id == departmentId);
             
             if (!department) {
-                showToast('Department not found in local data. Please refresh the page and try again.', 'error');
+                showToast('Department not found. Please refresh the page and try again.', 'error');
                 return;
             }
             
@@ -622,7 +667,10 @@
             document.getElementById('departmentModal').style.display = 'flex';
         }
         
+        // Save department
         function saveDepartment() {
+            console.log('Saving department...');
+            
             // Hide all error messages first
             hideAllErrors();
             
@@ -657,6 +705,7 @@
                 return;
             }
             
+            // Prepare data
             const departmentData = {
                 unitName: unitName,
                 divisionName: divisionName,
@@ -674,12 +723,13 @@
                 method = 'PUT';
             }
             
-            console.log('Saving department data:', departmentData);
-            console.log('Using URL:', url, 'Method:', method);
+            console.log('Sending department data:', departmentData);
+            console.log('URL:', url, 'Method:', method);
             
             // Show loading state
             showLoading(true);
             
+            // Send request
             fetch(url, {
                 method: method,
                 headers: {
@@ -698,13 +748,13 @@
                 return response.json();
             })
             .then(data => {
-                console.log('Save response data:', data);
+                console.log('Save response:', data);
                 
                 if (data.success) {
                     showToast(data.message || 'Department saved successfully!');
                     document.getElementById('departmentModal').style.display = 'none';
                     document.getElementById('departmentForm').reset();
-                    loadDepartments();
+                    loadDepartments(); // Reload the table
                     editingDepartment = null;
                 } else {
                     throw new Error(data.error || 'Unknown error occurred');
@@ -720,6 +770,7 @@
             });
         }
         
+        // Delete department
         function deleteDepartment(departmentId) {
             if (confirm('Are you sure you want to delete this department? This action cannot be undone.')) {
                 fetch(`/api/departments?id=${departmentId}`, {
