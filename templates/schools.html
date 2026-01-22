@@ -1090,33 +1090,43 @@
             });
         }
         
-        function deleteSchool(schoolId) {
-            if (confirm('Are you sure you want to delete this school? This action cannot be undone.')) {
-                fetch(`/api/schools?id=${schoolId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => {
+       function deleteSchool(schoolId) {
+    if (confirm('Are you sure you want to delete this school? This action cannot be undone.')) {
+        fetch(`/api/schools?id=${schoolId}`, {
+            method: 'DELETE'
+        })
+        .then(response => {
+            console.log('Delete response status:', response.status);
+            // Try to parse as JSON first
+            return response.text().then(text => {
+                console.log('Delete response text:', text);
+                try {
+                    const data = JSON.parse(text);
                     if (!response.ok) {
-                        return response.json().then(err => { 
-                            throw new Error(err.error || 'Failed to delete school'); 
-                        });
+                        throw new Error(data.error || data.message || `Server error: ${response.status}`);
                     }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.message) {
-                        showToast(data.message);
-                        loadSchools();
-                    } else {
-                        throw new Error(data.error || 'Unknown error occurred');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showToast(error.message || 'Error deleting school. Please try again.', 'error');
-                });
+                    return data;
+                } catch (e) {
+                    // If not JSON, create an error
+                    throw new Error(text || `Server error: ${response.status}`);
+                }
+            });
+        })
+        .then(data => {
+            console.log('Delete response data:', data);
+            if (data.success || data.message) {
+                showToast(data.message || 'School deleted successfully!', 'success');
+                loadSchools();
+            } else {
+                throw new Error(data.error || 'Unknown error occurred');
             }
-        }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error: ' + error.message, 'error');
+        });
+    }
+}
         
         // Test function to add sample data
         function addSampleData() {
@@ -1207,3 +1217,4 @@
     </script>
 </body>
 </html>
+
