@@ -164,6 +164,50 @@
             border-bottom: 1px solid #eee;
         }
         
+        /* Cluster group header row */
+        .cluster-group-header {
+            background-color: #e8f5e9 !important;
+            border-left: 4px solid #4caf50 !important;
+            font-weight: 600;
+            color: #2e7d32;
+            border-top: 2px solid #c8e6c9 !important;
+        }
+        
+        .cluster-group-header td {
+            font-weight: 600;
+            color: #2e7d32;
+            padding: 12px 15px !important;
+        }
+        
+        /* Visual separator between cluster groups */
+        .cluster-separator {
+            height: 3px;
+            background-color: #c8e6c9;
+        }
+        
+        /* School rows within a cluster */
+        .school-row td {
+            background-color: white;
+        }
+        
+        /* Indent school rows */
+        .school-row td:first-child {
+            padding-left: 30px !important;
+            position: relative;
+        }
+        
+        /* Connector line for school rows */
+        .school-row td:first-child::before {
+            content: "";
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            width: 10px;
+            height: 1px;
+            background-color: #4caf50;
+            opacity: 0.5;
+        }
+        
         .data-table tr:hover {
             background: #f9f9f9;
         }
@@ -330,6 +374,82 @@
             margin-top: 5px;
             display: none;
         }
+        
+        /* Filter controls */
+        .filter-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+        }
+        
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+        }
+        
+        .filter-group {
+            flex: 1;
+        }
+        
+        .filter-label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .filter-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #4caf50;
+            color: #4caf50;
+        }
+        
+        .btn-outline:hover {
+            background: #4caf50;
+            color: white;
+        }
+        
+        /* Schools summary */
+        .schools-summary {
+            background: #f1f8e9;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .summary-stats {
+            display: flex;
+            gap: 30px;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--gray);
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -354,6 +474,35 @@
             <button class="btn btn-primary" id="addSchoolBtn">Add New School</button>
         </div>
         
+        <div class="schools-summary" id="schoolsSummary" style="display: none;">
+            <div class="summary-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="totalClusters">0</div>
+                    <div class="stat-label">Clusters</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalSchools">0</div>
+                    <div class="stat-label">Schools</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-controls">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label class="filter-label">Search Schools</label>
+                    <input type="text" class="filter-input" id="searchInput" placeholder="Search by school name, cluster, or number...">
+                </div>
+                <div class="filter-group" style="flex: 0.5;">
+                    <label class="filter-label">Filter by Cluster</label>
+                    <select class="filter-input" id="clusterFilter">
+                        <option value="">All Clusters</option>
+                    </select>
+                </div>
+                <button class="btn btn-outline" id="clearFiltersBtn">Clear Filters</button>
+            </div>
+        </div>
+        
         <div class="data-table-container">
             <table class="data-table">
                 <thead>
@@ -370,7 +519,12 @@
                     </tr>
                 </thead>
                 <tbody id="schoolsTable">
-                    <!-- Data will be populated by JavaScript -->
+                    <tr>
+                        <td colspan="9" class="empty-state">
+                            <h3>Loading schools...</h3>
+                            <p>Please wait while we load the data.</p>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -450,6 +604,7 @@
     <script>
         let allSchools = [];
         let editingSchool = null;
+        let clusterGroups = {};
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
@@ -464,6 +619,9 @@
             const cancelBtn = document.getElementById('cancelBtn');
             const schoolForm = document.getElementById('schoolForm');
             const modalTitle = document.getElementById('modalTitle');
+            const searchInput = document.getElementById('searchInput');
+            const clusterFilter = document.getElementById('clusterFilter');
+            const clearFiltersBtn = document.getElementById('clearFiltersBtn');
             
             addSchoolBtn.addEventListener('click', () => {
                 editingSchool = null;
@@ -485,6 +643,23 @@
             schoolForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 saveSchool();
+            });
+            
+            // Search input listener
+            searchInput.addEventListener('input', () => {
+                filterSchools();
+            });
+            
+            // Cluster filter listener
+            clusterFilter.addEventListener('change', () => {
+                filterSchools();
+            });
+            
+            // Clear filters button
+            clearFiltersBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                clusterFilter.value = '';
+                filterSchools();
             });
             
             // Initial load
@@ -539,6 +714,8 @@
         
         // Load schools
         function loadSchools() {
+            console.log('Loading schools from API...');
+            
             fetch('/api/schools')
                 .then(response => {
                     if (!response.ok) {
@@ -548,19 +725,168 @@
                 })
                 .then(data => {
                     allSchools = data;
+                    
+                    // Process cluster groups
+                    processClusterGroups(data);
+                    
+                    // Populate cluster filter
+                    populateClusterFilter(data);
+                    
+                    // Update summary statistics
+                    updateSummaryStatistics(data);
+                    
+                    // Render schools table
                     renderSchoolsTable(data);
+                    
+                    if (data.length === 0) {
+                        showToast('No schools found. Add your first school!', 'warning');
+                    } else {
+                        const clusterCount = Object.keys(clusterGroups).length;
+                        showToast(`Loaded ${data.length} schools across ${clusterCount} cluster${clusterCount !== 1 ? 's' : ''}`, 'success');
+                    }
                 })
                 .catch(error => {
                     console.error('Error loading schools:', error);
                     showToast('Error loading schools. Please try again.', 'error');
+                    renderSchoolsTable([]);
                 });
         }
         
+        // Process schools into groups by cluster_number
+        function processClusterGroups(schools) {
+            clusterGroups = {};
+            
+            schools.forEach(school => {
+                const clusterNumber = school.cluster_number || 'Uncategorized';
+                
+                if (!clusterGroups[clusterNumber]) {
+                    clusterGroups[clusterNumber] = {
+                        name: clusterNumber,
+                        schools: []
+                    };
+                }
+                
+                clusterGroups[clusterNumber].schools.push(school);
+            });
+            
+            // Sort clusters numerically
+            clusterGroups = Object.fromEntries(
+                Object.entries(clusterGroups).sort(([a], [b]) => {
+                    // Try to sort as numbers if possible
+                    const numA = parseInt(a);
+                    const numB = parseInt(b);
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return numA - numB;
+                    }
+                    // Otherwise sort as strings
+                    return a.localeCompare(b);
+                })
+            );
+            
+            // Within each cluster, sort schools by name
+            Object.values(clusterGroups).forEach(group => {
+                group.schools.sort((a, b) => {
+                    const nameA = a.name || '';
+                    const nameB = b.name || '';
+                    return nameA.localeCompare(nameB);
+                });
+            });
+            
+            console.log('Processed cluster groups:', clusterGroups);
+        }
+        
+        // Populate cluster filter dropdown
+        function populateClusterFilter(schools) {
+            const clusterFilter = document.getElementById('clusterFilter');
+            const clusters = new Set();
+            
+            schools.forEach(school => {
+                if (school.cluster_number) {
+                    clusters.add(school.cluster_number);
+                }
+            });
+            
+            // Clear existing options except the first one
+            clusterFilter.innerHTML = '<option value="">All Clusters</option>';
+            
+            // Add cluster options sorted numerically
+            Array.from(clusters).sort((a, b) => {
+                const numA = parseInt(a);
+                const numB = parseInt(b);
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return numA - numB;
+                }
+                return a.localeCompare(b);
+            }).forEach(cluster => {
+                const option = document.createElement('option');
+                option.value = cluster;
+                option.textContent = cluster;
+                clusterFilter.appendChild(option);
+            });
+        }
+        
+        // Update summary statistics
+        function updateSummaryStatistics(schools) {
+            const summaryElement = document.getElementById('schoolsSummary');
+            
+            if (schools.length === 0) {
+                summaryElement.style.display = 'none';
+                return;
+            }
+            
+            summaryElement.style.display = 'block';
+            
+            // Count unique clusters
+            const uniqueClusters = new Set(schools.map(s => s.cluster_number));
+            
+            // Update display
+            document.getElementById('totalClusters').textContent = uniqueClusters.size;
+            document.getElementById('totalSchools').textContent = schools.length;
+        }
+        
+        // Filter schools based on search input and cluster filter
+        function filterSchools() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const selectedCluster = document.getElementById('clusterFilter').value;
+            
+            let filteredSchools = allSchools;
+            
+            // Apply search filter
+            if (searchTerm) {
+                filteredSchools = filteredSchools.filter(school => {
+                    return (
+                        (school.name && school.name.toLowerCase().includes(searchTerm)) ||
+                        (school.cluster_number && school.cluster_number.toLowerCase().includes(searchTerm)) ||
+                        (school.school_number && school.school_number.toLowerCase().includes(searchTerm)) ||
+                        (school.principal_name && school.principal_name.toLowerCase().includes(searchTerm)) ||
+                        (school.bmo_phone && school.bmo_phone.toLowerCase().includes(searchTerm)) ||
+                        (school.address && school.address.toLowerCase().includes(searchTerm)) ||
+                        (school.notes && school.notes.toLowerCase().includes(searchTerm))
+                    );
+                });
+            }
+            
+            // Apply cluster filter
+            if (selectedCluster) {
+                filteredSchools = filteredSchools.filter(school => 
+                    school.cluster_number === selectedCluster
+                );
+            }
+            
+            // Process and render filtered schools
+            processClusterGroups(filteredSchools);
+            renderSchoolsTable(filteredSchools);
+            
+            // Update summary with filtered data
+            updateSummaryStatistics(filteredSchools);
+        }
+        
+        // Render schools table with cluster grouping
         function renderSchoolsTable(schools) {
             const tableBody = document.getElementById('schoolsTable');
             tableBody.innerHTML = '';
             
-            if (schools.length === 0) {
+            if (!schools || schools.length === 0) {
                 tableBody.innerHTML = `
                     <tr>
                         <td colspan="9" class="empty-state">
@@ -572,23 +898,56 @@
                 return;
             }
             
-            schools.forEach(school => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${school.id}</td>
-                    <td>${school.name || '-'}</td>
-                    <td>${school.cluster_number || '-'}</td>
-                    <td>${school.school_number || '-'}</td>
-                    <td>${school.principal_name || '-'}</td>
-                    <td>${school.bmo_phone || '-'}</td>
-                    <td>${school.address || '-'}</td>
-                    <td>${school.notes || '-'}</td>
-                    <td class="actions-cell">
-                        <button class="btn btn-warning btn-sm edit-btn" data-id="${school.id}">Edit</button>
-                        <button class="btn btn-danger btn-sm delete-btn" data-id="${school.id}">Delete</button>
+            console.log('Rendering cluster groups:', clusterGroups);
+            
+            // Render each cluster group
+            Object.entries(clusterGroups).forEach(([clusterNumber, group], groupIndex) => {
+                console.log(`Rendering cluster: ${clusterNumber} with ${group.schools.length} schools`);
+                
+                // Add cluster group header row
+                const headerRow = document.createElement('tr');
+                headerRow.className = 'cluster-group-header';
+                
+                // Count schools in this cluster
+                const schoolCount = group.schools.length;
+                
+                headerRow.innerHTML = `
+                    <td colspan="9">
+                        <strong>Cluster ${clusterNumber}</strong> <span style="font-weight: normal; color: #2e7d32; font-size: 0.9em;">(${schoolCount} school${schoolCount !== 1 ? 's' : ''})</span>
                     </td>
                 `;
-                tableBody.appendChild(row);
+                tableBody.appendChild(headerRow);
+                
+                // Add school rows for this cluster
+                group.schools.forEach((school, schoolIndex) => {
+                    const schoolRow = document.createElement('tr');
+                    schoolRow.className = 'school-row';
+                    
+                    schoolRow.innerHTML = `
+                        <td>${school.id}</td>
+                        <td>${school.name || '-'}</td>
+                        <td>${school.cluster_number || '-'}</td>
+                        <td>${school.school_number || '-'}</td>
+                        <td>${school.principal_name || '-'}</td>
+                        <td>${school.bmo_phone || '-'}</td>
+                        <td>${school.address || '-'}</td>
+                        <td>${school.notes || '-'}</td>
+                        <td class="actions-cell">
+                            <button class="btn btn-warning btn-sm edit-btn" data-id="${school.id}">Edit</button>
+                            <button class="btn btn-danger btn-sm delete-btn" data-id="${school.id}">Delete</button>
+                        </td>
+                    `;
+                    tableBody.appendChild(schoolRow);
+                });
+                
+                // Add visual separator between cluster groups (except after the last one)
+                if (groupIndex < Object.keys(clusterGroups).length - 1) {
+                    const separatorRow = document.createElement('tr');
+                    separatorRow.innerHTML = `
+                        <td colspan="9" class="cluster-separator"></td>
+                    `;
+                    tableBody.appendChild(separatorRow);
+                }
             });
             
             // Add event listeners to edit buttons
@@ -757,6 +1116,93 @@
                     showToast(error.message || 'Error deleting school. Please try again.', 'error');
                 });
             }
+        }
+        
+        // Test function to add sample data
+        function addSampleData() {
+            console.log('Adding sample school data...');
+            
+            // Sample schools structure grouped by cluster
+            const sampleData = [
+                {
+                    name: "Primary School A",
+                    clusterNumber: "01",
+                    schoolNumber: "001, 002",
+                    bmoPhone: "234-5678",
+                    principalName: "John Smith",
+                    address: "Jalan Tutong, Brunei",
+                    notes: "Primary education school"
+                },
+                {
+                    name: "Primary School B",
+                    clusterNumber: "01",
+                    schoolNumber: "003",
+                    bmoPhone: "234-5679",
+                    principalName: "Sarah Johnson",
+                    address: "Jalan Gadong, Brunei",
+                    notes: "Primary education school"
+                },
+                {
+                    name: "Secondary School A",
+                    clusterNumber: "02",
+                    schoolNumber: "101",
+                    bmoPhone: "234-5680",
+                    principalName: "Michael Lee",
+                    address: "Jalan Kianggeh, Brunei",
+                    notes: "Secondary education school"
+                },
+                {
+                    name: "Secondary School B",
+                    clusterNumber: "02",
+                    schoolNumber: "102",
+                    bmoPhone: "234-5681",
+                    principalName: "Lisa Wong",
+                    address: "Jalan Muara, Brunei",
+                    notes: "Secondary education school"
+                },
+                {
+                    name: "Secondary School C",
+                    clusterNumber: "02",
+                    schoolNumber: "103",
+                    bmoPhone: "234-5682",
+                    principalName: "David Chen",
+                    address: "Jalan Berakas, Brunei",
+                    notes: "Technical secondary school"
+                },
+                {
+                    name: "College A",
+                    clusterNumber: "03",
+                    schoolNumber: "201",
+                    bmoPhone: "234-5683",
+                    principalName: "Robert Brown",
+                    address: "Jalan Tungku, Brunei",
+                    notes: "Higher education college"
+                }
+            ];
+            
+            // Add each sample school
+            sampleData.forEach((data, index) => {
+                setTimeout(() => {
+                    fetch('/api/schools', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        console.log(`Sample data ${index + 1} added:`, result);
+                        if (index === sampleData.length - 1) {
+                            showToast('Sample data added successfully!', 'success');
+                            loadSchools();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error adding sample data:', error);
+                    });
+                }, index * 500); // Delay to avoid overwhelming the server
+            });
         }
     </script>
 </body>
