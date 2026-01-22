@@ -119,8 +119,6 @@ def export_page():
 
 # ============ API ROUTES ============
 
-# ============ FINANCIAL YEARS API ============
-
 @app.route('/api/financial-years', methods=['GET'])
 def get_financial_years():
     """Get all financial years"""
@@ -227,7 +225,7 @@ def get_current_financial_year():
 
 @app.route('/api/financial-years/<int:fy_id>', methods=['PUT'])
 def update_financial_year(fy_id):
-    """Update a financial year budget allocation"""
+    """Update a financial year"""
     try:
         print(f"📅 PUT /api/financial-years/{fy_id} called")
         
@@ -281,8 +279,6 @@ def update_financial_year(fy_id):
         print(f"❌ Financial year PUT error: {e}")
         print(traceback.format_exc())
         return jsonify({'error': f'Failed to update financial year: {str(e)}'}), 500
-
-# ============ DASHBOARD DATA API ============
 
 @app.route('/api/dashboard-data')
 def dashboard_data():
@@ -501,7 +497,7 @@ def yearly_budget_data():
         print(f"❌ Yearly budget data error: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ============ STATISTICS API ============
+# ============ STATISTICS API ROUTES ============
 
 @app.route('/api/statistics/departments')
 def department_statistics():
