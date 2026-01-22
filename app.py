@@ -625,6 +625,42 @@ def update_school():
     except Exception as e:
         print(f"❌ Update school error: {e}")
         return jsonify({'success': False, 'error': f'Failed to update school: {str(e)}'}), 500
+@app.route('/api/schools', methods=['DELETE'])
+def delete_school():
+    """Delete a school"""
+    try:
+        school_id = request.args.get('id')
+        if not school_id:
+            return jsonify({'success': False, 'error': 'School ID is required'}), 400
+        
+        # Check if school has any utility bills before deleting
+        bills_response = supabase.table("utility_bills").select("*").eq("entity_type", "school").eq("entity_id", school_id).execute()
+        
+        if bills_response.data and len(bills_response.data) > 0:
+            return jsonify({
+                'success': False, 
+                'error': 'Cannot delete school because it has utility bills associated with it. Please delete the bills first.'
+            }), 400
+        
+        response = supabase.table("schools").delete().eq("id", school_id).execute()
+        
+        if hasattr(response, 'data') and response.data:
+            return jsonify({
+                'success': True,
+                'message': 'School deleted successfully'
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'error': 'Failed to delete school'
+            }), 500
+        
+    except Exception as e:
+        print(f"❌ Delete school error: {e}")
+        return jsonify({
+            'success': False, 
+            'error': f'Failed to delete school: {str(e)}'
+        }), 500
 
 # Departments API
 @app.route('/api/departments', methods=['GET'])
@@ -1209,6 +1245,7 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
