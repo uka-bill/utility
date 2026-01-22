@@ -496,6 +496,241 @@ def yearly_budget_data():
         print(f"❌ Yearly budget data error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/statistics/departments')
+def department_statistics():
+    """Get detailed department statistics"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        # Get all departments
+        response = supabase.table("departments").select("*").execute()
+        departments = response.data if response.data else []
+        
+        if not departments:
+            return jsonify({
+                'total_departments': 0,
+                'total_units': 0,
+                'total_divisions': 0,
+                'departments_by_name': {},
+                'units_by_department': {}
+            })
+        
+        # Calculate statistics
+        department_names = set()
+        division_names = set()
+        departments_by_name = {}
+        units_by_department = {}
+        
+        for dept in departments:
+            dept_name = dept.get('department_name', 'Uncategorized')
+            div_name = dept.get('division_name', 'Unknown')
+            unit_name = dept.get('unit_name', 'Unknown')
+            
+            # Track unique names
+            department_names.add(dept_name)
+            division_names.add(div_name)
+            
+            # Count by department name
+            if dept_name not in departments_by_name:
+                departments_by_name[dept_name] = {
+                    'name': dept_name,
+                    'total_units': 0,
+                    'divisions': set(),
+                    'units': []
+                }
+            
+            departments_by_name[dept_name]['total_units'] += 1
+            departments_by_name[dept_name]['divisions'].add(div_name)
+            departments_by_name[dept_name]['units'].append({
+                'id': dept['id'],
+                'unit_name': unit_name,
+                'division_name': div_name
+            })
+            
+            # Count units by department
+            if dept_name not in units_by_department:
+                units_by_department[dept_name] = 0
+            units_by_department[dept_name] += 1
+        
+        # Convert sets to lists for JSON serialization
+        for dept_name, data in departments_by_name.items():
+            data['divisions'] = list(data['divisions'])
+            data['divisions_count'] = len(data['divisions'])
+        
+        return jsonify({
+            'total_departments': len(department_names),
+            'total_units': len(departments),
+            'total_divisions': len(division_names),
+            'departments_by_name': departments_by_name,
+            'units_by_department': units_by_department
+        })
+        
+    except Exception as e:
+        print(f"❌ Department statistics error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/statistics/schools')
+def school_statistics():
+    """Get detailed school statistics"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        # Get all schools
+        response = supabase.table("schools").select("*").execute()
+        schools = response.data if response.data else []
+        
+        if not schools:
+            return jsonify({
+                'total_schools': 0,
+                'total_clusters': 0,
+                'schools_by_type': {'primary': 0, 'secondary': 0, 'college': 0, 'other': 0},
+                'schools_by_cluster': {},
+                'clusters': []
+            })
+        
+        # Calculate statistics
+        clusters = set()
+        schools_by_cluster = {}
+        schools_by_type = {
+            'primary': 0,
+            'secondary': 0, 
+            'college': 0,
+            'other': 0
+        }
+        
+        for school in schools:
+            school_name = school.get('name', '').lower()
+            cluster = school.get('cluster_number', 'Unknown')
+            school_number = school.get('school_number', '')
+            
+            # Track clusters
+            clusters.add(cluster)
+            
+            # Count by cluster
+            if cluster not in schools_by_cluster:
+                schools_by_cluster[cluster] = {
+                    'cluster': cluster,
+                    'total_schools': 0,
+                    'schools': []
+                }
+            
+            schools_by_cluster[cluster]['total_schools'] += 1
+            schools_by_cluster[cluster]['schools'].append({
+                'id': school['id'],
+                'name': school.get('name', ''),
+                'school_number': school_number
+            })
+            
+            # Categorize by school type based on name
+            if 'primary' in school_name:
+                schools_by_type['primary'] += 1
+            elif 'secondary' in school_name or 'high' in school_name:
+                schools_by_type['secondary'] += 1
+            elif 'college' in school_name or 'university' in school_name or 'institute' in school_name:
+                schools_by_type['college'] += 1
+            else:
+                schools_by_type['other'] += 1
+        
+        # Sort clusters numerically if possible
+        sorted_clusters = sorted(clusters, key=lambda x: int(x) if x.isdigit() else x)
+        
+        return jsonify({
+            'total_schools': len(schools),
+            'total_clusters': len(clusters),
+            'schools_by_type': schools_by_type,
+            'schools_by_cluster': schools_by_cluster,
+            'clusters': sorted_clusters
+        })
+        
+    except Exception as e:
+        print(f"❌ School statistics error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/statistics/overview')
+def overview_statistics():
+    """Get overview statistics for dashboard"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        # Get department statistics
+        dept_response = supabase.table("departments").select("*").execute()
+        departments = dept_response.data if dept_response.data else []
+        
+        # Get school statistics
+        school_response = supabase.table("schools").select("*").execute()
+        schools = school_response.data if school_response.data else []
+        
+        # Get utility bills statistics
+        bills_response = supabase.table("utility_bills").select("*").execute()
+        bills = bills_response.data if bills_response.data else []
+        
+        # Calculate department stats
+        dept_names = set()
+        divisions = set()
+        for dept in departments:
+            dept_names.add(dept.get('department_name', 'Uncategorized'))
+            divisions.add(dept.get('division_name', 'Unknown'))
+        
+        # Calculate school stats
+        clusters = set()
+        primary_count = 0
+        secondary_count = 0
+        college_count = 0
+        other_count = 0
+        
+        for school in schools:
+            school_name = school.get('name', '').lower()
+            clusters.add(school.get('cluster_number', 'Unknown'))
+            
+            if 'primary' in school_name:
+                primary_count += 1
+            elif 'secondary' in school_name or 'high' in school_name:
+                secondary_count += 1
+            elif 'college' in school_name or 'university' in school_name or 'institute' in school_name:
+                college_count += 1
+            else:
+                other_count += 1
+        
+        # Calculate utility stats
+        water_bills = [b for b in bills if b.get('utility_type') == 'water']
+        electricity_bills = [b for b in bills if b.get('utility_type') == 'electricity']
+        telephone_bills = [b for b in bills if b.get('utility_type') == 'telephone']
+        
+        return jsonify({
+            'departments': {
+                'total_departments': len(dept_names),
+                'total_units': len(departments),
+                'total_divisions': len(divisions),
+                'unique_departments': list(dept_names)[:10]  # Show first 10
+            },
+            'schools': {
+                'total_schools': len(schools),
+                'total_clusters': len(clusters),
+                'by_type': {
+                    'primary': primary_count,
+                    'secondary': secondary_count,
+                    'college': college_count,
+                    'other': other_count
+                },
+                'unique_clusters': list(clusters)[:10]  # Show first 10
+            },
+            'utility_bills': {
+                'total_bills': len(bills),
+                'water_bills': len(water_bills),
+                'electricity_bills': len(electricity_bills),
+                'telephone_bills': len(telephone_bills),
+                'total_amount': sum(float(b.get('current_charges', 0) or 0) for b in bills)
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ Overview statistics error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 # ============ OTHER API ROUTES ============
 
 @app.route('/api/test-connection')
@@ -1246,6 +1481,7 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
