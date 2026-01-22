@@ -625,6 +625,7 @@ def update_school():
     except Exception as e:
         print(f"❌ Update school error: {e}")
         return jsonify({'success': False, 'error': f'Failed to update school: {str(e)}'}), 500
+        
 @app.route('/api/schools', methods=['DELETE'])
 def delete_school():
     """Delete a school"""
@@ -1245,6 +1246,7 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
