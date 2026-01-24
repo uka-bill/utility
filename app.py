@@ -1,4 +1,3 @@
-app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
 import os
 from supabase import create_client, Client
@@ -1483,3 +1482,4 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
