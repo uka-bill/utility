@@ -1,4 +1,3 @@
-app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session
 import os
 from supabase import create_client, Client
@@ -72,7 +71,6 @@ def verify_password(stored_password, provided_password):
     pwdhash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt.encode('ascii'), 100000)
     pwdhash = pwdhash.hex()
     return pwdhash == stored_hash
-
 # Access level constants
 ACCESS_LEVELS = {
     'high': 3,      # Can view all and edit all information
@@ -2400,3 +2398,4 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
