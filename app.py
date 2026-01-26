@@ -1,4 +1,3 @@
-app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session, flash
 import os
 from supabase import create_client, Client
@@ -125,81 +124,123 @@ def test_supabase_connection():
             return False
     return False
 
-# Initialize default admin user if not exists
-def initialize_default_users():
+# Initialize database tables safely
+def initialize_database_tables():
+    """Initialize database tables if they don't exist"""
     try:
         if not supabase:
             return
         
-        # Check if users table exists, if not create it
+        print("🗄️ Checking database tables...")
+        
+        # Check if users table exists, create if not
         try:
-            response = supabase.table("users").select("*").limit(1).execute()
-        except:
-            # Create users table structure in Supabase manually or handle as needed
-            print("⚠️  Users table may not exist. Please create it in Supabase with columns: id, username, password_hash, access_level, email, created_at, updated_at")
-            return
+            supabase.table("users").select("id").limit(1).execute()
+            print("✅ Users table exists")
+        except Exception as e:
+            print("⚠️ Users table doesn't exist or error accessing it")
+            print("ℹ️ Please create the 'users' table manually in Supabase with:")
+            print("""
+            CREATE TABLE users (
+                id BIGSERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                access_level INTEGER NOT NULL DEFAULT 1,
+                email VARCHAR(255),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+            """)
         
-        # Check if admin user exists
-        response = supabase.table("users").select("*").eq("username", "admin").execute()
-        
-        if not response.data or len(response.data) == 0:
-            # Create default admin user
-            default_password = "Admin@123"  # Change this in production!
-            hashed_password = hash_password(default_password)
-            
-            admin_user = {
-                "username": "admin",
-                "password_hash": hashed_password,
-                "access_level": ACCESS_LEVELS['high'],
-                "email": "admin@moebrunei.gov.bn",
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
-            }
-            
-            supabase.table("users").insert(admin_user).execute()
-            print("👤 Created default admin user (username: admin, password: Admin@123)")
-            
-        # Create medium level user
-        response = supabase.table("users").select("*").eq("username", "manager").execute()
-        if not response.data or len(response.data) == 0:
-            default_password = "Manager@123"
-            hashed_password = hash_password(default_password)
-            
-            manager_user = {
-                "username": "manager",
-                "password_hash": hashed_password,
-                "access_level": ACCESS_LEVELS['medium'],
-                "email": "manager@moebrunei.gov.bn",
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
-            }
-            
-            supabase.table("users").insert(manager_user).execute()
-            print("👤 Created manager user (username: manager, password: Manager@123)")
-            
-        # Create low level user
-        response = supabase.table("users").select("*").eq("username", "viewer").execute()
-        if not response.data or len(response.data) == 0:
-            default_password = "Viewer@123"
-            hashed_password = hash_password(default_password)
-            
-            viewer_user = {
-                "username": "viewer",
-                "password_hash": hashed_password,
-                "access_level": ACCESS_LEVELS['low'],
-                "email": "viewer@moebrunei.gov.bn",
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
-            }
-            
-            supabase.table("users").insert(viewer_user).execute()
-            print("👤 Created viewer user (username: viewer, password: Viewer@123)")
+        # Check if password_resets table exists, create if not
+        try:
+            supabase.table("password_resets").select("id").limit(1).execute()
+            print("✅ Password resets table exists")
+        except Exception as e:
+            print("⚠️ Password resets table doesn't exist or error accessing it")
+            print("ℹ️ Please create the 'password_resets' table manually in Supabase with:")
+            print("""
+            CREATE TABLE password_resets (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                reset_token VARCHAR(64) UNIQUE NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+            """)
+            print("ℹ️ Create indexes for better performance:")
+            print("""
+            CREATE INDEX idx_password_resets_token ON password_resets(reset_token);
+            CREATE INDEX idx_password_resets_user ON password_resets(user_id);
+            CREATE INDEX idx_users_username ON users(username);
+            """)
             
     except Exception as e:
-        print(f"⚠️  Could not initialize default users: {e}")
+        print(f"⚠️ Database initialization warning: {e}")
+
+# Initialize default users if not exists
+def initialize_default_users():
+    """Create default users if they don't exist"""
+    try:
+        if not supabase:
+            return
+        
+        print("👤 Checking default users...")
+        
+        # Default users data
+        default_users = [
+            {
+                "username": "admin",
+                "password": "Admin@123",
+                "access_level": ACCESS_LEVELS['high'],
+                "email": "admin@moebrunei.gov.bn"
+            },
+            {
+                "username": "manager",
+                "password": "Manager@123",
+                "access_level": ACCESS_LEVELS['medium'],
+                "email": "manager@moebrunei.gov.bn"
+            },
+            {
+                "username": "viewer",
+                "password": "Viewer@123",
+                "access_level": ACCESS_LEVELS['low'],
+                "email": "viewer@moebrunei.gov.bn"
+            }
+        ]
+        
+        for user_data in default_users:
+            try:
+                # Check if user exists
+                response = supabase.table("users").select("id").eq("username", user_data["username"]).execute()
+                
+                if not response.data or len(response.data) == 0:
+                    # Create user
+                    hashed_password = hash_password(user_data["password"])
+                    
+                    user_record = {
+                        "username": user_data["username"],
+                        "password_hash": hashed_password,
+                        "access_level": user_data["access_level"],
+                        "email": user_data["email"],
+                        "created_at": datetime.now().isoformat(),
+                        "updated_at": datetime.now().isoformat()
+                    }
+                    
+                    supabase.table("users").insert(user_record).execute()
+                    print(f"✅ Created default user: {user_data['username']} (password: {user_data['password']})")
+                else:
+                    print(f"✅ User already exists: {user_data['username']}")
+                    
+            except Exception as e:
+                print(f"⚠️ Could not check/create user {user_data['username']}: {e}")
+                
+    except Exception as e:
+        print(f"⚠️ Default users initialization warning: {e}")
 
 # Email sending function for password reset
 def send_password_reset_email(email, reset_token, username):
+    """Send password reset email"""
     try:
         # Create reset link
         reset_link = f"{request.host_url}reset-password?token={reset_token}"
@@ -248,9 +289,10 @@ def send_password_reset_email(email, reset_token, username):
             server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
             server.send_message(msg)
         
+        print(f"✅ Password reset email sent to {email}")
         return True
     except Exception as e:
-        print(f"❌ Error sending email: {e}")
+        print(f"❌ Error sending email to {email}: {e}")
         return False
 
 # ============ AUTHENTICATION ROUTES ============
@@ -327,27 +369,37 @@ def forgot_password():
             
             user = response.data[0]
             
+            # Check if user has email
+            if not user.get('email'):
+                return jsonify({'success': False, 'error': 'No email registered for this account. Please contact administrator.'}), 400
+            
             # Generate reset token
             reset_token = secrets.token_urlsafe(32)
             token_expiry = datetime.now() + timedelta(hours=1)
             
             # Store reset token in database
-            supabase.table("password_resets").insert({
-                "user_id": user['id'],
-                "reset_token": reset_token,
-                "expires_at": token_expiry.isoformat(),
-                "created_at": datetime.now().isoformat()
-            }).execute()
+            try:
+                supabase.table("password_resets").insert({
+                    "user_id": user['id'],
+                    "reset_token": reset_token,
+                    "expires_at": token_expiry.isoformat(),
+                    "created_at": datetime.now().isoformat()
+                }).execute()
+            except Exception as e:
+                print(f"❌ Error storing reset token: {e}")
+                return jsonify({'success': False, 'error': 'Failed to create reset token. Please try again.'}), 500
             
             # Send reset email
-            if user.get('email'):
-                email_sent = send_password_reset_email(user['email'], reset_token, user['username'])
-                if email_sent:
-                    return jsonify({'success': True, 'message': 'Password reset email has been sent.'})
-                else:
-                    return jsonify({'success': False, 'error': 'Failed to send reset email. Please contact administrator.'}), 500
+            email_sent = send_password_reset_email(user['email'], reset_token, user['username'])
+            if email_sent:
+                return jsonify({'success': True, 'message': 'Password reset email has been sent.'})
             else:
-                return jsonify({'success': False, 'error': 'No email registered for this account. Please contact administrator.'}), 400
+                # Clean up the reset token if email failed
+                try:
+                    supabase.table("password_resets").delete().eq("reset_token", reset_token).execute()
+                except:
+                    pass
+                return jsonify({'success': False, 'error': 'Failed to send reset email. Please contact administrator.'}), 500
             
         except Exception as e:
             print(f"❌ Forgot password error: {e}")
@@ -364,18 +416,27 @@ def reset_password():
             return render_template('reset_password.html', error='Invalid reset link')
         
         # Verify token
-        response = supabase.table("password_resets").select("*").eq("reset_token", token).execute()
-        
-        if not response.data or len(response.data) == 0:
-            return render_template('reset_password.html', error='Invalid or expired reset link')
-        
-        reset_request = response.data[0]
-        expires_at = datetime.fromisoformat(reset_request['expires_at'].replace('Z', '+00:00'))
-        
-        if datetime.now() > expires_at:
-            return render_template('reset_password.html', error='Reset link has expired')
-        
-        return render_template('reset_password.html', token=token, valid=True)
+        try:
+            response = supabase.table("password_resets").select("*").eq("reset_token", token).execute()
+            
+            if not response.data or len(response.data) == 0:
+                return render_template('reset_password.html', error='Invalid or expired reset link')
+            
+            reset_request = response.data[0]
+            expires_at = datetime.fromisoformat(reset_request['expires_at'].replace('Z', '+00:00'))
+            
+            if datetime.now() > expires_at:
+                # Delete expired token
+                try:
+                    supabase.table("password_resets").delete().eq("reset_token", token).execute()
+                except:
+                    pass
+                return render_template('reset_password.html', error='Reset link has expired')
+            
+            return render_template('reset_password.html', token=token, valid=True)
+        except Exception as e:
+            print(f"❌ Token verification error: {e}")
+            return render_template('reset_password.html', error='Invalid reset link')
     
     else:  # POST
         try:
@@ -390,6 +451,10 @@ def reset_password():
             if new_password != confirm_password:
                 return jsonify({'success': False, 'error': 'Passwords do not match'}), 400
             
+            # Validate password strength
+            if len(new_password) < 8:
+                return jsonify({'success': False, 'error': 'Password must be at least 8 characters long'}), 400
+            
             # Verify token
             response = supabase.table("password_resets").select("*").eq("reset_token", token).execute()
             
@@ -400,18 +465,30 @@ def reset_password():
             expires_at = datetime.fromisoformat(reset_request['expires_at'].replace('Z', '+00:00'))
             
             if datetime.now() > expires_at:
+                # Delete expired token
+                try:
+                    supabase.table("password_resets").delete().eq("reset_token", token).execute()
+                except:
+                    pass
                 return jsonify({'success': False, 'error': 'Reset link has expired'}), 400
             
             # Update password
             hashed_password = hash_password(new_password)
             
-            supabase.table("users").update({
-                "password_hash": hashed_password,
-                "updated_at": datetime.now().isoformat()
-            }).eq("id", reset_request['user_id']).execute()
+            try:
+                supabase.table("users").update({
+                    "password_hash": hashed_password,
+                    "updated_at": datetime.now().isoformat()
+                }).eq("id", reset_request['user_id']).execute()
+            except Exception as e:
+                print(f"❌ Error updating password: {e}")
+                return jsonify({'success': False, 'error': 'Failed to reset password'}), 500
             
             # Delete used reset token
-            supabase.table("password_resets").delete().eq("reset_token", token).execute()
+            try:
+                supabase.table("password_resets").delete().eq("reset_token", token).execute()
+            except:
+                pass
             
             return jsonify({'success': True, 'message': 'Password has been reset successfully'})
             
@@ -1863,12 +1940,10 @@ def get_current_user():
         if not user_id:
             return jsonify({'error': 'Not authenticated'}), 401
         
-        response = supabase.table("users").select("*").eq("id", user_id).execute()
+        response = supabase.table("users").select("id, username, access_level, email, created_at, updated_at").eq("id", user_id).execute()
         
         if response.data and len(response.data) > 0:
             user = response.data[0]
-            # Don't return password hash
-            del user['password_hash']
             return jsonify(user)
         else:
             return jsonify({'error': 'User not found'}), 404
@@ -2247,7 +2322,7 @@ def forbidden(error):
         'message': 'You do not have permission to access this resource.'
     }), 403
 
-# Number formatting functions (add these)
+# Number formatting functions
 def format_currency(amount):
     try:
         if amount is None:
@@ -2279,6 +2354,9 @@ if __name__ == '__main__':
         print("✅ Supabase connection successful!")
     else:
         print("⚠️  Warning: Supabase connection failed")
+    
+    # Initialize database tables
+    initialize_database_tables()
     
     # Initialize default users
     print("👤 Initializing default users...")
