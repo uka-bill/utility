@@ -79,6 +79,91 @@ def test_supabase_connection():
             return False
     return False
 
+# ============ AUTHENTICATION SYSTEM ============
+
+# Password configurations for different access levels
+USER_CREDENTIALS = {
+    # Format: username: (password, access_level)
+    "admin": ("admin123", "high"),      # Can view and edit everything
+    "manager": ("manager123", "medium"), # Can edit departments, schools, bills, reports, backup
+    "viewer": ("viewer123", "low")       # Can only view utility bills
+}
+
+# Session management
+from flask import session
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if username in USER_CREDENTIALS:
+            stored_password, access_level = USER_CREDENTIALS[username]
+            if password == stored_password:
+                # Set session variables
+                session['logged_in'] = True
+                session['username'] = username
+                session['access_level'] = access_level
+                session['user_id'] = username  # Using username as user_id for simplicity
+                
+                # Log the login
+                print(f"✅ User '{username}' logged in with access level: {access_level}")
+                
+                return redirect(url_for('dashboard'))
+            else:
+                return render_template('login.html', error='Invalid password')
+        else:
+            return render_template('login.html', error='Invalid username')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """Logout user"""
+    session.clear()
+    return redirect(url_for('login'))
+
+# Authentication decorator
+def login_required(f):
+    """Decorator to require login"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Access control decorator
+def access_required(required_level):
+    """Decorator to check access level"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not session.get('logged_in'):
+                return redirect(url_for('login'))
+            
+            # Define access level hierarchy
+            access_hierarchy = {
+                'high': 3,
+                'medium': 2,
+                'low': 1
+            }
+            
+            user_level = session.get('access_level', 'low')
+            user_level_num = access_hierarchy.get(user_level, 1)
+            required_level_num = access_hierarchy.get(required_level, 1)
+            
+            if user_level_num < required_level_num:
+                return render_template('access_denied.html', 
+                                     user_level=user_level,
+                                     required_level=required_level)
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
 # ============ ROUTES ============
 
 @app.route('/')
@@ -1893,5 +1978,6 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
