@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
+app.py
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session, flash
 import os
 from supabase import create_client, Client
 import uuid
@@ -10,35 +11,80 @@ import traceback
 import json
 import sys
 import zipfile  
+import hashlib
+import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from functools import wraps
 
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'uka-bill-utility-secret-2026')
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
 # Configure upload folder
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# Email configuration for password reset
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True') == 'True'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'your-email@gmail.com')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', 'your-app-password')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'your-email@gmail.com')
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Number formatting functions
-def format_currency(amount):
-    try:
-        if amount is None:
-            return "0.00"
-        return "{:,.2f}".format(float(amount))
-    except (ValueError, TypeError):
-        return "0.00"
+# Password hashing functions
+def hash_password(password):
+    """Hash a password for storing."""
+    salt = secrets.token_hex(16)
+    pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('ascii'), 100000)
+    pwdhash = pwdhash.hex()
+    return f"{salt}${pwdhash}"
 
-def format_number(number):
-    try:
-        if number is None:
-            return "0"
-        return "{:,.0f}".format(float(number))
-    except (ValueError, TypeError):
-        return "0"
+def verify_password(stored_password, provided_password):
+    """Verify a stored password against one provided by user"""
+    if not stored_password or '$' not in stored_password:
+        return False
+    salt, stored_hash = stored_password.split('$')
+    pwdhash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt.encode('ascii'), 100000)
+    pwdhash = pwdhash.hex()
+    return pwdhash == stored_hash
+
+# Access level constants
+ACCESS_LEVELS = {
+    'high': 3,      # Can view all and edit all information
+    'medium': 2,    # Can view dashboard, edit/view departments, schools, utility bills, reports, backup
+    'low': 1        # Can only view utility bills
+}
+
+# Authentication decorators
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def access_required(required_level):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'user_id' not in session:
+                return redirect(url_for('login'))
+            
+            user_level = session.get('access_level', 0)
+            if user_level < required_level:
+                return jsonify({'error': 'Insufficient permissions'}), 403
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 # Initialize Supabase
 print("=" * 60)
@@ -79,47 +125,364 @@ def test_supabase_connection():
             return False
     return False
 
-# ============ ROUTES ============
+# Initialize default admin user if not exists
+def initialize_default_users():
+    try:
+        if not supabase:
+            return
+        
+        # Check if users table exists, if not create it
+        try:
+            response = supabase.table("users").select("*").limit(1).execute()
+        except:
+            # Create users table structure in Supabase manually or handle as needed
+            print("⚠️  Users table may not exist. Please create it in Supabase with columns: id, username, password_hash, access_level, email, created_at, updated_at")
+            return
+        
+        # Check if admin user exists
+        response = supabase.table("users").select("*").eq("username", "admin").execute()
+        
+        if not response.data or len(response.data) == 0:
+            # Create default admin user
+            default_password = "Admin@123"  # Change this in production!
+            hashed_password = hash_password(default_password)
+            
+            admin_user = {
+                "username": "admin",
+                "password_hash": hashed_password,
+                "access_level": ACCESS_LEVELS['high'],
+                "email": "admin@moebrunei.gov.bn",
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            supabase.table("users").insert(admin_user).execute()
+            print("👤 Created default admin user (username: admin, password: Admin@123)")
+            
+        # Create medium level user
+        response = supabase.table("users").select("*").eq("username", "manager").execute()
+        if not response.data or len(response.data) == 0:
+            default_password = "Manager@123"
+            hashed_password = hash_password(default_password)
+            
+            manager_user = {
+                "username": "manager",
+                "password_hash": hashed_password,
+                "access_level": ACCESS_LEVELS['medium'],
+                "email": "manager@moebrunei.gov.bn",
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            supabase.table("users").insert(manager_user).execute()
+            print("👤 Created manager user (username: manager, password: Manager@123)")
+            
+        # Create low level user
+        response = supabase.table("users").select("*").eq("username", "viewer").execute()
+        if not response.data or len(response.data) == 0:
+            default_password = "Viewer@123"
+            hashed_password = hash_password(default_password)
+            
+            viewer_user = {
+                "username": "viewer",
+                "password_hash": hashed_password,
+                "access_level": ACCESS_LEVELS['low'],
+                "email": "viewer@moebrunei.gov.bn",
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            supabase.table("users").insert(viewer_user).execute()
+            print("👤 Created viewer user (username: viewer, password: Viewer@123)")
+            
+    except Exception as e:
+        print(f"⚠️  Could not initialize default users: {e}")
+
+# Email sending function for password reset
+def send_password_reset_email(email, reset_token, username):
+    try:
+        # Create reset link
+        reset_link = f"{request.host_url}reset-password?token={reset_token}"
+        
+        # Create email
+        msg = MIMEMultipart()
+        msg['Subject'] = 'UKA-BILL Utility System - Password Reset'
+        msg['From'] = app.config['MAIL_DEFAULT_SENDER']
+        msg['To'] = email
+        
+        # Create HTML email
+        html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0;">UKA-BILL Utility System</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Ministry of Education Brunei</p>
+            </div>
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                <h2 style="color: #667eea;">Password Reset Request</h2>
+                <p>Hello {username},</p>
+                <p>We received a request to reset your password for the UKA-BILL Utility System.</p>
+                <p>Click the button below to reset your password:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{reset_link}" style="background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
+                </div>
+                <p>If you didn't request this, please ignore this email.</p>
+                <p>This link will expire in 1 hour.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                <p style="font-size: 12px; color: #666;">
+                    Ministry of Education Brunei<br>
+                    Utility Bills Management System<br>
+                    Contact: aka.sazali@gmail.com
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(html, 'html'))
+        
+        # Send email
+        with smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT']) as server:
+            if app.config['MAIL_USE_TLS']:
+                server.starttls()
+            server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
+            server.send_message(msg)
+        
+        return True
+    except Exception as e:
+        print(f"❌ Error sending email: {e}")
+        return False
+
+# ============ AUTHENTICATION ROUTES ============
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page"""
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            username = data.get('username')
+            password = data.get('password')
+            
+            if not username or not password:
+                return jsonify({'success': False, 'error': 'Username and password are required'}), 400
+            
+            # Get user from database
+            response = supabase.table("users").select("*").eq("username", username).execute()
+            
+            if not response.data or len(response.data) == 0:
+                return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
+            
+            user = response.data[0]
+            
+            # Verify password
+            if not verify_password(user['password_hash'], password):
+                return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
+            
+            # Set session
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            session['access_level'] = user['access_level']
+            session.permanent = True
+            
+            return jsonify({
+                'success': True,
+                'message': 'Login successful',
+                'user': {
+                    'id': user['id'],
+                    'username': user['username'],
+                    'access_level': user['access_level']
+                }
+            })
+            
+        except Exception as e:
+            print(f"❌ Login error: {e}")
+            return jsonify({'success': False, 'error': 'Login failed'}), 500
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """Logout user"""
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Forgot password page"""
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            username = data.get('username')
+            
+            if not username:
+                return jsonify({'success': False, 'error': 'Username is required'}), 400
+            
+            # Get user from database
+            response = supabase.table("users").select("*").eq("username", username).execute()
+            
+            if not response.data or len(response.data) == 0:
+                # Don't reveal if user exists for security
+                return jsonify({'success': True, 'message': 'If the username exists, a password reset email has been sent.'})
+            
+            user = response.data[0]
+            
+            # Generate reset token
+            reset_token = secrets.token_urlsafe(32)
+            token_expiry = datetime.now() + timedelta(hours=1)
+            
+            # Store reset token in database
+            supabase.table("password_resets").insert({
+                "user_id": user['id'],
+                "reset_token": reset_token,
+                "expires_at": token_expiry.isoformat(),
+                "created_at": datetime.now().isoformat()
+            }).execute()
+            
+            # Send reset email
+            if user.get('email'):
+                email_sent = send_password_reset_email(user['email'], reset_token, user['username'])
+                if email_sent:
+                    return jsonify({'success': True, 'message': 'Password reset email has been sent.'})
+                else:
+                    return jsonify({'success': False, 'error': 'Failed to send reset email. Please contact administrator.'}), 500
+            else:
+                return jsonify({'success': False, 'error': 'No email registered for this account. Please contact administrator.'}), 400
+            
+        except Exception as e:
+            print(f"❌ Forgot password error: {e}")
+            return jsonify({'success': False, 'error': 'Failed to process request'}), 500
+    
+    return render_template('forgot_password.html')
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    """Reset password page"""
+    if request.method == 'GET':
+        token = request.args.get('token')
+        if not token:
+            return render_template('reset_password.html', error='Invalid reset link')
+        
+        # Verify token
+        response = supabase.table("password_resets").select("*").eq("reset_token", token).execute()
+        
+        if not response.data or len(response.data) == 0:
+            return render_template('reset_password.html', error='Invalid or expired reset link')
+        
+        reset_request = response.data[0]
+        expires_at = datetime.fromisoformat(reset_request['expires_at'].replace('Z', '+00:00'))
+        
+        if datetime.now() > expires_at:
+            return render_template('reset_password.html', error='Reset link has expired')
+        
+        return render_template('reset_password.html', token=token, valid=True)
+    
+    else:  # POST
+        try:
+            data = request.get_json()
+            token = data.get('token')
+            new_password = data.get('new_password')
+            confirm_password = data.get('confirm_password')
+            
+            if not token or not new_password or not confirm_password:
+                return jsonify({'success': False, 'error': 'All fields are required'}), 400
+            
+            if new_password != confirm_password:
+                return jsonify({'success': False, 'error': 'Passwords do not match'}), 400
+            
+            # Verify token
+            response = supabase.table("password_resets").select("*").eq("reset_token", token).execute()
+            
+            if not response.data or len(response.data) == 0:
+                return jsonify({'success': False, 'error': 'Invalid or expired reset link'}), 400
+            
+            reset_request = response.data[0]
+            expires_at = datetime.fromisoformat(reset_request['expires_at'].replace('Z', '+00:00'))
+            
+            if datetime.now() > expires_at:
+                return jsonify({'success': False, 'error': 'Reset link has expired'}), 400
+            
+            # Update password
+            hashed_password = hash_password(new_password)
+            
+            supabase.table("users").update({
+                "password_hash": hashed_password,
+                "updated_at": datetime.now().isoformat()
+            }).eq("id", reset_request['user_id']).execute()
+            
+            # Delete used reset token
+            supabase.table("password_resets").delete().eq("reset_token", token).execute()
+            
+            return jsonify({'success': True, 'message': 'Password has been reset successfully'})
+            
+        except Exception as e:
+            print(f"❌ Reset password error: {e}")
+            return jsonify({'success': False, 'error': 'Failed to reset password'}), 500
+
+# ============ PROTECTED ROUTES ============
 
 @app.route('/')
 def splash():
     return render_template('splash.html')
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
-    return render_template('dashboard.html')
+    return render_template('dashboard.html', access_level=session.get('access_level'))
 
 @app.route('/water')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def water_utility():
-    return render_template('water.html')
+    return render_template('water.html', access_level=session.get('access_level'))
 
 @app.route('/electricity')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def electricity_utility():
-    return render_template('electricity.html')
+    return render_template('electricity.html', access_level=session.get('access_level'))
 
 @app.route('/telephone')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def telephone_utility():
-    return render_template('telephone.html')
+    return render_template('telephone.html', access_level=session.get('access_level'))
 
 @app.route('/schools')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def schools():
-    return render_template('schools.html')
+    return render_template('schools.html', access_level=session.get('access_level'))
 
 @app.route('/departments')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def departments():
-    return render_template('departments.html')
+    return render_template('departments.html', access_level=session.get('access_level'))
 
 @app.route('/reports')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def reports():
-    return render_template('reports.html')
+    return render_template('reports.html', access_level=session.get('access_level'))
 
 @app.route('/export')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def export_page():
-    return render_template('export.html')
+    return render_template('export.html', access_level=session.get('access_level'))
 
-# ============ API ROUTES ============
+@app.route('/backup')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
+def backup_page():
+    return render_template('backup.html', access_level=session.get('access_level'))
+
+# ============ API ROUTES WITH AUTH ============
 
 @app.route('/api/financial-years', methods=['GET'])
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def get_financial_years():
     """Get all financial years"""
     try:
@@ -136,6 +499,8 @@ def get_financial_years():
         return jsonify({'data': []}), 500
 
 @app.route('/api/financial-years', methods=['POST'])
+@login_required
+@access_required(ACCESS_LEVELS['high'])
 def create_financial_year():
     """Create a new financial year"""
     try:
@@ -176,6 +541,8 @@ def create_financial_year():
         return jsonify({'error': f'Failed to create financial year: {str(e)}'}), 500
 
 @app.route('/api/financial-years/<int:fy_id>', methods=['PUT'])
+@login_required
+@access_required(ACCESS_LEVELS['high'])
 def update_financial_year(fy_id):
     """Update a financial year"""
     try:
@@ -187,7 +554,6 @@ def update_financial_year(fy_id):
         data = request.get_json()
         print(f"📅 Update financial year data: {data}")
         
-        # Create update data dictionary with only provided fields
         financial_year_data = {}
         
         if data.get('financialYear'):
@@ -233,6 +599,8 @@ def update_financial_year(fy_id):
         return jsonify({'error': f'Failed to update financial year: {str(e)}'}), 500
 
 @app.route('/api/financial-years/current')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def get_current_financial_year():
     """Get current financial year based on date"""
     try:
@@ -245,11 +613,10 @@ def get_current_financial_year():
         current_year = current_date.year
         current_month = current_date.month
         
-        # Financial year is April to March (April = 4, March = 3)
-        if current_month >= 4:  # April or later
+        if current_month >= 4:
             start_year = current_year
             end_year = current_year + 1
-        else:  # January to March
+        else:
             start_year = current_year - 1
             end_year = current_year
         
@@ -258,7 +625,6 @@ def get_current_financial_year():
         if response.data and len(response.data) > 0:
             return jsonify(response.data[0])
         else:
-            # Create a default financial year if none exists
             default_financial_year = {
                 "financial_year": f"{start_year}-{end_year}",
                 "start_year": start_year,
@@ -281,6 +647,8 @@ def get_current_financial_year():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/financial-years/<int:fy_id>', methods=['DELETE'])
+@login_required
+@access_required(ACCESS_LEVELS['high'])
 def delete_financial_year(fy_id):
     """Delete a financial year"""
     try:
@@ -289,7 +657,6 @@ def delete_financial_year(fy_id):
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        # Check if there are any bills for this financial year
         response = supabase.table("financial_years").delete().eq("id", fy_id).execute()
         
         if response.data:
@@ -307,13 +674,14 @@ def delete_financial_year(fy_id):
 # ============ STATISTICS API ROUTES ============
 
 @app.route('/api/statistics/departments')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def department_statistics():
     """Get detailed department statistics"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        # Get all departments
         response = supabase.table("departments").select("*").execute()
         departments = response.data if response.data else []
         
@@ -326,7 +694,6 @@ def department_statistics():
                 'units_by_department': {}
             })
         
-        # Calculate statistics
         department_names = set()
         division_names = set()
         departments_by_name = {}
@@ -337,11 +704,9 @@ def department_statistics():
             div_name = dept.get('division_name', 'Unknown')
             unit_name = dept.get('unit_name', 'Unknown')
             
-            # Track unique names
             department_names.add(dept_name)
             division_names.add(div_name)
             
-            # Count by department name
             if dept_name not in departments_by_name:
                 departments_by_name[dept_name] = {
                     'name': dept_name,
@@ -358,12 +723,10 @@ def department_statistics():
                 'division_name': div_name
             })
             
-            # Count units by department
             if dept_name not in units_by_department:
                 units_by_department[dept_name] = 0
             units_by_department[dept_name] += 1
         
-        # Convert sets to lists for JSON serialization
         for dept_name, data in departments_by_name.items():
             data['divisions'] = list(data['divisions'])
             data['divisions_count'] = len(data['divisions'])
@@ -381,13 +744,14 @@ def department_statistics():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/statistics/schools')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def school_statistics():
     """Get detailed school statistics"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        # Get all schools
         response = supabase.table("schools").select("*").execute()
         schools = response.data if response.data else []
         
@@ -400,7 +764,6 @@ def school_statistics():
                 'clusters': []
             })
         
-        # Calculate statistics
         clusters = set()
         schools_by_cluster = {}
         schools_by_type = {
@@ -415,10 +778,8 @@ def school_statistics():
             cluster = school.get('cluster_number', 'Unknown')
             school_number = school.get('school_number', '')
             
-            # Track clusters
             clusters.add(cluster)
             
-            # Count by cluster
             if cluster not in schools_by_cluster:
                 schools_by_cluster[cluster] = {
                     'cluster': cluster,
@@ -433,7 +794,6 @@ def school_statistics():
                 'school_number': school_number
             })
             
-            # Categorize by school type based on name
             if 'primary' in school_name:
                 schools_by_type['primary'] += 1
             elif 'secondary' in school_name or 'high' in school_name:
@@ -443,7 +803,6 @@ def school_statistics():
             else:
                 schools_by_type['other'] += 1
         
-        # Sort clusters numerically if possible
         sorted_clusters = sorted(clusters, key=lambda x: int(x) if x.isdigit() else x)
         
         return jsonify({
@@ -459,32 +818,29 @@ def school_statistics():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/statistics/overview')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def overview_statistics():
     """Get overview statistics for dashboard"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        # Get department statistics
         dept_response = supabase.table("departments").select("*").execute()
         departments = dept_response.data if dept_response.data else []
         
-        # Get school statistics
         school_response = supabase.table("schools").select("*").execute()
         schools = school_response.data if school_response.data else []
         
-        # Get utility bills statistics
         bills_response = supabase.table("utility_bills").select("*").execute()
         bills = bills_response.data if bills_response.data else []
         
-        # Calculate department stats
         dept_names = set()
         divisions = set()
         for dept in departments:
             dept_names.add(dept.get('department_name', 'Uncategorized'))
             divisions.add(dept.get('division_name', 'Unknown'))
         
-        # Calculate school stats
         clusters = set()
         primary_count = 0
         secondary_count = 0
@@ -504,12 +860,10 @@ def overview_statistics():
             else:
                 other_count += 1
         
-        # Calculate utility stats
         water_bills = [b for b in bills if b.get('utility_type') == 'water']
         electricity_bills = [b for b in bills if b.get('utility_type') == 'electricity']
         telephone_bills = [b for b in bills if b.get('utility_type') == 'telephone']
         
-        # Calculate total amounts
         total_amount = sum(float(b.get('current_charges', 0) or 0) for b in bills)
         water_amount = sum(float(b.get('current_charges', 0) or 0) for b in water_bills)
         electricity_amount = sum(float(b.get('current_charges', 0) or 0) for b in electricity_bills)
@@ -552,24 +906,24 @@ def overview_statistics():
 # ============ DASHBOARD DATA ============
 
 @app.route('/api/dashboard-data')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def dashboard_data():
     """Get dashboard data with financial year budget and current usage"""
     try:
         print("📈 GET /api/dashboard-data called")
         
-        # Get current financial year
         fy_response = supabase.table("financial_years").select("*").order("start_year", desc=True).limit(1).execute()
         
         if not fy_response.data or len(fy_response.data) == 0:
-            # Create a default financial year
             current_date = datetime.now()
             current_year = current_date.year
             current_month = current_date.month
             
-            if current_month >= 4:  # April or later
+            if current_month >= 4:
                 start_year = current_year
                 end_year = current_year + 1
-            else:  # January to March
+            else:
                 start_year = current_year - 1
                 end_year = current_year
             
@@ -602,11 +956,9 @@ def dashboard_data():
         
         print(f"📈 Current financial year: {current_fy['financial_year']}")
         
-        # Get bills for current financial year (April to March)
         start_year = current_fy['start_year']
         end_year = current_fy['end_year']
         
-        # Get all bills between April start_year and March end_year
         query = supabase.table("utility_bills").select("*")
         response = query.execute()
         
@@ -622,11 +974,9 @@ def dashboard_data():
                 bill_year = bill['year']
                 bill_month = bill['month']
                 
-                # Check if bill falls within the financial year
-                # Financial year: April (4) start_year to March (3) end_year
-                if bill_year == start_year and bill_month >= 4:  # April to Dec start_year
+                if bill_year == start_year and bill_month >= 4:
                     include_bill = True
-                elif bill_year == end_year and bill_month <= 3:  # Jan to March end_year
+                elif bill_year == end_year and bill_month <= 3:
                     include_bill = True
                 else:
                     include_bill = False
@@ -643,7 +993,6 @@ def dashboard_data():
                     total_unsettled += float(bill['unsettled_charges'] or 0)
                     total_paid += float(bill.get('amount_paid') or 0)
         
-        # Calculate budget usage and remaining
         budget_calculations = {
             'financial_year': current_fy['financial_year'],
             'start_year': start_year,
@@ -666,7 +1015,6 @@ def dashboard_data():
             'total_percentage': (total_current / float(current_fy.get('total_allocated', 60000))) * 100 if float(current_fy.get('total_allocated', 60000)) > 0 else 0
         }
         
-        # Format numbers for display
         formatted_budget = {}
         for key, value in budget_calculations.items():
             if isinstance(value, (int, float)):
@@ -713,12 +1061,13 @@ def dashboard_data():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/yearly-budget-data')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def yearly_budget_data():
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        # Get all financial years
         fy_response = supabase.table("financial_years").select("*").order("start_year", desc=True).execute()
         
         if not fy_response.data or len(fy_response.data) == 0:
@@ -730,7 +1079,6 @@ def yearly_budget_data():
             start_year = fy['start_year']
             end_year = fy['end_year']
             
-            # Get bills for this financial year
             query = supabase.table("utility_bills").select("*")
             response = query.execute()
             
@@ -743,10 +1091,9 @@ def yearly_budget_data():
                     bill_year = bill['year']
                     bill_month = bill['month']
                     
-                    # Check if bill falls within the financial year
-                    if bill_year == start_year and bill_month >= 4:  # April to Dec start_year
+                    if bill_year == start_year and bill_month >= 4:
                         include_bill = True
-                    elif bill_year == end_year and bill_month <= 3:  # Jan to March end_year
+                    elif bill_year == end_year and bill_month <= 3:
                         include_bill = True
                     else:
                         include_bill = False
@@ -804,6 +1151,8 @@ def test_connection():
 # ============ SCHOOLS API ============
 
 @app.route('/api/schools', methods=['GET'])
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def api_schools():
     """Get all schools"""
     try:
@@ -820,6 +1169,8 @@ def api_schools():
         return jsonify({'data': []}), 500
 
 @app.route('/api/schools', methods=['POST'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def create_school():
     """Create a new school"""
     try:
@@ -827,7 +1178,6 @@ def create_school():
         data = request.get_json()
         print(f"🏫 Received school data: {data}")
         
-        # Validate required fields
         if not data.get('name'):
             return jsonify({'success': False, 'error': 'School name is required'}), 400
         if not data.get('clusterNumber'):
@@ -869,6 +1219,8 @@ def create_school():
         return jsonify({'success': False, 'error': f'Failed to create school: {str(e)}'}), 500
 
 @app.route('/api/schools', methods=['PUT'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def update_school():
     """Update a school"""
     try:
@@ -909,6 +1261,8 @@ def update_school():
         return jsonify({'success': False, 'error': f'Failed to update school: {str(e)}'}), 500
 
 @app.route('/api/schools', methods=['DELETE'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def delete_school():
     """Delete a school"""
     try:
@@ -916,7 +1270,6 @@ def delete_school():
         if not school_id:
             return jsonify({'success': False, 'error': 'School ID is required'}), 400
         
-        # Check if school has any utility bills before deleting
         bills_response = supabase.table("utility_bills").select("*").eq("entity_type", "school").eq("entity_id", school_id).execute()
         
         if bills_response.data and len(bills_response.data) > 0:
@@ -948,6 +1301,8 @@ def delete_school():
 # ============ DEPARTMENTS API ============
 
 @app.route('/api/departments', methods=['GET'])
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def api_departments():
     """Get all departments"""
     try:
@@ -964,6 +1319,8 @@ def api_departments():
         return jsonify({'data': []}), 500
 
 @app.route('/api/departments', methods=['POST'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def create_department():
     """Create a new department"""
     try:
@@ -971,7 +1328,6 @@ def create_department():
         data = request.get_json()
         print(f"🏢 Received department data: {data}")
         
-        # Validate required fields
         if not data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
         
@@ -1028,6 +1384,8 @@ def create_department():
         }), 500
         
 @app.route('/api/departments', methods=['PUT'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def update_department():
     """Update a department"""
     try:
@@ -1074,6 +1432,8 @@ def update_department():
         }), 500
 
 @app.route('/api/departments', methods=['DELETE'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def delete_department():
     """Delete a department"""
     try:
@@ -1104,6 +1464,8 @@ def delete_department():
 # ============ UTILITY BILLS API ============
 
 @app.route('/api/utility-bills', methods=['GET'])
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def api_utility_bills():
     """Get utility bills with filters"""
     try:
@@ -1120,7 +1482,6 @@ def api_utility_bills():
         
         print(f"💡 Filters - utility: {utility_type}, entity: {entity_type}")
         
-        # First, get all utility bills with filters
         query = supabase.table("utility_bills").select("*")
         
         if utility_type:
@@ -1141,16 +1502,13 @@ def api_utility_bills():
             for bill in response.data:
                 bill_data = dict(bill)
                 
-                # Get entity name based on entity type
                 if bill_data['entity_type'] == 'school':
-                    # Get school name
                     school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
                     if school_response.data and len(school_response.data) > 0:
                         bill_data['entity_name'] = school_response.data[0]['name']
                     else:
                         bill_data['entity_name'] = 'Unknown School'
                 elif bill_data['entity_type'] == 'department':
-                    # Get department name
                     dept_response = supabase.table("departments").select("name").eq("id", bill_data['entity_id']).execute()
                     if dept_response.data and len(dept_response.data) > 0:
                         bill_data['entity_name'] = dept_response.data[0]['name']
@@ -1170,13 +1528,14 @@ def api_utility_bills():
         return jsonify({'data': []}), 500
 
 @app.route('/api/utility-bills', methods=['POST'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def create_utility_bill():
     """Create a new utility bill"""
     try:
         data = request.get_json()
         print(f"📝 Creating utility bill with data: {data}")
         
-        # Get entity name
         entity_name = ""
         if data.get('entity_type') == 'school':
             school_response = supabase.table("schools").select("name").eq("id", data.get('entity_id')).execute()
@@ -1187,7 +1546,6 @@ def create_utility_bill():
             if dept_response.data and len(dept_response.data) > 0:
                 entity_name = dept_response.data[0]['name']
         
-        # Get current date for default values
         current_date = datetime.now()
         
         bill_data = {
@@ -1204,10 +1562,10 @@ def create_utility_bill():
             "amount_paid": float(data.get('amount_paid', 0)),
             "consumption_m3": float(data.get('consumption_m3', 0)) if data.get('consumption_m3') else None,
             "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
-            "month": int(data.get('month', current_date.month)),  # Month for filtering
-            "year": int(data.get('year', current_date.year)),  # Year for filtering
-            "bill_month": int(data.get('bill_month', current_date.month)),  # Month of the bill
-            "bill_year": int(data.get('bill_year', current_date.year)),  # Year of the bill
+            "month": int(data.get('month', current_date.month)),
+            "year": int(data.get('year', current_date.year)),
+            "bill_month": int(data.get('bill_month', current_date.month)),
+            "bill_year": int(data.get('bill_year', current_date.year)),
             "bill_image": data.get('bill_image'),
             "created_at": datetime.now().isoformat()
         }
@@ -1227,13 +1585,14 @@ def create_utility_bill():
         return jsonify({'error': 'Failed to create utility bill'}), 500
 
 @app.route('/api/utility-bills', methods=['PUT'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def update_utility_bill():
     """Update a utility bill"""
     try:
         data = request.get_json()
         bill_id = data.get('id')
         
-        # Get entity name
         entity_name = ""
         if data.get('entity_type') == 'school':
             school_response = supabase.table("schools").select("name").eq("id", data.get('entity_id')).execute()
@@ -1244,7 +1603,6 @@ def update_utility_bill():
             if dept_response.data and len(dept_response.data) > 0:
                 entity_name = dept_response.data[0]['name']
         
-        # Get current date for default values
         current_date = datetime.now()
         
         bill_data = {
@@ -1261,10 +1619,10 @@ def update_utility_bill():
             "amount_paid": float(data.get('amount_paid', 0)),
             "consumption_m3": float(data.get('consumption_m3', 0)) if data.get('consumption_m3') else None,
             "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
-            "month": int(data.get('month', current_date.month)),  # Month for filtering
-            "year": int(data.get('year', current_date.year)),  # Year for filtering
-            "bill_month": int(data.get('bill_month', current_date.month)),  # Month of the bill
-            "bill_year": int(data.get('bill_year', current_date.year)),  # Year of the bill
+            "month": int(data.get('month', current_date.month)),
+            "year": int(data.get('year', current_date.year)),
+            "bill_month": int(data.get('bill_month', current_date.month)),
+            "bill_year": int(data.get('bill_year', current_date.year)),
             "bill_image": data.get('bill_image'),
             "updated_at": datetime.now().isoformat()
         }
@@ -1283,6 +1641,8 @@ def update_utility_bill():
         return jsonify({'error': 'Failed to update utility bill'}), 500
 
 @app.route('/api/utility-bills', methods=['DELETE'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def delete_utility_bill():
     """Delete a utility bill"""
     try:
@@ -1300,6 +1660,8 @@ def delete_utility_bill():
 # ============ OTHER API ROUTES ============
 
 @app.route('/api/entities')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def api_entities():
     """Get schools or departments for dropdowns"""
     try:
@@ -1323,6 +1685,8 @@ def api_entities():
         return jsonify({'data': []}), 500
 
 @app.route('/api/entity-accounts')
+@login_required
+@access_required(ACCESS_LEVELS['low'])
 def api_entity_accounts():
     """Get account numbers for an entity"""
     try:
@@ -1344,6 +1708,8 @@ def api_entity_accounts():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/upload-bill-image', methods=['POST'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def upload_bill_image():
     try:
         if 'file' not in request.files:
@@ -1371,10 +1737,13 @@ def upload_bill_image():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/uploads/<filename>')
+@login_required
 def uploaded_file(filename):
     return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
 @app.route('/api/generate-report', methods=['POST'])
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def generate_report():
     try:
         data = request.get_json()
@@ -1409,6 +1778,8 @@ def generate_report():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/export-data')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def export_data():
     try:
         export_type = request.args.get('type', 'csv')
@@ -1452,6 +1823,8 @@ def export_data():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/backup-data')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def backup_data():
     try:
         if not supabase:
@@ -1481,6 +1854,29 @@ def backup_data():
         print(f"❌ Backup data error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/current-user')
+@login_required
+def get_current_user():
+    """Get current user information"""
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'Not authenticated'}), 401
+        
+        response = supabase.table("users").select("*").eq("id", user_id).execute()
+        
+        if response.data and len(response.data) > 0:
+            user = response.data[0]
+            # Don't return password hash
+            del user['password_hash']
+            return jsonify(user)
+        else:
+            return jsonify({'error': 'User not found'}), 404
+            
+    except Exception as e:
+        print(f"❌ Get current user error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # Health check endpoint
 @app.route('/health')
 def health_check():
@@ -1500,6 +1896,8 @@ def api_test():
 # ============ BACKUP & RESTORE API ============
 
 @app.route('/api/backup/all')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def backup_all_data():
     """Create a complete backup of all data"""
     try:
@@ -1508,42 +1906,33 @@ def backup_all_data():
         
         print("💾 Creating complete backup...")
         
-        # Get all data from all tables
         backup_data = {}
         
-        # Backup schools
         print("📚 Backing up schools...")
         schools_response = supabase.table("schools").select("*").execute()
         backup_data['schools'] = schools_response.data if schools_response.data else []
         
-        # Backup departments
         print("🏢 Backing up departments...")
         departments_response = supabase.table("departments").select("*").execute()
         backup_data['departments'] = departments_response.data if departments_response.data else []
         
-        # Backup utility bills
         print("📋 Backing up utility bills...")
         bills_response = supabase.table("utility_bills").select("*").execute()
         backup_data['utility_bills'] = bills_response.data if bills_response.data else []
         
-        # Backup financial years
         print("📅 Backing up financial years...")
         financial_years_response = supabase.table("financial_years").select("*").execute()
         backup_data['financial_years'] = financial_years_response.data if financial_years_response.data else []
         
-        # Get current date for filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"uka_bill_backup_{timestamp}.json"
         
-        # Create backups directory if it doesn't exist
         os.makedirs('backups', exist_ok=True)
         backup_path = os.path.join('backups', backup_filename)
         
-        # Save backup to file
         with open(backup_path, 'w', encoding='utf-8') as f:
             json.dump(backup_data, f, indent=2, ensure_ascii=False, default=str)
         
-        # Also return the data for direct download
         backup_data['metadata'] = {
             'backup_date': datetime.now().isoformat(),
             'backup_filename': backup_filename,
@@ -1576,12 +1965,13 @@ def backup_all_data():
         return jsonify({'error': f'Failed to create backup: {str(e)}'}), 500
 
 @app.route('/api/backup/download/<filename>')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def download_backup(filename):
     """Download a backup file"""
     try:
         backup_path = os.path.join('backups', filename)
         
-        # Security check - prevent directory traversal
         if not os.path.exists(backup_path) or '..' in filename or not filename.endswith('.json'):
             return jsonify({'error': 'Invalid backup file'}), 404
         
@@ -1597,6 +1987,8 @@ def download_backup(filename):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/backup/list')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def list_backups():
     """List all available backups"""
     try:
@@ -1618,7 +2010,6 @@ def list_backups():
                     'view_url': f'/backups/{filename}'
                 })
         
-        # Sort by creation date (newest first)
         backup_files.sort(key=lambda x: x['created'], reverse=True)
         
         return jsonify({
@@ -1632,6 +2023,8 @@ def list_backups():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/backup/restore', methods=['POST'])
+@login_required
+@access_required(ACCESS_LEVELS['high'])
 def restore_backup():
     """Restore data from a backup file"""
     try:
@@ -1649,67 +2042,46 @@ def restore_backup():
         if not backup_file.filename.endswith('.json'):
             return jsonify({'error': 'Only JSON backup files are supported'}), 400
         
-        # Read and parse backup file
         backup_content = backup_file.read().decode('utf-8')
         backup_data = json.loads(backup_content)
         
         print(f"📥 Restoring backup: {backup_file.filename}")
         
-        # Validate backup structure
         required_tables = ['schools', 'departments', 'utility_bills', 'financial_years']
         for table in required_tables:
             if table not in backup_data:
                 return jsonify({'error': f'Invalid backup file: missing {table} data'}), 400
         
-        # Ask for confirmation (this would be handled by the frontend)
-        # For now, we'll proceed with restoration
-        
         restoration_stats = {}
         
-        # Restore schools
         if backup_data['schools']:
             print(f"📚 Restoring {len(backup_data['schools'])} schools...")
-            # Clear existing schools
             supabase.table("schools").delete().neq("id", 0).execute()
-            # Insert backup schools
             for school in backup_data['schools']:
-                # Remove id to let database generate new ones
                 school_data = {k: v for k, v in school.items() if k != 'id'}
                 supabase.table("schools").insert(school_data).execute()
             restoration_stats['schools'] = len(backup_data['schools'])
         
-        # Restore departments
         if backup_data['departments']:
             print(f"🏢 Restoring {len(backup_data['departments'])} departments...")
-            # Clear existing departments
             supabase.table("departments").delete().neq("id", 0).execute()
-            # Insert backup departments
             for dept in backup_data['departments']:
-                # Remove id to let database generate new ones
                 dept_data = {k: v for k, v in dept.items() if k != 'id'}
                 supabase.table("departments").insert(dept_data).execute()
             restoration_stats['departments'] = len(backup_data['departments'])
         
-        # Restore financial years
         if backup_data['financial_years']:
             print(f"📅 Restoring {len(backup_data['financial_years'])} financial years...")
-            # Clear existing financial years
             supabase.table("financial_years").delete().neq("id", 0).execute()
-            # Insert backup financial years
             for fy in backup_data['financial_years']:
-                # Remove id to let database generate new ones
                 fy_data = {k: v for k, v in fy.items() if k != 'id'}
                 supabase.table("financial_years").insert(fy_data).execute()
             restoration_stats['financial_years'] = len(backup_data['financial_years'])
         
-        # Restore utility bills
         if backup_data['utility_bills']:
             print(f"📋 Restoring {len(backup_data['utility_bills'])} utility bills...")
-            # Clear existing utility bills
             supabase.table("utility_bills").delete().neq("id", 0).execute()
-            # Insert backup utility bills
             for bill in backup_data['utility_bills']:
-                # Remove id to let database generate new ones
                 bill_data = {k: v for k, v in bill.items() if k != 'id'}
                 supabase.table("utility_bills").insert(bill_data).execute()
             restoration_stats['utility_bills'] = len(backup_data['utility_bills'])
@@ -1732,6 +2104,8 @@ def restore_backup():
         return jsonify({'error': f'Failed to restore backup: {str(e)}'}), 500
 
 @app.route('/api/backup/export-csv')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def export_csv():
     """Export data as CSV files"""
     try:
@@ -1742,7 +2116,6 @@ def export_csv():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         if export_type == 'schools' or export_type == 'all':
-            # Export schools
             schools_response = supabase.table("schools").select("*").execute()
             schools_data = schools_response.data if schools_response.data else []
             
@@ -1757,7 +2130,6 @@ def export_csv():
             schools_filename = f"schools_export_{timestamp}.csv"
             
         if export_type == 'departments' or export_type == 'all':
-            # Export departments
             dept_response = supabase.table("departments").select("*").execute()
             dept_data = dept_response.data if dept_response.data else []
             
@@ -1772,7 +2144,6 @@ def export_csv():
             dept_filename = f"departments_export_{timestamp}.csv"
         
         if export_type == 'utility_bills' or export_type == 'all':
-            # Export utility bills
             bills_response = supabase.table("utility_bills").select("*").execute()
             bills_data = bills_response.data if bills_response.data else []
             
@@ -1787,7 +2158,6 @@ def export_csv():
             bills_filename = f"utility_bills_export_{timestamp}.csv"
         
         if export_type == 'all':
-            # Create a ZIP file with all CSVs
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 zip_file.writestr(schools_filename, schools_csv.getvalue())
@@ -1804,7 +2174,6 @@ def export_csv():
                 mimetype='application/zip'
             )
         else:
-            # Return single CSV file
             if export_type == 'schools':
                 return send_file(
                     io.BytesIO(schools_csv.getvalue().encode()),
@@ -1841,22 +2210,16 @@ def format_file_size(size_bytes):
 
 # Serve backup files statically
 @app.route('/backups/<filename>')
+@login_required
+@access_required(ACCESS_LEVELS['medium'])
 def serve_backup(filename):
     """Serve backup file for viewing"""
     backup_path = os.path.join('backups', filename)
     
-    # Security check
     if not os.path.exists(backup_path) or '..' in filename:
         return jsonify({'error': 'File not found'}), 404
     
     return send_file(backup_path, mimetype='application/json')
-
-# ============ BACKUP & RESTORE HTML PAGE ============
-
-@app.route('/backup')
-def backup_page():
-    """Backup and restore management page"""
-    return render_template('backup.html')
 
 # Error handlers
 @app.errorhandler(404)
@@ -1873,6 +2236,34 @@ def internal_error(error):
         'message': 'Something went wrong on our end. Please try again later.'
     }), 500
 
+@app.errorhandler(401)
+def unauthorized(error):
+    return redirect(url_for('login'))
+
+@app.errorhandler(403)
+def forbidden(error):
+    return jsonify({
+        'error': 'Access denied',
+        'message': 'You do not have permission to access this resource.'
+    }), 403
+
+# Number formatting functions (add these)
+def format_currency(amount):
+    try:
+        if amount is None:
+            return "0.00"
+        return "{:,.2f}".format(float(amount))
+    except (ValueError, TypeError):
+        return "0.00"
+
+def format_number(number):
+    try:
+        if number is None:
+            return "0"
+        return "{:,.0f}".format(float(number))
+    except (ValueError, TypeError):
+        return "0"
+
 # Application startup
 if __name__ == '__main__':
     create_directories()
@@ -1885,15 +2276,15 @@ if __name__ == '__main__':
     # Test connection on startup
     print("🔗 Testing Supabase connection...")
     if test_supabase_connection():
-        print("✅ All systems ready!")
+        print("✅ Supabase connection successful!")
     else:
         print("⚠️  Warning: Supabase connection failed")
+    
+    # Initialize default users
+    print("👤 Initializing default users...")
+    initialize_default_users()
     
     port = int(os.environ.get('PORT', 5000))
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
-
-
-
-
