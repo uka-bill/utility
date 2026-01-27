@@ -384,6 +384,27 @@
             background: #f8d7da;
             color: #721c24;
         }
+        
+        .no-data-row {
+            color: #999;
+            font-style: italic;
+        }
+        
+        .no-data-row td {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .month-header {
+            background-color: #f0f7ff;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        
+        .month-header td {
+            padding: 12px 15px;
+            border-bottom: 2px solid var(--primary);
+        }
     </style>
 </head>
 <body>
@@ -1124,7 +1145,7 @@
             
             if (bills.length === 0) {
                 tableBody.innerHTML = `
-                    <tr>
+                    <tr class="no-data-row">
                         <td colspan="13" style="text-align: center; padding: 30px;">
                             No water bills found matching your criteria. Try adjusting your filters or click "Add New Bill" to create one.
                         </td>
@@ -1182,55 +1203,94 @@
                 `;
                 tableBody.appendChild(headerRow);
                 
-                // Create child rows for each bill in the entity
-                entityBills.forEach(bill => {
-                    const childRow = document.createElement('tr');
-                    childRow.className = 'child-row';
-                    childRow.style.display = 'none';
-                    childRow.setAttribute('data-entity', entityName);
+                // Get the year for organizing by month (use most recent year in bills or current year)
+                const years = [...new Set(entityBills.map(bill => bill.bill_year || bill.year))];
+                const displayYear = years.length > 0 ? Math.max(...years) : currentYear;
+                
+                // Create all months from January to December
+                for (let month = 1; month <= 12; month++) {
+                    const monthName = getMonthName(month);
                     
-                    // Calculate status
-                    const totalCharges = bill.current_charges + bill.late_charges + bill.unsettled_charges;
-                    let status = 'pending';
-                    let statusText = 'Pending';
-                    
-                    if (bill.amount_paid >= totalCharges) {
-                        status = 'paid';
-                        statusText = 'Paid';
-                    } else if (bill.late_charges > 0) {
-                        status = 'overdue';
-                        statusText = 'Overdue';
-                    }
-                    
-                    let imageCell = '-';
-                    if (bill.bill_image) {
-                        imageCell = `<a href="${bill.bill_image}" target="_blank">View Bill</a>`;
-                    }
-                    
-                    // Use bill_month and bill_year for display instead of month and year
-                    const displayMonth = bill.bill_month || bill.month;
-                    const displayYear = bill.bill_year || bill.year;
-                    
-                    childRow.innerHTML = `
-                        <td>${bill.entity_name}</td>
-                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
-                        <td>${bill.account_number}</td>
-                        <td>${bill.meter_number}</td>
-                        <td>${bill.consumption_m3}</td>
-                        <td>$${bill.current_charges.toFixed(2)}</td>
-                        <td>$${bill.late_charges.toFixed(2)}</td>
-                        <td>$${bill.unsettled_charges.toFixed(2)}</td>
-                        <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
-                        <td><span class="status-badge status-${status}">${statusText}</span></td>
-                        <td>${imageCell}</td>
-                        <td>${getMonthName(displayMonth)} ${displayYear}</td>
-                        <td class="actions-cell">
-                            <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
-                            <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
+                    // Add month header
+                    const monthHeaderRow = document.createElement('tr');
+                    monthHeaderRow.className = 'month-header';
+                    monthHeaderRow.innerHTML = `
+                        <td colspan="13">
+                            ${monthName} ${displayYear}
                         </td>
                     `;
-                    tableBody.appendChild(childRow);
-                });
+                    tableBody.appendChild(monthHeaderRow);
+                    
+                    // Find bills for this month
+                    const monthBills = entityBills.filter(bill => {
+                        const billMonth = bill.bill_month || bill.month;
+                        return billMonth === month;
+                    });
+                    
+                    if (monthBills.length > 0) {
+                        // Display bills for this month
+                        monthBills.forEach(bill => {
+                            const childRow = document.createElement('tr');
+                            childRow.className = 'child-row';
+                            childRow.style.display = 'none';
+                            childRow.setAttribute('data-entity', entityName);
+                            
+                            // Calculate status
+                            const totalCharges = bill.current_charges + bill.late_charges + bill.unsettled_charges;
+                            let status = 'pending';
+                            let statusText = 'Pending';
+                            
+                            if (bill.amount_paid >= totalCharges) {
+                                status = 'paid';
+                                statusText = 'Paid';
+                            } else if (bill.late_charges > 0) {
+                                status = 'overdue';
+                                statusText = 'Overdue';
+                            }
+                            
+                            let imageCell = '-';
+                            if (bill.bill_image) {
+                                imageCell = `<a href="${bill.bill_image}" target="_blank">View Bill</a>`;
+                            }
+                            
+                            // Use bill_month and bill_year for display instead of month and year
+                            const displayMonth = bill.bill_month || bill.month;
+                            const displayYear = bill.bill_year || bill.year;
+                            
+                            childRow.innerHTML = `
+                                <td>${bill.entity_name}</td>
+                                <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
+                                <td>${bill.account_number}</td>
+                                <td>${bill.meter_number}</td>
+                                <td>${bill.consumption_m3}</td>
+                                <td>$${bill.current_charges.toFixed(2)}</td>
+                                <td>$${bill.late_charges.toFixed(2)}</td>
+                                <td>$${bill.unsettled_charges.toFixed(2)}</td>
+                                <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
+                                <td><span class="status-badge status-${status}">${statusText}</span></td>
+                                <td>${imageCell}</td>
+                                <td>${getMonthName(displayMonth)} ${displayYear}</td>
+                                <td class="actions-cell">
+                                    <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
+                                    <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
+                                </td>
+                            `;
+                            tableBody.appendChild(childRow);
+                        });
+                    } else {
+                        // No bills for this month - show empty row
+                        const emptyRow = document.createElement('tr');
+                        emptyRow.className = 'child-row no-data-row';
+                        emptyRow.style.display = 'none';
+                        emptyRow.setAttribute('data-entity', entityName);
+                        emptyRow.innerHTML = `
+                            <td colspan="13" style="text-align: center;">
+                                No water bill recorded for ${monthName} ${displayYear}
+                            </td>
+                        `;
+                        tableBody.appendChild(emptyRow);
+                    }
+                }
             });
             
             // Add event listeners to toggle icons
@@ -1451,4 +1511,3 @@
     </script>
 </body>
 </html>
-
