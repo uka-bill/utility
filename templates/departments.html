@@ -347,6 +347,62 @@
             font-size: 0.7rem;
             margin-right: 5px;
         }
+        
+        /* Department separator styles */
+        .department-separator {
+            background-color: #f3e5f5 !important;
+            border-top: 2px solid #7b1fa2 !important;
+            border-bottom: 2px solid #7b1fa2 !important;
+        }
+        
+        .department-separator td {
+            font-weight: bold;
+            color: #7b1fa2;
+            padding: 12px 15px;
+        }
+        
+        .department-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .department-count {
+            background-color: #7b1fa2;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        
+        /* Division separator styles */
+        .division-separator {
+            background-color: #fff3e0 !important;
+            border-top: 1px solid #ef6c00 !important;
+        }
+        
+        .division-separator td {
+            font-weight: 600;
+            color: #ef6c00;
+            padding: 10px 15px;
+            font-size: 0.9rem;
+        }
+        
+        .division-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .division-count {
+            background-color: #ef6c00;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -395,6 +451,7 @@
             <div class="filter-group">
                 <label class="filter-label">Sort By</label>
                 <select class="filter-select" id="sortFilter">
+                    <option value="dept-div-unit">Department → Division → Unit</option>
                     <option value="id">ID (Ascending)</option>
                     <option value="unitName">Unit Name (A-Z)</option>
                     <option value="divisionName">Division Name</option>
@@ -428,7 +485,7 @@
     <div class="modal" id="departmentModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title" id="modalTitle">Add New Department</h3>
+                <h3 class="modalTitle">Add New Department</h3>
                 <button class="close-modal" id="closeModal">&times;</button>
             </div>
             
@@ -667,6 +724,15 @@
             // Sort departments
             filteredDepartments.sort((a, b) => {
                 switch(sortBy) {
+                    case 'dept-div-unit':
+                        // First by department, then division, then unit name
+                        const deptCompare = (a.department_name || '').localeCompare(b.department_name || '');
+                        if (deptCompare !== 0) return deptCompare;
+                        
+                        const divCompare = (a.division_name || '').localeCompare(b.division_name || '');
+                        if (divCompare !== 0) return divCompare;
+                        
+                        return (a.unit_name || '').localeCompare(b.unit_name || '');
                     case 'id':
                         return a.id - b.id; // Sort by ID in ascending order
                     case 'unitName':
@@ -699,29 +765,15 @@
             
             tableBody.innerHTML = '';
             
-            departments.forEach(dept => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="id-cell">${dept.id}</td>
-                    <td>
-                        <strong>${dept.unit_name}</strong>
-                    </td>
-                    <td>
-                        <span class="division-badge">${dept.division_name}</span>
-                    </td>
-                    <td>
-                        <span class="department-badge">${dept.department_name}</span>
-                    </td>
-                    <td>${dept.hotline_numbers || '-'}</td>
-                    <td>${dept.address || '-'}</td>
-                    <td>${dept.notes || '-'}</td>
-                    <td class="actions-cell">
-                        <button class="btn btn-warning btn-sm edit-btn" data-id="${dept.id}">Edit</button>
-                        <button class="btn btn-danger btn-sm delete-btn" data-id="${dept.id}">Delete</button>
-                    </td>
-                `;
-                tableBody.appendChild(row);
-            });
+            const sortBy = document.getElementById('sortFilter').value;
+            
+            if (sortBy === 'dept-div-unit') {
+                // Hierarchical view with separators
+                renderHierarchicalView(departments, tableBody);
+            } else {
+                // Simple list view
+                renderSimpleView(departments, tableBody);
+            }
             
             // Add event listeners to edit buttons
             document.querySelectorAll('.edit-btn').forEach(button => {
@@ -738,6 +790,209 @@
                     deleteDepartment(departmentId);
                 });
             });
+        }
+        
+        function renderHierarchicalView(departments, tableBody) {
+            let currentDepartment = null;
+            let currentDivision = null;
+            let deptDepartments = [];
+            let divDepartments = [];
+            let deptCount = 0;
+            let divCount = 0;
+            
+            departments.forEach((dept, index) => {
+                // Check if we're starting a new department
+                if (dept.department_name !== currentDepartment) {
+                    // If we have departments in the previous department, add them
+                    if (deptDepartments.length > 0) {
+                        // Add department separator for the previous department
+                        const deptSeparator = document.createElement('tr');
+                        deptSeparator.className = 'department-separator';
+                        deptSeparator.innerHTML = `
+                            <td colspan="8">
+                                <div class="department-info">
+                                    <span>${currentDepartment}</span>
+                                    <span class="department-count">${deptCount} unit${deptCount > 1 ? 's' : ''}</span>
+                                </div>
+                            </td>
+                        `;
+                        tableBody.appendChild(deptSeparator);
+                        
+                        // Add division separators and units for the previous department
+                        let currentDivInDept = null;
+                        let divUnits = [];
+                        
+                        deptDepartments.forEach(d => {
+                            if (d.division_name !== currentDivInDept) {
+                                // Add previous division separator if exists
+                                if (divUnits.length > 0) {
+                                    const divSeparator = document.createElement('tr');
+                                    divSeparator.className = 'division-separator';
+                                    const unitCount = divUnits.length;
+                                    divSeparator.innerHTML = `
+                                        <td colspan="8">
+                                            <div class="division-info">
+                                                <span>${currentDivInDept}</span>
+                                                <span class="division-count">${unitCount} unit${unitCount > 1 ? 's' : ''}</span>
+                                            </div>
+                                        </td>
+                                    `;
+                                    tableBody.appendChild(divSeparator);
+                                    
+                                    // Add units for the division
+                                    divUnits.forEach(unit => addDepartmentRow(unit));
+                                }
+                                
+                                // Start new division
+                                currentDivInDept = d.division_name;
+                                divUnits = [d];
+                            } else {
+                                // Same division, add to current division
+                                divUnits.push(d);
+                            }
+                        });
+                        
+                        // Add the last division
+                        if (divUnits.length > 0) {
+                            const divSeparator = document.createElement('tr');
+                            divSeparator.className = 'division-separator';
+                            const unitCount = divUnits.length;
+                            divSeparator.innerHTML = `
+                                <td colspan="8">
+                                    <div class="division-info">
+                                        <span>${currentDivInDept}</span>
+                                        <span class="division-count">${unitCount} unit${unitCount > 1 ? 's' : ''}</span>
+                                    </div>
+                                </td>
+                            `;
+                            tableBody.appendChild(divSeparator);
+                            
+                            // Add units for the division
+                            divUnits.forEach(unit => addDepartmentRow(unit));
+                        }
+                    }
+                    
+                    // Start new department
+                    currentDepartment = dept.department_name;
+                    currentDivision = dept.division_name;
+                    deptDepartments = [dept];
+                    divDepartments = [dept];
+                    deptCount = 1;
+                    divCount = 1;
+                } else if (dept.division_name !== currentDivision) {
+                    // Same department, different division
+                    deptDepartments.push(dept);
+                    divDepartments.push(dept);
+                    deptCount++;
+                    divCount++;
+                    currentDivision = dept.division_name;
+                } else {
+                    // Same department and division
+                    deptDepartments.push(dept);
+                    divDepartments.push(dept);
+                    deptCount++;
+                    divCount++;
+                }
+                
+                // If this is the last department, add it
+                if (index === departments.length - 1) {
+                    // Add department separator
+                    const deptSeparator = document.createElement('tr');
+                    deptSeparator.className = 'department-separator';
+                    deptSeparator.innerHTML = `
+                        <td colspan="8">
+                            <div class="department-info">
+                                <span>${currentDepartment}</span>
+                                <span class="department-count">${deptCount} unit${deptCount > 1 ? 's' : ''}</span>
+                            </div>
+                        </td>
+                    `;
+                    tableBody.appendChild(deptSeparator);
+                    
+                    // Add division separators and units for the current department
+                    let currentDivInDept = null;
+                    let divUnits = [];
+                    
+                    deptDepartments.forEach(d => {
+                        if (d.division_name !== currentDivInDept) {
+                            // Add previous division separator if exists
+                            if (divUnits.length > 0) {
+                                const divSeparator = document.createElement('tr');
+                                divSeparator.className = 'division-separator';
+                                const unitCount = divUnits.length;
+                                divSeparator.innerHTML = `
+                                    <td colspan="8">
+                                        <div class="division-info">
+                                            <span>${currentDivInDept}</span>
+                                            <span class="division-count">${unitCount} unit${unitCount > 1 ? 's' : ''}</span>
+                                        </div>
+                                    </td>
+                                `;
+                                tableBody.appendChild(divSeparator);
+                                
+                                // Add units for the division
+                                divUnits.forEach(unit => addDepartmentRow(unit));
+                            }
+                            
+                            // Start new division
+                            currentDivInDept = d.division_name;
+                            divUnits = [d];
+                        } else {
+                            // Same division, add to current division
+                            divUnits.push(d);
+                        }
+                    });
+                    
+                    // Add the last division
+                    if (divUnits.length > 0) {
+                        const divSeparator = document.createElement('tr');
+                        divSeparator.className = 'division-separator';
+                        const unitCount = divUnits.length;
+                        divSeparator.innerHTML = `
+                            <td colspan="8">
+                                <div class="division-info">
+                                    <span>${currentDivInDept}</span>
+                                    <span class="division-count">${unitCount} unit${unitCount > 1 ? 's' : ''}</span>
+                                </div>
+                            </td>
+                        `;
+                        tableBody.appendChild(divSeparator);
+                        
+                        // Add units for the division
+                        divUnits.forEach(unit => addDepartmentRow(unit));
+                    }
+                }
+            });
+        }
+        
+        function renderSimpleView(departments, tableBody) {
+            departments.forEach(dept => {
+                addDepartmentRow(dept);
+            });
+        }
+        
+        function addDepartmentRow(dept) {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="id-cell">${dept.id}</td>
+                <td>
+                    <strong>${dept.unit_name}</strong>
+                </td>
+                <td>
+                    <span class="division-badge">${dept.division_name}</span>
+                </td>
+                <td>
+                    <span class="department-badge">${dept.department_name}</span>
+                </td>
+                <td>${dept.hotline_numbers || '-'}</td>
+                <td>${dept.address || '-'}</td>
+                <td>${dept.notes || '-'}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-warning btn-sm edit-btn" data-id="${dept.id}">Edit</button>
+                    <button class="btn btn-danger btn-sm delete-btn" data-id="${dept.id}">Delete</button>
+                </td>
+            `;
+            tableBody.appendChild(row);
         }
         
         function editDepartment(departmentId) {
