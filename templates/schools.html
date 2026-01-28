@@ -422,6 +422,45 @@
             color: #999;
             font-style: italic;
         }
+        
+        /* Loading overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 4000;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            text-align: center;
+        }
+        
+        .loading-content {
+            background: var(--primary);
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 400px;
+        }
+        
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -500,7 +539,7 @@
     <div class="modal" id="schoolModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title" id="modalTitle">Add New School</h3>
+                <h3 class="modalTitle">Add New School</h3>
                 <button class="close-modal" id="closeModal">&times;</button>
             </div>
             
@@ -570,6 +609,15 @@
             </p>
         </div>
     </div>
+    
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p id="loadingMessage">Reordering School IDs...</p>
+            <p id="loadingProgress">Processing: 0 of 0</p>
+        </div>
+    </div>
 
     <script>
         // Store schools globally
@@ -597,11 +645,16 @@
             const confirmReorderBtn = document.getElementById('confirmReorderBtn');
             const totalSchoolsCount = document.getElementById('totalSchoolsCount');
             
+            // Loading overlay
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingMessage = document.getElementById('loadingMessage');
+            const loadingProgress = document.getElementById('loadingProgress');
+            
             let editingSchool = null;
 
             addSchoolBtn.addEventListener('click', () => {
                 editingSchool = null;
-                modalTitle.textContent = 'Add New School';
+                document.getElementById('modalTitle').textContent = 'Add New School';
                 schoolForm.reset();
                 schoolModal.style.display = 'flex';
             });
@@ -929,50 +982,87 @@
         function reorderSchoolIds() {
             // First, get current schools sorted by ID
             const sortedSchools = [...allSchools].sort((a, b) => a.id - b.id);
+            const totalSchools = sortedSchools.length;
             
-            // Create an array of update promises
-            const updatePromises = sortedSchools.map((school, index) => {
-                const newId = index + 1; // Start from 1
+            // Show loading overlay
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingMessage = document.getElementById('loadingMessage');
+            const loadingProgress = document.getElementById('loadingProgress');
+            
+            loadingMessage.textContent = 'Reordering School IDs...';
+            loadingOverlay.style.display = 'flex';
+            
+            // Create an array to track all operations
+            const operations = [];
+            
+            // Process schools in batches to avoid overwhelming the server
+            const processBatch = async (batchIndex) => {
+                const batchSize = 5; // Process 5 schools at a time
+                const start = batchIndex * batchSize;
+                const end = Math.min(start + batchSize, totalSchools);
                 
-                // Skip if ID is already correct
-                if (school.id === newId) {
-                    return Promise.resolve();
+                if (start >= totalSchools) {
+                    // All batches processed
+                    return;
                 }
                 
-                // Create a copy of school data with new ID
-                const updatedSchool = {
-                    ...school,
-                    id: newId
-                };
+                // Update progress
+                loadingProgress.textContent = `Processing: ${start + 1} to ${end} of ${totalSchools}`;
                 
-                // Remove the id field for the update (let database handle it)
-                delete updatedSchool.id;
-                
-                // Update the school with new data (this will create a new record with new ID)
-                return fetch('/api/schools', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(updatedSchool)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.success) {
-                        throw new Error(`Failed to update school ${school.id}: ${data.error || 'Unknown error'}`);
+                // Process current batch
+                const batchPromises = sortedSchools.slice(start, end).map((school, index) => {
+                    const newId = start + index + 1; // Start from 1
+                    
+                    // Skip if ID is already correct
+                    if (school.id === newId) {
+                        return Promise.resolve();
                     }
-                    return data;
+                    
+                    // Create complete school data with ALL fields
+                    const schoolData = {
+                        name: school.name,
+                        clusterNumber: school.cluster_number,
+                        schoolNumber: school.school_number,
+                        bmoPhone: school.bmo_phone || '',
+                        principalName: school.principal_name || '',
+                        address: school.address || '',
+                        notes: school.notes || ''
+                    };
+                    
+                    // Create new school with correct ID
+                    return fetch('/api/schools', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(schoolData)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.success) {
+                            throw new Error(`Failed to create school ${school.name}: ${data.error || 'Unknown error'}`);
+                        }
+                        return data;
+                    });
                 });
-            });
+                
+                // Wait for current batch to complete
+                await Promise.all(batchPromises);
+                
+                // Process next batch
+                return processBatch(batchIndex + 1);
+            };
             
-            // Show loading message
-            alert('Reordering school IDs... This may take a moment. Please wait.');
-            
-            // Execute all updates
-            Promise.all(updatePromises)
+            // Start processing
+            processBatch(0)
                 .then(() => {
-                    // After creating new records, delete all old records
-                    const deletePromises = sortedSchools.map(school => {
+                    // All new schools created, now delete old ones
+                    loadingMessage.textContent = 'Deleting old school records...';
+                    loadingProgress.textContent = `Deleting: 0 of ${totalSchools}`;
+                    
+                    const deletePromises = sortedSchools.map((school, index) => {
+                        loadingProgress.textContent = `Deleting: ${index + 1} of ${totalSchools}`;
+                        
                         return fetch(`/api/schools?id=${school.id}`, {
                             method: 'DELETE'
                         })
@@ -988,12 +1078,21 @@
                     return Promise.all(deletePromises);
                 })
                 .then(() => {
-                    alert('School IDs have been successfully reordered! All schools now have sequential IDs from 1 to ' + sortedSchools.length + '.');
-                    loadSchools(); // Reload to show new IDs
+                    // Hide loading overlay
+                    loadingOverlay.style.display = 'none';
+                    
+                    // Show success message
+                    alert(`✅ School IDs have been successfully reordered!\n\nAll ${totalSchools} schools now have sequential IDs from 1 to ${totalSchools}.`);
+                    
+                    // Reload to show new IDs
+                    loadSchools();
                 })
                 .catch(error => {
+                    // Hide loading overlay
+                    loadingOverlay.style.display = 'none';
+                    
                     console.error('Error reordering IDs:', error);
-                    alert('Error reordering IDs: ' + error.message + '\nPlease try again or contact support.');
+                    alert(`❌ Error reordering IDs: ${error.message}\n\nPlease try again or contact support.`);
                 });
         }
     </script>
