@@ -332,30 +332,31 @@
         
         /* Cluster separator styles */
         .cluster-separator {
-            background-color: #e3f2fd !important;
-            border-top: 2px solid #4361ee !important;
-            border-bottom: 2px solid #4361ee !important;
+            background-color: #e8f4ff;
+            border-top: 2px solid #4a90e2;
+            border-bottom: 2px solid #4a90e2;
         }
         
         .cluster-separator td {
+            padding: 8px 15px;
             font-weight: bold;
-            color: var(--primary);
-            padding: 12px 15px;
+            color: #2c5282;
+            font-size: 0.9rem;
         }
         
-        .cluster-info {
+        .cluster-separator .cluster-info {
             display: flex;
             align-items: center;
             gap: 10px;
         }
         
-        .cluster-count {
-            background-color: var(--primary);
+        .cluster-separator .cluster-count {
+            background-color: #4a90e2;
             color: white;
             padding: 2px 8px;
             border-radius: 10px;
-            font-size: 0.7rem;
-            font-weight: 600;
+            font-size: 0.8rem;
+            font-weight: normal;
         }
     </style>
 </head>
@@ -398,7 +399,6 @@
             <div class="filter-group">
                 <label class="filter-label">Sort By</label>
                 <select class="filter-select" id="sortFilter">
-                    <option value="cluster-id">Cluster then ID</option>
                     <option value="id">ID (Ascending)</option>
                     <option value="name">Name (A-Z)</option>
                     <option value="cluster">Cluster Number</option>
@@ -433,7 +433,7 @@
     <div class="modal" id="schoolModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modalTitle">Add New School</h3>
+                <h3 class="modal-title" id="modalTitle">Add New School</h3>
                 <button class="close-modal" id="closeModal">&times;</button>
             </div>
             
@@ -663,11 +663,6 @@
             // Sort schools
             filteredSchools.sort((a, b) => {
                 switch(sortBy) {
-                    case 'cluster-id':
-                        // First by cluster, then by ID within cluster
-                        const clusterCompare = a.cluster_number.localeCompare(b.cluster_number);
-                        if (clusterCompare !== 0) return clusterCompare;
-                        return a.id - b.id;
                     case 'id':
                         return a.id - b.id; // Sort by ID in ascending order
                     case 'name':
@@ -705,80 +700,63 @@
             
             tableBody.innerHTML = '';
             
-            let currentCluster = null;
-            let clusterSchools = [];
-            let clusterCount = 0;
-            
-            schools.forEach((school, index) => {
-                // Check if we're starting a new cluster
-                if (school.cluster_number !== currentCluster) {
-                    // If we have schools in the previous cluster, add them
-                    if (clusterSchools.length > 0) {
-                        // Add cluster separator for the previous cluster
-                        const separatorRow = document.createElement('tr');
-                        separatorRow.className = 'cluster-separator';
-                        separatorRow.innerHTML = `
-                            <td colspan="9">
-                                <div class="cluster-info">
-                                    <span>Cluster ${currentCluster}</span>
-                                    <span class="cluster-count">${clusterCount} school${clusterCount > 1 ? 's' : ''}</span>
-                                </div>
-                            </td>
-                        `;
-                        tableBody.appendChild(separatorRow);
-                        
-                        // Add the schools from the previous cluster
-                        clusterSchools.forEach(s => addSchoolRow(s));
-                    }
-                    
-                    // Start new cluster
-                    currentCluster = school.cluster_number;
-                    clusterSchools = [school];
-                    clusterCount = 1;
-                } else {
-                    // Same cluster, add to current cluster
-                    clusterSchools.push(school);
-                    clusterCount++;
+            // Group schools by cluster
+            const schoolsByCluster = {};
+            schools.forEach(school => {
+                const cluster = school.cluster_number || 'Unknown';
+                if (!schoolsByCluster[cluster]) {
+                    schoolsByCluster[cluster] = [];
                 }
-                
-                // If this is the last school, add the current cluster
-                if (index === schools.length - 1) {
-                    // Add cluster separator
-                    const separatorRow = document.createElement('tr');
-                    separatorRow.className = 'cluster-separator';
-                    separatorRow.innerHTML = `
-                        <td colspan="9">
-                            <div class="cluster-info">
-                                <span>Cluster ${currentCluster}</span>
-                                <span class="cluster-count">${clusterCount} school${clusterCount > 1 ? 's' : ''}</span>
-                            </div>
-                        </td>
-                    `;
-                    tableBody.appendChild(separatorRow);
-                    
-                    // Add the schools from the current cluster
-                    clusterSchools.forEach(s => addSchoolRow(s));
-                }
+                schoolsByCluster[cluster].push(school);
             });
             
-            function addSchoolRow(school) {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="id-cell">${school.id}</td>
-                    <td>${school.name}</td>
-                    <td><span class="badge badge-cluster">${school.cluster_number}</span></td>
-                    <td>${school.school_number}</td>
-                    <td>${school.bmo_phone || '-'}</td>
-                    <td>${school.principal_name || '-'}</td>
-                    <td>${school.address || '-'}</td>
-                    <td>${school.notes || '-'}</td>
-                    <td class="actions-cell">
-                        <button class="btn btn-warning btn-sm edit-btn" data-id="${school.id}">Edit</button>
-                        <button class="btn btn-danger btn-sm delete-btn" data-id="${school.id}">Delete</button>
+            // Get clusters sorted
+            const clusters = Object.keys(schoolsByCluster).sort((a, b) => {
+                const numA = parseInt(a);
+                const numB = parseInt(b);
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return numA - numB;
+                }
+                return a.localeCompare(b);
+            });
+            
+            // Render each cluster group
+            clusters.forEach((cluster, clusterIndex) => {
+                const clusterSchools = schoolsByCluster[cluster];
+                
+                // Add cluster separator row
+                const separatorRow = document.createElement('tr');
+                separatorRow.className = 'cluster-separator';
+                separatorRow.innerHTML = `
+                    <td colspan="9">
+                        <div class="cluster-info">
+                            <span>CLUSTER ${cluster}</span>
+                            <span class="cluster-count">${clusterSchools.length} school${clusterSchools.length > 1 ? 's' : ''}</span>
+                        </div>
                     </td>
                 `;
-                tableBody.appendChild(row);
-            }
+                tableBody.appendChild(separatorRow);
+                
+                // Add schools for this cluster
+                clusterSchools.forEach(school => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="id-cell">${school.id}</td>
+                        <td>${school.name}</td>
+                        <td><span class="badge badge-cluster">${school.cluster_number}</span></td>
+                        <td>${school.school_number}</td>
+                        <td>${school.bmo_phone || '-'}</td>
+                        <td>${school.principal_name || '-'}</td>
+                        <td>${school.address || '-'}</td>
+                        <td>${school.notes || '-'}</td>
+                        <td class="actions-cell">
+                            <button class="btn btn-warning btn-sm edit-btn" data-id="${school.id}">Edit</button>
+                            <button class="btn btn-danger btn-sm delete-btn" data-id="${school.id}">Delete</button>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            });
             
             // Add event listeners to edit buttons
             document.querySelectorAll('.edit-btn').forEach(button => {
