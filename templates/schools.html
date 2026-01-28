@@ -329,6 +329,34 @@
             text-align: center;
             padding: 30px;
         }
+        
+        /* Cluster separator styles */
+        .cluster-separator {
+            background-color: #e3f2fd !important;
+            border-top: 2px solid #4361ee !important;
+            border-bottom: 2px solid #4361ee !important;
+        }
+        
+        .cluster-separator td {
+            font-weight: bold;
+            color: var(--primary);
+            padding: 12px 15px;
+        }
+        
+        .cluster-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .cluster-count {
+            background-color: var(--primary);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -370,6 +398,7 @@
             <div class="filter-group">
                 <label class="filter-label">Sort By</label>
                 <select class="filter-select" id="sortFilter">
+                    <option value="cluster-id">Cluster then ID</option>
                     <option value="id">ID (Ascending)</option>
                     <option value="name">Name (A-Z)</option>
                     <option value="cluster">Cluster Number</option>
@@ -404,7 +433,7 @@
     <div class="modal" id="schoolModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title" id="modalTitle">Add New School</h3>
+                <h3 class="modalTitle">Add New School</h3>
                 <button class="close-modal" id="closeModal">&times;</button>
             </div>
             
@@ -634,6 +663,11 @@
             // Sort schools
             filteredSchools.sort((a, b) => {
                 switch(sortBy) {
+                    case 'cluster-id':
+                        // First by cluster, then by ID within cluster
+                        const clusterCompare = a.cluster_number.localeCompare(b.cluster_number);
+                        if (clusterCompare !== 0) return clusterCompare;
+                        return a.id - b.id;
                     case 'id':
                         return a.id - b.id; // Sort by ID in ascending order
                     case 'name':
@@ -671,7 +705,63 @@
             
             tableBody.innerHTML = '';
             
-            schools.forEach(school => {
+            let currentCluster = null;
+            let clusterSchools = [];
+            let clusterCount = 0;
+            
+            schools.forEach((school, index) => {
+                // Check if we're starting a new cluster
+                if (school.cluster_number !== currentCluster) {
+                    // If we have schools in the previous cluster, add them
+                    if (clusterSchools.length > 0) {
+                        // Add cluster separator for the previous cluster
+                        const separatorRow = document.createElement('tr');
+                        separatorRow.className = 'cluster-separator';
+                        separatorRow.innerHTML = `
+                            <td colspan="9">
+                                <div class="cluster-info">
+                                    <span>Cluster ${currentCluster}</span>
+                                    <span class="cluster-count">${clusterCount} school${clusterCount > 1 ? 's' : ''}</span>
+                                </div>
+                            </td>
+                        `;
+                        tableBody.appendChild(separatorRow);
+                        
+                        // Add the schools from the previous cluster
+                        clusterSchools.forEach(s => addSchoolRow(s));
+                    }
+                    
+                    // Start new cluster
+                    currentCluster = school.cluster_number;
+                    clusterSchools = [school];
+                    clusterCount = 1;
+                } else {
+                    // Same cluster, add to current cluster
+                    clusterSchools.push(school);
+                    clusterCount++;
+                }
+                
+                // If this is the last school, add the current cluster
+                if (index === schools.length - 1) {
+                    // Add cluster separator
+                    const separatorRow = document.createElement('tr');
+                    separatorRow.className = 'cluster-separator';
+                    separatorRow.innerHTML = `
+                        <td colspan="9">
+                            <div class="cluster-info">
+                                <span>Cluster ${currentCluster}</span>
+                                <span class="cluster-count">${clusterCount} school${clusterCount > 1 ? 's' : ''}</span>
+                            </div>
+                        </td>
+                    `;
+                    tableBody.appendChild(separatorRow);
+                    
+                    // Add the schools from the current cluster
+                    clusterSchools.forEach(s => addSchoolRow(s));
+                }
+            });
+            
+            function addSchoolRow(school) {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td class="id-cell">${school.id}</td>
@@ -688,7 +778,7 @@
                     </td>
                 `;
                 tableBody.appendChild(row);
-            });
+            }
             
             // Add event listeners to edit buttons
             document.querySelectorAll('.edit-btn').forEach(button => {
