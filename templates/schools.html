@@ -320,6 +320,21 @@
             text-align: center;
         }
         
+        .seq-cell {
+            font-weight: bold;
+            color: #2c5282;
+            text-align: center;
+            background-color: #f8f9fa;
+            border-right: 2px solid #dee2e6;
+        }
+        
+        .db-id-cell {
+            font-size: 0.8rem;
+            color: #6c757d;
+            text-align: center;
+            font-style: italic;
+        }
+        
         .no-data-row {
             color: #999;
             font-style: italic;
@@ -359,107 +374,21 @@
             font-weight: normal;
         }
         
-        /* New button for reordering */
-        .page-actions {
+        .sequence-info {
             display: flex;
-            gap: 10px;
+            flex-direction: column;
             align-items: center;
+            gap: 2px;
         }
         
-        .btn-info {
-            background: #17a2b8;
-            color: white;
+        .sequence-number {
+            font-size: 1.1rem;
+            font-weight: bold;
         }
         
-        .btn-info:hover {
-            background: #138496;
-        }
-        
-        /* Confirmation modal styles */
-        .confirmation-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 3000;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .confirmation-content {
-            background: white;
-            border-radius: 10px;
-            width: 90%;
-            max-width: 500px;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .confirmation-title {
-            font-size: 1.3rem;
-            color: var(--dark);
-            margin-bottom: 15px;
-        }
-        
-        .confirmation-message {
-            color: var(--gray);
-            margin-bottom: 25px;
-            line-height: 1.5;
-        }
-        
-        .confirmation-actions {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-        }
-        
-        .confirmation-note {
-            margin-top: 15px;
-            font-size: 0.8rem;
-            color: #999;
-            font-style: italic;
-        }
-        
-        /* Loading overlay */
-        .loading-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 4000;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.2rem;
-            text-align: center;
-        }
-        
-        .loading-content {
-            background: var(--primary);
-            padding: 30px;
-            border-radius: 10px;
-            max-width: 400px;
-        }
-        
-        .loading-spinner {
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid white;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .db-id-label {
+            font-size: 0.7rem;
+            color: #6c757d;
         }
     </style>
 </head>
@@ -483,10 +412,7 @@
     <div class="container">
         <div class="page-header">
             <h1 class="page-title">Schools Management</h1>
-            <div class="page-actions">
-                <button class="btn btn-info" id="reorderIdsBtn">Reorder IDs</button>
-                <button class="btn btn-primary" id="addSchoolBtn">Add New School</button>
-            </div>
+            <button class="btn btn-primary" id="addSchoolBtn">Add New School</button>
         </div>
         
         <div class="filters">
@@ -505,7 +431,8 @@
             <div class="filter-group">
                 <label class="filter-label">Sort By</label>
                 <select class="filter-select" id="sortFilter">
-                    <option value="id">ID (Ascending)</option>
+                    <option value="seq">Sequence Number</option>
+                    <option value="id">Database ID</option>
                     <option value="name">Name (A-Z)</option>
                     <option value="cluster">Cluster Number</option>
                     <option value="schoolNumber">School Number</option>
@@ -517,7 +444,7 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th width="50">ID</th>
+                        <th width="80">No.</th>
                         <th>School Name</th>
                         <th>Cluster Number</th>
                         <th>School Number</th>
@@ -539,7 +466,7 @@
     <div class="modal" id="schoolModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modalTitle">Add New School</h3>
+                <h3 class="modal-title" id="modalTitle">Add New School</h3>
                 <button class="close-modal" id="closeModal">&times;</button>
             </div>
             
@@ -591,33 +518,6 @@
             </form>
         </div>
     </div>
-    
-    <!-- Reorder IDs Confirmation Modal -->
-    <div class="confirmation-modal" id="reorderConfirmationModal">
-        <div class="confirmation-content">
-            <h3 class="confirmation-title">Reorder School IDs</h3>
-            <p class="confirmation-message">
-                This will renumber all school IDs sequentially from 1 to <span id="totalSchoolsCount">0</span>.<br>
-                <strong>This action cannot be undone.</strong> Are you sure you want to continue?
-            </p>
-            <div class="confirmation-actions">
-                <button class="btn btn-secondary" id="cancelReorderBtn">Cancel</button>
-                <button class="btn btn-danger" id="confirmReorderBtn">Yes, Reorder IDs</button>
-            </div>
-            <p class="confirmation-note">
-                Note: This will not affect any utility bills linked to these schools.
-            </p>
-        </div>
-    </div>
-    
-    <!-- Loading Overlay -->
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <p id="loadingMessage">Reordering School IDs...</p>
-            <p id="loadingProgress">Processing: 0 of 0</p>
-        </div>
-    </div>
 
     <script>
         // Store schools globally
@@ -638,23 +538,11 @@
             const modalTitle = document.getElementById('modalTitle');
             const schoolIdField = document.getElementById('schoolId');
             
-            // Reorder IDs functionality
-            const reorderIdsBtn = document.getElementById('reorderIdsBtn');
-            const reorderConfirmationModal = document.getElementById('reorderConfirmationModal');
-            const cancelReorderBtn = document.getElementById('cancelReorderBtn');
-            const confirmReorderBtn = document.getElementById('confirmReorderBtn');
-            const totalSchoolsCount = document.getElementById('totalSchoolsCount');
-            
-            // Loading overlay
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            const loadingMessage = document.getElementById('loadingMessage');
-            const loadingProgress = document.getElementById('loadingProgress');
-            
             let editingSchool = null;
 
             addSchoolBtn.addEventListener('click', () => {
                 editingSchool = null;
-                document.getElementById('modalTitle').textContent = 'Add New School';
+                modalTitle.textContent = 'Add New School';
                 schoolForm.reset();
                 schoolModal.style.display = 'flex';
             });
@@ -665,21 +553,6 @@
             
             cancelBtn.addEventListener('click', () => {
                 schoolModal.style.display = 'none';
-            });
-            
-            // Reorder IDs button click
-            reorderIdsBtn.addEventListener('click', () => {
-                totalSchoolsCount.textContent = allSchools.length;
-                reorderConfirmationModal.style.display = 'flex';
-            });
-            
-            cancelReorderBtn.addEventListener('click', () => {
-                reorderConfirmationModal.style.display = 'none';
-            });
-            
-            confirmReorderBtn.addEventListener('click', () => {
-                reorderConfirmationModal.style.display = 'none';
-                reorderSchoolIds();
             });
             
             // Form submission
@@ -823,8 +696,9 @@
             // Sort schools
             filteredSchools.sort((a, b) => {
                 switch(sortBy) {
+                    case 'seq':
                     case 'id':
-                        return a.id - b.id; // Sort by ID in ascending order
+                        return a.id - b.id; // Sort by database ID
                     case 'name':
                         return a.name.localeCompare(b.name);
                     case 'cluster':
@@ -837,7 +711,7 @@
                     case 'schoolNumber':
                         return a.school_number.localeCompare(b.school_number);
                     default:
-                        return a.id - b.id; // Default to ID sort
+                        return a.id - b.id; // Default to database ID sort
                 }
             });
             
@@ -880,6 +754,9 @@
                 return a.localeCompare(b);
             });
             
+            // Track sequence number across all clusters
+            let sequenceNumber = 1;
+            
             // Render each cluster group
             clusters.forEach((cluster, clusterIndex) => {
                 const clusterSchools = schoolsByCluster[cluster];
@@ -901,7 +778,12 @@
                 clusterSchools.forEach(school => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td class="id-cell">${school.id}</td>
+                        <td class="seq-cell">
+                            <div class="sequence-info">
+                                <span class="sequence-number">${sequenceNumber}</span>
+                                <span class="db-id-label">ID: ${school.id}</span>
+                            </div>
+                        </td>
                         <td>${school.name}</td>
                         <td><span class="badge badge-cluster">${school.cluster_number}</span></td>
                         <td>${school.school_number}</td>
@@ -915,6 +797,7 @@
                         </td>
                     `;
                     tableBody.appendChild(row);
+                    sequenceNumber++;
                 });
             });
             
@@ -977,123 +860,6 @@
                     alert('Error deleting school. Please try again.');
                 });
             }
-        }
-        
-        function reorderSchoolIds() {
-            // First, get current schools sorted by ID
-            const sortedSchools = [...allSchools].sort((a, b) => a.id - b.id);
-            const totalSchools = sortedSchools.length;
-            
-            // Show loading overlay
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            const loadingMessage = document.getElementById('loadingMessage');
-            const loadingProgress = document.getElementById('loadingProgress');
-            
-            loadingMessage.textContent = 'Reordering School IDs...';
-            loadingOverlay.style.display = 'flex';
-            
-            // Create an array to track all operations
-            const operations = [];
-            
-            // Process schools in batches to avoid overwhelming the server
-            const processBatch = async (batchIndex) => {
-                const batchSize = 5; // Process 5 schools at a time
-                const start = batchIndex * batchSize;
-                const end = Math.min(start + batchSize, totalSchools);
-                
-                if (start >= totalSchools) {
-                    // All batches processed
-                    return;
-                }
-                
-                // Update progress
-                loadingProgress.textContent = `Processing: ${start + 1} to ${end} of ${totalSchools}`;
-                
-                // Process current batch
-                const batchPromises = sortedSchools.slice(start, end).map((school, index) => {
-                    const newId = start + index + 1; // Start from 1
-                    
-                    // Skip if ID is already correct
-                    if (school.id === newId) {
-                        return Promise.resolve();
-                    }
-                    
-                    // Create complete school data with ALL fields
-                    const schoolData = {
-                        name: school.name,
-                        clusterNumber: school.cluster_number,
-                        schoolNumber: school.school_number,
-                        bmoPhone: school.bmo_phone || '',
-                        principalName: school.principal_name || '',
-                        address: school.address || '',
-                        notes: school.notes || ''
-                    };
-                    
-                    // Create new school with correct ID
-                    return fetch('/api/schools', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(schoolData)
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (!data.success) {
-                            throw new Error(`Failed to create school ${school.name}: ${data.error || 'Unknown error'}`);
-                        }
-                        return data;
-                    });
-                });
-                
-                // Wait for current batch to complete
-                await Promise.all(batchPromises);
-                
-                // Process next batch
-                return processBatch(batchIndex + 1);
-            };
-            
-            // Start processing
-            processBatch(0)
-                .then(() => {
-                    // All new schools created, now delete old ones
-                    loadingMessage.textContent = 'Deleting old school records...';
-                    loadingProgress.textContent = `Deleting: 0 of ${totalSchools}`;
-                    
-                    const deletePromises = sortedSchools.map((school, index) => {
-                        loadingProgress.textContent = `Deleting: ${index + 1} of ${totalSchools}`;
-                        
-                        return fetch(`/api/schools?id=${school.id}`, {
-                            method: 'DELETE'
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (!data.success) {
-                                console.warn(`Failed to delete old school ${school.id}: ${data.error || 'Unknown error'}`);
-                            }
-                            return data;
-                        });
-                    });
-                    
-                    return Promise.all(deletePromises);
-                })
-                .then(() => {
-                    // Hide loading overlay
-                    loadingOverlay.style.display = 'none';
-                    
-                    // Show success message
-                    alert(`✅ School IDs have been successfully reordered!\n\nAll ${totalSchools} schools now have sequential IDs from 1 to ${totalSchools}.`);
-                    
-                    // Reload to show new IDs
-                    loadSchools();
-                })
-                .catch(error => {
-                    // Hide loading overlay
-                    loadingOverlay.style.display = 'none';
-                    
-                    console.error('Error reordering IDs:', error);
-                    alert(`❌ Error reordering IDs: ${error.message}\n\nPlease try again or contact support.`);
-                });
         }
     </script>
 </body>
