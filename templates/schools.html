@@ -358,6 +358,70 @@
             font-size: 0.8rem;
             font-weight: normal;
         }
+        
+        /* New button for reordering */
+        .page-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .btn-info:hover {
+            background: #138496;
+        }
+        
+        /* Confirmation modal styles */
+        .confirmation-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .confirmation-content {
+            background: white;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .confirmation-title {
+            font-size: 1.3rem;
+            color: var(--dark);
+            margin-bottom: 15px;
+        }
+        
+        .confirmation-message {
+            color: var(--gray);
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+        
+        .confirmation-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .confirmation-note {
+            margin-top: 15px;
+            font-size: 0.8rem;
+            color: #999;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -380,7 +444,10 @@
     <div class="container">
         <div class="page-header">
             <h1 class="page-title">Schools Management</h1>
-            <button class="btn btn-primary" id="addSchoolBtn">Add New School</button>
+            <div class="page-actions">
+                <button class="btn btn-info" id="reorderIdsBtn">Reorder IDs</button>
+                <button class="btn btn-primary" id="addSchoolBtn">Add New School</button>
+            </div>
         </div>
         
         <div class="filters">
@@ -485,6 +552,24 @@
             </form>
         </div>
     </div>
+    
+    <!-- Reorder IDs Confirmation Modal -->
+    <div class="confirmation-modal" id="reorderConfirmationModal">
+        <div class="confirmation-content">
+            <h3 class="confirmation-title">Reorder School IDs</h3>
+            <p class="confirmation-message">
+                This will renumber all school IDs sequentially from 1 to <span id="totalSchoolsCount">0</span>.<br>
+                <strong>This action cannot be undone.</strong> Are you sure you want to continue?
+            </p>
+            <div class="confirmation-actions">
+                <button class="btn btn-secondary" id="cancelReorderBtn">Cancel</button>
+                <button class="btn btn-danger" id="confirmReorderBtn">Yes, Reorder IDs</button>
+            </div>
+            <p class="confirmation-note">
+                Note: This will not affect any utility bills linked to these schools.
+            </p>
+        </div>
+    </div>
 
     <script>
         // Store schools globally
@@ -505,6 +590,13 @@
             const modalTitle = document.getElementById('modalTitle');
             const schoolIdField = document.getElementById('schoolId');
             
+            // Reorder IDs functionality
+            const reorderIdsBtn = document.getElementById('reorderIdsBtn');
+            const reorderConfirmationModal = document.getElementById('reorderConfirmationModal');
+            const cancelReorderBtn = document.getElementById('cancelReorderBtn');
+            const confirmReorderBtn = document.getElementById('confirmReorderBtn');
+            const totalSchoolsCount = document.getElementById('totalSchoolsCount');
+            
             let editingSchool = null;
 
             addSchoolBtn.addEventListener('click', () => {
@@ -520,6 +612,21 @@
             
             cancelBtn.addEventListener('click', () => {
                 schoolModal.style.display = 'none';
+            });
+            
+            // Reorder IDs button click
+            reorderIdsBtn.addEventListener('click', () => {
+                totalSchoolsCount.textContent = allSchools.length;
+                reorderConfirmationModal.style.display = 'flex';
+            });
+            
+            cancelReorderBtn.addEventListener('click', () => {
+                reorderConfirmationModal.style.display = 'none';
+            });
+            
+            confirmReorderBtn.addEventListener('click', () => {
+                reorderConfirmationModal.style.display = 'none';
+                reorderSchoolIds();
             });
             
             // Form submission
@@ -817,6 +924,77 @@
                     alert('Error deleting school. Please try again.');
                 });
             }
+        }
+        
+        function reorderSchoolIds() {
+            // First, get current schools sorted by ID
+            const sortedSchools = [...allSchools].sort((a, b) => a.id - b.id);
+            
+            // Create an array of update promises
+            const updatePromises = sortedSchools.map((school, index) => {
+                const newId = index + 1; // Start from 1
+                
+                // Skip if ID is already correct
+                if (school.id === newId) {
+                    return Promise.resolve();
+                }
+                
+                // Create a copy of school data with new ID
+                const updatedSchool = {
+                    ...school,
+                    id: newId
+                };
+                
+                // Remove the id field for the update (let database handle it)
+                delete updatedSchool.id;
+                
+                // Update the school with new data (this will create a new record with new ID)
+                return fetch('/api/schools', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updatedSchool)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        throw new Error(`Failed to update school ${school.id}: ${data.error || 'Unknown error'}`);
+                    }
+                    return data;
+                });
+            });
+            
+            // Show loading message
+            alert('Reordering school IDs... This may take a moment. Please wait.');
+            
+            // Execute all updates
+            Promise.all(updatePromises)
+                .then(() => {
+                    // After creating new records, delete all old records
+                    const deletePromises = sortedSchools.map(school => {
+                        return fetch(`/api/schools?id=${school.id}`, {
+                            method: 'DELETE'
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!data.success) {
+                                console.warn(`Failed to delete old school ${school.id}: ${data.error || 'Unknown error'}`);
+                            }
+                            return data;
+                        });
+                    });
+                    
+                    return Promise.all(deletePromises);
+                })
+                .then(() => {
+                    alert('School IDs have been successfully reordered! All schools now have sequential IDs from 1 to ' + sortedSchools.length + '.');
+                    loadSchools(); // Reload to show new IDs
+                })
+                .catch(error => {
+                    console.error('Error reordering IDs:', error);
+                    alert('Error reordering IDs: ' + error.message + '\nPlease try again or contact support.');
+                });
         }
     </script>
 </body>
