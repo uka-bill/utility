@@ -320,6 +320,21 @@
             text-align: center;
         }
         
+        .seq-cell {
+            font-weight: bold;
+            color: #2c5282;
+            text-align: center;
+            background-color: #f8f9fa;
+            border-right: 2px solid #dee2e6;
+        }
+        
+        .db-id-cell {
+            font-size: 0.8rem;
+            color: #6c757d;
+            text-align: center;
+            font-style: italic;
+        }
+        
         .no-data-row {
             color: #999;
             font-style: italic;
@@ -376,6 +391,23 @@
             font-size: 0.8rem;
             font-weight: normal;
         }
+        
+        .sequence-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+        
+        .sequence-number {
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+        
+        .db-id-label {
+            font-size: 0.7rem;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
@@ -424,7 +456,8 @@
             <div class="filter-group">
                 <label class="filter-label">Sort By</label>
                 <select class="filter-select" id="sortFilter">
-                    <option value="id">ID (Ascending)</option>
+                    <option value="seq">Sequence Number</option>
+                    <option value="id">Database ID</option>
                     <option value="unitName">Unit Name (A-Z)</option>
                     <option value="divisionName">Division Name</option>
                     <option value="departmentName">Department Name</option>
@@ -436,7 +469,7 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th width="50">ID</th>
+                        <th width="80">No.</th>
                         <th>Unit Name</th>
                         <th>Division Name</th>
                         <th>Department Name</th>
@@ -696,8 +729,9 @@
             // Sort departments
             filteredDepartments.sort((a, b) => {
                 switch(sortBy) {
+                    case 'seq':
                     case 'id':
-                        return a.id - b.id; // Sort by ID in ascending order
+                        return a.id - b.id; // Sort by database ID
                     case 'unitName':
                         return (a.unit_name || '').localeCompare(b.unit_name || '');
                     case 'divisionName':
@@ -705,7 +739,7 @@
                     case 'departmentName':
                         return (a.department_name || '').localeCompare(b.department_name || '');
                     default:
-                        return a.id - b.id; // Default to ID sort
+                        return a.id - b.id; // Default to database ID sort
                 }
             });
             
@@ -741,6 +775,9 @@
             // Get department names sorted alphabetically
             const deptNames = Object.keys(departmentsByDept).sort((a, b) => a.localeCompare(b));
             
+            // Track sequence number across all departments
+            let sequenceNumber = 1;
+            
             // Render each department group
             deptNames.forEach((deptName, deptIndex) => {
                 const deptUnits = departmentsByDept[deptName];
@@ -762,7 +799,12 @@
                 deptUnits.forEach(dept => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td class="id-cell">${dept.id}</td>
+                        <td class="seq-cell">
+                            <div class="sequence-info">
+                                <span class="sequence-number">${sequenceNumber}</span>
+                                <span class="db-id-label">ID: ${dept.id}</span>
+                            </div>
+                        </td>
                         <td>
                             <strong>${dept.unit_name}</strong>
                         </td>
@@ -781,6 +823,7 @@
                         </td>
                     `;
                     tableBody.appendChild(row);
+                    sequenceNumber++;
                 });
             });
             
