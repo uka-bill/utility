@@ -490,7 +490,7 @@
     <div class="modal" id="departmentModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title" id="modalTitle">Add New Department</h3>
+                <h3 class="modalTitle">Add New Department</h3>
                 <button class="close-modal" id="closeModal">&times;</button>
             </div>
             
@@ -552,7 +552,7 @@
             const closeModal = document.getElementById('closeModal');
             const cancelBtn = document.getElementById('cancelBtn');
             const departmentForm = document.getElementById('departmentForm');
-            const modalTitle = document.getElementById('modalTitle');
+            const modalTitle = document.querySelector('#departmentModal .modalTitle');
             const departmentIdField = document.getElementById('departmentId');
             
             let editingDepartment = null;
@@ -572,8 +572,8 @@
                 departmentModal.style.display = 'none';
             });
             
-            // Form submission
-            departmentForm.addEventListener('submit', (e) => {
+            // Form submission - FIXED VERSION
+            departmentForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
                 const departmentData = {
@@ -589,19 +589,22 @@
                 let method = 'POST';
                 
                 if (editingDepartment) {
-                    departmentData.id = editingDepartment.id;
+                    url = `/api/departments/${editingDepartment.id}`;
                     method = 'PUT';
+                    departmentData.id = editingDepartment.id;
                 }
                 
-                fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(departmentData)
-                })
-                .then(response => response.json())
-                .then(data => {
+                try {
+                    const response = await fetch(url, {
+                        method: method,
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(departmentData)
+                    });
+                    
+                    const data = await response.json();
+                    
                     if (data.success) {
                         alert(data.message);
                         departmentModal.style.display = 'none';
@@ -610,11 +613,10 @@
                     } else {
                         alert('Error: ' + (data.error || 'Unknown error'));
                     }
-                })
-                .catch(error => {
+                } catch (error) {
                     console.error('Error:', error);
                     alert('Error saving department. Please try again.');
-                });
+                }
             });
             
             // Filter event listeners
@@ -835,7 +837,7 @@
                 });
             });
             
-            // Add event listeners to delete buttons
+            // Add event listeners to delete buttons - FIXED VERSION
             document.querySelectorAll('.delete-btn').forEach(button => {
                 button.addEventListener('click', function() {
                     const departmentId = this.getAttribute('data-id');
@@ -854,7 +856,7 @@
             }
             
             editingDepartment = department;
-            document.getElementById('modalTitle').textContent = 'Edit Department';
+            document.querySelector('#departmentModal .modalTitle').textContent = 'Edit Department';
             document.getElementById('departmentId').value = department.id;
             document.getElementById('unitName').value = department.unit_name || '';
             document.getElementById('divisionName').value = department.division_name || '';
@@ -866,24 +868,25 @@
             document.getElementById('departmentModal').style.display = 'flex';
         }
         
-        function deleteDepartment(departmentId) {
+        async function deleteDepartment(departmentId) {
             if (confirm('Are you sure you want to delete this department? This action cannot be undone.')) {
-                fetch(`/api/departments?id=${departmentId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(data => {
+                try {
+                    const response = await fetch(`/api/departments/${departmentId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const data = await response.json();
+                    
                     if (data.success) {
                         alert(data.message);
                         loadDepartments();
                     } else {
                         alert('Error: ' + (data.error || 'Failed to delete department'));
                     }
-                })
-                .catch(error => {
+                } catch (error) {
                     console.error('Error:', error);
                     alert('Error deleting department. Please try again.');
-                });
+                }
             }
         }
     </script>
