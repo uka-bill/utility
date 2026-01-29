@@ -1,3 +1,4 @@
+schools.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -448,8 +449,8 @@
                         <th>School Name</th>
                         <th>Cluster Number</th>
                         <th>School Number</th>
+                        <th>BMO Name</th>
                         <th>BMO Phone</th>
-                        <th>Principal Name</th>
                         <th>Address</th>
                         <th>Notes</th>
                         <th>Actions</th>
@@ -491,13 +492,13 @@
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">BMO Phone</label>
-                        <input type="text" class="form-control" id="bmoPhone">
+                        <label class="form-label">BMO Name</label>
+                        <input type="text" class="form-control" id="bmoName">
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label">Principal Name</label>
-                        <input type="text" class="form-control" id="principalName">
+                        <label class="form-label">BMO Phone Number</label>
+                        <input type="text" class="form-control" id="bmoPhone">
                     </div>
                 </div>
                 
@@ -555,16 +556,16 @@
                 schoolModal.style.display = 'none';
             });
             
-            // Form submission
-            schoolForm.addEventListener('submit', (e) => {
+            // Form submission - FIXED VERSION
+            schoolForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
                 const schoolData = {
                     name: document.getElementById('schoolName').value,
                     clusterNumber: document.getElementById('clusterNumber').value,
                     schoolNumber: document.getElementById('schoolNumber').value,
+                    bmoName: document.getElementById('bmoName').value,
                     bmoPhone: document.getElementById('bmoPhone').value,
-                    principalName: document.getElementById('principalName').value,
                     address: document.getElementById('address').value,
                     notes: document.getElementById('notes').value
                 };
@@ -573,19 +574,22 @@
                 let method = 'POST';
                 
                 if (editingSchool) {
-                    schoolData.id = editingSchool.id;
+                    url = `/api/schools/${editingSchool.id}`;
                     method = 'PUT';
+                    schoolData.id = editingSchool.id;
                 }
                 
-                fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(schoolData)
-                })
-                .then(response => response.json())
-                .then(data => {
+                try {
+                    const response = await fetch(url, {
+                        method: method,
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(schoolData)
+                    });
+                    
+                    const data = await response.json();
+                    
                     if (data.success) {
                         alert(data.message);
                         schoolModal.style.display = 'none';
@@ -594,11 +598,10 @@
                     } else {
                         alert('Error: ' + (data.error || 'Unknown error'));
                     }
-                })
-                .catch(error => {
+                } catch (error) {
                     console.error('Error:', error);
                     alert('Error saving school. Please try again.');
-                });
+                }
             });
             
             // Filter event listeners
@@ -683,7 +686,8 @@
                     school.name.toLowerCase().includes(searchTerm) ||
                     school.cluster_number.toLowerCase().includes(searchTerm) ||
                     school.school_number.toLowerCase().includes(searchTerm) ||
-                    (school.principal_name && school.principal_name.toLowerCase().includes(searchTerm)) ||
+                    (school.bmo_name && school.bmo_name.toLowerCase().includes(searchTerm)) ||
+                    (school.bmo_phone && school.bmo_phone.toLowerCase().includes(searchTerm)) ||
                     (school.address && school.address.toLowerCase().includes(searchTerm))
                 );
             }
@@ -787,8 +791,8 @@
                         <td>${school.name}</td>
                         <td><span class="badge badge-cluster">${school.cluster_number}</span></td>
                         <td>${school.school_number}</td>
+                        <td>${school.bmo_name || '-'}</td>
                         <td>${school.bmo_phone || '-'}</td>
-                        <td>${school.principal_name || '-'}</td>
                         <td>${school.address || '-'}</td>
                         <td>${school.notes || '-'}</td>
                         <td class="actions-cell">
@@ -809,7 +813,7 @@
                 });
             });
             
-            // Add event listeners to delete buttons
+            // Add event listeners to delete buttons - FIXED VERSION
             document.querySelectorAll('.delete-btn').forEach(button => {
                 button.addEventListener('click', function() {
                     const schoolId = this.getAttribute('data-id');
@@ -833,32 +837,33 @@
             document.getElementById('schoolName').value = school.name;
             document.getElementById('clusterNumber').value = school.cluster_number;
             document.getElementById('schoolNumber').value = school.school_number;
+            document.getElementById('bmoName').value = school.bmo_name || '';
             document.getElementById('bmoPhone').value = school.bmo_phone || '';
-            document.getElementById('principalName').value = school.principal_name || '';
             document.getElementById('address').value = school.address || '';
             document.getElementById('notes').value = school.notes || '';
             
             document.getElementById('schoolModal').style.display = 'flex';
         }
         
-        function deleteSchool(schoolId) {
+        async function deleteSchool(schoolId) {
             if (confirm('Are you sure you want to delete this school? This action cannot be undone.')) {
-                fetch(`/api/schools?id=${schoolId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(data => {
+                try {
+                    const response = await fetch(`/api/schools/${schoolId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const data = await response.json();
+                    
                     if (data.success) {
                         alert(data.message);
                         loadSchools();
                     } else {
                         alert('Error: ' + (data.error || 'Failed to delete school'));
                     }
-                })
-                .catch(error => {
+                } catch (error) {
                     console.error('Error:', error);
                     alert('Error deleting school. Please try again.');
-                });
+                }
             }
         }
     </script>
