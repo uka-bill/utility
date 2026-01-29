@@ -865,8 +865,8 @@ def create_school():
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber'),
             "school_number": data.get('schoolNumber'),
-            "bmo_name": data.get('bmoName', ''),  # Changed from bmo_phone to bmo_name
-            "bmo_phone": data.get('bmoPhone', ''),  # New field for phone
+            "bmo_name": data.get('bmoName', ''),
+            "bmo_phone": data.get('bmoPhone', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
             "created_at": datetime.now().isoformat()
@@ -894,7 +894,7 @@ def create_school():
         print(traceback.format_exc())
         return jsonify({'success': False, 'error': f'Failed to create school: {str(e)}'}), 500
 
-@app.route('/api/schools/<int:school_id>', methods=['PUT'])  # FIXED: Changed to proper PUT endpoint
+@app.route('/api/schools/<int:school_id>', methods=['PUT'])
 def update_school(school_id):
     """Update a school - FIXED VERSION"""
     try:
@@ -910,8 +910,8 @@ def update_school(school_id):
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber', ''),
             "school_number": data.get('schoolNumber', ''),
-            "bmo_name": data.get('bmoName', ''),  # Changed from bmo_phone to bmo_name
-            "bmo_phone": data.get('bmoPhone', ''),  # New field for phone
+            "bmo_name": data.get('bmoName', ''),
+            "bmo_phone": data.get('bmoPhone', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
             "updated_at": datetime.now().isoformat()
@@ -939,9 +939,9 @@ def update_school(school_id):
         print(traceback.format_exc())
         return jsonify({'success': False, 'error': f'Failed to update school: {str(e)}'}), 500
 
-@app.route('/api/schools/<int:school_id>', methods=['DELETE'])  # FIXED: Changed to proper DELETE endpoint
+@app.route('/api/schools/<int:school_id>', methods=['DELETE'])
 def delete_school(school_id):
-    """Delete a school - FIXED VERSION"""
+    """Delete a school"""
     try:
         print(f"🏫 DELETE /api/schools/{school_id} called")
         
@@ -1064,7 +1064,7 @@ def create_department():
             'error': f'Failed to create department: {str(e)}'
         }), 500
         
-@app.route('/api/departments/<int:department_id>', methods=['PUT'])  # FIXED: Changed to proper PUT endpoint
+@app.route('/api/departments/<int:department_id>', methods=['PUT'])
 def update_department(department_id):
     """Update a department - FIXED VERSION"""
     try:
@@ -1115,9 +1115,9 @@ def update_department(department_id):
             'error': f'Failed to update department: {str(e)}'
         }), 500
 
-@app.route('/api/departments/<int:department_id>', methods=['DELETE'])  # FIXED: Changed to proper DELETE endpoint
+@app.route('/api/departments/<int:department_id>', methods=['DELETE'])
 def delete_department(department_id):
-    """Delete a department - FIXED VERSION"""
+    """Delete a department"""
     try:
         print(f"🏢 DELETE /api/departments/{department_id} called")
         
@@ -1933,4 +1933,3 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
-
