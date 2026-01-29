@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
 import os
 from supabase import create_client, Client
@@ -865,8 +866,8 @@ def create_school():
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber'),
             "school_number": data.get('schoolNumber'),
-            "bmo_phone": data.get('bmoPhone', ''),
-            "principal_name": data.get('principalName', ''),
+            "bmo_name": data.get('bmoName', ''),  # Changed from bmo_phone to bmo_name
+            "bmo_phone": data.get('bmoPhone', ''),  # New field for phone
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
             "created_at": datetime.now().isoformat()
@@ -894,12 +895,14 @@ def create_school():
         print(traceback.format_exc())
         return jsonify({'success': False, 'error': f'Failed to create school: {str(e)}'}), 500
 
-@app.route('/api/schools', methods=['PUT'])
-def update_school():
-    """Update a school"""
+@app.route('/api/schools/<int:school_id>', methods=['PUT'])  # FIXED: Changed to proper PUT endpoint
+def update_school(school_id):
+    """Update a school - FIXED VERSION"""
     try:
         data = request.get_json()
-        school_id = data.get('id')
+        
+        print(f"🏫 PUT /api/schools/{school_id} called")
+        print(f"🏫 Update data: {data}")
         
         if not school_id:
             return jsonify({'success': False, 'error': 'School ID is required'}), 400
@@ -908,8 +911,8 @@ def update_school():
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber', ''),
             "school_number": data.get('schoolNumber', ''),
-            "bmo_phone": data.get('bmoPhone', ''),
-            "principal_name": data.get('principalName', ''),
+            "bmo_name": data.get('bmoName', ''),  # Changed from bmo_phone to bmo_name
+            "bmo_phone": data.get('bmoPhone', ''),  # New field for phone
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
             "updated_at": datetime.now().isoformat()
@@ -922,23 +925,27 @@ def update_school():
         print(f"🏫 Supabase update response: {response}")
         
         if hasattr(response, 'data') and response.data:
+            print(f"✅ School updated successfully: {response.data[0]}")
             return jsonify({
                 'success': True,
                 'message': 'School updated successfully',
                 'school': response.data[0]
             })
         else:
+            print("❌ School update failed - no data returned")
             return jsonify({'success': False, 'error': 'Failed to update school'}), 500
         
     except Exception as e:
         print(f"❌ Update school error: {e}")
+        print(traceback.format_exc())
         return jsonify({'success': False, 'error': f'Failed to update school: {str(e)}'}), 500
 
-@app.route('/api/schools', methods=['DELETE'])
-def delete_school():
-    """Delete a school"""
+@app.route('/api/schools/<int:school_id>', methods=['DELETE'])  # FIXED: Changed to proper DELETE endpoint
+def delete_school(school_id):
+    """Delete a school - FIXED VERSION"""
     try:
-        school_id = request.args.get('id')
+        print(f"🏫 DELETE /api/schools/{school_id} called")
+        
         if not school_id:
             return jsonify({'success': False, 'error': 'School ID is required'}), 400
         
@@ -953,12 +960,16 @@ def delete_school():
         
         response = supabase.table("schools").delete().eq("id", school_id).execute()
         
+        print(f"🏫 Delete response: {response}")
+        
         if hasattr(response, 'data') and response.data:
+            print(f"✅ School deleted successfully")
             return jsonify({
                 'success': True,
                 'message': 'School deleted successfully'
             })
         else:
+            print("❌ School delete failed")
             return jsonify({
                 'success': False, 
                 'error': 'Failed to delete school'
@@ -966,6 +977,7 @@ def delete_school():
         
     except Exception as e:
         print(f"❌ Delete school error: {e}")
+        print(traceback.format_exc())
         return jsonify({
             'success': False, 
             'error': f'Failed to delete school: {str(e)}'
@@ -1053,12 +1065,14 @@ def create_department():
             'error': f'Failed to create department: {str(e)}'
         }), 500
         
-@app.route('/api/departments', methods=['PUT'])
-def update_department():
-    """Update a department"""
+@app.route('/api/departments/<int:department_id>', methods=['PUT'])  # FIXED: Changed to proper PUT endpoint
+def update_department(department_id):
+    """Update a department - FIXED VERSION"""
     try:
         data = request.get_json()
-        department_id = data.get('id')
+        
+        print(f"🏢 PUT /api/departments/{department_id} called")
+        print(f"🏢 Update data: {data}")
         
         if not department_id:
             return jsonify({'success': False, 'error': 'Department ID is required'}), 400
@@ -1081,12 +1095,14 @@ def update_department():
         print(f"🏢 Supabase update response: {response}")
         
         if hasattr(response, 'data') and response.data:
+            print(f"✅ Department updated successfully: {response.data[0]}")
             return jsonify({
                 'success': True,
                 'message': 'Department updated successfully',
                 'department': response.data[0]
             })
         else:
+            print("❌ Department update failed - no data returned")
             return jsonify({
                 'success': False, 
                 'error': 'Failed to update department - no data returned'
@@ -1094,27 +1110,33 @@ def update_department():
         
     except Exception as e:
         print(f"❌ Update department error: {e}")
+        print(traceback.format_exc())
         return jsonify({
             'success': False, 
             'error': f'Failed to update department: {str(e)}'
         }), 500
 
-@app.route('/api/departments', methods=['DELETE'])
-def delete_department():
-    """Delete a department"""
+@app.route('/api/departments/<int:department_id>', methods=['DELETE'])  # FIXED: Changed to proper DELETE endpoint
+def delete_department(department_id):
+    """Delete a department - FIXED VERSION"""
     try:
-        department_id = request.args.get('id')
+        print(f"🏢 DELETE /api/departments/{department_id} called")
+        
         if not department_id:
             return jsonify({'success': False, 'error': 'Department ID is required'}), 400
         
         response = supabase.table("departments").delete().eq("id", department_id).execute()
         
+        print(f"🏢 Delete response: {response}")
+        
         if hasattr(response, 'data') and response.data:
+            print(f"✅ Department deleted successfully")
             return jsonify({
                 'success': True,
                 'message': 'Department deleted successfully'
             })
         else:
+            print("❌ Department delete failed")
             return jsonify({
                 'success': False, 
                 'error': 'Failed to delete department'
@@ -1122,6 +1144,7 @@ def delete_department():
         
     except Exception as e:
         print(f"❌ Delete department error: {e}")
+        print(traceback.format_exc())
         return jsonify({
             'success': False, 
             'error': f'Failed to delete department: {str(e)}'
@@ -1252,12 +1275,11 @@ def create_utility_bill():
         print(traceback.format_exc())
         return jsonify({'error': 'Failed to create utility bill'}), 500
 
-@app.route('/api/utility-bills', methods=['PUT'])
-def update_utility_bill():
+@app.route('/api/utility-bills/<int:bill_id>', methods=['PUT'])
+def update_utility_bill(bill_id):
     """Update a utility bill"""
     try:
         data = request.get_json()
-        bill_id = data.get('id')
         
         # Get entity name
         entity_name = ""
@@ -1308,11 +1330,10 @@ def update_utility_bill():
         print(f"❌ Update utility bill error: {e}")
         return jsonify({'error': 'Failed to update utility bill'}), 500
 
-@app.route('/api/utility-bills', methods=['DELETE'])
-def delete_utility_bill():
+@app.route('/api/utility-bills/<int:bill_id>', methods=['DELETE'])
+def delete_utility_bill(bill_id):
     """Delete a utility bill"""
     try:
-        bill_id = request.args.get('id')
         response = supabase.table("utility_bills").delete().eq("id", bill_id).execute()
         if response.data:
             return jsonify({'message': 'Utility bill deleted successfully'})
