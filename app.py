@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
 import os
 from supabase import create_client, Client
@@ -237,7 +238,8 @@ def update_financial_year(fy_id):
         if data.get('telephoneAllocated') is not None:
             financial_year_data["telephone_allocated"] = float(data.get('telephoneAllocated', 10000))
         
-        financial_year_data["updated_at"] = datetime.now().isoformat()
+        # Don't include updated_at to avoid errors
+        # financial_year_data["updated_at"] = datetime.now().isoformat()
         
         print(f"📅 Final update data: {financial_year_data}")
         
@@ -896,7 +898,7 @@ def create_school():
 
 @app.route('/api/schools/<int:school_id>', methods=['PUT'])
 def update_school(school_id):
-    """Update a school - FIXED VERSION"""
+    """Update a school - FIXED VERSION without updated_at"""
     try:
         data = request.get_json()
         
@@ -913,8 +915,8 @@ def update_school(school_id):
             "bmo_name": data.get('bmoName', ''),
             "bmo_phone": data.get('bmoPhone', ''),
             "address": data.get('address', ''),
-            "notes": data.get('notes', ''),
-            "updated_at": datetime.now().isoformat()
+            "notes": data.get('notes', '')
+            # Removed updated_at to avoid errors
         }
         
         print(f"🏫 Updating school {school_id} with data: {school_data}")
@@ -1066,7 +1068,7 @@ def create_department():
         
 @app.route('/api/departments/<int:department_id>', methods=['PUT'])
 def update_department(department_id):
-    """Update a department - FIXED VERSION"""
+    """Update a department - FIXED VERSION without updated_at"""
     try:
         data = request.get_json()
         
@@ -1083,8 +1085,8 @@ def update_department(department_id):
             "department_name": data.get('departmentName', ''),
             "hotline_numbers": data.get('hotlineNumbers', ''),
             "address": data.get('address', ''),
-            "notes": data.get('notes', ''),
-            "updated_at": datetime.now().isoformat()
+            "notes": data.get('notes', '')
+            # Removed updated_at to avoid errors
         }
         
         print(f"🏢 Updating department {department_id} with data: {department_data}")
