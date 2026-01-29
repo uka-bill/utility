@@ -513,7 +513,7 @@
                 
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save School</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">Save School</button>
                 </div>
             </form>
         </div>
@@ -522,6 +522,7 @@
     <script>
         // Store schools globally
         let allSchools = [];
+        let editingSchoolId = null;
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
@@ -536,12 +537,10 @@
             const cancelBtn = document.getElementById('cancelBtn');
             const schoolForm = document.getElementById('schoolForm');
             const modalTitle = document.getElementById('modalTitle');
-            const schoolIdField = document.getElementById('schoolId');
+            const submitBtn = document.getElementById('submitBtn');
             
-            let editingSchool = null;
-
             addSchoolBtn.addEventListener('click', () => {
-                editingSchool = null;
+                editingSchoolId = null;
                 modalTitle.textContent = 'Add New School';
                 schoolForm.reset();
                 schoolModal.style.display = 'flex';
@@ -569,13 +568,16 @@
                     notes: document.getElementById('notes').value
                 };
                 
-                let url = '/api/schools';
-                let method = 'POST';
+                let url, method;
                 
-                if (editingSchool) {
-                    url = `/api/schools/${editingSchool.id}`;
+                if (editingSchoolId) {
+                    // Editing existing school
+                    url = `/api/schools/${editingSchoolId}`;
                     method = 'PUT';
-                    schoolData.id = editingSchool.id;
+                } else {
+                    // Adding new school
+                    url = '/api/schools';
+                    method = 'POST';
                 }
                 
                 try {
@@ -593,6 +595,7 @@
                         alert(data.message);
                         schoolModal.style.display = 'none';
                         schoolForm.reset();
+                        editingSchoolId = null;
                         loadSchools();
                     } else {
                         alert('Error: ' + (data.error || 'Unknown error'));
@@ -812,7 +815,7 @@
                 });
             });
             
-            // Add event listeners to delete buttons - FIXED VERSION
+            // Add event listeners to delete buttons
             document.querySelectorAll('.delete-btn').forEach(button => {
                 button.addEventListener('click', function() {
                     const schoolId = this.getAttribute('data-id');
@@ -830,7 +833,7 @@
                 return;
             }
             
-            editingSchool = school;
+            editingSchoolId = schoolId;
             document.getElementById('modalTitle').textContent = 'Edit School';
             document.getElementById('schoolId').value = school.id;
             document.getElementById('schoolName').value = school.name;
@@ -868,4 +871,3 @@
     </script>
 </body>
 </html>
-
