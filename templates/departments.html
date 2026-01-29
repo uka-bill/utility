@@ -1,3 +1,4 @@
+departments.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -490,7 +491,7 @@
     <div class="modal" id="departmentModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modalTitle">Add New Department</h3>
+                <h3 class="modal-title" id="modalTitle">Add New Department</h3>
                 <button class="close-modal" id="closeModal">&times;</button>
             </div>
             
@@ -530,7 +531,7 @@
                 
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Department</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">Save Department</button>
                 </div>
             </form>
         </div>
@@ -539,6 +540,7 @@
     <script>
         // Store departments globally
         let allDepartments = [];
+        let editingDepartmentId = null;
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
@@ -552,13 +554,11 @@
             const closeModal = document.getElementById('closeModal');
             const cancelBtn = document.getElementById('cancelBtn');
             const departmentForm = document.getElementById('departmentForm');
-            const modalTitle = document.querySelector('#departmentModal .modalTitle');
-            const departmentIdField = document.getElementById('departmentId');
+            const modalTitle = document.getElementById('modalTitle');
+            const submitBtn = document.getElementById('submitBtn');
             
-            let editingDepartment = null;
-
             addDepartmentBtn.addEventListener('click', () => {
-                editingDepartment = null;
+                editingDepartmentId = null;
                 modalTitle.textContent = 'Add New Department';
                 departmentForm.reset();
                 departmentModal.style.display = 'flex';
@@ -585,13 +585,16 @@
                     notes: document.getElementById('notes').value
                 };
                 
-                let url = '/api/departments';
-                let method = 'POST';
+                let url, method;
                 
-                if (editingDepartment) {
-                    url = `/api/departments/${editingDepartment.id}`;
+                if (editingDepartmentId) {
+                    // Editing existing department
+                    url = `/api/departments/${editingDepartmentId}`;
                     method = 'PUT';
-                    departmentData.id = editingDepartment.id;
+                } else {
+                    // Adding new department
+                    url = '/api/departments';
+                    method = 'POST';
                 }
                 
                 try {
@@ -609,6 +612,7 @@
                         alert(data.message);
                         departmentModal.style.display = 'none';
                         departmentForm.reset();
+                        editingDepartmentId = null;
                         loadDepartments();
                     } else {
                         alert('Error: ' + (data.error || 'Unknown error'));
@@ -837,7 +841,7 @@
                 });
             });
             
-            // Add event listeners to delete buttons - FIXED VERSION
+            // Add event listeners to delete buttons
             document.querySelectorAll('.delete-btn').forEach(button => {
                 button.addEventListener('click', function() {
                     const departmentId = this.getAttribute('data-id');
@@ -855,8 +859,8 @@
                 return;
             }
             
-            editingDepartment = department;
-            document.querySelector('#departmentModal .modalTitle').textContent = 'Edit Department';
+            editingDepartmentId = departmentId;
+            document.getElementById('modalTitle').textContent = 'Edit Department';
             document.getElementById('departmentId').value = department.id;
             document.getElementById('unitName').value = department.unit_name || '';
             document.getElementById('divisionName').value = department.division_name || '';
