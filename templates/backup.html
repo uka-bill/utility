@@ -509,6 +509,9 @@
                         <span id="createBackupText">Create Backup Now</span>
                         <span id="createBackupSpinner" class="spinner" style="display: none;"></span>
                     </button>
+                    <button class="btn btn-success" id="directDownloadBtn">
+                        <span id="directDownloadText">Quick Download</span>
+                    </button>
                 </div>
             </div>
             
@@ -653,6 +656,7 @@
             
             // Get DOM elements
             const createBackupBtn = document.getElementById('createBackupBtn');
+            const directDownloadBtn = document.getElementById('directDownloadBtn');
             const exportDataBtn = document.getElementById('exportDataBtn');
             const restoreBackupBtn = document.getElementById('restoreBackupBtn');
             const refreshBackupsBtn = document.getElementById('refreshBackupsBtn');
@@ -669,6 +673,7 @@
             
             // Set up event listeners
             createBackupBtn.addEventListener('click', createBackup);
+            directDownloadBtn.addEventListener('click', downloadBackupDirect);
             exportDataBtn.addEventListener('click', exportData);
             restoreBackupBtn.addEventListener('click', () => {
                 restoreModal.style.display = 'flex';
@@ -815,29 +820,30 @@
                 .then(data => {
                     console.log('Backup created:', data);
                     
-                    showToast(data.message || 'Backup created successfully!', 'success');
-                    
-                    // Show backup details
-                    const stats = data.records_count;
-                    const details = `
-                        Backup created successfully!
-                        • Schools: ${stats.schools} records
-                        • Departments: ${stats.departments} records
-                        • Utility Bills: ${stats.utility_bills} records
-                        • Financial Years: ${stats.financial_years} records
+                    if (data.success) {
+                        showToast(data.message || 'Backup created successfully!', 'success');
                         
-                        File: ${data.backup_filename}
-                    `;
-                    
-                    // Create download link
-                    const downloadLink = document.createElement('a');
-                    downloadLink.href = data.download_url;
-                    downloadLink.download = data.backup_filename;
-                    downloadLink.click();
-                    
-                    // Reload backups list
-                    loadBackupsList();
-                    
+                        // Create and trigger download from JSON content
+                        const backupContent = data.backup_content;
+                        const timestamp = new Date().getTime();
+                        const backupFilename = data.backup_filename || `uka_bill_backup_${timestamp}.json`;
+                        
+                        // Create download link
+                        const blob = new Blob([backupContent], { type: 'application/json' });
+                        const url = window.URL.createObjectURL(blob);
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = url;
+                        downloadLink.download = backupFilename;
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+                        window.URL.revokeObjectURL(url);
+                        
+                        // Reload backups list
+                        loadBackupsList();
+                    } else {
+                        showToast('Error: ' + (data.error || 'Backup failed'), 'error');
+                    }
                 })
                 .catch(error => {
                     console.error('Error creating backup:', error);
@@ -846,6 +852,26 @@
                 .finally(() => {
                     showLoading('createBackupBtn', false);
                 });
+        }
+        
+        // Direct download backup (quick method)
+        function downloadBackupDirect() {
+            console.log('Quick downloading backup...');
+            
+            if (!confirm('Quick download backup of all system data?')) {
+                return;
+            }
+            
+            // Direct download without showing backup details
+            const downloadUrl = '/api/backup/download-direct';
+            const downloadLink = document.createElement('a');
+            downloadLink.href = downloadUrl;
+            downloadLink.style.display = 'none';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            showToast('Downloading backup...', 'success');
         }
         
         // Export data
@@ -864,7 +890,9 @@
                 downloadLink.download = `${selectedExportType}_export_${new Date().getTime()}.csv`;
             }
             
+            document.body.appendChild(downloadLink);
             downloadLink.click();
+            document.body.removeChild(downloadLink);
             
             showToast(`Exporting ${selectedExportType} data...`, 'success');
         }
@@ -994,8 +1022,10 @@
             const downloadUrl = `/api/backup/download/${encodeURIComponent(filename)}`;
             const downloadLink = document.createElement('a');
             downloadLink.href = downloadUrl;
-            downloadLink.download = filename;
+            downloadLink.style.display = 'none';
+            document.body.appendChild(downloadLink);
             downloadLink.click();
+            document.body.removeChild(downloadLink);
             
             showToast(`Downloading ${filename}...`, 'success');
         }
@@ -1016,6 +1046,8 @@
             
             // Download the file first
             const downloadUrl = `/api/backup/download/${encodeURIComponent(filename)}`;
+            
+            showToast('Downloading backup file...', 'warning');
             
             fetch(downloadUrl)
                 .then(response => {
@@ -1085,27 +1117,34 @@
             .then(data => {
                 console.log('Restore complete:', data);
                 
-                showToast(data.message || 'Data restored successfully!', 'success');
-                
-                // Close modal
-                document.getElementById('restoreModal').style.display = 'none';
-                
-                // Clear file input
-                document.getElementById('backupFile').value = '';
-                document.getElementById('selectedFileName').style.display = 'none';
-                
-                // Reload all data
-                setTimeout(() => {
-                    loadCurrentStats();
-                    loadBackupsList();
-                    showToast('System data has been restored. Refreshing page in 5 seconds...', 'success');
+                if (data.success) {
+                    showToast(data.message || 'Data restored successfully!', 'success');
                     
-                    // Refresh the page after 5 seconds
+                    // Close modal
+                    document.getElementById('restoreModal').style.display = 'none';
+                    
+                    // Clear file input
+                    document.getElementById('backupFile').value = '';
+                    document.getElementById('selectedFileName').style.display = 'none';
+                    
+                    // Reload all data
                     setTimeout(() => {
-                        window.location.reload();
-                    }, 5000);
-                }, 1000);
-                
+                        loadCurrentStats();
+                        loadBackupsList();
+                        showToast('System data has been restored. Refreshing page in 5 seconds...', 'success');
+                        
+                        // Refresh the page after 5 seconds
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 5000);
+                    }, 1000);
+                } else {
+                    let errorMsg = data.error || 'Restore failed';
+                    if (data.errors) {
+                        errorMsg += ': ' + data.errors.join(', ');
+                    }
+                    showToast('Error: ' + errorMsg, 'error');
+                }
             })
             .catch(error => {
                 console.error('Error restoring backup:', error);
