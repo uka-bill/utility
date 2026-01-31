@@ -513,6 +513,21 @@
         .btn-delete:hover {
             background: #dc3545;
         }
+        
+        /* Order info */
+        .order-info {
+            background: #e8f4ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 5px;
+            padding: 10px 15px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #0066cc;
+        }
+        
+        .order-info strong {
+            color: #004d99;
+        }
     </style>
 </head>
 <body>
@@ -542,6 +557,9 @@
             <h4>⚠️ Important Backup Information</h4>
             <p>Regularly backup your data to prevent data loss. Backups include all departments, schools, utility bills, and financial years.</p>
             <p><strong>Warning:</strong> Restoring from backup will replace ALL existing data with the backup data.</p>
+            <div class="order-info">
+                <strong>✓ Order Preserved:</strong> Backups now save data in the exact order you see in the interface (schools by cluster, departments by department/division/unit).
+            </div>
         </div>
         
         <!-- Backup Actions Grid -->
@@ -573,6 +591,9 @@
                         </div>
                     </div>
                     <p>The backup will be saved as a JSON file that you can download and store safely.</p>
+                    <div class="order-info">
+                        <strong>Order Preserved:</strong> Schools by cluster, Departments by department/division/unit
+                    </div>
                 </div>
                 <div class="card-actions">
                     <button class="btn btn-primary" id="createBackupBtn">
@@ -614,6 +635,9 @@
                     <p style="margin-top: 15px; font-size: 0.9rem; color: var(--gray);">
                         Selected: <strong id="selectedExportType">All Data (ZIP)</strong>
                     </p>
+                    <div class="order-info">
+                        <strong>Order Preserved:</strong> Data exported in the same order as in the interface
+                    </div>
                 </div>
                 <div class="card-actions">
                     <button class="btn btn-success" id="exportDataBtn">Export Selected</button>
@@ -632,6 +656,9 @@
                         <p><strong>⚠️ DANGER:</strong> This will delete ALL current data and replace it with the backup data.</p>
                     </div>
                     <p>Only use .json backup files created by this system.</p>
+                    <div class="order-info">
+                        <strong>Order Preserved:</strong> Data restored in the exact order from the backup
+                    </div>
                 </div>
                 <div class="card-actions">
                     <button class="btn btn-danger" id="restoreBackupBtn">Restore from Backup</button>
@@ -905,7 +932,7 @@
                     document.getElementById('schoolsCount').textContent = data.schools.total_schools;
                     document.getElementById('departmentsCount').textContent = data.departments.total_units;
                     document.getElementById('billsCount').textContent = data.utility_bills.total_bills;
-                    document.getElementById('yearsCount').textContent = data.schools.total_clusters;
+                    document.getElementById('yearsCount').textContent = data.schools.total_clusters || '0';
                 })
                 .catch(error => {
                     console.error('Error loading statistics:', error);
@@ -920,7 +947,7 @@
         function createBackup() {
             console.log('Creating backup...');
             
-            if (!confirm('Create a new backup of all system data?')) {
+            if (!confirm('Create a new backup of all system data?\n\n✅ Order will be preserved:\n• Schools by cluster number\n• Departments by department/division/unit\n• Bills by year/month/entity')) {
                 return;
             }
             
@@ -939,7 +966,7 @@
                     console.log('Backup created:', data);
                     
                     if (data.success) {
-                        showToast(data.message || 'Backup created successfully!', 'success');
+                        showToast(data.message || 'Backup created successfully! Order preserved.', 'success');
                         
                         // Create and trigger download from JSON content
                         const backupContent = data.backup_content;
@@ -976,7 +1003,7 @@
         function downloadBackupDirect() {
             console.log('Quick downloading backup...');
             
-            if (!confirm('Quick download backup of all system data?')) {
+            if (!confirm('Quick download backup of all system data?\n\n✅ Order will be preserved')) {
                 return;
             }
             
@@ -989,7 +1016,7 @@
             downloadLink.click();
             document.body.removeChild(downloadLink);
             
-            showToast('Downloading backup...', 'success');
+            showToast('Downloading backup... Order preserved.', 'success');
         }
         
         // Export data - FIXED VERSION
@@ -1000,7 +1027,7 @@
             const selectedOption = document.querySelector('.export-option.selected');
             const exportName = selectedOption ? selectedOption.querySelector('div:last-child').textContent : selectedExportType;
             
-            if (!confirm(`Export ${exportName} as CSV file?`)) {
+            if (!confirm(`Export ${exportName} as CSV file?\n\n✅ Data will be exported in the same order as shown in the interface.`)) {
                 return;
             }
             
@@ -1024,7 +1051,7 @@
             downloadLink.click();
             document.body.removeChild(downloadLink);
             
-            showToast(`Exporting ${exportName}...`, 'success');
+            showToast(`Exporting ${exportName}... Order preserved.`, 'success');
         }
         
         // Load backups list
@@ -1074,6 +1101,13 @@
                 const date = new Date(backup.created);
                 const formattedDate = date.toLocaleString();
                 
+                // Get record counts
+                const records = backup.records_count || {};
+                const schoolsCount = records.schools || '--';
+                const deptsCount = records.departments || '--';
+                const billsCount = records.utility_bills || '--';
+                const yearsCount = records.financial_years || '--';
+                
                 row.innerHTML = `
                     <td>
                         <strong>${filename}</strong>
@@ -1085,9 +1119,10 @@
                     <td>${backup.size_formatted}</td>
                     <td>
                         <div style="font-size: 0.9rem;">
-                            <div>Schools: --</div>
-                            <div>Departments: --</div>
-                            <div>Bills: --</div>
+                            <div>🏫 Schools: ${schoolsCount}</div>
+                            <div>🏢 Departments: ${deptsCount}</div>
+                            <div>📋 Bills: ${billsCount}</div>
+                            <div>📅 Years: ${yearsCount}</div>
                         </div>
                     </td>
                     <td class="actions-cell">
@@ -1233,14 +1268,14 @@
         
         // Confirm restore from file
         function confirmRestoreFromFile(filename) {
-            if (!confirm(`⚠️ DANGER: Restore from backup "${filename}"?\n\nThis will DELETE ALL current data and replace it with the backup data.\n\nMake sure you have a current backup before proceeding!`)) {
+            if (!confirm(`⚠️ DANGER: Restore from backup "${filename}"?\n\nThis will DELETE ALL current data and replace it with the backup data.\n\n✅ Order will be preserved from backup.\n\nMake sure you have a current backup before proceeding!`)) {
                 return;
             }
             
             // Download the file first
             const downloadUrl = `/api/backup/download/${encodeURIComponent(filename)}`;
             
-            showToast('Downloading backup file...', 'warning');
+            showToast('Downloading backup file... Order will be preserved.', 'warning');
             
             fetch(downloadUrl)
                 .then(response => {
@@ -1279,7 +1314,7 @@
             }
             
             // Final confirmation
-            if (!confirm(`⚠️ FINAL CONFIRMATION: Restore from "${file.name}"?\n\nThis action cannot be undone!\nAll current data will be permanently deleted!`)) {
+            if (!confirm(`⚠️ FINAL CONFIRMATION: Restore from "${file.name}"?\n\nThis action cannot be undone!\nAll current data will be permanently deleted!\n\n✅ Order will be preserved from backup.`)) {
                 return;
             }
             
@@ -1311,7 +1346,8 @@
                 console.log('Restore complete:', data);
                 
                 if (data.success) {
-                    showToast(data.message || 'Data restored successfully!', 'success');
+                    const orderMsg = data.order_preserved ? 'Order preserved. ' : '';
+                    showToast(data.message + ' ' + orderMsg, 'success');
                     
                     // Close modal
                     document.getElementById('restoreModal').style.display = 'none';
