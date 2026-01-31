@@ -1732,6 +1732,30 @@ def list_backups():
         print(f"❌ List backups error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/backup/delete/<filename>', methods=['DELETE'])
+def delete_backup(filename):
+    """Delete a backup file"""
+    try:
+        backup_path = os.path.join('backups', filename)
+        
+        # Security check - prevent directory traversal
+        if not os.path.exists(backup_path) or '..' in filename or not filename.endswith('.json'):
+            return jsonify({'success': False, 'error': 'Invalid backup file'}), 404
+        
+        # Delete the file
+        os.remove(backup_path)
+        
+        print(f"🗑️ Backup file deleted: {filename}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Backup file "{filename}" deleted successfully'
+        })
+        
+    except Exception as e:
+        print(f"❌ Delete backup error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/backup/restore', methods=['POST'])
 def restore_backup():
     """Restore data from a backup file"""
@@ -1869,58 +1893,76 @@ def export_csv():
         export_type = request.args.get('type', 'all')
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
+        # Create backups directory if it doesn't exist
+        os.makedirs('backups', exist_ok=True)
+        
         if export_type == 'schools' or export_type == 'all':
             # Export schools
             schools_response = supabase.table("schools").select("*").execute()
             schools_data = schools_response.data if schools_response.data else []
             
-            schools_csv = io.StringIO()
-            schools_writer = csv.writer(schools_csv)
             if schools_data:
+                schools_csv = io.StringIO()
+                schools_writer = csv.writer(schools_csv)
                 schools_writer.writerow(schools_data[0].keys())
                 for school in schools_data:
                     schools_writer.writerow(school.values())
-            
-            schools_csv.seek(0)
-            schools_filename = f"schools_export_{timestamp}.csv"
-            
+                
+                schools_csv.seek(0)
+                schools_filename = f"schools_export_{timestamp}.csv"
+                schools_csv_content = schools_csv.getvalue()
+            else:
+                schools_csv_content = "No schools data available"
+                schools_filename = f"schools_export_{timestamp}.csv"
+        
         if export_type == 'departments' or export_type == 'all':
             # Export departments
             dept_response = supabase.table("departments").select("*").execute()
             dept_data = dept_response.data if dept_response.data else []
             
-            dept_csv = io.StringIO()
-            dept_writer = csv.writer(dept_csv)
             if dept_data:
+                dept_csv = io.StringIO()
+                dept_writer = csv.writer(dept_csv)
                 dept_writer.writerow(dept_data[0].keys())
                 for dept in dept_data:
                     dept_writer.writerow(dept.values())
-            
-            dept_csv.seek(0)
-            dept_filename = f"departments_export_{timestamp}.csv"
+                
+                dept_csv.seek(0)
+                dept_filename = f"departments_export_{timestamp}.csv"
+                dept_csv_content = dept_csv.getvalue()
+            else:
+                dept_csv_content = "No departments data available"
+                dept_filename = f"departments_export_{timestamp}.csv"
         
         if export_type == 'utility_bills' or export_type == 'all':
             # Export utility bills
             bills_response = supabase.table("utility_bills").select("*").execute()
             bills_data = bills_response.data if bills_response.data else []
             
-            bills_csv = io.StringIO()
-            bills_writer = csv.writer(bills_csv)
             if bills_data:
+                bills_csv = io.StringIO()
+                bills_writer = csv.writer(bills_csv)
                 bills_writer.writerow(bills_data[0].keys())
                 for bill in bills_data:
                     bills_writer.writerow(bill.values())
-            
-            bills_csv.seek(0)
-            bills_filename = f"utility_bills_export_{timestamp}.csv"
+                
+                bills_csv.seek(0)
+                bills_filename = f"utility_bills_export_{timestamp}.csv"
+                bills_csv_content = bills_csv.getvalue()
+            else:
+                bills_csv_content = "No utility bills data available"
+                bills_filename = f"utility_bills_export_{timestamp}.csv"
         
         if export_type == 'all':
             # Create a ZIP file with all CSVs
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                zip_file.writestr(schools_filename, schools_csv.getvalue())
-                zip_file.writestr(dept_filename, dept_csv.getvalue())
-                zip_file.writestr(bills_filename, bills_csv.getvalue())
+                if schools_data:
+                    zip_file.writestr(schools_filename, schools_csv_content)
+                if dept_data:
+                    zip_file.writestr(dept_filename, dept_csv_content)
+                if bills_data:
+                    zip_file.writestr(bills_filename, bills_csv_content)
             
             zip_buffer.seek(0)
             zip_filename = f"uka_bill_export_{timestamp}.zip"
@@ -1935,21 +1977,21 @@ def export_csv():
             # Return single CSV file
             if export_type == 'schools':
                 return send_file(
-                    io.BytesIO(schools_csv.getvalue().encode()),
+                    io.BytesIO(schools_csv_content.encode()),
                     as_attachment=True,
                     download_name=schools_filename,
                     mimetype='text/csv'
                 )
             elif export_type == 'departments':
                 return send_file(
-                    io.BytesIO(dept_csv.getvalue().encode()),
+                    io.BytesIO(dept_csv_content.encode()),
                     as_attachment=True,
                     download_name=dept_filename,
                     mimetype='text/csv'
                 )
             elif export_type == 'utility_bills':
                 return send_file(
-                    io.BytesIO(bills_csv.getvalue().encode()),
+                    io.BytesIO(bills_csv_content.encode()),
                     as_attachment=True,
                     download_name=bills_filename,
                     mimetype='text/csv'
@@ -2018,4 +2060,3 @@ if __name__ == '__main__':
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
-
