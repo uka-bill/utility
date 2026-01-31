@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
 import os
 from supabase import create_client, Client
@@ -1548,35 +1549,39 @@ def api_test():
 
 @app.route('/api/backup/all')
 def backup_all_data():
-    """Create a complete backup of all data"""
+    """Create a complete backup of all data - PRESERVE ORDER VERSION"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        print("💾 Creating complete backup...")
+        print("💾 Creating complete backup (preserving order)...")
         
-        # Get all data from all tables
+        # Get all data from all tables IN SPECIFIC ORDER
         backup_data = {}
         
-        # Backup schools
-        print("📚 Backing up schools...")
-        schools_response = supabase.table("schools").select("*").execute()
-        backup_data['schools'] = schools_response.data if schools_response.data else []
+        # Backup schools - ORDER BY CLUSTER NUMBER, then NAME
+        print("📚 Backing up schools in order...")
+        schools_response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
+        schools_data = schools_response.data if schools_response.data else []
+        backup_data['schools'] = schools_data
         
-        # Backup departments
-        print("🏢 Backing up departments...")
-        departments_response = supabase.table("departments").select("*").execute()
-        backup_data['departments'] = departments_response.data if departments_response.data else []
+        # Backup departments - ORDER BY DEPARTMENT, DIVISION, UNIT
+        print("🏢 Backing up departments in order...")
+        departments_response = supabase.table("departments").select("*").order("department_name").order("division_name").order("unit_name").execute()
+        departments_data = departments_response.data if departments_response.data else []
+        backup_data['departments'] = departments_data
         
-        # Backup utility bills
-        print("📋 Backing up utility bills...")
-        bills_response = supabase.table("utility_bills").select("*").execute()
-        backup_data['utility_bills'] = bills_response.data if bills_response.data else []
+        # Backup utility bills - ORDER BY YEAR DESC, MONTH DESC, ENTITY_TYPE, ENTITY_NAME
+        print("📋 Backing up utility bills in order...")
+        bills_response = supabase.table("utility_bills").select("*").order("year", desc=True).order("month", desc=True).order("entity_type").order("entity_name").execute()
+        bills_data = bills_response.data if bills_response.data else []
+        backup_data['utility_bills'] = bills_data
         
-        # Backup financial years
-        print("📅 Backing up financial years...")
-        financial_years_response = supabase.table("financial_years").select("*").execute()
-        backup_data['financial_years'] = financial_years_response.data if financial_years_response.data else []
+        # Backup financial years - ORDER BY START_YEAR DESC
+        print("📅 Backing up financial years in order...")
+        financial_years_response = supabase.table("financial_years").select("*").order("start_year", desc=True).execute()
+        financial_years_data = financial_years_response.data if financial_years_response.data else []
+        backup_data['financial_years'] = financial_years_data
         
         # Get current date for filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1586,30 +1591,48 @@ def backup_all_data():
         os.makedirs('backups', exist_ok=True)
         backup_path = os.path.join('backups', backup_filename)
         
+        # Add metadata to backup
+        backup_metadata = {
+            'backup_date': datetime.now().isoformat(),
+            'backup_filename': backup_filename,
+            'records_count': {
+                'schools': len(schools_data),
+                'departments': len(departments_data),
+                'utility_bills': len(bills_data),
+                'financial_years': len(financial_years_data)
+            },
+            'order_preserved': True,
+            'schools_order': 'By cluster number, then name',
+            'departments_order': 'By department, division, then unit name',
+            'utility_bills_order': 'By year (desc), month (desc), entity type, then entity name',
+            'financial_years_order': 'By start year (desc)'
+        }
+        
+        # Combine data with metadata
+        full_backup_data = {
+            'metadata': backup_metadata,
+            'data': backup_data
+        }
+        
         # Save backup to file
         with open(backup_path, 'w', encoding='utf-8') as f:
-            json.dump(backup_data, f, indent=2, ensure_ascii=False, default=str)
+            json.dump(full_backup_data, f, indent=2, ensure_ascii=False, default=str)
+        
+        # Also return the data for direct download
+        backup_content = json.dumps(full_backup_data, indent=2, ensure_ascii=False, default=str)
         
         print(f"✅ Backup created successfully: {backup_filename}")
-        print(f"   Schools: {len(backup_data['schools'])} records")
-        print(f"   Departments: {len(backup_data['departments'])} records")
-        print(f"   Utility Bills: {len(backup_data['utility_bills'])} records")
-        print(f"   Financial Years: {len(backup_data['financial_years'])} records")
-        
-        # Return JSON response with actual file content for download
-        backup_content = json.dumps(backup_data, indent=2, ensure_ascii=False, default=str)
+        print(f"   Schools: {len(schools_data)} records (ordered by cluster)")
+        print(f"   Departments: {len(departments_data)} records (ordered by department)")
+        print(f"   Utility Bills: {len(bills_data)} records (ordered by year/month)")
+        print(f"   Financial Years: {len(financial_years_data)} records (ordered by start year)")
         
         return jsonify({
             'success': True,
-            'message': 'Backup created successfully',
+            'message': 'Backup created successfully with order preserved',
             'backup_filename': backup_filename,
-            'backup_content': backup_content,  # Include backup content in response
-            'records_count': {
-                'schools': len(backup_data['schools']),
-                'departments': len(backup_data['departments']),
-                'utility_bills': len(backup_data['utility_bills']),
-                'financial_years': len(backup_data['financial_years'])
-            }
+            'backup_content': backup_content,
+            'metadata': backup_metadata
         })
         
     except Exception as e:
@@ -1640,34 +1663,60 @@ def download_backup(filename):
 
 @app.route('/api/backup/download-direct')
 def download_backup_direct():
-    """Create and download backup directly"""
+    """Create and download backup directly with preserved order"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        print("💾 Creating and downloading backup...")
+        print("💾 Creating and downloading backup (preserving order)...")
         
-        # Get all data from all tables
+        # Get all data from all tables IN SPECIFIC ORDER
         backup_data = {}
         
-        # Backup schools
-        schools_response = supabase.table("schools").select("*").execute()
-        backup_data['schools'] = schools_response.data if schools_response.data else []
+        # Backup schools - ORDER BY CLUSTER NUMBER, then NAME
+        schools_response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
+        schools_data = schools_response.data if schools_response.data else []
+        backup_data['schools'] = schools_data
         
-        # Backup departments
-        departments_response = supabase.table("departments").select("*").execute()
-        backup_data['departments'] = departments_response.data if departments_response.data else []
+        # Backup departments - ORDER BY DEPARTMENT, DIVISION, UNIT
+        departments_response = supabase.table("departments").select("*").order("department_name").order("division_name").order("unit_name").execute()
+        departments_data = departments_response.data if departments_response.data else []
+        backup_data['departments'] = departments_data
         
-        # Backup utility bills
-        bills_response = supabase.table("utility_bills").select("*").execute()
-        backup_data['utility_bills'] = bills_response.data if bills_response.data else []
+        # Backup utility bills - ORDER BY YEAR DESC, MONTH DESC, ENTITY_TYPE, ENTITY_NAME
+        bills_response = supabase.table("utility_bills").select("*").order("year", desc=True).order("month", desc=True).order("entity_type").order("entity_name").execute()
+        bills_data = bills_response.data if bills_response.data else []
+        backup_data['utility_bills'] = bills_data
         
-        # Backup financial years
-        financial_years_response = supabase.table("financial_years").select("*").execute()
-        backup_data['financial_years'] = financial_years_response.data if financial_years_response.data else []
+        # Backup financial years - ORDER BY START_YEAR DESC
+        financial_years_response = supabase.table("financial_years").select("*").order("start_year", desc=True).execute()
+        financial_years_data = financial_years_response.data if financial_years_response.data else []
+        backup_data['financial_years'] = financial_years_data
+        
+        # Add metadata
+        backup_metadata = {
+            'backup_date': datetime.now().isoformat(),
+            'records_count': {
+                'schools': len(schools_data),
+                'departments': len(departments_data),
+                'utility_bills': len(bills_data),
+                'financial_years': len(financial_years_data)
+            },
+            'order_preserved': True,
+            'schools_order': 'By cluster number, then name',
+            'departments_order': 'By department, division, then unit name',
+            'utility_bills_order': 'By year (desc), month (desc), entity type, then entity name',
+            'financial_years_order': 'By start year (desc)'
+        }
+        
+        # Combine data with metadata
+        full_backup_data = {
+            'metadata': backup_metadata,
+            'data': backup_data
+        }
         
         # Create backup content
-        backup_content = json.dumps(backup_data, indent=2, ensure_ascii=False, default=str)
+        backup_content = json.dumps(full_backup_data, indent=2, ensure_ascii=False, default=str)
         
         # Create in-memory file
         mem = io.BytesIO()
@@ -1711,12 +1760,33 @@ def list_backups():
                 filepath = os.path.join(backups_dir, filename)
                 file_stats = os.stat(filepath)
                 
+                # Try to read metadata from file
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        backup_data = json.load(f)
+                    
+                    if 'metadata' in backup_data:
+                        metadata = backup_data['metadata']
+                        records_count = metadata.get('records_count', {})
+                    else:
+                        # Old format backup
+                        records_count = {}
+                        if 'schools' in backup_data:
+                            records_count['schools'] = len(backup_data.get('schools', []))
+                        if 'departments' in backup_data:
+                            records_count['departments'] = len(backup_data.get('departments', []))
+                        if 'utility_bills' in backup_data:
+                            records_count['utility_bills'] = len(backup_data.get('utility_bills', []))
+                except:
+                    records_count = {}
+                
                 backup_files.append({
                     'filename': filename,
                     'created': datetime.fromtimestamp(file_stats.st_ctime).isoformat(),
                     'size': file_stats.st_size,
                     'size_formatted': format_file_size(file_stats.st_size),
-                    'download_url': f'/api/backup/download/{filename}'
+                    'download_url': f'/api/backup/download/{filename}',
+                    'records_count': records_count
                 })
         
         # Sort by creation date (newest first)
@@ -1758,7 +1828,7 @@ def delete_backup(filename):
 
 @app.route('/api/backup/restore', methods=['POST'])
 def restore_backup():
-    """Restore data from a backup file"""
+    """Restore data from a backup file - PRESERVE ORDER VERSION"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
@@ -1776,9 +1846,20 @@ def restore_backup():
         
         # Read and parse backup file
         backup_content = backup_file.read().decode('utf-8')
-        backup_data = json.loads(backup_content)
+        backup_data_full = json.loads(backup_content)
         
         print(f"📥 Restoring backup: {backup_file.filename}")
+        
+        # Check if it's the new format with metadata
+        if 'data' in backup_data_full and 'metadata' in backup_data_full:
+            backup_data = backup_data_full['data']
+            metadata = backup_data_full['metadata']
+            print(f"📊 Backup metadata: {metadata}")
+        else:
+            # Old format backup
+            backup_data = backup_data_full
+            metadata = {'order_preserved': False}
+            print("⚠️ Old format backup detected (order may not be preserved)")
         
         # Validate backup structure
         required_tables = ['schools', 'departments', 'utility_bills', 'financial_years']
@@ -1789,68 +1870,84 @@ def restore_backup():
         restoration_stats = {}
         errors = []
         
-        # Restore schools (clear existing first)
-        if backup_data['schools']:
-            print(f"📚 Restoring {len(backup_data['schools'])} schools...")
-            try:
-                # Clear existing schools
-                supabase.table("schools").delete().neq("id", 0).execute()
-                # Insert backup schools
-                for school in backup_data['schools']:
-                    # Remove id to let database generate new ones
-                    school_data = {k: v for k, v in school.items() if k != 'id'}
-                    school_data['created_at'] = datetime.now().isoformat()
-                    supabase.table("schools").insert(school_data).execute()
-                restoration_stats['schools'] = len(backup_data['schools'])
-            except Exception as e:
-                errors.append(f"Schools: {str(e)}")
-                restoration_stats['schools'] = f"Error: {str(e)}"
+        # Clear all existing data first (in reverse order to avoid foreign key constraints)
+        print("🧹 Clearing existing data...")
+        supabase.table("utility_bills").delete().neq("id", 0).execute()
+        supabase.table("departments").delete().neq("id", 0).execute()
+        supabase.table("schools").delete().neq("id", 0).execute()
+        supabase.table("financial_years").delete().neq("id", 0).execute()
         
-        # Restore departments
-        if backup_data['departments']:
-            print(f"🏢 Restoring {len(backup_data['departments'])} departments...")
-            try:
-                # Clear existing departments
-                supabase.table("departments").delete().neq("id", 0).execute()
-                # Insert backup departments
-                for dept in backup_data['departments']:
-                    # Remove id to let database generate new ones
-                    dept_data = {k: v for k, v in dept.items() if k != 'id'}
-                    dept_data['created_at'] = datetime.now().isoformat()
-                    supabase.table("departments").insert(dept_data).execute()
-                restoration_stats['departments'] = len(backup_data['departments'])
-            except Exception as e:
-                errors.append(f"Departments: {str(e)}")
-                restoration_stats['departments'] = f"Error: {str(e)}"
-        
-        # Restore financial years
+        # Restore financial years FIRST (no dependencies)
         if backup_data['financial_years']:
             print(f"📅 Restoring {len(backup_data['financial_years'])} financial years...")
             try:
-                # Clear existing financial years
-                supabase.table("financial_years").delete().neq("id", 0).execute()
-                # Insert backup financial years
                 for fy in backup_data['financial_years']:
                     # Remove id to let database generate new ones
                     fy_data = {k: v for k, v in fy.items() if k != 'id'}
-                    fy_data['created_at'] = datetime.now().isoformat()
+                    if 'created_at' not in fy_data:
+                        fy_data['created_at'] = datetime.now().isoformat()
                     supabase.table("financial_years").insert(fy_data).execute()
                 restoration_stats['financial_years'] = len(backup_data['financial_years'])
             except Exception as e:
                 errors.append(f"Financial Years: {str(e)}")
                 restoration_stats['financial_years'] = f"Error: {str(e)}"
         
-        # Restore utility bills
+        # Restore schools (needed for utility bills)
+        if backup_data['schools']:
+            print(f"📚 Restoring {len(backup_data['schools'])} schools...")
+            try:
+                for school in backup_data['schools']:
+                    # Remove id to let database generate new ones
+                    school_data = {k: v for k, v in school.items() if k != 'id'}
+                    if 'created_at' not in school_data:
+                        school_data['created_at'] = datetime.now().isoformat()
+                    supabase.table("schools").insert(school_data).execute()
+                restoration_stats['schools'] = len(backup_data['schools'])
+            except Exception as e:
+                errors.append(f"Schools: {str(e)}")
+                restoration_stats['schools'] = f"Error: {str(e)}"
+        
+        # Restore departments (needed for utility bills)
+        if backup_data['departments']:
+            print(f"🏢 Restoring {len(backup_data['departments'])} departments...")
+            try:
+                for dept in backup_data['departments']:
+                    # Remove id to let database generate new ones
+                    dept_data = {k: v for k, v in dept.items() if k != 'id'}
+                    if 'created_at' not in dept_data:
+                        dept_data['created_at'] = datetime.now().isoformat()
+                    supabase.table("departments").insert(dept_data).execute()
+                restoration_stats['departments'] = len(backup_data['departments'])
+            except Exception as e:
+                errors.append(f"Departments: {str(e)}")
+                restoration_stats['departments'] = f"Error: {str(e)}"
+        
+        # Restore utility bills LAST (depends on schools and departments)
         if backup_data['utility_bills']:
             print(f"📋 Restoring {len(backup_data['utility_bills'])} utility bills...")
             try:
-                # Clear existing utility bills
-                supabase.table("utility_bills").delete().neq("id", 0).execute()
-                # Insert backup utility bills
                 for bill in backup_data['utility_bills']:
                     # Remove id to let database generate new ones
                     bill_data = {k: v for k, v in bill.items() if k != 'id'}
-                    bill_data['created_at'] = datetime.now().isoformat()
+                    if 'created_at' not in bill_data:
+                        bill_data['created_at'] = datetime.now().isoformat()
+                    
+                    # Update entity_name based on current data
+                    if bill_data.get('entity_type') == 'school' and bill_data.get('entity_id'):
+                        try:
+                            school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
+                            if school_response.data:
+                                bill_data['entity_name'] = school_response.data[0]['name']
+                        except:
+                            pass
+                    elif bill_data.get('entity_type') == 'department' and bill_data.get('entity_id'):
+                        try:
+                            dept_response = supabase.table("departments").select("name").eq("id", bill_data['entity_id']).execute()
+                            if dept_response.data:
+                                bill_data['entity_name'] = dept_response.data[0]['name']
+                        except:
+                            pass
+                    
                     supabase.table("utility_bills").insert(bill_data).execute()
                 restoration_stats['utility_bills'] = len(backup_data['utility_bills'])
             except Exception as e:
@@ -1874,8 +1971,9 @@ def restore_backup():
             
             return jsonify({
                 'success': True,
-                'message': 'Data restored successfully',
-                'restoration_stats': restoration_stats
+                'message': 'Data restored successfully with order preserved' if metadata.get('order_preserved') else 'Data restored successfully',
+                'restoration_stats': restoration_stats,
+                'order_preserved': metadata.get('order_preserved', False)
             })
         
     except Exception as e:
@@ -1885,7 +1983,7 @@ def restore_backup():
 
 @app.route('/api/backup/export-csv')
 def export_csv():
-    """Export data as CSV files"""
+    """Export data as CSV files with preserved order"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
@@ -1897,8 +1995,8 @@ def export_csv():
         os.makedirs('backups', exist_ok=True)
         
         if export_type == 'schools' or export_type == 'all':
-            # Export schools
-            schools_response = supabase.table("schools").select("*").execute()
+            # Export schools - ORDERED BY CLUSTER, NAME
+            schools_response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
             schools_data = schools_response.data if schools_response.data else []
             
             if schools_data:
@@ -1916,8 +2014,8 @@ def export_csv():
                 schools_filename = f"schools_export_{timestamp}.csv"
         
         if export_type == 'departments' or export_type == 'all':
-            # Export departments
-            dept_response = supabase.table("departments").select("*").execute()
+            # Export departments - ORDERED BY DEPARTMENT, DIVISION, UNIT
+            dept_response = supabase.table("departments").select("*").order("department_name").order("division_name").order("unit_name").execute()
             dept_data = dept_response.data if dept_response.data else []
             
             if dept_data:
@@ -1935,8 +2033,8 @@ def export_csv():
                 dept_filename = f"departments_export_{timestamp}.csv"
         
         if export_type == 'utility_bills' or export_type == 'all':
-            # Export utility bills
-            bills_response = supabase.table("utility_bills").select("*").execute()
+            # Export utility bills - ORDERED BY YEAR, MONTH, ENTITY
+            bills_response = supabase.table("utility_bills").select("*").order("year", desc=True).order("month", desc=True).order("entity_type").order("entity_name").execute()
             bills_data = bills_response.data if bills_response.data else []
             
             if bills_data:
