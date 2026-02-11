@@ -552,7 +552,7 @@
             const departmentModal = document.getElementById('departmentModal');
             const closeModal = document.getElementById('closeModal');
             const cancelBtn = document.getElementById('cancelBtn');
-            const departmentForm = document.getElementById('departmentForm'); // FIXED: Corrected variable name
+            const departmentForm = document.getElementById('departmentForm');
             const modalTitle = document.getElementById('modalTitle');
             const submitBtn = document.getElementById('submitBtn');
             
@@ -597,12 +597,10 @@
                 let url, method;
                 
                 if (editingDepartmentId) {
-                    // Editing existing department
                     url = `/api/departments/${editingDepartmentId}`;
                     method = 'PUT';
                     console.log(`Editing department ID: ${editingDepartmentId}`);
                 } else {
-                    // Adding new department
                     url = '/api/departments';
                     method = 'POST';
                     console.log('Adding new department');
@@ -645,7 +643,10 @@
             document.getElementById('searchFilter').addEventListener('input', filterDepartments);
             document.getElementById('departmentFilter').addEventListener('change', filterDepartments);
             document.getElementById('divisionFilter').addEventListener('change', filterDepartments);
-            document.getElementById('sortFilter').addEventListener('change', filterDepartments);
+            document.getElementById('sortFilter').addEventListener('change', function() {
+                console.log('Sort filter changed to:', this.value);
+                filterDepartments();
+            });
             
             // Initial load
             loadDepartments();
@@ -774,6 +775,7 @@
             if (sortBy === 'id' || sortBy === 'seq') {
                 // Sort by database ID (ascending)
                 filteredDepartments.sort((a, b) => a.id - b.id);
+                console.log('Sorted by database ID');
             } else if (sortBy === 'unitName') {
                 // Sort by Unit Name (A-Z)
                 filteredDepartments.sort((a, b) => {
@@ -781,6 +783,7 @@
                     const nameB = b.unit_name || '';
                     return nameA.localeCompare(nameB);
                 });
+                console.log('Sorted by unit name');
             } else if (sortBy === 'divisionName') {
                 // Sort by Division Name (A-Z)
                 filteredDepartments.sort((a, b) => {
@@ -788,6 +791,7 @@
                     const nameB = b.division_name || '';
                     return nameA.localeCompare(nameB);
                 });
+                console.log('Sorted by division name');
             } else if (sortBy === 'departmentName') {
                 // Sort by Department Name (A-Z)
                 filteredDepartments.sort((a, b) => {
@@ -795,6 +799,7 @@
                     const nameB = b.department_name || '';
                     return nameA.localeCompare(nameB);
                 });
+                console.log('Sorted by department name');
             }
             
             renderDepartmentsTable(filteredDepartments);
@@ -830,8 +835,35 @@
                 departmentsByDept[deptName].push(dept);
             });
             
-            // Get department names sorted alphabetically
-            const deptNames = Object.keys(departmentsByDept).sort((a, b) => a.localeCompare(b));
+            // Sort the department groups based on current sort option
+            const sortBy = document.getElementById('sortFilter').value;
+            let deptNames = Object.keys(departmentsByDept);
+            
+            if (sortBy === 'departmentName') {
+                // Sort department groups by department name (A-Z)
+                deptNames.sort((a, b) => a.localeCompare(b));
+            } else if (sortBy === 'id' || sortBy === 'seq') {
+                // Sort department groups by the minimum ID in each group
+                deptNames.sort((a, b) => {
+                    const minIdA = Math.min(...departmentsByDept[a].map(d => d.id));
+                    const minIdB = Math.min(...departmentsByDept[b].map(d => d.id));
+                    return minIdA - minIdB;
+                });
+            } else if (sortBy === 'unitName') {
+                // Sort department groups by the first unit name in each group
+                deptNames.sort((a, b) => {
+                    const firstUnitA = departmentsByDept[a][0].unit_name || '';
+                    const firstUnitB = departmentsByDept[b][0].unit_name || '';
+                    return firstUnitA.localeCompare(firstUnitB);
+                });
+            } else if (sortBy === 'divisionName') {
+                // Sort department groups by the first division name in each group
+                deptNames.sort((a, b) => {
+                    const firstDivisionA = departmentsByDept[a][0].division_name || '';
+                    const firstDivisionB = departmentsByDept[b][0].division_name || '';
+                    return firstDivisionA.localeCompare(firstDivisionB);
+                });
+            }
             
             // Track sequence number across all departments
             let sequenceNumber = 1;
@@ -839,6 +871,29 @@
             // Render each department group
             deptNames.forEach((deptName, deptIndex) => {
                 const deptUnits = departmentsByDept[deptName];
+                
+                // Sort units within each department group based on current sort option
+                if (sortBy === 'id' || sortBy === 'seq') {
+                    deptUnits.sort((a, b) => a.id - b.id);
+                } else if (sortBy === 'unitName') {
+                    deptUnits.sort((a, b) => {
+                        const nameA = a.unit_name || '';
+                        const nameB = b.unit_name || '';
+                        return nameA.localeCompare(nameB);
+                    });
+                } else if (sortBy === 'divisionName') {
+                    deptUnits.sort((a, b) => {
+                        const nameA = a.division_name || '';
+                        const nameB = b.division_name || '';
+                        return nameA.localeCompare(nameB);
+                    });
+                } else if (sortBy === 'departmentName') {
+                    deptUnits.sort((a, b) => {
+                        const nameA = a.unit_name || '';
+                        const nameB = b.unit_name || '';
+                        return nameA.localeCompare(nameB);
+                    });
+                }
                 
                 // Add department separator row
                 const separatorRow = document.createElement('tr');
