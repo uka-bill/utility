@@ -28,9 +28,9 @@ def format_currency(amount):
     try:
         if amount is None:
             return "0.00"
-        return "{:,.2f}".format(float(amount))
+        return "${:,.2f}".format(float(amount))
     except (ValueError, TypeError):
-        return "0.00"
+        return "$0.00"
 
 def format_number(number):
     try:
@@ -39,6 +39,21 @@ def format_number(number):
         return "{:,.0f}".format(float(number))
     except (ValueError, TypeError):
         return "0"
+
+def format_year(year_value):
+    """Format year values without currency symbols"""
+    try:
+        if year_value is None:
+            return ""
+        # Remove any currency formatting and format as integer year
+        year_str = str(year_value)
+        # Remove dollar signs and commas
+        year_str = year_str.replace('$', '').replace(',', '').strip()
+        # Convert to integer then back to string
+        year_int = int(float(year_str))
+        return f"{year_int}"
+    except (ValueError, TypeError):
+        return ""
 
 # Initialize Supabase
 print("=" * 60)
@@ -237,9 +252,6 @@ def update_financial_year(fy_id):
         if data.get('telephoneAllocated') is not None:
             financial_year_data["telephone_allocated"] = float(data.get('telephoneAllocated', 10000))
         
-        # Don't include updated_at to avoid errors
-        # financial_year_data["updated_at"] = datetime.now().isoformat()
-        
         print(f"📅 Final update data: {financial_year_data}")
         
         response = supabase.table("financial_years").update(financial_year_data).eq("id", fy_id).execute()
@@ -316,7 +328,6 @@ def delete_financial_year(fy_id):
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        # Check if there are any bills for this financial year
         response = supabase.table("financial_years").delete().eq("id", fy_id).execute()
         
         if response.data:
@@ -699,6 +710,9 @@ def dashboard_data():
             if isinstance(value, (int, float)):
                 if 'percentage' in key:
                     formatted_budget[key] = f"{value:.1f}%"
+                elif 'start_year' in key or 'end_year' in key:
+                    # Format year values without currency symbols
+                    formatted_budget[key] = format_year(value)
                 else:
                     formatted_budget[key] = format_currency(value)
             else:
@@ -915,7 +929,6 @@ def update_school(school_id):
             "bmo_phone": data.get('bmoPhone', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', '')
-            # Removed updated_at to avoid errors
         }
         
         print(f"🏫 Updating school {school_id} with data: {school_data}")
@@ -1085,7 +1098,6 @@ def update_department(department_id):
             "hotline_numbers": data.get('hotlineNumbers', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', '')
-            # Removed updated_at to avoid errors
         }
         
         print(f"🏢 Updating department {department_id} with data: {department_data}")
@@ -1253,10 +1265,10 @@ def create_utility_bill():
             "amount_paid": float(data.get('amount_paid', 0)),
             "consumption_m3": float(data.get('consumption_m3', 0)) if data.get('consumption_m3') else None,
             "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
-            "month": int(data.get('month', current_date.month)),  # Month for filtering
-            "year": int(data.get('year', current_date.year)),  # Year for filtering
-            "bill_month": int(data.get('bill_month', current_date.month)),  # Month of the bill
-            "bill_year": int(data.get('bill_year', current_date.year)),  # Year of the bill
+            "month": int(data.get('month', current_date.month)),
+            "year": int(data.get('year', current_date.year)),
+            "bill_month": int(data.get('bill_month', current_date.month)),
+            "bill_year": int(data.get('bill_year', current_date.year)),
             "bill_image": data.get('bill_image'),
             "created_at": datetime.now().isoformat()
         }
@@ -1309,10 +1321,10 @@ def update_utility_bill(bill_id):
             "amount_paid": float(data.get('amount_paid', 0)),
             "consumption_m3": float(data.get('consumption_m3', 0)) if data.get('consumption_m3') else None,
             "consumption_kwh": float(data.get('consumption_kwh', 0)) if data.get('consumption_kwh') else None,
-            "month": int(data.get('month', current_date.month)),  # Month for filtering
-            "year": int(data.get('year', current_date.year)),  # Year for filtering
-            "bill_month": int(data.get('bill_month', current_date.month)),  # Month of the bill
-            "bill_year": int(data.get('bill_year', current_date.year)),  # Year of the bill
+            "month": int(data.get('month', current_date.month)),
+            "year": int(data.get('year', current_date.year)),
+            "bill_month": int(data.get('bill_month', current_date.month)),
+            "bill_year": int(data.get('bill_year', current_date.year)),
             "bill_image": data.get('bill_image'),
             "updated_at": datetime.now().isoformat()
         }
@@ -1555,7 +1567,6 @@ def backup_all_data():
         
         print("💾 Creating complete backup (preserving order)...")
         
-        # Get all data from all tables IN SPECIFIC ORDER
         backup_data = {}
         
         # Backup schools - ORDER BY CLUSTER NUMBER, then NAME
@@ -1582,15 +1593,12 @@ def backup_all_data():
         financial_years_data = financial_years_response.data if financial_years_response.data else []
         backup_data['financial_years'] = financial_years_data
         
-        # Get current date for filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"uka_bill_backup_{timestamp}.json"
         
-        # Create backups directory if it doesn't exist
         os.makedirs('backups', exist_ok=True)
         backup_path = os.path.join('backups', backup_filename)
         
-        # Add metadata to backup
         backup_metadata = {
             'backup_date': datetime.now().isoformat(),
             'backup_filename': backup_filename,
@@ -1607,17 +1615,14 @@ def backup_all_data():
             'financial_years_order': 'By start year (desc)'
         }
         
-        # Combine data with metadata
         full_backup_data = {
             'metadata': backup_metadata,
             'data': backup_data
         }
         
-        # Save backup to file
         with open(backup_path, 'w', encoding='utf-8') as f:
             json.dump(full_backup_data, f, indent=2, ensure_ascii=False, default=str)
         
-        # Also return the data for direct download
         backup_content = json.dumps(full_backup_data, indent=2, ensure_ascii=False, default=str)
         
         print(f"✅ Backup created successfully: {backup_filename}")
@@ -1645,7 +1650,6 @@ def download_backup(filename):
     try:
         backup_path = os.path.join('backups', filename)
         
-        # Security check - prevent directory traversal
         if not os.path.exists(backup_path) or '..' in filename or not filename.endswith('.json'):
             return jsonify({'error': 'Invalid backup file'}), 404
         
@@ -1669,30 +1673,24 @@ def download_backup_direct():
         
         print("💾 Creating and downloading backup (preserving order)...")
         
-        # Get all data from all tables IN SPECIFIC ORDER
         backup_data = {}
         
-        # Backup schools - ORDER BY CLUSTER NUMBER, then NAME
         schools_response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
         schools_data = schools_response.data if schools_response.data else []
         backup_data['schools'] = schools_data
         
-        # Backup departments - ORDER BY DEPARTMENT, DIVISION, UNIT
         departments_response = supabase.table("departments").select("*").order("department_name").order("division_name").order("unit_name").execute()
         departments_data = departments_response.data if departments_response.data else []
         backup_data['departments'] = departments_data
         
-        # Backup utility bills - ORDER BY YEAR DESC, MONTH DESC, ENTITY_TYPE, ENTITY_NAME
         bills_response = supabase.table("utility_bills").select("*").order("year", desc=True).order("month", desc=True).order("entity_type").order("entity_name").execute()
         bills_data = bills_response.data if bills_response.data else []
         backup_data['utility_bills'] = bills_data
         
-        # Backup financial years - ORDER BY START_YEAR DESC
         financial_years_response = supabase.table("financial_years").select("*").order("start_year", desc=True).execute()
         financial_years_data = financial_years_response.data if financial_years_response.data else []
         backup_data['financial_years'] = financial_years_data
         
-        # Add metadata
         backup_metadata = {
             'backup_date': datetime.now().isoformat(),
             'records_count': {
@@ -1708,25 +1706,20 @@ def download_backup_direct():
             'financial_years_order': 'By start year (desc)'
         }
         
-        # Combine data with metadata
         full_backup_data = {
             'metadata': backup_metadata,
             'data': backup_data
         }
         
-        # Create backup content
         backup_content = json.dumps(full_backup_data, indent=2, ensure_ascii=False, default=str)
         
-        # Create in-memory file
         mem = io.BytesIO()
         mem.write(backup_content.encode('utf-8'))
         mem.seek(0)
         
-        # Generate filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"uka_bill_backup_{timestamp}.json"
         
-        # Also save to disk for future reference
         backup_path = os.path.join('backups', backup_filename)
         os.makedirs('backups', exist_ok=True)
         with open(backup_path, 'w', encoding='utf-8') as f:
@@ -1759,7 +1752,6 @@ def list_backups():
                 filepath = os.path.join(backups_dir, filename)
                 file_stats = os.stat(filepath)
                 
-                # Try to read metadata from file
                 try:
                     with open(filepath, 'r', encoding='utf-8') as f:
                         backup_data = json.load(f)
@@ -1768,7 +1760,6 @@ def list_backups():
                         metadata = backup_data['metadata']
                         records_count = metadata.get('records_count', {})
                     else:
-                        # Old format backup
                         records_count = {}
                         if 'schools' in backup_data:
                             records_count['schools'] = len(backup_data.get('schools', []))
@@ -1788,7 +1779,6 @@ def list_backups():
                     'records_count': records_count
                 })
         
-        # Sort by creation date (newest first)
         backup_files.sort(key=lambda x: x['created'], reverse=True)
         
         return jsonify({
@@ -1807,11 +1797,9 @@ def delete_backup(filename):
     try:
         backup_path = os.path.join('backups', filename)
         
-        # Security check - prevent directory traversal
         if not os.path.exists(backup_path) or '..' in filename or not filename.endswith('.json'):
             return jsonify({'success': False, 'error': 'Invalid backup file'}), 404
         
-        # Delete the file
         os.remove(backup_path)
         
         print(f"🗑️ Backup file deleted: {filename}")
@@ -1843,24 +1831,20 @@ def restore_backup():
         if not backup_file.filename.endswith('.json'):
             return jsonify({'error': 'Only JSON backup files are supported'}), 400
         
-        # Read and parse backup file
         backup_content = backup_file.read().decode('utf-8')
         backup_data_full = json.loads(backup_content)
         
         print(f"📥 Restoring backup: {backup_file.filename}")
         
-        # Check if it's the new format with metadata
         if 'data' in backup_data_full and 'metadata' in backup_data_full:
             backup_data = backup_data_full['data']
             metadata = backup_data_full['metadata']
             print(f"📊 Backup metadata: {metadata}")
         else:
-            # Old format backup
             backup_data = backup_data_full
             metadata = {'order_preserved': False}
             print("⚠️ Old format backup detected (order may not be preserved)")
         
-        # Validate backup structure
         required_tables = ['schools', 'departments', 'utility_bills', 'financial_years']
         for table in required_tables:
             if table not in backup_data:
@@ -1869,19 +1853,16 @@ def restore_backup():
         restoration_stats = {}
         errors = []
         
-        # Clear all existing data first (in reverse order to avoid foreign key constraints)
         print("🧹 Clearing existing data...")
         supabase.table("utility_bills").delete().neq("id", 0).execute()
         supabase.table("departments").delete().neq("id", 0).execute()
         supabase.table("schools").delete().neq("id", 0).execute()
         supabase.table("financial_years").delete().neq("id", 0).execute()
         
-        # Restore financial years FIRST (no dependencies)
         if backup_data['financial_years']:
             print(f"📅 Restoring {len(backup_data['financial_years'])} financial years...")
             try:
                 for fy in backup_data['financial_years']:
-                    # Remove id to let database generate new ones
                     fy_data = {k: v for k, v in fy.items() if k != 'id'}
                     if 'created_at' not in fy_data:
                         fy_data['created_at'] = datetime.now().isoformat()
@@ -1891,12 +1872,10 @@ def restore_backup():
                 errors.append(f"Financial Years: {str(e)}")
                 restoration_stats['financial_years'] = f"Error: {str(e)}"
         
-        # Restore schools (needed for utility bills)
         if backup_data['schools']:
             print(f"📚 Restoring {len(backup_data['schools'])} schools...")
             try:
                 for school in backup_data['schools']:
-                    # Remove id to let database generate new ones
                     school_data = {k: v for k, v in school.items() if k != 'id'}
                     if 'created_at' not in school_data:
                         school_data['created_at'] = datetime.now().isoformat()
@@ -1906,12 +1885,10 @@ def restore_backup():
                 errors.append(f"Schools: {str(e)}")
                 restoration_stats['schools'] = f"Error: {str(e)}"
         
-        # Restore departments (needed for utility bills)
         if backup_data['departments']:
             print(f"🏢 Restoring {len(backup_data['departments'])} departments...")
             try:
                 for dept in backup_data['departments']:
-                    # Remove id to let database generate new ones
                     dept_data = {k: v for k, v in dept.items() if k != 'id'}
                     if 'created_at' not in dept_data:
                         dept_data['created_at'] = datetime.now().isoformat()
@@ -1921,17 +1898,14 @@ def restore_backup():
                 errors.append(f"Departments: {str(e)}")
                 restoration_stats['departments'] = f"Error: {str(e)}"
         
-        # Restore utility bills LAST (depends on schools and departments)
         if backup_data['utility_bills']:
             print(f"📋 Restoring {len(backup_data['utility_bills'])} utility bills...")
             try:
                 for bill in backup_data['utility_bills']:
-                    # Remove id to let database generate new ones
                     bill_data = {k: v for k, v in bill.items() if k != 'id'}
                     if 'created_at' not in bill_data:
                         bill_data['created_at'] = datetime.now().isoformat()
                     
-                    # Update entity_name based on current data
                     if bill_data.get('entity_type') == 'school' and bill_data.get('entity_id'):
                         try:
                             school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
@@ -1990,11 +1964,9 @@ def export_csv():
         export_type = request.args.get('type', 'all')
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Create backups directory if it doesn't exist
         os.makedirs('backups', exist_ok=True)
         
         if export_type == 'schools' or export_type == 'all':
-            # Export schools - ORDERED BY CLUSTER, NAME
             schools_response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
             schools_data = schools_response.data if schools_response.data else []
             
@@ -2013,7 +1985,6 @@ def export_csv():
                 schools_filename = f"schools_export_{timestamp}.csv"
         
         if export_type == 'departments' or export_type == 'all':
-            # Export departments - ORDERED BY DEPARTMENT, DIVISION, UNIT
             dept_response = supabase.table("departments").select("*").order("department_name").order("division_name").order("unit_name").execute()
             dept_data = dept_response.data if dept_response.data else []
             
@@ -2032,7 +2003,6 @@ def export_csv():
                 dept_filename = f"departments_export_{timestamp}.csv"
         
         if export_type == 'utility_bills' or export_type == 'all':
-            # Export utility bills - ORDERED BY YEAR, MONTH, ENTITY
             bills_response = supabase.table("utility_bills").select("*").order("year", desc=True).order("month", desc=True).order("entity_type").order("entity_name").execute()
             bills_data = bills_response.data if bills_response.data else []
             
@@ -2051,7 +2021,6 @@ def export_csv():
                 bills_filename = f"utility_bills_export_{timestamp}.csv"
         
         if export_type == 'all':
-            # Create a ZIP file with all CSVs
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 if schools_data:
@@ -2071,7 +2040,6 @@ def export_csv():
                 mimetype='application/zip'
             )
         else:
-            # Return single CSV file
             if export_type == 'schools':
                 return send_file(
                     io.BytesIO(schools_csv_content.encode()),
@@ -2106,13 +2074,11 @@ def format_file_size(size_bytes):
         size_bytes /= 1024.0
     return f"{size_bytes:.1f} TB"
 
-# Serve backup files statically
 @app.route('/backups/<filename>')
 def serve_backup(filename):
     """Serve backup file for viewing"""
     backup_path = os.path.join('backups', filename)
     
-    # Security check
     if not os.path.exists(backup_path) or '..' in filename:
         return jsonify({'error': 'File not found'}), 404
     
@@ -2143,18 +2109,15 @@ if __name__ == '__main__':
     print("👤 Contact: aka.sazali@gmail.com")
     print("="*60 + "\n")
     
-    # Test connection on startup
     print("🔗 Testing Supabase connection...")
     if test_supabase_connection():
         print("✅ All systems ready!")
     else:
         print("⚠️  Warning: Supabase connection failed")
     
-    # Initialize database tables
     initialize_database_tables()
     
     port = int(os.environ.get('PORT', 5000))
     print(f"🌐 Server will run on port: {port}")
     
     app.run(host='0.0.0.0', port=port, debug=False)
-
