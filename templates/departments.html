@@ -1,4 +1,3 @@
-departments.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -553,7 +552,7 @@ departments.html
             const departmentModal = document.getElementById('departmentModal');
             const closeModal = document.getElementById('closeModal');
             const cancelBtn = document.getElementById('cancelBtn');
-            const departmentForm = document.getElementById('departmentForm');
+            const departmentForm = document.getElementById('epartmentForm');
             const modalTitle = document.getElementById('modalTitle');
             const submitBtn = document.getElementById('submitBtn');
             
@@ -572,7 +571,7 @@ departments.html
                 departmentModal.style.display = 'none';
             });
             
-            // Form submission - FIXED VERSION
+            // Form submission
             departmentForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
@@ -588,11 +587,9 @@ departments.html
                 let url, method;
                 
                 if (editingDepartmentId) {
-                    // Editing existing department
                     url = `/api/departments/${editingDepartmentId}`;
                     method = 'PUT';
                 } else {
-                    // Adding new department
                     url = '/api/departments';
                     method = 'POST';
                 }
@@ -648,7 +645,7 @@ departments.html
                     // Update filter dropdowns
                     updateFilterDropdowns(allDepartments);
                     
-                    // Apply initial filters
+                    // Apply initial filters and sorting
                     filterDepartments();
                 })
                 .catch(error => {
@@ -732,22 +729,35 @@ departments.html
                 filteredDepartments = filteredDepartments.filter(dept => dept.division_name === divisionFilter);
             }
             
-            // Sort departments
-            filteredDepartments.sort((a, b) => {
-                switch(sortBy) {
-                    case 'seq':
-                    case 'id':
-                        return a.id - b.id; // Sort by database ID
-                    case 'unitName':
-                        return (a.unit_name || '').localeCompare(b.unit_name || '');
-                    case 'divisionName':
-                        return (a.division_name || '').localeCompare(b.division_name || '');
-                    case 'departmentName':
-                        return (a.department_name || '').localeCompare(b.department_name || '');
-                    default:
-                        return a.id - b.id; // Default to database ID sort
-                }
-            });
+            // Sort departments based on selected option
+            if (sortBy === 'id') {
+                // Sort by database ID (ascending)
+                filteredDepartments.sort((a, b) => a.id - b.id);
+            } else if (sortBy === 'unitName') {
+                // Sort by Unit Name (A-Z)
+                filteredDepartments.sort((a, b) => {
+                    const nameA = a.unit_name || '';
+                    const nameB = b.unit_name || '';
+                    return nameA.localeCompare(nameB);
+                });
+            } else if (sortBy === 'divisionName') {
+                // Sort by Division Name (A-Z)
+                filteredDepartments.sort((a, b) => {
+                    const nameA = a.division_name || '';
+                    const nameB = b.division_name || '';
+                    return nameA.localeCompare(nameB);
+                });
+            } else if (sortBy === 'departmentName') {
+                // Sort by Department Name (A-Z)
+                filteredDepartments.sort((a, b) => {
+                    const nameA = a.department_name || '';
+                    const nameB = b.department_name || '';
+                    return nameA.localeCompare(nameB);
+                });
+            } else {
+                // Default: Sort by sequence (which is database ID order)
+                filteredDepartments.sort((a, b) => a.id - b.id);
+            }
             
             renderDepartmentsTable(filteredDepartments);
         }
@@ -778,7 +788,7 @@ departments.html
                 departmentsByDept[deptName].push(dept);
             });
             
-            // Get department names sorted alphabetically
+            // Get department names sorted alphabetically regardless of sort option
             const deptNames = Object.keys(departmentsByDept).sort((a, b) => a.localeCompare(b));
             
             // Track sequence number across all departments
