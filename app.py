@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 import traceback
 import json
 import sys
-import zipfile  
+import zipfile
+import base64
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -17,8 +18,10 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'uka-bill-utility-secret
 
 # Configure upload folder
 UPLOAD_FOLDER = 'uploads'
+BACKUP_FOLDER = 'backups'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['BACKUP_FOLDER'] = BACKUP_FOLDER
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -97,21 +100,25 @@ def test_supabase_connection():
 # ============ DATABASE INITIALIZATION FUNCTIONS ============
 
 def initialize_database_tables():
-    """Check if required tables exist"""
+    """Check if required tables exist and create backup_metadata table if needed"""
     try:
         if not supabase:
             return
         
         print("🗄️ Checking required database tables...")
         
-        tables = ['financial_years', 'schools', 'departments', 'utility_bills']
+        tables = ['financial_years', 'schools', 'departments', 'utility_bills', 'backup_metadata']
         for table in tables:
             try:
                 supabase.table(table).select("id").limit(1).execute()
                 print(f"✅ {table.capitalize()} table exists")
             except Exception as e:
-                print(f"❌ {table} table not found or error accessing it")
-                print(f"⚠️ Please create the '{table}' table manually in Supabase")
+                print(f"⚠️ {table} table not found or error accessing it")
+                if table == 'backup_metadata':
+                    print(f"ℹ️ Creating backup_metadata table automatically")
+                    # The table will be created on first use through the backup API
+                else:
+                    print(f"⚠️ Please create the '{table}' table manually in Supabase")
                 
     except Exception as e:
         print(f"⚠️ Database check warning: {e}")
@@ -1556,16 +1563,44 @@ def health_check():
 def api_test():
     return jsonify({'message': 'API is working'})
 
-# ============ BACKUP & RESTORE API ============
+# ============ BACKUP & RESTORE API - HYBRID APPROACH ============
+
+def ensure_backup_metadata_table():
+    """Ensure backup_metadata table exists in Supabase"""
+    try:
+        if not supabase:
+            return False
+        
+        # Try to create the table by inserting a test record
+        try:
+            test_data = {
+                "filename": "test_backup.json",
+                "created_at": datetime.now().isoformat(),
+                "file_size": 0,
+                "records_count": json.dumps({"test": 0}),
+                "backup_content": "test",
+                "is_deleted": True
+            }
+            response = supabase.table("backup_metadata").insert(test_data).execute()
+            if response.data:
+                # Delete the test record
+                supabase.table("backup_metadata").delete().eq("filename", "test_backup.json").execute()
+            return True
+        except Exception as e:
+            print(f"⚠️ Could not access backup_metadata table: {e}")
+            return False
+    except Exception as e:
+        print(f"⚠️ Error ensuring backup_metadata table: {e}")
+        return False
 
 @app.route('/api/backup/all')
 def backup_all_data():
-    """Create a complete backup of all data - PRESERVE ORDER VERSION"""
+    """Create a complete backup of all data - HYBRID APPROACH: Save to Supabase AND provide download"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        print("💾 Creating complete backup (preserving order)...")
+        print("💾 Creating complete backup with Supabase storage...")
         
         backup_data = {}
         
@@ -1596,9 +1631,6 @@ def backup_all_data():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"uka_bill_backup_{timestamp}.json"
         
-        os.makedirs('backups', exist_ok=True)
-        backup_path = os.path.join('backups', backup_filename)
-        
         backup_metadata = {
             'backup_date': datetime.now().isoformat(),
             'backup_filename': backup_filename,
@@ -1620,12 +1652,42 @@ def backup_all_data():
             'data': backup_data
         }
         
-        with open(backup_path, 'w', encoding='utf-8') as f:
-            json.dump(full_backup_data, f, indent=2, ensure_ascii=False, default=str)
-        
         backup_content = json.dumps(full_backup_data, indent=2, ensure_ascii=False, default=str)
         
-        print(f"✅ Backup created successfully: {backup_filename}")
+        # ===== SAVE TO SUPABASE =====
+        try:
+            # Ensure the table exists or create it
+            ensure_backup_metadata_table()
+            
+            # Save backup metadata to Supabase
+            supabase_backup_data = {
+                "filename": backup_filename,
+                "created_at": datetime.now().isoformat(),
+                "file_size": len(backup_content.encode('utf-8')),
+                "records_count": json.dumps(backup_metadata['records_count']),
+                "backup_content": backup_content,  # Store full backup content in Supabase
+                "metadata": json.dumps(backup_metadata),
+                "is_deleted": False
+            }
+            
+            try:
+                supabase.table("backup_metadata").insert(supabase_backup_data).execute()
+                print(f"✅ Backup saved to Supabase: {backup_filename}")
+                saved_to_supabase = True
+            except Exception as e:
+                print(f"⚠️ Could not save backup to Supabase: {e}")
+                saved_to_supabase = False
+        except Exception as e:
+            print(f"⚠️ Error saving to Supabase: {e}")
+            saved_to_supabase = False
+        
+        # ===== SAVE TO LOCAL BACKUPS DIRECTORY =====
+        os.makedirs('backups', exist_ok=True)
+        backup_path = os.path.join('backups', backup_filename)
+        with open(backup_path, 'w', encoding='utf-8') as f:
+            f.write(backup_content)
+        
+        print(f"✅ Backup saved locally: {backup_filename}")
         print(f"   Schools: {len(schools_data)} records (ordered by cluster)")
         print(f"   Departments: {len(departments_data)} records (ordered by department)")
         print(f"   Utility Bills: {len(bills_data)} records (ordered by year/month)")
@@ -1633,10 +1695,11 @@ def backup_all_data():
         
         return jsonify({
             'success': True,
-            'message': 'Backup created successfully with order preserved',
+            'message': 'Backup created successfully and saved to database',
             'backup_filename': backup_filename,
             'backup_content': backup_content,
-            'metadata': backup_metadata
+            'metadata': backup_metadata,
+            'saved_to_supabase': saved_to_supabase
         })
         
     except Exception as e:
@@ -1646,13 +1709,34 @@ def backup_all_data():
 
 @app.route('/api/backup/download/<filename>')
 def download_backup(filename):
-    """Download a backup file"""
+    """Download a backup file - Try Supabase first, then local"""
     try:
+        # First, try to get from Supabase
+        if supabase:
+            try:
+                response = supabase.table("backup_metadata").select("backup_content").eq("filename", filename).eq("is_deleted", False).execute()
+                if response.data and len(response.data) > 0 and response.data[0].get('backup_content'):
+                    backup_content = response.data[0]['backup_content']
+                    mem = io.BytesIO()
+                    mem.write(backup_content.encode('utf-8'))
+                    mem.seek(0)
+                    print(f"✅ Serving backup from Supabase: {filename}")
+                    return send_file(
+                        mem,
+                        as_attachment=True,
+                        download_name=filename,
+                        mimetype='application/json'
+                    )
+            except Exception as e:
+                print(f"⚠️ Could not get backup from Supabase: {e}")
+        
+        # Fallback to local file
         backup_path = os.path.join('backups', filename)
         
         if not os.path.exists(backup_path) or '..' in filename or not filename.endswith('.json'):
             return jsonify({'error': 'Invalid backup file'}), 404
         
+        print(f"✅ Serving backup from local storage: {filename}")
         return send_file(
             backup_path,
             as_attachment=True,
@@ -1720,10 +1804,28 @@ def download_backup_direct():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"uka_bill_backup_{timestamp}.json"
         
+        # Also save locally
         backup_path = os.path.join('backups', backup_filename)
         os.makedirs('backups', exist_ok=True)
         with open(backup_path, 'w', encoding='utf-8') as f:
             f.write(backup_content)
+        
+        # Try to save to Supabase
+        try:
+            ensure_backup_metadata_table()
+            supabase_backup_data = {
+                "filename": backup_filename,
+                "created_at": datetime.now().isoformat(),
+                "file_size": len(backup_content.encode('utf-8')),
+                "records_count": json.dumps(backup_metadata['records_count']),
+                "backup_content": backup_content,
+                "metadata": json.dumps(backup_metadata),
+                "is_deleted": False
+            }
+            supabase.table("backup_metadata").insert(supabase_backup_data).execute()
+            print(f"✅ Backup also saved to Supabase: {backup_filename}")
+        except Exception as e:
+            print(f"⚠️ Could not save backup to Supabase: {e}")
         
         print(f"✅ Backup created and ready for download: {backup_filename}")
         
@@ -1741,44 +1843,86 @@ def download_backup_direct():
 
 @app.route('/api/backup/list')
 def list_backups():
-    """List all available backups"""
+    """List all available backups - COMBINED from Supabase and local storage"""
     try:
-        backups_dir = 'backups'
-        os.makedirs(backups_dir, exist_ok=True)
-        
         backup_files = []
-        for filename in os.listdir(backups_dir):
-            if filename.endswith('.json'):
-                filepath = os.path.join(backups_dir, filename)
-                file_stats = os.stat(filepath)
-                
-                try:
-                    with open(filepath, 'r', encoding='utf-8') as f:
-                        backup_data = json.load(f)
-                    
-                    if 'metadata' in backup_data:
-                        metadata = backup_data['metadata']
-                        records_count = metadata.get('records_count', {})
-                    else:
-                        records_count = {}
-                        if 'schools' in backup_data:
-                            records_count['schools'] = len(backup_data.get('schools', []))
-                        if 'departments' in backup_data:
-                            records_count['departments'] = len(backup_data.get('departments', []))
-                        if 'utility_bills' in backup_data:
-                            records_count['utility_bills'] = len(backup_data.get('utility_bills', []))
-                except:
-                    records_count = {}
-                
-                backup_files.append({
-                    'filename': filename,
-                    'created': datetime.fromtimestamp(file_stats.st_ctime).isoformat(),
-                    'size': file_stats.st_size,
-                    'size_formatted': format_file_size(file_stats.st_size),
-                    'download_url': f'/api/backup/download/{filename}',
-                    'records_count': records_count
-                })
+        seen_filenames = set()
         
+        # ===== GET BACKUPS FROM SUPABASE =====
+        if supabase:
+            try:
+                response = supabase.table("backup_metadata").select("*").eq("is_deleted", False).order("created_at", desc=True).execute()
+                
+                if response.data:
+                    for item in response.data:
+                        filename = item.get('filename')
+                        seen_filenames.add(filename)
+                        
+                        # Parse records count
+                        records_count = {}
+                        try:
+                            records_count_str = item.get('records_count', '{}')
+                            if isinstance(records_count_str, str):
+                                records_count = json.loads(records_count_str)
+                            else:
+                                records_count = records_count_str
+                        except:
+                            records_count = {}
+                        
+                        backup_files.append({
+                            'filename': filename,
+                            'created': item.get('created_at', datetime.now().isoformat()),
+                            'size': item.get('file_size', 0),
+                            'size_formatted': format_file_size(item.get('file_size', 0)),
+                            'download_url': f'/api/backup/download/{filename}',
+                            'records_count': records_count,
+                            'source': 'supabase'
+                        })
+            except Exception as e:
+                print(f"⚠️ Could not get backups from Supabase: {e}")
+        
+        # ===== GET BACKUPS FROM LOCAL STORAGE =====
+        try:
+            backups_dir = 'backups'
+            os.makedirs(backups_dir, exist_ok=True)
+            
+            for filename in os.listdir(backups_dir):
+                if filename.endswith('.json') and filename not in seen_filenames:
+                    filepath = os.path.join(backups_dir, filename)
+                    file_stats = os.stat(filepath)
+                    
+                    # Try to read metadata from file
+                    records_count = {}
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            backup_data = json.load(f)
+                        
+                        if 'metadata' in backup_data:
+                            metadata = backup_data['metadata']
+                            records_count = metadata.get('records_count', {})
+                        else:
+                            records_count = {
+                                'schools': len(backup_data.get('schools', [])) if 'schools' in backup_data else 0,
+                                'departments': len(backup_data.get('departments', [])) if 'departments' in backup_data else 0,
+                                'utility_bills': len(backup_data.get('utility_bills', [])) if 'utility_bills' in backup_data else 0,
+                                'financial_years': len(backup_data.get('financial_years', [])) if 'financial_years' in backup_data else 0
+                            }
+                    except:
+                        pass
+                    
+                    backup_files.append({
+                        'filename': filename,
+                        'created': datetime.fromtimestamp(file_stats.st_ctime).isoformat(),
+                        'size': file_stats.st_size,
+                        'size_formatted': format_file_size(file_stats.st_size),
+                        'download_url': f'/api/backup/download/{filename}',
+                        'records_count': records_count,
+                        'source': 'local'
+                    })
+        except Exception as e:
+            print(f"⚠️ Could not get backups from local storage: {e}")
+        
+        # Sort by created date (newest first)
         backup_files.sort(key=lambda x: x['created'], reverse=True)
         
         return jsonify({
@@ -1793,21 +1937,50 @@ def list_backups():
 
 @app.route('/api/backup/delete/<filename>', methods=['DELETE'])
 def delete_backup(filename):
-    """Delete a backup file"""
+    """Delete a backup file - Delete from Supabase AND local storage"""
     try:
+        deleted_from_supabase = False
+        deleted_from_local = False
+        
+        # ===== DELETE FROM SUPABASE =====
+        if supabase:
+            try:
+                # Soft delete by setting is_deleted flag
+                response = supabase.table("backup_metadata").update({"is_deleted": True}).eq("filename", filename).execute()
+                if response.data:
+                    deleted_from_supabase = True
+                    print(f"✅ Backup soft-deleted from Supabase: {filename}")
+                else:
+                    # Try hard delete if soft delete fails
+                    response = supabase.table("backup_metadata").delete().eq("filename", filename).execute()
+                    if response.data:
+                        deleted_from_supabase = True
+                        print(f"✅ Backup hard-deleted from Supabase: {filename}")
+            except Exception as e:
+                print(f"⚠️ Could not delete backup from Supabase: {e}")
+        
+        # ===== DELETE FROM LOCAL STORAGE =====
         backup_path = os.path.join('backups', filename)
+        if os.path.exists(backup_path) and filename.endswith('.json') and '..' not in filename:
+            try:
+                os.remove(backup_path)
+                deleted_from_local = True
+                print(f"✅ Backup deleted from local storage: {filename}")
+            except Exception as e:
+                print(f"⚠️ Could not delete backup from local storage: {e}")
         
-        if not os.path.exists(backup_path) or '..' in filename or not filename.endswith('.json'):
-            return jsonify({'success': False, 'error': 'Invalid backup file'}), 404
-        
-        os.remove(backup_path)
-        
-        print(f"🗑️ Backup file deleted: {filename}")
-        
-        return jsonify({
-            'success': True,
-            'message': f'Backup file "{filename}" deleted successfully'
-        })
+        if deleted_from_supabase or deleted_from_local:
+            return jsonify({
+                'success': True,
+                'message': f'Backup file "{filename}" deleted successfully',
+                'deleted_from_supabase': deleted_from_supabase,
+                'deleted_from_local': deleted_from_local
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Backup file not found or could not be deleted'
+            }), 404
         
     except Exception as e:
         print(f"❌ Delete backup error: {e}")
@@ -1815,26 +1988,67 @@ def delete_backup(filename):
 
 @app.route('/api/backup/restore', methods=['POST'])
 def restore_backup():
-    """Restore data from a backup file - PRESERVE ORDER VERSION"""
+    """Restore data from a backup file - SUPPORTS BOTH SUPABASE AND LOCAL BACKUPS"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        if 'backup_file' not in request.files:
-            return jsonify({'error': 'No backup file provided'}), 400
+        backup_content = None
+        backup_filename = None
         
-        backup_file = request.files['backup_file']
+        # Check if we're restoring from uploaded file or from stored backup
+        if 'backup_file' in request.files:
+            # Restore from uploaded file
+            backup_file = request.files['backup_file']
+            
+            if backup_file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
+            
+            if not backup_file.filename.endswith('.json'):
+                return jsonify({'error': 'Only JSON backup files are supported'}), 400
+            
+            backup_filename = backup_file.filename
+            backup_content = backup_file.read().decode('utf-8')
+            print(f"📥 Restoring from uploaded file: {backup_filename}")
         
-        if backup_file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+        elif request.is_json:
+            # Restore from filename (Supabase backup)
+            data = request.get_json()
+            filename = data.get('filename')
+            
+            if not filename:
+                return jsonify({'error': 'No backup file specified'}), 400
+            
+            backup_filename = filename
+            
+            # Try to get from Supabase first
+            if supabase:
+                try:
+                    response = supabase.table("backup_metadata").select("backup_content").eq("filename", filename).eq("is_deleted", False).execute()
+                    if response.data and len(response.data) > 0 and response.data[0].get('backup_content'):
+                        backup_content = response.data[0]['backup_content']
+                        print(f"📥 Restoring from Supabase backup: {filename}")
+                except Exception as e:
+                    print(f"⚠️ Could not get backup from Supabase: {e}")
+            
+            # Try local file if not found in Supabase
+            if not backup_content:
+                backup_path = os.path.join('backups', filename)
+                if os.path.exists(backup_path):
+                    with open(backup_path, 'r', encoding='utf-8') as f:
+                        backup_content = f.read()
+                    print(f"📥 Restoring from local backup: {filename}")
         
-        if not backup_file.filename.endswith('.json'):
-            return jsonify({'error': 'Only JSON backup files are supported'}), 400
+        if not backup_content:
+            return jsonify({'error': 'Backup file not found'}), 404
         
-        backup_content = backup_file.read().decode('utf-8')
-        backup_data_full = json.loads(backup_content)
+        # Parse backup data
+        try:
+            backup_data_full = json.loads(backup_content)
+        except json.JSONDecodeError as e:
+            return jsonify({'error': f'Invalid JSON backup file: {str(e)}'}), 400
         
-        print(f"📥 Restoring backup: {backup_file.filename}")
+        print(f"📥 Processing backup: {backup_filename}")
         
         if 'data' in backup_data_full and 'metadata' in backup_data_full:
             backup_data = backup_data_full['data']
@@ -1854,11 +2068,18 @@ def restore_backup():
         errors = []
         
         print("🧹 Clearing existing data...")
-        supabase.table("utility_bills").delete().neq("id", 0).execute()
-        supabase.table("departments").delete().neq("id", 0).execute()
-        supabase.table("schools").delete().neq("id", 0).execute()
-        supabase.table("financial_years").delete().neq("id", 0).execute()
         
+        # Delete in reverse order of dependencies
+        try:
+            supabase.table("utility_bills").delete().neq("id", 0).execute()
+            supabase.table("departments").delete().neq("id", 0).execute()
+            supabase.table("schools").delete().neq("id", 0).execute()
+            supabase.table("financial_years").delete().neq("id", 0).execute()
+            print("✅ Existing data cleared")
+        except Exception as e:
+            print(f"⚠️ Error clearing data: {e}")
+        
+        # Restore financial years
         if backup_data['financial_years']:
             print(f"📅 Restoring {len(backup_data['financial_years'])} financial years...")
             try:
@@ -1872,6 +2093,7 @@ def restore_backup():
                 errors.append(f"Financial Years: {str(e)}")
                 restoration_stats['financial_years'] = f"Error: {str(e)}"
         
+        # Restore schools
         if backup_data['schools']:
             print(f"📚 Restoring {len(backup_data['schools'])} schools...")
             try:
@@ -1885,6 +2107,7 @@ def restore_backup():
                 errors.append(f"Schools: {str(e)}")
                 restoration_stats['schools'] = f"Error: {str(e)}"
         
+        # Restore departments
         if backup_data['departments']:
             print(f"🏢 Restoring {len(backup_data['departments'])} departments...")
             try:
@@ -1898,6 +2121,7 @@ def restore_backup():
                 errors.append(f"Departments: {str(e)}")
                 restoration_stats['departments'] = f"Error: {str(e)}"
         
+        # Restore utility bills
         if backup_data['utility_bills']:
             print(f"📋 Restoring {len(backup_data['utility_bills'])} utility bills...")
             try:
@@ -1906,6 +2130,7 @@ def restore_backup():
                     if 'created_at' not in bill_data:
                         bill_data['created_at'] = datetime.now().isoformat()
                     
+                    # Update entity name if needed
                     if bill_data.get('entity_type') == 'school' and bill_data.get('entity_id'):
                         try:
                             school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
@@ -1944,7 +2169,154 @@ def restore_backup():
             
             return jsonify({
                 'success': True,
-                'message': 'Data restored successfully with order preserved' if metadata.get('order_preserved') else 'Data restored successfully',
+                'message': 'Data restored successfully',
+                'restoration_stats': restoration_stats,
+                'order_preserved': metadata.get('order_preserved', False)
+            })
+        
+    except Exception as e:
+        print(f"❌ Restore backup error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'success': False, 'error': f'Failed to restore backup: {str(e)}'}), 500
+
+@app.route('/api/backup/restore-from-file', methods=['POST'])
+def restore_backup_from_file():
+    """Restore from a backup file - Simplified endpoint for file uploads"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        if 'backup_file' not in request.files:
+            return jsonify({'error': 'No backup file provided'}), 400
+        
+        backup_file = request.files['backup_file']
+        
+        if backup_file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not backup_file.filename.endswith('.json'):
+            return jsonify({'error': 'Only JSON backup files are supported'}), 400
+        
+        backup_content = backup_file.read().decode('utf-8')
+        
+        print(f"📥 Restoring from file: {backup_file.filename}")
+        
+        # Parse backup data
+        try:
+            backup_data_full = json.loads(backup_content)
+        except json.JSONDecodeError as e:
+            return jsonify({'error': f'Invalid JSON backup file: {str(e)}'}), 400
+        
+        if 'data' in backup_data_full and 'metadata' in backup_data_full:
+            backup_data = backup_data_full['data']
+            metadata = backup_data_full['metadata']
+        else:
+            backup_data = backup_data_full
+            metadata = {'order_preserved': False}
+        
+        required_tables = ['schools', 'departments', 'utility_bills', 'financial_years']
+        for table in required_tables:
+            if table not in backup_data:
+                return jsonify({'error': f'Invalid backup file: missing {table} data'}), 400
+        
+        restoration_stats = {}
+        errors = []
+        
+        print("🧹 Clearing existing data...")
+        
+        # Delete in reverse order of dependencies
+        try:
+            supabase.table("utility_bills").delete().neq("id", 0).execute()
+            supabase.table("departments").delete().neq("id", 0).execute()
+            supabase.table("schools").delete().neq("id", 0).execute()
+            supabase.table("financial_years").delete().neq("id", 0).execute()
+            print("✅ Existing data cleared")
+        except Exception as e:
+            print(f"⚠️ Error clearing data: {e}")
+        
+        # Restore financial years
+        if backup_data['financial_years']:
+            print(f"📅 Restoring {len(backup_data['financial_years'])} financial years...")
+            try:
+                for fy in backup_data['financial_years']:
+                    fy_data = {k: v for k, v in fy.items() if k != 'id'}
+                    if 'created_at' not in fy_data:
+                        fy_data['created_at'] = datetime.now().isoformat()
+                    supabase.table("financial_years").insert(fy_data).execute()
+                restoration_stats['financial_years'] = len(backup_data['financial_years'])
+            except Exception as e:
+                errors.append(f"Financial Years: {str(e)}")
+                restoration_stats['financial_years'] = f"Error: {str(e)}"
+        
+        # Restore schools
+        if backup_data['schools']:
+            print(f"📚 Restoring {len(backup_data['schools'])} schools...")
+            try:
+                for school in backup_data['schools']:
+                    school_data = {k: v for k, v in school.items() if k != 'id'}
+                    if 'created_at' not in school_data:
+                        school_data['created_at'] = datetime.now().isoformat()
+                    supabase.table("schools").insert(school_data).execute()
+                restoration_stats['schools'] = len(backup_data['schools'])
+            except Exception as e:
+                errors.append(f"Schools: {str(e)}")
+                restoration_stats['schools'] = f"Error: {str(e)}"
+        
+        # Restore departments
+        if backup_data['departments']:
+            print(f"🏢 Restoring {len(backup_data['departments'])} departments...")
+            try:
+                for dept in backup_data['departments']:
+                    dept_data = {k: v for k, v in dept.items() if k != 'id'}
+                    if 'created_at' not in dept_data:
+                        dept_data['created_at'] = datetime.now().isoformat()
+                    supabase.table("departments").insert(dept_data).execute()
+                restoration_stats['departments'] = len(backup_data['departments'])
+            except Exception as e:
+                errors.append(f"Departments: {str(e)}")
+                restoration_stats['departments'] = f"Error: {str(e)}"
+        
+        # Restore utility bills
+        if backup_data['utility_bills']:
+            print(f"📋 Restoring {len(backup_data['utility_bills'])} utility bills...")
+            try:
+                for bill in backup_data['utility_bills']:
+                    bill_data = {k: v for k, v in bill.items() if k != 'id'}
+                    if 'created_at' not in bill_data:
+                        bill_data['created_at'] = datetime.now().isoformat()
+                    
+                    if bill_data.get('entity_type') == 'school' and bill_data.get('entity_id'):
+                        try:
+                            school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
+                            if school_response.data:
+                                bill_data['entity_name'] = school_response.data[0]['name']
+                        except:
+                            pass
+                    elif bill_data.get('entity_type') == 'department' and bill_data.get('entity_id'):
+                        try:
+                            dept_response = supabase.table("departments").select("name").eq("id", bill_data['entity_id']).execute()
+                            if dept_response.data:
+                                bill_data['entity_name'] = dept_response.data[0]['name']
+                        except:
+                            pass
+                    
+                    supabase.table("utility_bills").insert(bill_data).execute()
+                restoration_stats['utility_bills'] = len(backup_data['utility_bills'])
+            except Exception as e:
+                errors.append(f"Utility Bills: {str(e)}")
+                restoration_stats['utility_bills'] = f"Error: {str(e)}"
+        
+        if errors:
+            return jsonify({
+                'success': False,
+                'message': 'Restoration completed with errors',
+                'restoration_stats': restoration_stats,
+                'errors': errors
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': 'Data restored successfully',
                 'restoration_stats': restoration_stats,
                 'order_preserved': metadata.get('order_preserved', False)
             })
@@ -1965,6 +2337,16 @@ def export_csv():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         os.makedirs('backups', exist_ok=True)
+        
+        schools_data = []
+        dept_data = []
+        bills_data = []
+        schools_csv_content = ""
+        dept_csv_content = ""
+        bills_csv_content = ""
+        schools_filename = ""
+        dept_filename = ""
+        bills_filename = ""
         
         if export_type == 'schools' or export_type == 'all':
             schools_response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
