@@ -467,7 +467,7 @@
         
         .statistics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             gap: 20px;
         }
         
@@ -476,18 +476,25 @@
             border-radius: 8px;
             padding: 20px;
             border-left: 4px solid var(--primary);
+            display: flex;
+            flex-direction: column;
+            height: auto;
+            min-height: 400px;
+            max-height: 600px;
         }
         
         .statistics-card h3 {
             margin-bottom: 15px;
             color: var(--primary);
             font-size: 1.2rem;
+            flex-shrink: 0;
         }
         
         .statistics-content {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            flex-shrink: 0;
         }
         
         .stat-item {
@@ -513,17 +520,72 @@
             font-size: 1.1rem;
         }
         
+        /* Scrollable details section */
         .stat-details {
-            margin-top: 10px;
-            padding: 10px;
+            margin-top: 15px;
+            padding: 15px;
             background: white;
             border-radius: 5px;
             font-size: 0.9rem;
             color: var(--gray);
+            border: 1px solid #e9ecef;
+            flex: 1;
+            min-height: 150px;
+            max-height: 250px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--primary) #e9ecef;
+        }
+        
+        /* Custom scrollbar for WebKit browsers */
+        .stat-details::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .stat-details::-webkit-scrollbar-track {
+            background: #e9ecef;
+            border-radius: 3px;
+        }
+        
+        .stat-details::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 3px;
+        }
+        
+        .stat-details::-webkit-scrollbar-thumb:hover {
+            background: var(--secondary);
         }
         
         .stat-details p {
-            margin: 5px 0;
+            margin: 8px 0;
+            line-height: 1.5;
+            border-bottom: 1px dashed #eee;
+            padding-bottom: 5px;
+        }
+        
+        .stat-details p:last-child {
+            border-bottom: none;
+        }
+        
+        .stat-details strong {
+            color: var(--dark);
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1rem;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 5px;
+        }
+        
+        .stat-details .item-count {
+            font-size: 0.8rem;
+            color: var(--gray);
+            margin-left: 5px;
+        }
+        
+        .stat-details .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
         /* Color coding for different stats */
@@ -733,9 +795,9 @@
                             <span class="stat-label">Total Divisions:</span>
                             <span class="stat-value" id="totalDivisions">0</span>
                         </div>
-                        <div class="stat-details" id="departmentDetails">
-                            <p>Loading department details...</p>
-                        </div>
+                    </div>
+                    <div class="stat-details" id="departmentDetails">
+                        <p>Loading department details...</p>
                     </div>
                 </div>
                 
@@ -763,9 +825,9 @@
                             <span class="stat-label">Colleges/Other:</span>
                             <span class="stat-value" id="collegeSchools">0</span>
                         </div>
-                        <div class="stat-details" id="schoolDetails">
-                            <p>Loading school details...</p>
-                        </div>
+                    </div>
+                    <div class="stat-details" id="schoolDetails">
+                        <p>Loading school details...</p>
                     </div>
                 </div>
                 
@@ -1807,7 +1869,7 @@
                     document.getElementById('telephoneBills').textContent = data.utility_bills.telephone_bills;
                     document.getElementById('totalAmount').textContent = formatCurrency(data.utility_bills.total_amount);
                     
-                    // Update details
+                    // Update details with scrollable lists showing all items
                     updateDepartmentDetails(data.departments.unique_departments);
                     updateSchoolDetails(data.schools.unique_clusters);
                 })
@@ -1824,14 +1886,10 @@
                 return;
             }
             
-            let html = '<p><strong>Departments:</strong></p>';
-            departments.forEach(dept => {
-                html += `<p>• ${dept}</p>`;
+            let html = '<strong>All Departments:</strong>';
+            departments.sort().forEach((dept, index) => {
+                html += `<p class="list-item"><span>• ${dept}</span> <span class="item-count">${index + 1}</span></p>`;
             });
-            
-            if (departments.length > 10) {
-                html += `<p>... and ${departments.length - 10} more</p>`;
-            }
             
             detailsElement.innerHTML = html;
         }
@@ -1843,18 +1901,26 @@
                 return;
             }
             
-            let html = '<p><strong>Clusters:</strong></p>';
-            clusters.forEach(cluster => {
-                html += `<p>• Cluster ${cluster}</p>`;
+            let html = '<strong>All Clusters:</strong>';
+            
+            // Sort clusters numerically if possible
+            const sortedClusters = clusters.sort((a, b) => {
+                // Try to sort numerically
+                const numA = parseInt(a);
+                const numB = parseInt(b);
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return numA - numB;
+                }
+                // Fallback to string comparison
+                return String(a).localeCompare(String(b));
             });
             
-            if (clusters.length > 10) {
-                html += `<p>... and ${clusters.length - 10} more</p>`;
-            }
+            sortedClusters.forEach((cluster, index) => {
+                html += `<p class="list-item"><span>• Cluster ${cluster}</span> <span class="item-count">${index + 1}</span></p>`;
+            });
             
             detailsElement.innerHTML = html;
         }
     </script>
 </body>
 </html>
-
