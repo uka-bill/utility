@@ -187,6 +187,7 @@
             text-align: left;
             position: sticky;
             top: 0;
+            z-index: 10;
         }
         
         .data-table td {
@@ -343,8 +344,14 @@
         }
         
         .merged-row {
-            background-color: #f8f9fa;
+            background-color: #f0f7ff;
             font-weight: 600;
+            border-bottom: 2px solid var(--primary);
+        }
+        
+        .merged-row td {
+            padding: 12px 15px;
+            color: var(--primary);
         }
         
         .child-row {
@@ -361,6 +368,12 @@
             display: inline-block;
             width: 20px;
             text-align: center;
+            color: var(--primary);
+            font-size: 1.1rem;
+        }
+        
+        .toggle-icon:hover {
+            color: var(--secondary);
         }
         
         .status-badge {
@@ -392,18 +405,37 @@
         
         .no-data-row td {
             text-align: center;
-            padding: 20px;
+            padding: 30px;
         }
         
-        .month-header {
-            background-color: #f0f7ff;
-            font-weight: bold;
-            color: var(--primary);
+        .month-badge {
+            background: var(--info);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+            min-width: 80px;
+            text-align: center;
         }
         
-        .month-header td {
-            padding: 12px 15px;
-            border-bottom: 2px solid var(--primary);
+        .year-badge {
+            background: var(--success);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+            min-width: 60px;
+            text-align: center;
+        }
+        
+        .period-cell {
+            display: flex;
+            gap: 8px;
+            align-items: center;
         }
     </style>
 </head>
@@ -495,6 +527,7 @@
                     <tr>
                         <th>Entity</th>
                         <th>Type</th>
+                        <th>Bill Period</th>
                         <th>Account No.</th>
                         <th>Meter No.</th>
                         <th>Consumption (M³)</th>
@@ -504,7 +537,6 @@
                         <th>Amount Paid</th>
                         <th>Status</th>
                         <th>Bill Image</th>
-                        <th>Bill Period</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -668,6 +700,7 @@
         // Store bills globally for editing
         let allBills = [];
         let currentYear = new Date().getFullYear();
+        let editingBill = null;
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
@@ -706,8 +739,6 @@
             const billIdField = document.getElementById('billId');
             const accountNumberSelect = document.getElementById('accountNumberSelect');
             const accountNumber = document.getElementById('accountNumber');
-            
-            let editingBill = null;
 
             addBillBtn.addEventListener('click', () => {
                 editingBill = null;
@@ -913,7 +944,7 @@
                 let method = 'POST';
                 
                 if (editingBill) {
-                    billData.id = editingBill.id;
+                    url = `/api/utility-bills/${editingBill.id}`;
                     method = 'PUT';
                 }
                 
@@ -1172,6 +1203,19 @@
                 filteredBills = bills.filter(bill => bill.entity_name === selectedEntityName);
             }
             
+            // Sort bills by year (descending) and month (ascending) for better organization
+            filteredBills.sort((a, b) => {
+                const yearA = a.bill_year || a.year;
+                const yearB = b.bill_year || b.year;
+                const monthA = a.bill_month || a.month;
+                const monthB = b.bill_month || b.month;
+                
+                if (yearA !== yearB) {
+                    return yearB - yearA; // Descending by year (newest first)
+                }
+                return monthA - monthB; // Ascending by month
+            });
+            
             // Group bills by entity name for better organization
             const groupedBills = {};
             filteredBills.forEach(bill => {
@@ -1203,94 +1247,61 @@
                 `;
                 tableBody.appendChild(headerRow);
                 
-                // Get the year for organizing by month (use most recent year in bills or current year)
-                const years = [...new Set(entityBills.map(bill => bill.bill_year || bill.year))];
-                const displayYear = years.length > 0 ? Math.max(...years) : currentYear;
-                
-                // Create all months from January to December
-                for (let month = 1; month <= 12; month++) {
-                    const monthName = getMonthName(month);
+                // Display all bills for this entity without month separators
+                entityBills.forEach(bill => {
+                    const childRow = document.createElement('tr');
+                    childRow.className = 'child-row';
+                    childRow.style.display = 'none';
+                    childRow.setAttribute('data-entity', entityName);
                     
-                    // Add month header
-                    const monthHeaderRow = document.createElement('tr');
-                    monthHeaderRow.className = 'month-header';
-                    monthHeaderRow.innerHTML = `
-                        <td colspan="13">
-                            ${monthName} ${displayYear}
+                    // Calculate status
+                    const totalCharges = bill.current_charges + bill.late_charges + bill.unsettled_charges;
+                    let status = 'pending';
+                    let statusText = 'Pending';
+                    
+                    if (bill.amount_paid >= totalCharges) {
+                        status = 'paid';
+                        statusText = 'Paid';
+                    } else if (bill.late_charges > 0) {
+                        status = 'overdue';
+                        statusText = 'Overdue';
+                    }
+                    
+                    let imageCell = '-';
+                    if (bill.bill_image) {
+                        imageCell = `<a href="${bill.bill_image}" target="_blank">View Bill</a>`;
+                    }
+                    
+                    // Use bill_month and bill_year for display
+                    const displayMonth = bill.bill_month || bill.month;
+                    const displayYear = bill.bill_year || bill.year;
+                    const monthName = getMonthName(displayMonth);
+                    
+                    childRow.innerHTML = `
+                        <td>${bill.entity_name}</td>
+                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
+                        <td>
+                            <div class="period-cell">
+                                <span class="month-badge">${monthName}</span>
+                                <span class="year-badge">${displayYear}</span>
+                            </div>
+                        </td>
+                        <td>${bill.account_number}</td>
+                        <td>${bill.meter_number}</td>
+                        <td>${bill.consumption_m3}</td>
+                        <td>$${bill.current_charges.toFixed(2)}</td>
+                        <td>$${bill.late_charges.toFixed(2)}</td>
+                        <td>$${bill.unsettled_charges.toFixed(2)}</td>
+                        <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
+                        <td><span class="status-badge status-${status}">${statusText}</span></td>
+                        <td>${imageCell}</td>
+                        <td class="actions-cell">
+                            <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
+                            <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
                         </td>
                     `;
-                    tableBody.appendChild(monthHeaderRow);
-                    
-                    // Find bills for this month
-                    const monthBills = entityBills.filter(bill => {
-                        const billMonth = bill.bill_month || bill.month;
-                        return billMonth === month;
-                    });
-                    
-                    if (monthBills.length > 0) {
-                        // Display bills for this month
-                        monthBills.forEach(bill => {
-                            const childRow = document.createElement('tr');
-                            childRow.className = 'child-row';
-                            childRow.style.display = 'none';
-                            childRow.setAttribute('data-entity', entityName);
-                            
-                            // Calculate status
-                            const totalCharges = bill.current_charges + bill.late_charges + bill.unsettled_charges;
-                            let status = 'pending';
-                            let statusText = 'Pending';
-                            
-                            if (bill.amount_paid >= totalCharges) {
-                                status = 'paid';
-                                statusText = 'Paid';
-                            } else if (bill.late_charges > 0) {
-                                status = 'overdue';
-                                statusText = 'Overdue';
-                            }
-                            
-                            let imageCell = '-';
-                            if (bill.bill_image) {
-                                imageCell = `<a href="${bill.bill_image}" target="_blank">View Bill</a>`;
-                            }
-                            
-                            // Use bill_month and bill_year for display instead of month and year
-                            const displayMonth = bill.bill_month || bill.month;
-                            const displayYear = bill.bill_year || bill.year;
-                            
-                            childRow.innerHTML = `
-                                <td>${bill.entity_name}</td>
-                                <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
-                                <td>${bill.account_number}</td>
-                                <td>${bill.meter_number}</td>
-                                <td>${bill.consumption_m3}</td>
-                                <td>$${bill.current_charges.toFixed(2)}</td>
-                                <td>$${bill.late_charges.toFixed(2)}</td>
-                                <td>$${bill.unsettled_charges.toFixed(2)}</td>
-                                <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
-                                <td><span class="status-badge status-${status}">${statusText}</span></td>
-                                <td>${imageCell}</td>
-                                <td>${getMonthName(displayMonth)} ${displayYear}</td>
-                                <td class="actions-cell">
-                                    <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
-                                    <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
-                                </td>
-                            `;
-                            tableBody.appendChild(childRow);
-                        });
-                    } else {
-                        // No bills for this month - show empty row
-                        const emptyRow = document.createElement('tr');
-                        emptyRow.className = 'child-row no-data-row';
-                        emptyRow.style.display = 'none';
-                        emptyRow.setAttribute('data-entity', entityName);
-                        emptyRow.innerHTML = `
-                            <td colspan="13" style="text-align: center;">
-                                No water bill recorded for ${monthName} ${displayYear}
-                            </td>
-                        `;
-                        tableBody.appendChild(emptyRow);
-                    }
-                }
+                    tableBody.appendChild(childRow);
+                });
             });
             
             // Add event listeners to toggle icons
@@ -1298,7 +1309,7 @@
                 icon.addEventListener('click', function() {
                     const entityName = this.getAttribute('data-entity');
                     const childRows = document.querySelectorAll(`tr.child-row[data-entity="${entityName}"]`);
-                    const isExpanded = childRows[0].style.display !== 'none';
+                    const isExpanded = childRows.length > 0 && childRows[0].style.display !== 'none';
                     
                     if (isExpanded) {
                         // Collapse
@@ -1320,11 +1331,13 @@
                 });
             });
             
-            // Add event listeners to delete buttons
+            // Add event listeners to delete buttons - FIXED DELETE FUNCTIONALITY
             document.querySelectorAll('.delete-btn').forEach(button => {
                 button.addEventListener('click', function() {
                     const billId = this.getAttribute('data-id');
-                    deleteBill(billId);
+                    if (confirm('Are you sure you want to delete this bill? This action cannot be undone.')) {
+                        deleteBill(billId);
+                    }
                 });
             });
         }
@@ -1483,24 +1496,32 @@
         }
         
         function deleteBill(billId) {
-            if (confirm('Are you sure you want to delete this bill?')) {
-                fetch(`/api/utility-bills?id=${billId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message) {
-                        alert(data.message);
-                        loadBills();
-                    } else {
-                        alert('Error deleting bill: ' + (data.error || 'Unknown error'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error deleting bill. Please try again.');
-                });
-            }
+            console.log('Deleting bill with ID:', billId);
+            
+            fetch(`/api/utility-bills/${billId}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || `Server error: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Delete response:', data);
+                if (data.message) {
+                    alert(data.message);
+                    loadBills(); // Refresh the bills list
+                } else {
+                    alert('Error deleting bill: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting bill:', error);
+                alert('Error deleting bill: ' + error.message);
+            });
         }
         
         function getMonthName(month) {
