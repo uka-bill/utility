@@ -1,4 +1,3 @@
-app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
 import os
 from supabase import create_client, Client
