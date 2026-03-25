@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file
 import os
 from supabase import create_client, Client
@@ -1072,13 +1073,13 @@ def create_school():
         if not data.get('schoolNumber'):
             return jsonify({'success': False, 'error': 'School number is required'}), 400
         
-        # Convert the arrays to JSON strings for storage
-        water_accounts_json = json.dumps(data.get('waterAccounts', []))
-        water_meters_json = json.dumps(data.get('waterMeters', []))
-        electricity_accounts_json = json.dumps(data.get('electricityAccounts', []))
-        electricity_meters_json = json.dumps(data.get('electricityMeters', []))
-        telephone_accounts_json = json.dumps(data.get('telephoneAccounts', []))
-        telephone_numbers_json = json.dumps(data.get('telephoneNumbers', []))
+        # Convert water accounts and meters to JSON if they are arrays
+        water_accounts = data.get('waterAccounts', [])
+        water_meters = data.get('waterMeters', [])
+        electricity_accounts = data.get('electricityAccounts', [])
+        electricity_meters = data.get('electricityMeters', [])
+        telephone_accounts = data.get('telephoneAccounts', [])
+        telephone_numbers = data.get('telephoneNumbers', [])
         
         school_data = {
             "name": data.get('name'),
@@ -1088,19 +1089,19 @@ def create_school():
             "bmo_phone": data.get('bmoPhone', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
-            "water_accounts": water_accounts_json,
-            "water_meters": water_meters_json,
-            "electricity_accounts": electricity_accounts_json,
-            "electricity_meters": electricity_meters_json,
-            "telephone_accounts": telephone_accounts_json,
-            "telephone_numbers": telephone_numbers_json,
+            "water_accounts": json.dumps(water_accounts) if water_accounts else None,
+            "water_meters": json.dumps(water_meters) if water_meters else None,
+            "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else None,
+            "electricity_meters": json.dumps(electricity_meters) if electricity_meters else None,
+            "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else None,
+            "telephone_numbers": json.dumps(telephone_numbers) if telephone_numbers else None,
             # Legacy fields for backward compatibility
-            "water_account": data.get('waterAccount', ''),
-            "water_meter": data.get('waterMeter', ''),
-            "electricity_account": data.get('electricityAccount', ''),
-            "electricity_meter": data.get('electricityMeter', ''),
-            "telephone_account": data.get('telephoneAccount', ''),
-            "telephone_number": data.get('telephoneNumber', ''),
+            "water_account": water_accounts[0] if water_accounts else '',
+            "water_meter": water_meters[0] if water_meters else '',
+            "electricity_account": electricity_accounts[0] if electricity_accounts else '',
+            "electricity_meter": electricity_meters[0] if electricity_meters else '',
+            "telephone_account": telephone_accounts[0] if telephone_accounts else '',
+            "telephone_number": telephone_numbers[0] if telephone_numbers else '',
             "created_at": datetime.now().isoformat()
         }
         
@@ -1138,13 +1139,13 @@ def update_school(school_id):
         if not school_id:
             return jsonify({'success': False, 'error': 'School ID is required'}), 400
         
-        # Convert the arrays to JSON strings for storage
-        water_accounts_json = json.dumps(data.get('waterAccounts', []))
-        water_meters_json = json.dumps(data.get('waterMeters', []))
-        electricity_accounts_json = json.dumps(data.get('electricityAccounts', []))
-        electricity_meters_json = json.dumps(data.get('electricityMeters', []))
-        telephone_accounts_json = json.dumps(data.get('telephoneAccounts', []))
-        telephone_numbers_json = json.dumps(data.get('telephoneNumbers', []))
+        # Convert water accounts and meters to JSON if they are arrays
+        water_accounts = data.get('waterAccounts', [])
+        water_meters = data.get('waterMeters', [])
+        electricity_accounts = data.get('electricityAccounts', [])
+        electricity_meters = data.get('electricityMeters', [])
+        telephone_accounts = data.get('telephoneAccounts', [])
+        telephone_numbers = data.get('telephoneNumbers', [])
         
         school_data = {
             "name": data.get('name'),
@@ -1154,19 +1155,19 @@ def update_school(school_id):
             "bmo_phone": data.get('bmoPhone', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
-            "water_accounts": water_accounts_json,
-            "water_meters": water_meters_json,
-            "electricity_accounts": electricity_accounts_json,
-            "electricity_meters": electricity_meters_json,
-            "telephone_accounts": telephone_accounts_json,
-            "telephone_numbers": telephone_numbers_json,
+            "water_accounts": json.dumps(water_accounts) if water_accounts else None,
+            "water_meters": json.dumps(water_meters) if water_meters else None,
+            "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else None,
+            "electricity_meters": json.dumps(electricity_meters) if electricity_meters else None,
+            "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else None,
+            "telephone_numbers": json.dumps(telephone_numbers) if telephone_numbers else None,
             # Legacy fields for backward compatibility
-            "water_account": data.get('waterAccount', ''),
-            "water_meter": data.get('waterMeter', ''),
-            "electricity_account": data.get('electricityAccount', ''),
-            "electricity_meter": data.get('electricityMeter', ''),
-            "telephone_account": data.get('telephoneAccount', ''),
-            "telephone_number": data.get('telephoneNumber', '')
+            "water_account": water_accounts[0] if water_accounts else '',
+            "water_meter": water_meters[0] if water_meters else '',
+            "electricity_account": electricity_accounts[0] if electricity_accounts else '',
+            "electricity_meter": electricity_meters[0] if electricity_meters else '',
+            "telephone_account": telephone_accounts[0] if telephone_accounts else '',
+            "telephone_number": telephone_numbers[0] if telephone_numbers else ''
         }
         
         print(f"🏫 Updating school {school_id} with data: {school_data}")
@@ -1277,13 +1278,13 @@ def create_department():
         if not department_name:
             return jsonify({'success': False, 'error': 'Department Name is required'}), 400
         
-        # Convert the arrays to JSON strings for storage
-        water_accounts_json = json.dumps(data.get('waterAccounts', []))
-        water_meters_json = json.dumps(data.get('waterMeters', []))
-        electricity_accounts_json = json.dumps(data.get('electricityAccounts', []))
-        electricity_meters_json = json.dumps(data.get('electricityMeters', []))
-        telephone_accounts_json = json.dumps(data.get('telephoneAccounts', []))
-        telephone_numbers_json = json.dumps(data.get('telephoneNumbers', []))
+        # Convert water accounts and meters to JSON if they are arrays
+        water_accounts = data.get('waterAccounts', [])
+        water_meters = data.get('waterMeters', [])
+        electricity_accounts = data.get('electricityAccounts', [])
+        electricity_meters = data.get('electricityMeters', [])
+        telephone_accounts = data.get('telephoneAccounts', [])
+        telephone_numbers = data.get('telephoneNumbers', [])
         
         department_data = {
             "name": unit_name,
@@ -1293,19 +1294,19 @@ def create_department():
             "hotline_numbers": data.get('hotlineNumbers', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
-            "water_accounts": water_accounts_json,
-            "water_meters": water_meters_json,
-            "electricity_accounts": electricity_accounts_json,
-            "electricity_meters": electricity_meters_json,
-            "telephone_accounts": telephone_accounts_json,
-            "telephone_numbers": telephone_numbers_json,
+            "water_accounts": json.dumps(water_accounts) if water_accounts else None,
+            "water_meters": json.dumps(water_meters) if water_meters else None,
+            "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else None,
+            "electricity_meters": json.dumps(electricity_meters) if electricity_meters else None,
+            "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else None,
+            "telephone_numbers": json.dumps(telephone_numbers) if telephone_numbers else None,
             # Legacy fields for backward compatibility
-            "water_account": data.get('waterAccount', ''),
-            "water_meter": data.get('waterMeter', ''),
-            "electricity_account": data.get('electricityAccount', ''),
-            "electricity_meter": data.get('electricityMeter', ''),
-            "telephone_account": data.get('telephoneAccount', ''),
-            "telephone_number": data.get('telephoneNumber', ''),
+            "water_account": water_accounts[0] if water_accounts else '',
+            "water_meter": water_meters[0] if water_meters else '',
+            "electricity_account": electricity_accounts[0] if electricity_accounts else '',
+            "electricity_meter": electricity_meters[0] if electricity_meters else '',
+            "telephone_account": telephone_accounts[0] if telephone_accounts else '',
+            "telephone_number": telephone_numbers[0] if telephone_numbers else '',
             "created_at": datetime.now().isoformat()
         }
         
@@ -1349,13 +1350,13 @@ def update_department(department_id):
         if not department_id:
             return jsonify({'success': False, 'error': 'Department ID is required'}), 400
         
-        # Convert the arrays to JSON strings for storage
-        water_accounts_json = json.dumps(data.get('waterAccounts', []))
-        water_meters_json = json.dumps(data.get('waterMeters', []))
-        electricity_accounts_json = json.dumps(data.get('electricityAccounts', []))
-        electricity_meters_json = json.dumps(data.get('electricityMeters', []))
-        telephone_accounts_json = json.dumps(data.get('telephoneAccounts', []))
-        telephone_numbers_json = json.dumps(data.get('telephoneNumbers', []))
+        # Convert water accounts and meters to JSON if they are arrays
+        water_accounts = data.get('waterAccounts', [])
+        water_meters = data.get('waterMeters', [])
+        electricity_accounts = data.get('electricityAccounts', [])
+        electricity_meters = data.get('electricityMeters', [])
+        telephone_accounts = data.get('telephoneAccounts', [])
+        telephone_numbers = data.get('telephoneNumbers', [])
         
         department_data = {
             "name": data.get('unitName'),
@@ -1365,19 +1366,19 @@ def update_department(department_id):
             "hotline_numbers": data.get('hotlineNumbers', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
-            "water_accounts": water_accounts_json,
-            "water_meters": water_meters_json,
-            "electricity_accounts": electricity_accounts_json,
-            "electricity_meters": electricity_meters_json,
-            "telephone_accounts": telephone_accounts_json,
-            "telephone_numbers": telephone_numbers_json,
+            "water_accounts": json.dumps(water_accounts) if water_accounts else None,
+            "water_meters": json.dumps(water_meters) if water_meters else None,
+            "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else None,
+            "electricity_meters": json.dumps(electricity_meters) if electricity_meters else None,
+            "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else None,
+            "telephone_numbers": json.dumps(telephone_numbers) if telephone_numbers else None,
             # Legacy fields for backward compatibility
-            "water_account": data.get('waterAccount', ''),
-            "water_meter": data.get('waterMeter', ''),
-            "electricity_account": data.get('electricityAccount', ''),
-            "electricity_meter": data.get('electricityMeter', ''),
-            "telephone_account": data.get('telephoneAccount', ''),
-            "telephone_number": data.get('telephoneNumber', '')
+            "water_account": water_accounts[0] if water_accounts else '',
+            "water_meter": water_meters[0] if water_meters else '',
+            "electricity_account": electricity_accounts[0] if electricity_accounts else '',
+            "electricity_meter": electricity_meters[0] if electricity_meters else '',
+            "telephone_account": telephone_accounts[0] if telephone_accounts else '',
+            "telephone_number": telephone_numbers[0] if telephone_numbers else ''
         }
         
         print(f"🏢 Updating department {department_id} with data: {department_data}")
