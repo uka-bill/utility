@@ -1042,7 +1042,14 @@ def create_school():
         if not data.get('schoolNumber'):
             return jsonify({'success': False, 'error': 'School number is required'}), 400
         
-        # Prepare the data for insertion
+        # Convert water accounts and meters to JSON if they are arrays
+        water_accounts = data.get('waterAccounts', [])
+        water_meters = data.get('waterMeters', [])
+        electricity_accounts = data.get('electricityAccounts', [])
+        electricity_meters = data.get('electricityMeters', [])
+        telephone_accounts = data.get('telephoneAccounts', [])
+        telephone_numbers = data.get('telephoneNumbers', [])
+        
         school_data = {
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber'),
@@ -1051,26 +1058,28 @@ def create_school():
             "bmo_phone": data.get('bmoPhone', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
+            # Store as JSON strings
+            "water_accounts": json.dumps(water_accounts) if water_accounts else '[]',
+            "water_meters": json.dumps(water_meters) if water_meters else '[]',
+            "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else '[]',
+            "electricity_meters": json.dumps(electricity_meters) if electricity_meters else '[]',
+            "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else '[]',
+            "telephone_numbers": json.dumps(telephone_numbers) if telephone_numbers else '[]',
+            # Legacy fields for backward compatibility
+            "water_account": water_accounts[0] if water_accounts else '',
+            "water_meter": water_meters[0] if water_meters else '',
+            "electricity_account": electricity_accounts[0] if electricity_accounts else '',
+            "electricity_meter": electricity_meters[0] if electricity_meters else '',
+            "telephone_account": telephone_accounts[0] if telephone_accounts else '',
+            "telephone_number": telephone_numbers[0] if telephone_numbers else '',
             "created_at": datetime.now().isoformat()
         }
-        
-        # Add the JSON columns if they exist in the data
-        if 'waterAccounts' in data:
-            school_data["water_accounts"] = json.dumps(data.get('waterAccounts', []))
-        if 'waterMeters' in data:
-            school_data["water_meters"] = json.dumps(data.get('waterMeters', []))
-        if 'electricityAccounts' in data:
-            school_data["electricity_accounts"] = json.dumps(data.get('electricityAccounts', []))
-        if 'electricityMeters' in data:
-            school_data["electricity_meters"] = json.dumps(data.get('electricityMeters', []))
-        if 'telephoneAccounts' in data:
-            school_data["telephone_accounts"] = json.dumps(data.get('telephoneAccounts', []))
-        if 'telephoneNumbers' in data:
-            school_data["telephone_numbers"] = json.dumps(data.get('telephoneNumbers', []))
         
         print(f"🏫 School data to insert: {school_data}")
         
         response = supabase.table("schools").insert(school_data).execute()
+        
+        print(f"🏫 Supabase response: {response}")
         
         if hasattr(response, 'data') and response.data:
             print(f"✅ School created successfully: {response.data[0]}")
@@ -1100,7 +1109,14 @@ def update_school(school_id):
         if not school_id:
             return jsonify({'success': False, 'error': 'School ID is required'}), 400
         
-        # Prepare the data for update
+        # Convert water accounts and meters to JSON if they are arrays
+        water_accounts = data.get('waterAccounts', [])
+        water_meters = data.get('waterMeters', [])
+        electricity_accounts = data.get('electricityAccounts', [])
+        electricity_meters = data.get('electricityMeters', [])
+        telephone_accounts = data.get('telephoneAccounts', [])
+        telephone_numbers = data.get('telephoneNumbers', [])
+        
         school_data = {
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber', ''),
@@ -1109,26 +1125,26 @@ def update_school(school_id):
             "bmo_phone": data.get('bmoPhone', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
-            "updated_at": datetime.now().isoformat()
+            "water_accounts": json.dumps(water_accounts) if water_accounts else '[]',
+            "water_meters": json.dumps(water_meters) if water_meters else '[]',
+            "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else '[]',
+            "electricity_meters": json.dumps(electricity_meters) if electricity_meters else '[]',
+            "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else '[]',
+            "telephone_numbers": json.dumps(telephone_numbers) if telephone_numbers else '[]',
+            # Legacy fields for backward compatibility
+            "water_account": water_accounts[0] if water_accounts else '',
+            "water_meter": water_meters[0] if water_meters else '',
+            "electricity_account": electricity_accounts[0] if electricity_accounts else '',
+            "electricity_meter": electricity_meters[0] if electricity_meters else '',
+            "telephone_account": telephone_accounts[0] if telephone_accounts else '',
+            "telephone_number": telephone_numbers[0] if telephone_numbers else ''
         }
-        
-        # Add the JSON columns if they exist in the data
-        if 'waterAccounts' in data:
-            school_data["water_accounts"] = json.dumps(data.get('waterAccounts', []))
-        if 'waterMeters' in data:
-            school_data["water_meters"] = json.dumps(data.get('waterMeters', []))
-        if 'electricityAccounts' in data:
-            school_data["electricity_accounts"] = json.dumps(data.get('electricityAccounts', []))
-        if 'electricityMeters' in data:
-            school_data["electricity_meters"] = json.dumps(data.get('electricityMeters', []))
-        if 'telephoneAccounts' in data:
-            school_data["telephone_accounts"] = json.dumps(data.get('telephoneAccounts', []))
-        if 'telephoneNumbers' in data:
-            school_data["telephone_numbers"] = json.dumps(data.get('telephoneNumbers', []))
         
         print(f"🏫 Updating school {school_id} with data: {school_data}")
         
         response = supabase.table("schools").update(school_data).eq("id", school_id).execute()
+        
+        print(f"🏫 Supabase update response: {response}")
         
         if hasattr(response, 'data') and response.data:
             print(f"✅ School updated successfully: {response.data[0]}")
@@ -1165,6 +1181,8 @@ def delete_school(school_id):
             }), 400
         
         response = supabase.table("schools").delete().eq("id", school_id).execute()
+        
+        print(f"🏫 Delete response: {response}")
         
         if hasattr(response, 'data') and response.data:
             print(f"✅ School deleted successfully")
@@ -1230,7 +1248,11 @@ def create_department():
         if not department_name:
             return jsonify({'success': False, 'error': 'Department Name is required'}), 400
         
-        # Prepare the data for insertion
+        # Get utility accounts data
+        water_accounts = data.get('waterAccounts', [])
+        electricity_accounts = data.get('electricityAccounts', [])
+        telephone_accounts = data.get('telephoneAccounts', [])
+        
         department_data = {
             "name": unit_name,
             "unit_name": unit_name,
@@ -1239,26 +1261,25 @@ def create_department():
             "hotline_numbers": data.get('hotlineNumbers', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
+            # Store as JSON strings
+            "water_accounts": json.dumps(water_accounts) if water_accounts else '[]',
+            "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else '[]',
+            "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else '[]',
+            # Legacy fields for backward compatibility
+            "water_account": water_accounts[0].get('accountNumber', '') if water_accounts and len(water_accounts) > 0 else '',
+            "water_meter": water_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if water_accounts and len(water_accounts) > 0 and water_accounts[0].get('meters') and len(water_accounts[0]['meters']) > 0 else '',
+            "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts and len(electricity_accounts) > 0 else '',
+            "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
+            "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
+            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
             "created_at": datetime.now().isoformat()
         }
-        
-        # Add the JSON columns if they exist in the data
-        if 'waterAccounts' in data:
-            department_data["water_accounts"] = json.dumps(data.get('waterAccounts', []))
-        if 'waterMeters' in data:
-            department_data["water_meters"] = json.dumps(data.get('waterMeters', []))
-        if 'electricityAccounts' in data:
-            department_data["electricity_accounts"] = json.dumps(data.get('electricityAccounts', []))
-        if 'electricityMeters' in data:
-            department_data["electricity_meters"] = json.dumps(data.get('electricityMeters', []))
-        if 'telephoneAccounts' in data:
-            department_data["telephone_accounts"] = json.dumps(data.get('telephoneAccounts', []))
-        if 'telephoneNumbers' in data:
-            department_data["telephone_numbers"] = json.dumps(data.get('telephoneNumbers', []))
         
         print(f"🏢 Department data to insert: {department_data}")
         
         response = supabase.table("departments").insert(department_data).execute()
+        
+        print(f"🏢 Supabase response: {response}")
         
         if hasattr(response, 'data') and response.data:
             print(f"✅ Department created successfully: {response.data[0]}")
@@ -1294,7 +1315,11 @@ def update_department(department_id):
         if not department_id:
             return jsonify({'success': False, 'error': 'Department ID is required'}), 400
         
-        # Prepare the data for update
+        # Get utility accounts data
+        water_accounts = data.get('waterAccounts', [])
+        electricity_accounts = data.get('electricityAccounts', [])
+        telephone_accounts = data.get('telephoneAccounts', [])
+        
         department_data = {
             "name": data.get('unitName'),
             "unit_name": data.get('unitName', ''),
@@ -1303,26 +1328,23 @@ def update_department(department_id):
             "hotline_numbers": data.get('hotlineNumbers', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
-            "updated_at": datetime.now().isoformat()
+            "water_accounts": json.dumps(water_accounts) if water_accounts else '[]',
+            "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else '[]',
+            "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else '[]',
+            # Legacy fields for backward compatibility
+            "water_account": water_accounts[0].get('accountNumber', '') if water_accounts and len(water_accounts) > 0 else '',
+            "water_meter": water_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if water_accounts and len(water_accounts) > 0 and water_accounts[0].get('meters') and len(water_accounts[0]['meters']) > 0 else '',
+            "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts and len(electricity_accounts) > 0 else '',
+            "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
+            "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
+            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else ''
         }
-        
-        # Add the JSON columns if they exist in the data
-        if 'waterAccounts' in data:
-            department_data["water_accounts"] = json.dumps(data.get('waterAccounts', []))
-        if 'waterMeters' in data:
-            department_data["water_meters"] = json.dumps(data.get('waterMeters', []))
-        if 'electricityAccounts' in data:
-            department_data["electricity_accounts"] = json.dumps(data.get('electricityAccounts', []))
-        if 'electricityMeters' in data:
-            department_data["electricity_meters"] = json.dumps(data.get('electricityMeters', []))
-        if 'telephoneAccounts' in data:
-            department_data["telephone_accounts"] = json.dumps(data.get('telephoneAccounts', []))
-        if 'telephoneNumbers' in data:
-            department_data["telephone_numbers"] = json.dumps(data.get('telephoneNumbers', []))
         
         print(f"🏢 Updating department {department_id} with data: {department_data}")
         
         response = supabase.table("departments").update(department_data).eq("id", department_id).execute()
+        
+        print(f"🏢 Supabase update response: {response}")
         
         if hasattr(response, 'data') and response.data:
             print(f"✅ Department updated successfully: {response.data[0]}")
@@ -1365,6 +1387,8 @@ def delete_department(department_id):
             }), 400
         
         response = supabase.table("departments").delete().eq("id", department_id).execute()
+        
+        print(f"🏢 Delete response: {response}")
         
         if hasattr(response, 'data') and response.data:
             print(f"✅ Department deleted successfully")
@@ -1597,9 +1621,9 @@ def api_entities():
             return jsonify({'data': []}), 500
         
         if entity_type == 'school':
-            response = supabase.table("schools").select("id, name").execute()
+            response = supabase.table("schools").select("id, name, water_account, water_meter, electricity_account, electricity_meter, telephone_account, telephone_number").execute()
         elif entity_type == 'department':
-            response = supabase.table("departments").select("id, name").execute()
+            response = supabase.table("departments").select("id, name, water_account, water_meter, electricity_account, electricity_meter, telephone_account, telephone_number").execute()
         else:
             return jsonify({'error': 'Invalid entity type', 'data': []}), 400
         
@@ -1625,7 +1649,7 @@ def api_entity_accounts():
         
         accounts = response.data if response.data else []
         
-        # If no accounts found, try to get from legacy fields in schools/departments tables
+        # If no accounts found, try to get from legacy fields
         if not accounts:
             if entity_type == 'school':
                 school_response = supabase.table("schools").select("*").eq("id", int(entity_id)).execute()
