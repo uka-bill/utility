@@ -1044,11 +1044,8 @@ def create_school():
         
         # Convert water accounts and meters to JSON if they are arrays
         water_accounts = data.get('waterAccounts', [])
-        water_meters = data.get('waterMeters', [])
         electricity_accounts = data.get('electricityAccounts', [])
-        electricity_meters = data.get('electricityMeters', [])
         telephone_accounts = data.get('telephoneAccounts', [])
-        telephone_numbers = data.get('telephoneNumbers', [])
         
         school_data = {
             "name": data.get('name'),
@@ -1060,18 +1057,15 @@ def create_school():
             "notes": data.get('notes', ''),
             # Store as JSON strings
             "water_accounts": json.dumps(water_accounts) if water_accounts else '[]',
-            "water_meters": json.dumps(water_meters) if water_meters else '[]',
             "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else '[]',
-            "electricity_meters": json.dumps(electricity_meters) if electricity_meters else '[]',
             "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else '[]',
-            "telephone_numbers": json.dumps(telephone_numbers) if telephone_numbers else '[]',
             # Legacy fields for backward compatibility
-            "water_account": water_accounts[0] if water_accounts else '',
-            "water_meter": water_meters[0] if water_meters else '',
-            "electricity_account": electricity_accounts[0] if electricity_accounts else '',
-            "electricity_meter": electricity_meters[0] if electricity_meters else '',
-            "telephone_account": telephone_accounts[0] if telephone_accounts else '',
-            "telephone_number": telephone_numbers[0] if telephone_numbers else '',
+            "water_account": water_accounts[0].get('accountNumber', '') if water_accounts and len(water_accounts) > 0 else '',
+            "water_meter": water_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if water_accounts and len(water_accounts) > 0 and water_accounts[0].get('meters') and len(water_accounts[0]['meters']) > 0 else '',
+            "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts and len(electricity_accounts) > 0 else '',
+            "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
+            "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
+            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
             "created_at": datetime.now().isoformat()
         }
         
@@ -1111,11 +1105,8 @@ def update_school(school_id):
         
         # Convert water accounts and meters to JSON if they are arrays
         water_accounts = data.get('waterAccounts', [])
-        water_meters = data.get('waterMeters', [])
         electricity_accounts = data.get('electricityAccounts', [])
-        electricity_meters = data.get('electricityMeters', [])
         telephone_accounts = data.get('telephoneAccounts', [])
-        telephone_numbers = data.get('telephoneNumbers', [])
         
         school_data = {
             "name": data.get('name'),
@@ -1126,18 +1117,15 @@ def update_school(school_id):
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
             "water_accounts": json.dumps(water_accounts) if water_accounts else '[]',
-            "water_meters": json.dumps(water_meters) if water_meters else '[]',
             "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else '[]',
-            "electricity_meters": json.dumps(electricity_meters) if electricity_meters else '[]',
             "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else '[]',
-            "telephone_numbers": json.dumps(telephone_numbers) if telephone_numbers else '[]',
             # Legacy fields for backward compatibility
-            "water_account": water_accounts[0] if water_accounts else '',
-            "water_meter": water_meters[0] if water_meters else '',
-            "electricity_account": electricity_accounts[0] if electricity_accounts else '',
-            "electricity_meter": electricity_meters[0] if electricity_meters else '',
-            "telephone_account": telephone_accounts[0] if telephone_accounts else '',
-            "telephone_number": telephone_numbers[0] if telephone_numbers else ''
+            "water_account": water_accounts[0].get('accountNumber', '') if water_accounts and len(water_accounts) > 0 else '',
+            "water_meter": water_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if water_accounts and len(water_accounts) > 0 and water_accounts[0].get('meters') and len(water_accounts[0]['meters']) > 0 else '',
+            "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts and len(electricity_accounts) > 0 else '',
+            "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
+            "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
+            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else ''
         }
         
         print(f"🏫 Updating school {school_id} with data: {school_data}")
