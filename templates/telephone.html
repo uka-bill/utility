@@ -442,6 +442,1416 @@
             border-radius: 4px;
             font-size: 0.9rem;
         }
+
+        .account-select-group {
+            margin-bottom: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            background-color: #fafafa;
+        }
+
+        .account-select-label {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .account-select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+            background-color: white;
+        }
+
+        .number-select-group {
+            margin-top: 10px;
+            margin-left: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+
+        .number-select-label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #666;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .number-select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">
+            <span>Utility Bills Management</span>
+        </div>
+        <ul class="nav-tabs">
+            <li><a href="/dashboard">Dashboard</a></li>
+            <li><a href="/departments">Departments</a></li>
+            <li><a href="/schools">Schools</a></li>
+            <li><a href="/water">Water</a></li>
+            <li><a href="/electricity">Electricity</a></li>
+            <li><a href="/telephone" class="active">Telephone</a></li>
+            <li><a href="/reports">Reports & Print</a></li>
+            <li><a href="/backup">Backup & Restore</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1 class="page-title">Telephone Utility Bills</h1>
+            <button class="btn btn-primary" id="addBillBtn">Add New Bill</button>
+        </div>
+        
+        <div class="filters">
+            <div class="filter-group">
+                <label class="filter-label">Entity Type</label>
+                <select class="filter-select" id="entityTypeFilter">
+                    <option value="all">All</option>
+                    <option value="school">Schools</option>
+                    <option value="department">Departments</option>
+                </select>
+            </div>
+            
+            <div class="search-group" id="schoolSearchGroup" style="display: none;">
+                <label class="filter-label">Select School</label>
+                <select class="search-select" id="schoolSearch">
+                    <option value="all">All Schools</option>
+                </select>
+            </div>
+            
+            <div class="search-group" id="departmentSearchGroup" style="display: none;">
+                <label class="filter-label">Select Department</label>
+                <select class="search-select" id="departmentSearch">
+                    <option value="all">All Departments</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Month</label>
+                <select class="filter-select" id="monthFilter">
+                    <option value="all">All Months</option>
+                    <option value="1">January</option>
+                    <option value="2">February</option>
+                    <option value="3">March</option>
+                    <option value="4">April</option>
+                    <option value="5">May</option>
+                    <option value="6">June</option>
+                    <option value="7">July</option>
+                    <option value="8">August</option>
+                    <option value="9">September</option>
+                    <option value="10">October</option>
+                    <option value="11">November</option>
+                    <option value="12">December</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Year</label>
+                <select class="filter-select" id="yearFilter">
+                    <option value="all">All Years</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Search</label>
+                <input type="text" class="filter-input" id="searchFilter" placeholder="Search...">
+            </div>
+        </div>
+        
+        <div class="data-table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Entity</th>
+                        <th>Type</th>
+                        <th>Bill Period</th>
+                        <th>Account No.</th>
+                        <th>Phone No.</th>
+                        <th>Current Charges</th>
+                        <th>Late Charges</th>
+                        <th>Unsettled Charges</th>
+                        <th>Amount Paid</th>
+                        <th>Status</th>
+                        <th>Bill Image</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="billsTable">
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="modal" id="billModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">Add Telephone Bill</h3>
+                <button class="close-modal" id="closeModal">&times;</button>
+            </div>
+            
+            <form id="billForm">
+                <input type="hidden" id="billId">
+                
+                <div class="info-note">
+                    <strong>ℹ️ Multiple Accounts Support:</strong> When you select a school or department, you can choose from multiple telephone accounts and their associated phone numbers.
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Entity Type</label>
+                    <select class="form-control" id="entityType" required>
+                        <option value="">Select Type</option>
+                        <option value="school">School</option>
+                        <option value="department">Department</option>
+                    </select>
+                </div>
+                
+                <div class="form-group entity-selector" id="schoolSelector">
+                    <label class="form-label">Select School</label>
+                    <select class="form-control" id="schoolId" required>
+                        <option value="">Select School</option>
+                    </select>
+                </div>
+                
+                <div class="form-group entity-selector" id="departmentSelector">
+                    <label class="form-label">Select Department</label>
+                    <select class="form-control" id="departmentId" required>
+                        <option value="">Select Department</option>
+                    </select>
+                </div>
+                
+                <div id="accountSelectionSection" style="display: none;">
+                    <div class="account-select-group" id="accountSelectGroup">
+                        <label class="account-select-label">📞 Select Telephone Account</label>
+                        <select class="account-select" id="accountSelect" required>
+                            <option value="">-- Select an account --</option>
+                        </select>
+                    </div>
+                    
+                    <div id="numberSelectGroup" style="display: none;">
+                        <div class="number-select-group">
+                            <label class="number-select-label">📱 Select Phone Number</label>
+                            <select class="number-select" id="numberSelect">
+                                <option value="">-- Select a phone number (optional) --</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Current Charges ($)</label>
+                        <input type="number" step="0.01" class="form-control" id="currentCharges" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Late Charges ($)</label>
+                        <input type="number" step="0.01" class="form-control" id="lateCharges" value="0">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Unsettled Charges ($)</label>
+                        <input type="number" step="0.01" class="form-control" id="unsettledCharges" value="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Amount Paid ($)</label>
+                        <input type="number" step="0.01" class="form-control" id="amountPaid" value="0">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Bill Image (Proof)</label>
+                        <input type="file" class="form-control" id="billImage" accept="image/*,.pdf">
+                        <div id="imagePreview"></div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Bill Month</label>
+                        <select class="form-control" id="billMonth" required>
+                            <option value="">Select Bill Month</option>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Bill Year</label>
+                        <input type="number" class="form-control" id="billYear" min="2000" max="2050" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Month (for filtering)</label>
+                        <select class="form-control" id="month" required>
+                            <option value="">Select Month</option>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Year (for filtering)</label>
+                        <input type="number" class="form-control" id="year" min="2000" max="2050" required>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Bill</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let allBills = [];
+        let currentYear = new Date().getFullYear();
+        let editingBill = null;
+        let schoolsData = [];
+        let departmentsData = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializePage();
+        });
+
+        function initializePage() {
+            const yearFilter = document.getElementById('yearFilter');
+            for (let year = 2000; year <= 2050; year++) {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                if (year === currentYear) {
+                    option.selected = true;
+                }
+                yearFilter.appendChild(option);
+            }
+
+            loadSchoolsAndDepartments();
+
+            const addBillBtn = document.getElementById('addBillBtn');
+            const billModal = document.getElementById('billModal');
+            const closeModal = document.getElementById('closeModal');
+            const cancelBtn = document.getElementById('cancelBtn');
+            const billForm = document.getElementById('billForm');
+            const entityType = document.getElementById('entityType');
+            const schoolSelector = document.getElementById('schoolSelector');
+            const departmentSelector = document.getElementById('departmentSelector');
+
+            addBillBtn.addEventListener('click', () => {
+                editingBill = null;
+                document.getElementById('modalTitle').textContent = 'Add Telephone Bill';
+                billForm.reset();
+                document.getElementById('imagePreview').innerHTML = '';
+                document.getElementById('billYear').value = currentYear;
+                document.getElementById('year').value = currentYear;
+                document.getElementById('accountSelectionSection').style.display = 'none';
+                document.getElementById('numberSelectGroup').style.display = 'none';
+                entityType.disabled = false;
+                billModal.style.display = 'flex';
+            });
+            
+            closeModal.addEventListener('click', () => {
+                billModal.style.display = 'none';
+            });
+            
+            cancelBtn.addEventListener('click', () => {
+                billModal.style.display = 'none';
+            });
+            
+            entityType.addEventListener('change', () => {
+                const type = entityType.value;
+                schoolSelector.style.display = 'none';
+                departmentSelector.style.display = 'none';
+                document.getElementById('accountSelectionSection').style.display = 'none';
+                
+                if (type === 'school') {
+                    schoolSelector.style.display = 'block';
+                    populateSchoolDropdown();
+                } else if (type === 'department') {
+                    departmentSelector.style.display = 'block';
+                    populateDepartmentDropdown();
+                }
+            });
+
+            document.getElementById('schoolId').addEventListener('change', function() {
+                const schoolId = this.value;
+                if (schoolId) {
+                    loadTelephoneAccountsForEntity('school', schoolId);
+                } else {
+                    document.getElementById('accountSelectionSection').style.display = 'none';
+                }
+            });
+
+            document.getElementById('departmentId').addEventListener('change', function() {
+                const departmentId = this.value;
+                if (departmentId) {
+                    loadTelephoneAccountsForEntity('department', departmentId);
+                } else {
+                    document.getElementById('accountSelectionSection').style.display = 'none';
+                }
+            });
+
+            document.getElementById('accountSelect').addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    const numbers = JSON.parse(selectedOption.getAttribute('data-numbers') || '[]');
+                    populateNumberDropdown(numbers);
+                    document.getElementById('numberSelectGroup').style.display = numbers.length > 0 ? 'block' : 'none';
+                } else {
+                    document.getElementById('numberSelectGroup').style.display = 'none';
+                }
+            });
+            
+            document.getElementById('billImage').addEventListener('change', function() {
+                const file = this.files[0];
+                const preview = document.getElementById('imagePreview');
+                if (file) {
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            preview.innerHTML = `<img src="${e.target.result}" class="image-preview" alt="Bill preview">`;
+                        }
+                        reader.readAsDataURL(file);
+                    } else if (file.type === 'application/pdf') {
+                        preview.innerHTML = '<div class="image-preview">PDF File: ' + file.name + '</div>';
+                    }
+                } else {
+                    preview.innerHTML = '';
+                }
+            });
+            
+            billForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const imageFile = document.getElementById('billImage').files[0];
+                
+                if (imageFile) {
+                    const formData = new FormData();
+                    formData.append('file', imageFile);
+                    
+                    fetch('/api/upload-bill-image', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.image_url) {
+                            saveBillData(data.image_url);
+                        } else {
+                            alert('Error uploading image: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error uploading image. Please try again.');
+                    });
+                } else {
+                    saveBillData(editingBill ? editingBill.bill_image : null);
+                }
+            });
+            
+            document.getElementById('entityTypeFilter').addEventListener('change', function() {
+                const entityType = this.value;
+                const schoolSearchGroup = document.getElementById('schoolSearchGroup');
+                const departmentSearchGroup = document.getElementById('departmentSearchGroup');
+                schoolSearchGroup.style.display = 'none';
+                departmentSearchGroup.style.display = 'none';
+                
+                if (entityType === 'school') {
+                    schoolSearchGroup.style.display = 'block';
+                } else if (entityType === 'department') {
+                    departmentSearchGroup.style.display = 'block';
+                }
+                loadBills();
+            });
+            
+            document.getElementById('schoolSearch').addEventListener('change', loadBills);
+            document.getElementById('departmentSearch').addEventListener('change', loadBills);
+            document.getElementById('monthFilter').addEventListener('change', loadBills);
+            document.getElementById('yearFilter').addEventListener('change', loadBills);
+            document.getElementById('searchFilter').addEventListener('input', loadBills);
+            
+            loadBills();
+        }
+
+        function loadSchoolsAndDepartments() {
+            fetch('/api/schools')
+                .then(response => response.json())
+                .then(data => {
+                    schoolsData = data.sort((a, b) => a.id - b.id);
+                })
+                .catch(error => console.error('Error loading schools:', error));
+
+            fetch('/api/departments')
+                .then(response => response.json())
+                .then(data => {
+                    departmentsData = data.sort((a, b) => a.id - b.id);
+                })
+                .catch(error => console.error('Error loading departments:', error));
+        }
+
+        function populateSchoolDropdown() {
+            const schoolSelect = document.getElementById('schoolId');
+            schoolSelect.innerHTML = '<option value="">Select School</option>';
+            
+            const sortedSchools = [...schoolsData].sort((a, b) => a.id - b.id);
+            
+            sortedSchools.forEach(school => {
+                const option = document.createElement('option');
+                option.value = school.id;
+                let displayName = school.name;
+                if (school.school_number) {
+                    displayName = `${school.school_number} - ${school.name}`;
+                }
+                option.textContent = displayName;
+                schoolSelect.appendChild(option);
+            });
+        }
+
+        function populateDepartmentDropdown() {
+            const departmentSelect = document.getElementById('departmentId');
+            departmentSelect.innerHTML = '<option value="">Select Department</option>';
+            
+            const sortedDepartments = [...departmentsData].sort((a, b) => a.id - b.id);
+            
+            sortedDepartments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept.id;
+                let displayName = dept.unit_name || dept.name || 'Unknown';
+                if (dept.department_name) {
+                    displayName = `${dept.department_name} - ${dept.division_name} - ${displayName}`;
+                }
+                option.textContent = displayName;
+                departmentSelect.appendChild(option);
+            });
+        }
+
+        function loadTelephoneAccountsForEntity(entityType, entityId) {
+            let entityData = null;
+            
+            if (entityType === 'school') {
+                entityData = schoolsData.find(s => s.id == entityId);
+            } else {
+                entityData = departmentsData.find(d => d.id == entityId);
+            }
+            
+            if (!entityData) {
+                console.error('Entity not found:', entityType, entityId);
+                return;
+            }
+            
+            let telephoneAccounts = [];
+            
+            try {
+                if (entityData.telephone_accounts) {
+                    telephoneAccounts = typeof entityData.telephone_accounts === 'string' 
+                        ? JSON.parse(entityData.telephone_accounts) 
+                        : entityData.telephone_accounts;
+                }
+            } catch(e) {
+                console.error('Error parsing telephone accounts:', e);
+            }
+            
+            if (telephoneAccounts.length === 0) {
+                if (entityData.telephone_account) {
+                    telephoneAccounts = [{
+                        accountNumber: entityData.telephone_account,
+                        numbers: entityData.telephone_number ? [{ phoneNumber: entityData.telephone_number }] : []
+                    }];
+                }
+            }
+            
+            const accountSelect = document.getElementById('accountSelect');
+            accountSelect.innerHTML = '<option value="">-- Select an account --</option>';
+            
+            telephoneAccounts.forEach((account, index) => {
+                const option = document.createElement('option');
+                option.value = account.accountNumber;
+                option.textContent = `Account: ${account.accountNumber}`;
+                option.setAttribute('data-numbers', JSON.stringify(account.numbers || []));
+                accountSelect.appendChild(option);
+            });
+            
+            document.getElementById('accountSelectionSection').style.display = telephoneAccounts.length > 0 ? 'block' : 'none';
+            
+            if (telephoneAccounts.length === 0) {
+                alert('No telephone accounts found for this entity. Please add telephone account information in the Schools or Departments tab first.');
+            }
+        }
+
+        function populateNumberDropdown(numbers) {
+            const numberSelect = document.getElementById('numberSelect');
+            numberSelect.innerHTML = '<option value="">-- Select a phone number (optional) --</option>';
+            
+            numbers.forEach(number => {
+                const option = document.createElement('option');
+                option.value = number.phoneNumber;
+                let displayText = number.phoneNumber;
+                if (number.location) displayText += ` - ${number.location}`;
+                if (number.notes) displayText += ` (${number.notes})`;
+                option.textContent = displayText;
+                numberSelect.appendChild(option);
+            });
+        }
+
+        function saveBillData(imageUrl) {
+            const entityType = document.getElementById('entityType').value;
+            let entityId = '';
+            
+            if (entityType === 'school') {
+                entityId = document.getElementById('schoolId').value;
+            } else {
+                entityId = document.getElementById('departmentId').value;
+            }
+            
+            if (!entityId) {
+                alert('Please select a school or department');
+                return;
+            }
+            
+            const accountSelect = document.getElementById('accountSelect');
+            const accountNumber = accountSelect.value;
+            const numberSelect = document.getElementById('numberSelect');
+            const phoneNumber = numberSelect.value;
+            
+            if (!accountNumber) {
+                alert('Please select a telephone account');
+                return;
+            }
+            
+            const billData = {
+                utility_type: 'telephone',
+                entity_type: entityType,
+                entity_id: parseInt(entityId),
+                account_number: accountNumber,
+                phone_number: phoneNumber,
+                current_charges: parseFloat(document.getElementById('currentCharges').value),
+                late_charges: parseFloat(document.getElementById('lateCharges').value),
+                unsettled_charges: parseFloat(document.getElementById('unsettledCharges').value),
+                amount_paid: parseFloat(document.getElementById('amountPaid').value),
+                month: parseInt(document.getElementById('month').value),
+                year: parseInt(document.getElementById('year').value),
+                bill_month: parseInt(document.getElementById('billMonth').value),
+                bill_year: parseInt(document.getElementById('billYear').value),
+                bill_image: imageUrl
+            };
+            
+            let url = '/api/utility-bills';
+            let method = 'POST';
+            
+            if (editingBill) {
+                url = `/api/utility-bills/${editingBill.id}`;
+                method = 'PUT';
+            }
+            
+            fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(billData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    alert(data.message);
+                    document.getElementById('billModal').style.display = 'none';
+                    document.getElementById('billForm').reset();
+                    loadBills();
+                } else {
+                    alert('Error saving bill: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error saving bill. Please try again.');
+            });
+        }
+        
+        function loadBills() {
+            const entityTypeFilter = document.getElementById('entityTypeFilter').value;
+            const schoolSearch = document.getElementById('schoolSearch').value;
+            const departmentSearch = document.getElementById('departmentSearch').value;
+            const monthFilter = document.getElementById('monthFilter').value;
+            const yearFilter = document.getElementById('yearFilter').value;
+            const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+            
+            let url = '/api/utility-bills?utility_type=telephone';
+            
+            if (entityTypeFilter !== 'all') {
+                url += `&entity_type=${entityTypeFilter}`;
+            }
+            if (entityTypeFilter === 'school' && schoolSearch !== 'all') {
+                url += `&entity_id=${schoolSearch}`;
+            } else if (entityTypeFilter === 'department' && departmentSearch !== 'all') {
+                url += `&entity_id=${departmentSearch}`;
+            }
+            if (monthFilter !== 'all') {
+                url += `&month=${monthFilter}`;
+            }
+            if (yearFilter !== 'all') {
+                url += `&year=${yearFilter}`;
+            }
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    allBills = data;
+                    if (searchFilter) {
+                        data = data.filter(bill => 
+                            bill.entity_name.toLowerCase().includes(searchFilter) ||
+                            (bill.account_number && bill.account_number.toLowerCase().includes(searchFilter)) ||
+                            (bill.phone_number && bill.phone_number.toLowerCase().includes(searchFilter))
+                        );
+                    }
+                    renderBillsTable(data);
+                })
+                .catch(error => {
+                    console.error('Error loading bills:', error);
+                    alert('Error loading bills. Please try again.');
+                });
+        }
+        
+        function renderBillsTable(bills) {
+            const tableBody = document.getElementById('billsTable');
+            tableBody.innerHTML = '';
+            
+            if (bills.length === 0) {
+                tableBody.innerHTML = `
+                    <tr class="no-data-row">
+                        <td colspan="12" style="text-align: center; padding: 30px;">
+                            No telephone bills found matching your criteria.
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const entityTypeFilter = document.getElementById('entityTypeFilter').value;
+            const schoolSearch = document.getElementById('schoolSearch');
+            const departmentSearch = document.getElementById('departmentSearch');
+            
+            let selectedEntityName = '';
+            if (entityTypeFilter === 'school' && schoolSearch.value !== 'all') {
+                selectedEntityName = schoolSearch.options[schoolSearch.selectedIndex]?.text;
+            } else if (entityTypeFilter === 'department' && departmentSearch.value !== 'all') {
+                selectedEntityName = departmentSearch.options[departmentSearch.selectedIndex]?.text;
+            }
+            
+            let filteredBills = bills;
+            if (selectedEntityName) {
+                filteredBills = bills.filter(bill => bill.entity_name === selectedEntityName);
+            }
+            
+            filteredBills.sort((a, b) => {
+                const yearA = a.bill_year || a.year;
+                const yearB = b.bill_year || b.year;
+                const monthA = a.bill_month || a.month;
+                const monthB = b.bill_month || b.month;
+                if (yearA !== yearB) return yearB - yearA;
+                return monthA - monthB;
+            });
+            
+            const groupedBills = {};
+            filteredBills.forEach(bill => {
+                if (!groupedBills[bill.entity_name]) {
+                    groupedBills[bill.entity_name] = [];
+                }
+                groupedBills[bill.entity_name].push(bill);
+            });
+            
+            Object.keys(groupedBills).forEach(entityName => {
+                const entityBills = groupedBills[entityName];
+                const entityType = entityBills[0].entity_type;
+                
+                const headerRow = document.createElement('tr');
+                headerRow.className = 'merged-row';
+                headerRow.innerHTML = `
+                    <td colspan="12">
+                        <span class="toggle-icon" data-entity="${entityName}">▶</span>
+                        <strong>${entityName}</strong> 
+                        <span class="badge ${entityType === 'school' ? 'badge-school' : 'badge-department'}" style="margin-left: 10px;">
+                            ${entityType}
+                        </span>
+                        <span style="margin-left: 10px; color: #666; font-size: 0.9em;">
+                            (${entityBills.length} bill${entityBills.length > 1 ? 's' : ''})
+                        </span>
+                    </div>
+                `;
+                tableBody.appendChild(headerRow);
+                
+                entityBills.forEach(bill => {
+                    const childRow = document.createElement('tr');
+                    childRow.className = 'child-row';
+                    childRow.style.display = 'none';
+                    childRow.setAttribute('data-entity', entityName);
+                    
+                    const totalCharges = bill.current_charges + bill.late_charges + bill.unsettled_charges;
+                    let status = 'pending';
+                    let statusText = 'Pending';
+                    
+                    if (bill.amount_paid >= totalCharges) {
+                        status = 'paid';
+                        statusText = 'Paid';
+                    } else if (bill.late_charges > 0) {
+                        status = 'overdue';
+                        statusText = 'Overdue';
+                    }
+                    
+                    let imageCell = '-';
+                    if (bill.bill_image) {
+                        imageCell = `<a href="${bill.bill_image}" target="_blank">View Bill</a>`;
+                    }
+                    
+                    const displayMonth = bill.bill_month || bill.month;
+                    const displayYear = bill.bill_year || bill.year;
+                    const monthName = getMonthName(displayMonth);
+                    
+                    childRow.innerHTML = `
+                        <td>${bill.entity_name}</td>
+                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
+                        <td>
+                            <div class="period-cell">
+                                <span class="month-badge">${monthName}</span>
+                                <span class="year-badge">${displayYear}</span>
+                            </div>
+                        </div>
+                        <td>${bill.account_number || '-'}</div>
+                        <td>${bill.phone_number || '-'}</div>
+                        <td>$${bill.current_charges.toFixed(2)}</div>
+                        <td>$${bill.late_charges.toFixed(2)}</div>
+                        <td>$${bill.unsettled_charges.toFixed(2)}</div>
+                        <td>$${(bill.amount_paid || 0).toFixed(2)}</div>
+                        <td><span class="status-badge status-${status}">${statusText}</span></div>
+                        <td>${imageCell}</div>
+                        <td class="actions-cell">
+                            <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
+                            <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
+                        </div>
+                    `;
+                    tableBody.appendChild(childRow);
+                });
+            });
+            
+            document.querySelectorAll('.toggle-icon').forEach(icon => {
+                icon.addEventListener('click', function() {
+                    const entityName = this.getAttribute('data-entity');
+                    const childRows = document.querySelectorAll(`tr.child-row[data-entity="${entityName}"]`);
+                    const isExpanded = childRows.length > 0 && childRows[0].style.display !== 'none';
+                    
+                    if (isExpanded) {
+                        childRows.forEach(row => row.style.display = 'none');
+                        this.textContent = '▶';
+                    } else {
+                        childRows.forEach(row => row.style.display = '');
+                        this.textContent = '▼';
+                    }
+                });
+            });
+            
+            document.querySelectorAll('.edit-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    editBill(this.getAttribute('data-id'));
+                });
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    if (confirm('Are you sure you want to delete this bill?')) {
+                        deleteBill(this.getAttribute('data-id'));
+                    }
+                });
+            });
+        }
+        
+        function editBill(billId) {
+            const bill = allBills.find(b => b.id == billId);
+            if (!bill) {
+                alert('Bill not found.');
+                return;
+            }
+            
+            editingBill = bill;
+            document.getElementById('modalTitle').textContent = 'Edit Telephone Bill';
+            document.getElementById('billId').value = bill.id;
+            document.getElementById('billYear').value = currentYear;
+            document.getElementById('year').value = currentYear;
+            
+            const entityType = document.getElementById('entityType');
+            entityType.value = bill.entity_type;
+            entityType.disabled = true;
+            
+            const event = new Event('change');
+            entityType.dispatchEvent(event);
+            
+            setTimeout(() => {
+                if (bill.entity_type === 'school') {
+                    const schoolSelect = document.getElementById('schoolId');
+                    for (let i = 0; i < schoolSelect.options.length; i++) {
+                        if (schoolSelect.options[i].value == bill.entity_id) {
+                            schoolSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                    const changeEvent = new Event('change');
+                    schoolSelect.dispatchEvent(changeEvent);
+                } else {
+                    const deptSelect = document.getElementById('departmentId');
+                    for (let i = 0; i < deptSelect.options.length; i++) {
+                        if (deptSelect.options[i].value == bill.entity_id) {
+                            deptSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                    const changeEvent = new Event('change');
+                    deptSelect.dispatchEvent(changeEvent);
+                }
+                
+                setTimeout(() => {
+                    const accountSelect = document.getElementById('accountSelect');
+                    for (let i = 0; i < accountSelect.options.length; i++) {
+                        if (accountSelect.options[i].value === bill.account_number) {
+                            accountSelect.selectedIndex = i;
+                            const accountEvent = new Event('change');
+                            accountSelect.dispatchEvent(accountEvent);
+                            break;
+                        }
+                    }
+                    
+                    setTimeout(() => {
+                        if (bill.phone_number) {
+                            const numberSelect = document.getElementById('numberSelect');
+                            for (let i = 0; i < numberSelect.options.length; i++) {
+                                if (numberSelect.options[i].value === bill.phone_number) {
+                                    numberSelect.selectedIndex = i;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        document.getElementById('currentCharges').value = bill.current_charges || 0;
+                        document.getElementById('lateCharges').value = bill.late_charges || 0;
+                        document.getElementById('unsettledCharges').value = bill.unsettled_charges || 0;
+                        document.getElementById('amountPaid').value = bill.amount_paid || 0;
+                        document.getElementById('month').value = bill.month || '';
+                        document.getElementById('year').value = bill.year || currentYear;
+                        document.getElementById('billMonth').value = bill.bill_month || bill.month || '';
+                        document.getElementById('billYear').value = bill.bill_year || bill.year || currentYear;
+                        
+                        if (bill.bill_image) {
+                            document.getElementById('imagePreview').innerHTML = `<a href="${bill.bill_image}" target="_blank">View Current Bill Image</a>`;
+                        }
+                    }, 200);
+                }, 200);
+            }, 300);
+            
+            document.getElementById('billModal').style.display = 'flex';
+        }
+        
+        function deleteBill(billId) {
+            fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        alert(data.message);
+                        loadBills();
+                    } else {
+                        alert('Error deleting bill: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error deleting bill:', error);
+                    alert('Error deleting bill.');
+                });
+        }
+        
+        function getMonthName(month) {
+            const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+            return months[month - 1] || 'Unknown';
+        }
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telephone Utility - Bills Management</title>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #3f37c9;
+            --success: #4cc9f0;
+            --danger: #f72585;
+            --warning: #f8961e;
+            --info: #4895ef;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --gray: #6c757d;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fb;
+            color: var(--dark);
+        }
+        
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 0 20px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+        
+        .logo span {
+            margin-left: 10px;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            list-style: none;
+        }
+        
+        .nav-tabs li {
+            margin: 0 5px;
+        }
+        
+        .nav-tabs a {
+            text-decoration: none;
+            color: var(--gray);
+            padding: 10px 20px;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .nav-tabs a:hover, .nav-tabs a.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .container {
+            margin-top: 90px;
+            padding: 20px;
+        }
+        
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .page-title {
+            color: var(--dark);
+            font-size: 1.8rem;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--secondary);
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+        }
+        
+        .filters {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 150px;
+        }
+        
+        .filter-label {
+            font-size: 0.8rem;
+            margin-bottom: 5px;
+            color: var(--gray);
+        }
+        
+        .filter-select, .filter-input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+        
+        .data-table-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 30px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1300px;
+        }
+        
+        .data-table th {
+            background: var(--primary);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .data-table td {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .data-table tr:hover {
+            background: #f9f9f9;
+        }
+        
+        .badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .badge-school {
+            background: #e3f2fd;
+            color: var(--info);
+        }
+        
+        .badge-department {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 30px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-title {
+            font-size: 1.5rem;
+            color: var(--dark);
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        
+        .btn-secondary {
+            background: var(--gray);
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .image-preview {
+            max-width: 200px;
+            max-height: 200px;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 5px;
+        }
+        
+        .actions-cell {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .entity-selector {
+            display: none;
+        }
+        
+        .search-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 200px;
+        }
+        
+        .search-select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+        
+        .merged-row {
+            background-color: #f0f7ff;
+            font-weight: 600;
+            border-bottom: 2px solid var(--primary);
+        }
+        
+        .merged-row td {
+            padding: 12px 15px;
+            color: var(--primary);
+        }
+        
+        .child-row {
+            background-color: #ffffff;
+        }
+        
+        .child-row td:first-child {
+            padding-left: 40px;
+        }
+        
+        .toggle-icon {
+            cursor: pointer;
+            margin-right: 8px;
+            display: inline-block;
+            width: 20px;
+            text-align: center;
+            color: var(--primary);
+            font-size: 1.1rem;
+        }
+        
+        .toggle-icon:hover {
+            color: var(--secondary);
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        
+        .status-paid {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-overdue {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .no-data-row {
+            color: #999;
+            font-style: italic;
+        }
+        
+        .no-data-row td {
+            text-align: center;
+            padding: 30px;
+        }
+        
+        .month-badge {
+            background: var(--info);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+            min-width: 80px;
+            text-align: center;
+        }
+        
+        .year-badge {
+            background: var(--success);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+            min-width: 60px;
+            text-align: center;
+        }
+        
+        .period-cell {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .auto-filled {
+            background-color: #f3e5f5;
+            border-left: 3px solid #9c27b0;
+            padding-left: 3px;
+        }
+        
+        .info-note {
+            background: #f3e5f5;
+            border-left: 4px solid #9c27b0;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
