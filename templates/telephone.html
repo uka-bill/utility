@@ -442,6 +442,18 @@
             border-radius: 4px;
             font-size: 0.9rem;
         }
+
+        .account-select-group {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        .account-select-group label {
+            font-weight: 600;
+            color: var(--primary);
+        }
     </style>
 </head>
 <body>
@@ -477,7 +489,6 @@
                 </select>
             </div>
             
-            <!-- School Search (initially hidden) -->
             <div class="search-group" id="schoolSearchGroup" style="display: none;">
                 <label class="filter-label">Select School</label>
                 <select class="search-select" id="schoolSearch">
@@ -485,7 +496,6 @@
                 </select>
             </div>
             
-            <!-- Department Search (initially hidden) -->
             <div class="search-group" id="departmentSearchGroup" style="display: none;">
                 <label class="filter-label">Select Department</label>
                 <select class="search-select" id="departmentSearch">
@@ -544,11 +554,6 @@
                     </tr>
                 </thead>
                 <tbody id="billsTable">
-                    <tr class="no-data-row">
-                        <td colspan="12" style="text-align: center; padding: 30px;">
-                            No telephone bills found matching your criteria. Try adjusting your filters or click "Add New Bill" to create one.
-                        </td>
-                    </tr>
                 </tbody>
             </table>
         </div>
@@ -566,7 +571,7 @@
                 <input type="hidden" id="billId">
                 
                 <div class="info-note">
-                    <strong>ℹ️ Auto-fill Feature:</strong> When you select a school or department, the account number and phone number will be automatically filled from the information you entered in the Schools/Departments tab.
+                    <strong>ℹ️ Multiple Accounts Support:</strong> Select an entity first, then choose from the available account numbers. The phone number will auto-fill based on your selection.
                 </div>
                 
                 <div class="form-group">
@@ -578,7 +583,6 @@
                     </select>
                 </div>
                 
-                <!-- School Selector (initially hidden) -->
                 <div class="form-group entity-selector" id="schoolSelector">
                     <label class="form-label">Select School</label>
                     <select class="form-control" id="schoolId" required>
@@ -586,7 +590,6 @@
                     </select>
                 </div>
                 
-                <!-- Department Selector (initially hidden) -->
                 <div class="form-group entity-selector" id="departmentSelector">
                     <label class="form-label">Select Department</label>
                     <select class="form-control" id="departmentId" required>
@@ -594,14 +597,16 @@
                     </select>
                 </div>
                 
-                <div class="form-group">
-                    <label class="form-label">Account Number <span id="accountAutoIndicator" style="color: #9c27b0; font-size: 0.8rem; display: none;">(Auto-filled)</span></label>
-                    <input type="text" class="form-control" id="accountNumber" placeholder="Will auto-fill from entity" readonly>
+                <div class="account-select-group" id="accountSelectGroup" style="display: none;">
+                    <label class="form-label">Select Account Number</label>
+                    <select class="form-control" id="accountSelect" required>
+                        <option value="">-- Select an account --</option>
+                    </select>
                 </div>
                 
                 <div class="form-group">
                     <label class="form-label">Phone Number <span id="phoneAutoIndicator" style="color: #9c27b0; font-size: 0.8rem; display: none;">(Auto-filled)</span></label>
-                    <input type="text" class="form-control" id="phoneNumber" placeholder="Will auto-fill from entity" readonly>
+                    <input type="text" class="form-control" id="phoneNumber" placeholder="Will auto-fill from selected account" readonly>
                 </div>
                 
                 <div class="form-row">
@@ -697,34 +702,28 @@
     </div>
 
     <script>
-        // Store bills globally for editing
         let allBills = [];
         let currentYear = new Date().getFullYear();
         let editingBill = null;
+        let currentAccounts = [];
 
-        // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
             initializePage();
         });
 
         function initializePage() {
-            // Populate years from 2000 to 2050
             const yearFilter = document.getElementById('yearFilter');
             for (let year = 2000; year <= 2050; year++) {
                 const option = document.createElement('option');
                 option.value = year;
                 option.textContent = year;
-                if (year === currentYear) {
-                    option.selected = true;
-                }
+                if (year === currentYear) option.selected = true;
                 yearFilter.appendChild(option);
             }
 
-            // Load schools and departments for search dropdowns
             loadSchoolsForSearch();
             loadDepartmentsForSearch();
 
-            // Modal functionality
             const addBillBtn = document.getElementById('addBillBtn');
             const billModal = document.getElementById('billModal');
             const closeModal = document.getElementById('closeModal');
@@ -733,188 +732,196 @@
             const entityType = document.getElementById('entityType');
             const schoolSelector = document.getElementById('schoolSelector');
             const departmentSelector = document.getElementById('departmentSelector');
-            const schoolId = document.getElementById('schoolId');
-            const departmentId = document.getElementById('departmentId');
-            const modalTitle = document.getElementById('modalTitle');
-            const accountNumber = document.getElementById('accountNumber');
-            const phoneNumber = document.getElementById('phoneNumber');
-            const accountAutoIndicator = document.getElementById('accountAutoIndicator');
-            const phoneAutoIndicator = document.getElementById('phoneAutoIndicator');
+            const accountSelectGroup = document.getElementById('accountSelectGroup');
+            const accountSelect = document.getElementById('accountSelect');
 
             addBillBtn.addEventListener('click', () => {
                 editingBill = null;
-                modalTitle.textContent = 'Add Telephone Bill';
+                document.getElementById('modalTitle').textContent = 'Add Telephone Bill';
                 billForm.reset();
                 document.getElementById('imagePreview').innerHTML = '';
                 document.getElementById('billYear').value = currentYear;
                 document.getElementById('year').value = currentYear;
-                accountNumber.value = '';
-                phoneNumber.value = '';
-                accountAutoIndicator.style.display = 'none';
-                phoneAutoIndicator.style.display = 'none';
-                
-                // Enable entity type selection
+                document.getElementById('phoneNumber').value = '';
+                document.getElementById('phoneAutoIndicator').style.display = 'none';
                 entityType.disabled = false;
-                
+                accountSelectGroup.style.display = 'none';
                 billModal.style.display = 'flex';
             });
             
-            closeModal.addEventListener('click', () => {
-                billModal.style.display = 'none';
-            });
+            closeModal.addEventListener('click', () => billModal.style.display = 'none');
+            cancelBtn.addEventListener('click', () => billModal.style.display = 'none');
             
-            cancelBtn.addEventListener('click', () => {
-                billModal.style.display = 'none';
-            });
-            
-            // Load entities when entity type changes
-            entityType.addEventListener('change', () => {
+            entityType.addEventListener('change', async () => {
                 const type = entityType.value;
+                document.getElementById('phoneNumber').value = '';
+                document.getElementById('phoneAutoIndicator').style.display = 'none';
+                accountSelectGroup.style.display = 'none';
+                accountSelect.innerHTML = '<option value="">-- Select an account --</option>';
+                currentAccounts = [];
                 
-                // Clear auto-filled fields
-                accountNumber.value = '';
-                phoneNumber.value = '';
-                accountAutoIndicator.style.display = 'none';
-                phoneAutoIndicator.style.display = 'none';
-                
-                // Hide both selectors initially
                 schoolSelector.style.display = 'none';
                 departmentSelector.style.display = 'none';
                 
                 if (type === 'school') {
                     schoolSelector.style.display = 'block';
-                    departmentSelector.style.display = 'none';
-                    // Load schools
-                    fetch('/api/entities?type=school')
-                        .then(response => response.json())
-                        .then(data => {
-                            schoolId.innerHTML = '<option value="">Select School</option>';
-                            data.forEach(school => {
-                                const option = document.createElement('option');
-                                option.value = school.id;
-                                option.textContent = school.name;
-                                option.dataset.telephoneAccount = school.telephone_account || '';
-                                option.dataset.telephoneNumber = school.telephone_number || '';
-                                schoolId.appendChild(option);
-                            });
-                        })
-                        .catch(error => {
-                            console.error('Error loading schools:', error);
-                        });
+                    await loadSchoolsForModal();
                 } else if (type === 'department') {
                     departmentSelector.style.display = 'block';
-                    schoolSelector.style.display = 'none';
-                    // Load departments
-                    fetch('/api/entities?type=department')
-                        .then(response => response.json())
-                        .then(data => {
-                            departmentId.innerHTML = '<option value="">Select Department</option>';
-                            data.forEach(department => {
-                                const option = document.createElement('option');
-                                option.value = department.id;
-                                option.textContent = department.name;
-                                option.dataset.telephoneAccount = department.telephone_account || '';
-                                option.dataset.telephoneNumber = department.telephone_number || '';
-                                departmentId.appendChild(option);
-                            });
-                        })
-                        .catch(error => {
-                            console.error('Error loading departments:', error);
+                    await loadDepartmentsForModal();
+                }
+            });
+
+            async function loadSchoolsForModal() {
+                try {
+                    const response = await fetch('/api/schools');
+                    const schools = await response.json();
+                    const schoolSelect = document.getElementById('schoolId');
+                    
+                    const sortedSchools = [...schools].sort((a, b) => {
+                        const numA = parseInt(a.school_number) || 0;
+                        const numB = parseInt(b.school_number) || 0;
+                        return numA - numB;
+                    });
+                    
+                    schoolSelect.innerHTML = '<option value="">Select School</option>';
+                    sortedSchools.forEach(school => {
+                        const option = document.createElement('option');
+                        option.value = school.id;
+                        let displayName = school.name;
+                        if (school.school_number) {
+                            displayName = `[${school.school_number}] ${school.name}`;
+                        }
+                        option.textContent = displayName;
+                        schoolSelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading schools:', error);
+                }
+            }
+
+            async function loadDepartmentsForModal() {
+                try {
+                    const response = await fetch('/api/departments');
+                    const departments = await response.json();
+                    const deptSelect = document.getElementById('departmentId');
+                    
+                    const sortedDepts = [...departments].sort((a, b) => {
+                        const deptCompare = (a.department_name || '').localeCompare(b.department_name || '');
+                        if (deptCompare !== 0) return deptCompare;
+                        const divCompare = (a.division_name || '').localeCompare(b.division_name || '');
+                        if (divCompare !== 0) return divCompare;
+                        return (a.unit_name || '').localeCompare(b.unit_name || '');
+                    });
+                    
+                    deptSelect.innerHTML = '<option value="">Select Department</option>';
+                    sortedDepts.forEach(dept => {
+                        const option = document.createElement('option');
+                        option.value = dept.id;
+                        let displayName = dept.unit_name || dept.name || 'Unnamed';
+                        if (dept.department_name) {
+                            displayName = `${dept.department_name} - ${dept.division_name || ''} - ${displayName}`;
+                        }
+                        option.textContent = displayName;
+                        deptSelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading departments:', error);
+                }
+            }
+
+            document.getElementById('schoolId').addEventListener('change', async function() {
+                const schoolId = this.value;
+                if (schoolId) {
+                    await loadTelephoneAccounts(schoolId, 'school');
+                } else {
+                    accountSelectGroup.style.display = 'none';
+                    currentAccounts = [];
+                }
+            });
+
+            document.getElementById('departmentId').addEventListener('change', async function() {
+                const deptId = this.value;
+                if (deptId) {
+                    await loadTelephoneAccounts(deptId, 'department');
+                } else {
+                    accountSelectGroup.style.display = 'none';
+                    currentAccounts = [];
+                }
+            });
+
+            async function loadTelephoneAccounts(entityId, entityType) {
+                try {
+                    const url = `/api/entity-accounts?entity_type=${entityType}&entity_id=${entityId}&utility_type=telephone`;
+                    const response = await fetch(url);
+                    const accounts = await response.json();
+                    currentAccounts = accounts;
+                    
+                    const accountSelect = document.getElementById('accountSelect');
+                    accountSelect.innerHTML = '<option value="">-- Select an account --</option>';
+                    
+                    if (accounts && accounts.length > 0) {
+                        accounts.forEach(account => {
+                            const option = document.createElement('option');
+                            option.value = account.id;
+                            let displayText = account.account_number;
+                            if (account.phone_number) {
+                                displayText += ` (Phone: ${account.phone_number})`;
+                            }
+                            if (!account.is_active) {
+                                displayText += ' [INACTIVE]';
+                            }
+                            option.textContent = displayText;
+                            option.dataset.phoneNumber = account.phone_number || '';
+                            option.dataset.accountNumber = account.account_number;
+                            accountSelect.appendChild(option);
                         });
+                        accountSelectGroup.style.display = 'block';
+                    } else {
+                        accountSelectGroup.style.display = 'none';
+                        alert('No telephone accounts found for this entity. Please add account numbers in Schools/Departments tab first.');
+                    }
+                } catch (error) {
+                    console.error('Error loading accounts:', error);
+                    accountSelectGroup.style.display = 'none';
                 }
-            });
+            }
 
-            // Auto-fill account and phone when school is selected
-            schoolId.addEventListener('change', function() {
-                const selected = this.options[this.selectedIndex];
-                if (selected && selected.value) {
-                    const telephoneAccount = selected.dataset.telephoneAccount;
-                    const telephoneNumber = selected.dataset.telephoneNumber;
-                    
-                    if (telephoneAccount) {
-                        accountNumber.value = telephoneAccount;
-                        accountAutoIndicator.style.display = 'inline';
-                    } else {
-                        accountNumber.value = '';
-                        accountAutoIndicator.style.display = 'none';
-                    }
-                    
-                    if (telephoneNumber) {
-                        phoneNumber.value = telephoneNumber;
-                        phoneAutoIndicator.style.display = 'inline';
-                    } else {
-                        phoneNumber.value = '';
-                        phoneAutoIndicator.style.display = 'none';
-                    }
-                } else {
-                    accountNumber.value = '';
-                    phoneNumber.value = '';
-                    accountAutoIndicator.style.display = 'none';
-                    phoneAutoIndicator.style.display = 'none';
-                }
-            });
-
-            // Auto-fill account and phone when department is selected
-            departmentId.addEventListener('change', function() {
-                const selected = this.options[this.selectedIndex];
-                if (selected && selected.value) {
-                    const telephoneAccount = selected.dataset.telephoneAccount;
-                    const telephoneNumber = selected.dataset.telephoneNumber;
-                    
-                    if (telephoneAccount) {
-                        accountNumber.value = telephoneAccount;
-                        accountAutoIndicator.style.display = 'inline';
-                    } else {
-                        accountNumber.value = '';
-                        accountAutoIndicator.style.display = 'none';
-                    }
-                    
-                    if (telephoneNumber) {
-                        phoneNumber.value = telephoneNumber;
-                        phoneAutoIndicator.style.display = 'inline';
-                    } else {
-                        phoneNumber.value = '';
-                        phoneAutoIndicator.style.display = 'none';
-                    }
-                } else {
-                    accountNumber.value = '';
-                    phoneNumber.value = '';
-                    accountAutoIndicator.style.display = 'none';
-                    phoneAutoIndicator.style.display = 'none';
-                }
+            document.getElementById('accountSelect').addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                const phoneNumber = selectedOption?.dataset?.phoneNumber || '';
+                document.getElementById('phoneNumber').value = phoneNumber;
+                document.getElementById('phoneAutoIndicator').style.display = phoneNumber ? 'inline' : 'none';
             });
             
-            // Image preview
             document.getElementById('billImage').addEventListener('change', function() {
                 const file = this.files[0];
                 const preview = document.getElementById('imagePreview');
-                
                 if (file) {
                     if (file.type.startsWith('image/')) {
                         const reader = new FileReader();
                         reader.onload = function(e) {
-                            preview.innerHTML = '<img src="' + e.target.result + '" class="image-preview" alt="Bill preview">';
-                        }
+                            preview.innerHTML = `<img src="${e.target.result}" class="image-preview" alt="Bill preview">`;
+                        };
                         reader.readAsDataURL(file);
                     } else if (file.type === 'application/pdf') {
-                        preview.innerHTML = '<div class="image-preview">PDF File: ' + file.name + '</div>';
+                        preview.innerHTML = `<div class="image-preview">PDF File: ${file.name}</div>`;
                     }
                 } else {
                     preview.innerHTML = '';
                 }
             });
             
-            // Form submission
-            billForm.addEventListener('submit', (e) => {
+            billForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
                 const entityTypeVal = entityType.value;
                 let entityIdVal = '';
                 
                 if (entityTypeVal === 'school') {
-                    entityIdVal = schoolId.value;
+                    entityIdVal = document.getElementById('schoolId').value;
                 } else if (entityTypeVal === 'department') {
-                    entityIdVal = departmentId.value;
+                    entityIdVal = document.getElementById('departmentId').value;
                 }
                 
                 if (!entityIdVal) {
@@ -922,12 +929,21 @@
                     return;
                 }
                 
+                const accountSelect = document.getElementById('accountSelect');
+                const selectedAccount = accountSelect.options[accountSelect.selectedIndex];
+                
+                if (!selectedAccount || !selectedAccount.value) {
+                    alert('Please select an account number');
+                    return;
+                }
+                
                 const billData = {
                     utility_type: 'telephone',
                     entity_type: entityTypeVal,
                     entity_id: parseInt(entityIdVal),
-                    account_number: accountNumber.value,
-                    phone_number: phoneNumber.value,
+                    account_id: parseInt(selectedAccount.value),
+                    account_number: selectedAccount.dataset.accountNumber || '',
+                    phone_number: document.getElementById('phoneNumber').value,
                     current_charges: parseFloat(document.getElementById('currentCharges').value),
                     late_charges: parseFloat(document.getElementById('lateCharges').value),
                     unsettled_charges: parseFloat(document.getElementById('unsettledCharges').value),
@@ -939,54 +955,65 @@
                     bill_image: null
                 };
                 
+                const imageFile = document.getElementById('billImage').files[0];
+                
+                if (imageFile) {
+                    const formData = new FormData();
+                    formData.append('file', imageFile);
+                    
+                    try {
+                        const uploadResponse = await fetch('/api/upload-bill-image', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const uploadData = await uploadResponse.json();
+                        if (uploadData.image_url) {
+                            billData.bill_image = uploadData.image_url;
+                        }
+                    } catch (error) {
+                        console.error('Error uploading image:', error);
+                    }
+                } else if (editingBill && editingBill.bill_image) {
+                    billData.bill_image = editingBill.bill_image;
+                }
+                
                 let url = '/api/utility-bills';
                 let method = 'POST';
                 
                 if (editingBill) {
-                    url = '/api/utility-bills/' + editingBill.id;
+                    url = `/api/utility-bills/${editingBill.id}`;
                     method = 'PUT';
                 }
                 
-                fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(billData)
-                })
-                .then(response => response.json())
-                .then(data => {
+                try {
+                    const response = await fetch(url, {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(billData)
+                    });
+                    const data = await response.json();
                     if (data.message) {
                         alert(data.message);
                         billModal.style.display = 'none';
                         billForm.reset();
-                        location.reload();
+                        loadBills();
                     } else {
                         alert('Error saving bill: ' + (data.error || 'Unknown error'));
                     }
-                })
-                .catch(error => {
+                } catch (error) {
                     console.error('Error:', error);
                     alert('Error saving bill. Please try again.');
-                });
+                }
             });
             
-            // Filter event listeners
             document.getElementById('entityTypeFilter').addEventListener('change', function() {
                 const entityType = this.value;
                 const schoolSearchGroup = document.getElementById('schoolSearchGroup');
                 const departmentSearchGroup = document.getElementById('departmentSearchGroup');
-                
-                // Hide both search groups initially
                 schoolSearchGroup.style.display = 'none';
                 departmentSearchGroup.style.display = 'none';
-                
-                if (entityType === 'school') {
-                    schoolSearchGroup.style.display = 'block';
-                } else if (entityType === 'department') {
-                    departmentSearchGroup.style.display = 'block';
-                }
-                
+                if (entityType === 'school') schoolSearchGroup.style.display = 'block';
+                else if (entityType === 'department') departmentSearchGroup.style.display = 'block';
                 loadBills();
             });
             
@@ -996,70 +1023,68 @@
             document.getElementById('yearFilter').addEventListener('change', loadBills);
             document.getElementById('searchFilter').addEventListener('input', loadBills);
             
-            // Initial load
             loadBills();
         }
         
-        function loadSchoolsForSearch() {
-            fetch('/api/entities?type=school')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch schools');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    const schoolSearch = document.getElementById('schoolSearch');
-                    schoolSearch.innerHTML = '<option value="all">All Schools</option>';
-                    
-                    if (data && data.length > 0) {
-                        data.forEach(school => {
-                            const option = document.createElement('option');
-                            option.value = school.id;
-                            option.textContent = school.name;
-                            schoolSearch.appendChild(option);
-                        });
-                        console.log('Loaded ' + data.length + ' schools for search');
-                    } else {
-                        console.warn('No schools found for search dropdown');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading schools for search:', error);
+        async function loadSchoolsForSearch() {
+            try {
+                const response = await fetch('/api/schools');
+                const schools = await response.json();
+                const schoolSearch = document.getElementById('schoolSearch');
+                
+                const sortedSchools = [...schools].sort((a, b) => {
+                    const numA = parseInt(a.school_number) || 0;
+                    const numB = parseInt(b.school_number) || 0;
+                    return numA - numB;
                 });
+                
+                schoolSearch.innerHTML = '<option value="all">All Schools</option>';
+                sortedSchools.forEach(school => {
+                    const option = document.createElement('option');
+                    option.value = school.id;
+                    let displayName = school.name;
+                    if (school.school_number) {
+                        displayName = `[${school.school_number}] ${school.name}`;
+                    }
+                    option.textContent = displayName;
+                    schoolSearch.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading schools for search:', error);
+            }
         }
         
-        function loadDepartmentsForSearch() {
-            fetch('/api/entities?type=department')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch departments');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    const departmentSearch = document.getElementById('departmentSearch');
-                    departmentSearch.innerHTML = '<option value="all">All Departments</option>';
-                    
-                    if (data && data.length > 0) {
-                        data.forEach(department => {
-                            const option = document.createElement('option');
-                            option.value = department.id;
-                            option.textContent = department.name;
-                            departmentSearch.appendChild(option);
-                        });
-                        console.log('Loaded ' + data.length + ' departments for search');
-                    } else {
-                        console.warn('No departments found for search dropdown');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading departments for search:', error);
+        async function loadDepartmentsForSearch() {
+            try {
+                const response = await fetch('/api/departments');
+                const departments = await response.json();
+                const deptSearch = document.getElementById('departmentSearch');
+                
+                const sortedDepts = [...departments].sort((a, b) => {
+                    const deptCompare = (a.department_name || '').localeCompare(b.department_name || '');
+                    if (deptCompare !== 0) return deptCompare;
+                    const divCompare = (a.division_name || '').localeCompare(b.division_name || '');
+                    if (divCompare !== 0) return divCompare;
+                    return (a.unit_name || '').localeCompare(b.unit_name || '');
                 });
+                
+                deptSearch.innerHTML = '<option value="all">All Departments</option>';
+                sortedDepts.forEach(dept => {
+                    const option = document.createElement('option');
+                    option.value = dept.id;
+                    let displayName = dept.unit_name || dept.name || 'Unnamed';
+                    if (dept.department_name) {
+                        displayName = `${dept.department_name} - ${dept.division_name || ''} - ${displayName}`;
+                    }
+                    option.textContent = displayName;
+                    deptSearch.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading departments for search:', error);
+            }
         }
         
-        // Load bills on page load
-        function loadBills() {
+        async function loadBills() {
             const entityTypeFilter = document.getElementById('entityTypeFilter').value;
             const schoolSearch = document.getElementById('schoolSearch').value;
             const departmentSearch = document.getElementById('departmentSearch').value;
@@ -1069,54 +1094,30 @@
             
             let url = '/api/utility-bills?utility_type=telephone';
             
-            // Add entity type filter to API call
-            if (entityTypeFilter !== 'all') {
-                url += '&entity_type=' + entityTypeFilter;
-            }
+            if (entityTypeFilter !== 'all') url += `&entity_type=${entityTypeFilter}`;
+            if (entityTypeFilter === 'school' && schoolSearch !== 'all') url += `&entity_id=${schoolSearch}`;
+            else if (entityTypeFilter === 'department' && departmentSearch !== 'all') url += `&entity_id=${departmentSearch}`;
+            if (monthFilter !== 'all') url += `&month=${monthFilter}`;
+            if (yearFilter !== 'all') url += `&year=${yearFilter}`;
             
-            // Add specific entity filter to API call
-            if (entityTypeFilter === 'school' && schoolSearch !== 'all') {
-                url += '&entity_id=' + schoolSearch;
-            } else if (entityTypeFilter === 'department' && departmentSearch !== 'all') {
-                url += '&entity_id=' + departmentSearch;
+            try {
+                const response = await fetch(url);
+                let data = await response.json();
+                allBills = data;
+                
+                if (searchFilter) {
+                    data = data.filter(bill => 
+                        bill.entity_name?.toLowerCase().includes(searchFilter) ||
+                        bill.account_number?.toLowerCase().includes(searchFilter) ||
+                        bill.phone_number?.toLowerCase().includes(searchFilter)
+                    );
+                }
+                
+                renderBillsTable(data);
+            } catch (error) {
+                console.error('Error loading bills:', error);
+                alert('Error loading bills. Please try again.');
             }
-            
-            // Add month and year filters to API call
-            if (monthFilter !== 'all') {
-                url += '&month=' + monthFilter;
-            }
-            if (yearFilter !== 'all') {
-                url += '&year=' + yearFilter;
-            }
-            
-            console.log('Loading bills with URL:', url);
-            
-            fetch(url)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch bills');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    allBills = data;
-                    
-                    // Apply search filter if provided
-                    if (searchFilter) {
-                        data = data.filter(bill => 
-                            bill.entity_name.toLowerCase().includes(searchFilter) ||
-                            (bill.account_number && bill.account_number.toLowerCase().includes(searchFilter)) ||
-                            (bill.phone_number && bill.phone_number.toLowerCase().includes(searchFilter))
-                        );
-                    }
-                    
-                    console.log('Loaded ' + data.length + ' bills');
-                    renderBillsTable(data);
-                })
-                .catch(error => {
-                    console.error('Error loading bills:', error);
-                    alert('Error loading bills. Please try again.');
-                });
         }
         
         function renderBillsTable(bills) {
@@ -1134,201 +1135,217 @@
                 return;
             }
             
-            // Get the selected school/department name for display
             const entityTypeFilter = document.getElementById('entityTypeFilter').value;
             const schoolSearch = document.getElementById('schoolSearch');
             const departmentSearch = document.getElementById('departmentSearch');
             
             let selectedEntityName = '';
             if (entityTypeFilter === 'school' && schoolSearch.value !== 'all') {
-                selectedEntityName = schoolSearch.options[schoolSearch.selectedIndex].text;
+                selectedEntityName = schoolSearch.options[schoolSearch.selectedIndex]?.text || '';
             } else if (entityTypeFilter === 'department' && departmentSearch.value !== 'all') {
-                selectedEntityName = departmentSearch.options[departmentSearch.selectedIndex].text;
+                selectedEntityName = departmentSearch.options[departmentSearch.selectedIndex]?.text || '';
             }
             
-            // If a specific entity is selected, only show bills for that entity
             let filteredBills = bills;
             if (selectedEntityName) {
                 filteredBills = bills.filter(bill => bill.entity_name === selectedEntityName);
             }
             
-            // Sort bills by year (descending) and month (ascending)
             filteredBills.sort((a, b) => {
                 const yearA = a.bill_year || a.year;
                 const yearB = b.bill_year || b.year;
                 const monthA = a.bill_month || a.month;
                 const monthB = b.bill_month || b.month;
-                
-                if (yearA !== yearB) {
-                    return yearB - yearA;
-                }
+                if (yearA !== yearB) return yearB - yearA;
                 return monthA - monthB;
             });
             
-            // Render each bill
+            const groupedBills = {};
             filteredBills.forEach(bill => {
-                const row = document.createElement('tr');
-                
-                // Calculate status
-                const totalCharges = bill.current_charges + bill.late_charges + bill.unsettled_charges;
-                let status = 'pending';
-                let statusText = 'Pending';
-                
-                if (bill.amount_paid >= totalCharges) {
-                    status = 'paid';
-                    statusText = 'Paid';
-                } else if (bill.late_charges > 0) {
-                    status = 'overdue';
-                    statusText = 'Overdue';
-                }
-                
-                let imageCell = '-';
-                if (bill.bill_image) {
-                    imageCell = '<a href="' + bill.bill_image + '" target="_blank">View Bill</a>';
-                }
-                
-                const displayMonth = bill.bill_month || bill.month;
-                const displayYear = bill.bill_year || bill.year;
-                const monthName = getMonthName(displayMonth);
-                
-                row.innerHTML = `
-                    <td>${bill.entity_name}</td>
-                    <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
-                    <td>
-                        <div class="period-cell">
-                            <span class="month-badge">${monthName}</span>
-                            <span class="year-badge">${displayYear}</span>
-                        </div>
-                    </td>
-                    <td>${bill.account_number || '-'}</td>
-                    <td>${bill.phone_number || '-'}</td>
-                    <td>$${bill.current_charges.toFixed(2)}</td>
-                    <td>$${bill.late_charges.toFixed(2)}</td>
-                    <td>$${bill.unsettled_charges.toFixed(2)}</td>
-                    <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
-                    <td><span class="status-badge status-${status}">${statusText}</span></td>
-                    <td>${imageCell}</td>
-                    <td class="actions-cell">
-                        <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
-                        <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
-                    </td>
-                `;
-                tableBody.appendChild(row);
+                if (!groupedBills[bill.entity_name]) groupedBills[bill.entity_name] = [];
+                groupedBills[bill.entity_name].push(bill);
             });
             
-            // Add event listeners to edit buttons
-            document.querySelectorAll('.edit-btn').forEach(button => {
-                button.addEventListener('click', function() {
-                    const billId = this.getAttribute('data-id');
-                    editBill(billId);
+            Object.keys(groupedBills).forEach(entityName => {
+                const entityBills = groupedBills[entityName];
+                const entityType = entityBills[0].entity_type;
+                
+                const headerRow = document.createElement('tr');
+                headerRow.className = 'merged-row';
+                headerRow.innerHTML = `
+                    <td colspan="12">
+                        <span class="toggle-icon" data-entity="${entityName.replace(/'/g, "\\'")}">▶</span>
+                        <strong>${escapeHtml(entityName)}</strong> 
+                        <span class="badge ${entityType === 'school' ? 'badge-school' : 'badge-department'}" style="margin-left: 10px;">
+                            ${entityType}
+                        </span>
+                        <span style="margin-left: 10px; color: #666; font-size: 0.9em;">
+                            (${entityBills.length} bill${entityBills.length > 1 ? 's' : ''})
+                        </span>
+                    </td>
+                `;
+                tableBody.appendChild(headerRow);
+                
+                entityBills.forEach(bill => {
+                    const childRow = document.createElement('tr');
+                    childRow.className = 'child-row';
+                    childRow.style.display = 'none';
+                    childRow.setAttribute('data-entity', entityName);
+                    
+                    const totalCharges = bill.current_charges + bill.late_charges + bill.unsettled_charges;
+                    let status = 'pending';
+                    let statusText = 'Pending';
+                    
+                    if (bill.amount_paid >= totalCharges) {
+                        status = 'paid';
+                        statusText = 'Paid';
+                    } else if (bill.late_charges > 0) {
+                        status = 'overdue';
+                        statusText = 'Overdue';
+                    }
+                    
+                    let imageCell = '-';
+                    if (bill.bill_image) {
+                        imageCell = `<a href="${bill.bill_image}" target="_blank">View Bill</a>`;
+                    }
+                    
+                    const displayMonth = bill.bill_month || bill.month;
+                    const displayYear = bill.bill_year || bill.year;
+                    const monthName = getMonthName(displayMonth);
+                    
+                    childRow.innerHTML = `
+                        <td style="padding-left: 40px;">${escapeHtml(bill.entity_name)}</td>
+                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
+                        <td><div class="period-cell"><span class="month-badge">${monthName}</span><span class="year-badge">${displayYear}</span></div></td>
+                        <td>${escapeHtml(bill.account_number || '-')}</td>
+                        <td>${escapeHtml(bill.phone_number || '-')}</td>
+                        <td>$${bill.current_charges?.toFixed(2) || '0.00'}</td>
+                        <td>$${bill.late_charges?.toFixed(2) || '0.00'}</td>
+                        <td>$${bill.unsettled_charges?.toFixed(2) || '0.00'}</td>
+                        <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
+                        <td><span class="status-badge status-${status}">${statusText}</span></td>
+                        <td>${imageCell}</td>
+                        <td class="actions-cell">
+                            <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
+                            <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
+                        </td>
+                    `;
+                    tableBody.appendChild(childRow);
                 });
             });
             
-            // Add event listeners to delete buttons
+            document.querySelectorAll('.toggle-icon').forEach(icon => {
+                icon.addEventListener('click', function() {
+                    const entityName = this.getAttribute('data-entity');
+                    const childRows = document.querySelectorAll(`tr.child-row[data-entity="${entityName.replace(/\\/g, '\\\\')}"]`);
+                    const isExpanded = childRows.length > 0 && childRows[0].style.display !== 'none';
+                    childRows.forEach(row => row.style.display = isExpanded ? 'none' : '');
+                    this.textContent = isExpanded ? '▶' : '▼';
+                });
+            });
+            
+            document.querySelectorAll('.edit-btn').forEach(button => {
+                button.addEventListener('click', () => editBill(button.getAttribute('data-id')));
+            });
+            
             document.querySelectorAll('.delete-btn').forEach(button => {
-                button.addEventListener('click', function() {
-                    const billId = this.getAttribute('data-id');
-                    if (confirm('Are you sure you want to delete this bill? This action cannot be undone.')) {
-                        deleteBill(billId);
+                button.addEventListener('click', () => {
+                    if (confirm('Are you sure you want to delete this bill?')) {
+                        deleteBill(button.getAttribute('data-id'));
                     }
                 });
             });
         }
         
-        function editBill(billId) {
-            // Find the bill in our stored data
+        async function editBill(billId) {
             const bill = allBills.find(b => b.id == billId);
-            
             if (!bill) {
-                alert('Bill not found in local data. Please refresh the page and try again.');
+                alert('Bill not found');
                 return;
             }
             
             editingBill = bill;
             document.getElementById('modalTitle').textContent = 'Edit Telephone Bill';
             document.getElementById('billId').value = bill.id;
-            
-            // Set current year as default
             document.getElementById('billYear').value = currentYear;
             document.getElementById('year').value = currentYear;
-            
-            // Disable entity type when editing
             document.getElementById('entityType').disabled = true;
             
-            // First, set the entity type
             const entityType = document.getElementById('entityType');
             entityType.value = bill.entity_type;
+            entityType.dispatchEvent(new Event('change'));
             
-            // Trigger change event to show appropriate selector
-            const event = new Event('change');
-            entityType.dispatchEvent(event);
-            
-            // Wait a bit for the dropdown to populate, then set values
-            setTimeout(() => {
-                // Now populate all form fields
-                document.getElementById('accountNumber').value = bill.account_number || '';
-                document.getElementById('phoneNumber').value = bill.phone_number || '';
-                document.getElementById('currentCharges').value = bill.current_charges || 0;
-                document.getElementById('lateCharges').value = bill.late_charges || 0;
-                document.getElementById('unsettledCharges').value = bill.unsettled_charges || 0;
-                document.getElementById('amountPaid').value = bill.amount_paid || 0;
-                document.getElementById('month').value = bill.month || '';
-                document.getElementById('year').value = bill.year || currentYear;
-                document.getElementById('billMonth').value = bill.bill_month || bill.month || '';
-                document.getElementById('billYear').value = bill.bill_year || bill.year || currentYear;
-                
-                // Show auto-fill indicators if values exist
-                if (bill.account_number) {
-                    document.getElementById('accountAutoIndicator').style.display = 'inline';
-                }
-                if (bill.phone_number) {
-                    document.getElementById('phoneAutoIndicator').style.display = 'inline';
-                }
-                
-                // Show existing image
-                if (bill.bill_image) {
-                    document.getElementById('imagePreview').innerHTML = '<a href="' + bill.bill_image + '" target="_blank">View Current Bill Image</a>';
+            setTimeout(async () => {
+                if (bill.entity_type === 'school') {
+                    const schoolSelect = document.getElementById('schoolId');
+                    await loadSchoolsForModal();
+                    schoolSelect.value = bill.entity_id;
+                    schoolSelect.dispatchEvent(new Event('change'));
                 } else {
-                    document.getElementById('imagePreview').innerHTML = '';
+                    const deptSelect = document.getElementById('departmentId');
+                    await loadDepartmentsForModal();
+                    deptSelect.value = bill.entity_id;
+                    deptSelect.dispatchEvent(new Event('change'));
                 }
                 
-                document.getElementById('billModal').style.display = 'flex';
+                setTimeout(() => {
+                    const accountSelect = document.getElementById('accountSelect');
+                    for (let i = 0; i < accountSelect.options.length; i++) {
+                        if (accountSelect.options[i].dataset.accountNumber === bill.account_number) {
+                            accountSelect.selectedIndex = i;
+                            accountSelect.dispatchEvent(new Event('change'));
+                            break;
+                        }
+                    }
+                    
+                    document.getElementById('currentCharges').value = bill.current_charges || 0;
+                    document.getElementById('lateCharges').value = bill.late_charges || 0;
+                    document.getElementById('unsettledCharges').value = bill.unsettled_charges || 0;
+                    document.getElementById('amountPaid').value = bill.amount_paid || 0;
+                    document.getElementById('month').value = bill.month || '';
+                    document.getElementById('year').value = bill.year || currentYear;
+                    document.getElementById('billMonth').value = bill.bill_month || bill.month || '';
+                    document.getElementById('billYear').value = bill.bill_year || bill.year || currentYear;
+                    
+                    if (bill.bill_image) {
+                        document.getElementById('imagePreview').innerHTML = `<a href="${bill.bill_image}" target="_blank">View Current Bill Image</a>`;
+                    }
+                    
+                    document.getElementById('billModal').style.display = 'flex';
+                }, 500);
             }, 500);
         }
         
-        function deleteBill(billId) {
-            console.log('Deleting bill with ID:', billId);
-            
-            fetch('/api/utility-bills/' + billId, {
-                method: 'DELETE'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => {
-                        throw new Error(err.error || 'Server error: ' + response.status);
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Delete response:', data);
+        async function deleteBill(billId) {
+            try {
+                const response = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
+                const data = await response.json();
                 if (data.message) {
                     alert(data.message);
-                    location.reload();
+                    loadBills();
                 } else {
                     alert('Error deleting bill: ' + (data.error || 'Unknown error'));
                 }
-            })
-            .catch(error => {
+            } catch (error) {
                 console.error('Error deleting bill:', error);
-                alert('Error deleting bill: ' + error.message);
-            });
+                alert('Error deleting bill');
+            }
         }
         
         function getMonthName(month) {
             const months = ['January', 'February', 'March', 'April', 'May', 'June', 
                            'July', 'August', 'September', 'October', 'November', 'December'];
             return months[month - 1] || 'Unknown';
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
         }
     </script>
 </body>
