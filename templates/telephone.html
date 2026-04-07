@@ -897,8 +897,10 @@
                 
                 if (entityType === 'school') {
                     schoolSearchGroup.style.display = 'block';
+                    populateSchoolSearchDropdown();
                 } else if (entityType === 'department') {
                     departmentSearchGroup.style.display = 'block';
+                    populateDepartmentSearchDropdown();
                 }
                 loadBills();
             });
@@ -937,11 +939,7 @@
             sortedSchools.forEach(school => {
                 const option = document.createElement('option');
                 option.value = school.id;
-                let displayName = school.name;
-                if (school.school_number) {
-                    displayName = `${school.school_number} - ${school.name}`;
-                }
-                option.textContent = displayName;
+                option.textContent = school.name;
                 schoolSelect.appendChild(option);
             });
         }
@@ -961,6 +959,38 @@
                 }
                 option.textContent = displayName;
                 departmentSelect.appendChild(option);
+            });
+        }
+
+        function populateSchoolSearchDropdown() {
+            const schoolSearch = document.getElementById('schoolSearch');
+            schoolSearch.innerHTML = '<option value="all">All Schools</option>';
+            
+            const sortedSchools = [...schoolsData].sort((a, b) => a.id - b.id);
+            
+            sortedSchools.forEach(school => {
+                const option = document.createElement('option');
+                option.value = school.id;
+                option.textContent = school.name;
+                schoolSearch.appendChild(option);
+            });
+        }
+
+        function populateDepartmentSearchDropdown() {
+            const departmentSearch = document.getElementById('departmentSearch');
+            departmentSearch.innerHTML = '<option value="all">All Departments</option>';
+            
+            const sortedDepartments = [...departmentsData].sort((a, b) => a.id - b.id);
+            
+            sortedDepartments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept.id;
+                let displayName = dept.unit_name || dept.name || 'Unknown';
+                if (dept.department_name) {
+                    displayName = `${dept.department_name} - ${dept.division_name} - ${displayName}`;
+                }
+                option.textContent = displayName;
+                departmentSearch.appendChild(option);
             });
         }
 
@@ -1135,7 +1165,7 @@
                     allBills = data;
                     if (searchFilter) {
                         data = data.filter(bill => 
-                            bill.entity_name.toLowerCase().includes(searchFilter) ||
+                            bill.entity_name && bill.entity_name.toLowerCase().includes(searchFilter) ||
                             (bill.account_number && bill.account_number.toLowerCase().includes(searchFilter)) ||
                             (bill.phone_number && bill.phone_number.toLowerCase().includes(searchFilter))
                         );
@@ -1222,14 +1252,14 @@
                     childRow.style.display = 'none';
                     childRow.setAttribute('data-entity', entityName);
                     
-                    const totalCharges = bill.current_charges + bill.late_charges + bill.unsettled_charges;
+                    const totalCharges = (bill.current_charges || 0) + (bill.late_charges || 0) + (bill.unsettled_charges || 0);
                     let status = 'pending';
                     let statusText = 'Pending';
                     
-                    if (bill.amount_paid >= totalCharges) {
+                    if ((bill.amount_paid || 0) >= totalCharges) {
                         status = 'paid';
                         statusText = 'Paid';
-                    } else if (bill.late_charges > 0) {
+                    } else if ((bill.late_charges || 0) > 0) {
                         status = 'overdue';
                         statusText = 'Overdue';
                     }
@@ -1244,8 +1274,8 @@
                     const monthName = getMonthName(displayMonth);
                     
                     childRow.innerHTML = `
-                        <td>${bill.entity_name}</td>
-                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
+                        <td>${bill.entity_name || '-'}</div>
+                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></div>
                         <td>
                             <div class="period-cell">
                                 <span class="month-badge">${monthName}</span>
@@ -1254,9 +1284,9 @@
                         </div>
                         <td>${bill.account_number || '-'}</div>
                         <td>${bill.phone_number || '-'}</div>
-                        <td>$${bill.current_charges.toFixed(2)}</div>
-                        <td>$${bill.late_charges.toFixed(2)}</div>
-                        <td>$${bill.unsettled_charges.toFixed(2)}</div>
+                        <td>$${(bill.current_charges || 0).toFixed(2)}</div>
+                        <td>$${(bill.late_charges || 0).toFixed(2)}</div>
+                        <td>$${(bill.unsettled_charges || 0).toFixed(2)}</div>
                         <td>$${(bill.amount_paid || 0).toFixed(2)}</div>
                         <td><span class="status-badge status-${status}">${statusText}</span></div>
                         <td>${imageCell}</div>
