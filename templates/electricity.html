@@ -442,6 +442,54 @@
             border-radius: 4px;
             font-size: 0.9rem;
         }
+
+        .account-select-group {
+            margin-bottom: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            background-color: #fafafa;
+        }
+
+        .account-select-label {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .account-select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+            background-color: white;
+        }
+
+        .meter-select-group {
+            margin-top: 10px;
+            margin-left: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+
+        .meter-select-label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #666;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .meter-select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
@@ -477,7 +525,6 @@
                 </select>
             </div>
             
-            <!-- School Search (initially hidden) -->
             <div class="search-group" id="schoolSearchGroup" style="display: none;">
                 <label class="filter-label">Select School</label>
                 <select class="search-select" id="schoolSearch">
@@ -485,7 +532,6 @@
                 </select>
             </div>
             
-            <!-- Department Search (initially hidden) -->
             <div class="search-group" id="departmentSearchGroup" style="display: none;">
                 <label class="filter-label">Select Department</label>
                 <select class="search-select" id="departmentSearch">
@@ -545,17 +591,11 @@
                     </tr>
                 </thead>
                 <tbody id="billsTable">
-                    <tr class="no-data-row">
-                        <td colspan="13" style="text-align: center; padding: 30px;">
-                            No electricity bills found matching your criteria. Try adjusting your filters or click "Add New Bill" to create one.
-                        </td>
-                    </tr>
                 </tbody>
             </table>
         </div>
     </div>
     
-    <!-- Add/Edit Bill Modal -->
     <div class="modal" id="billModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -567,7 +607,7 @@
                 <input type="hidden" id="billId">
                 
                 <div class="info-note">
-                    <strong>ℹ️ Auto-fill Feature:</strong> When you select a school or department, the account number and meter number will be automatically filled from the information you entered in the Schools/Departments tab.
+                    <strong>ℹ️ Multiple Accounts Support:</strong> When you select a school or department, you can choose from multiple electricity accounts and their associated meters.
                 </div>
                 
                 <div class="form-group">
@@ -579,7 +619,6 @@
                     </select>
                 </div>
                 
-                <!-- School Selector (initially hidden) -->
                 <div class="form-group entity-selector" id="schoolSelector">
                     <label class="form-label">Select School</label>
                     <select class="form-control" id="schoolId" required>
@@ -587,7 +626,6 @@
                     </select>
                 </div>
                 
-                <!-- Department Selector (initially hidden) -->
                 <div class="form-group entity-selector" id="departmentSelector">
                     <label class="form-label">Select Department</label>
                     <select class="form-control" id="departmentId" required>
@@ -595,14 +633,22 @@
                     </select>
                 </div>
                 
-                <div class="form-group">
-                    <label class="form-label">Account Number <span id="accountAutoIndicator" style="color: #ff9800; font-size: 0.8rem; display: none;">(Auto-filled)</span></label>
-                    <input type="text" class="form-control" id="accountNumber" placeholder="Will auto-fill from entity" readonly>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Meter Number <span id="meterAutoIndicator" style="color: #ff9800; font-size: 0.8rem; display: none;">(Auto-filled)</span></label>
-                    <input type="text" class="form-control" id="meterNumber" placeholder="Will auto-fill from entity" readonly>
+                <div id="accountSelectionSection" style="display: none;">
+                    <div class="account-select-group" id="accountSelectGroup">
+                        <label class="account-select-label">⚡ Select Electricity Account</label>
+                        <select class="account-select" id="accountSelect" required>
+                            <option value="">-- Select an account --</option>
+                        </select>
+                    </div>
+                    
+                    <div id="meterSelectGroup" style="display: none;">
+                        <div class="meter-select-group">
+                            <label class="meter-select-label">📊 Select Meter</label>
+                            <select class="meter-select" id="meterSelect">
+                                <option value="">-- Select a meter (optional) --</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="form-row">
@@ -705,18 +751,17 @@
     </div>
 
     <script>
-        // Store bills globally for editing
         let allBills = [];
         let currentYear = new Date().getFullYear();
         let editingBill = null;
+        let schoolsData = [];
+        let departmentsData = [];
 
-        // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
             initializePage();
         });
 
         function initializePage() {
-            // Populate years from 2000 to 2050
             const yearFilter = document.getElementById('yearFilter');
             for (let year = 2000; year <= 2050; year++) {
                 const option = document.createElement('option');
@@ -728,11 +773,8 @@
                 yearFilter.appendChild(option);
             }
 
-            // Load schools and departments for search dropdowns
-            loadSchoolsForSearch();
-            loadDepartmentsForSearch();
+            loadSchoolsAndDepartments();
 
-            // Modal functionality
             const addBillBtn = document.getElementById('addBillBtn');
             const billModal = document.getElementById('billModal');
             const closeModal = document.getElementById('closeModal');
@@ -741,29 +783,17 @@
             const entityType = document.getElementById('entityType');
             const schoolSelector = document.getElementById('schoolSelector');
             const departmentSelector = document.getElementById('departmentSelector');
-            const schoolId = document.getElementById('schoolId');
-            const departmentId = document.getElementById('departmentId');
-            const modalTitle = document.getElementById('modalTitle');
-            const accountNumber = document.getElementById('accountNumber');
-            const meterNumber = document.getElementById('meterNumber');
-            const accountAutoIndicator = document.getElementById('accountAutoIndicator');
-            const meterAutoIndicator = document.getElementById('meterAutoIndicator');
 
             addBillBtn.addEventListener('click', () => {
                 editingBill = null;
-                modalTitle.textContent = 'Add Electricity Bill';
+                document.getElementById('modalTitle').textContent = 'Add Electricity Bill';
                 billForm.reset();
                 document.getElementById('imagePreview').innerHTML = '';
                 document.getElementById('billYear').value = currentYear;
                 document.getElementById('year').value = currentYear;
-                accountNumber.value = '';
-                meterNumber.value = '';
-                accountAutoIndicator.style.display = 'none';
-                meterAutoIndicator.style.display = 'none';
-                
-                // Enable entity type selection
+                document.getElementById('accountSelectionSection').style.display = 'none';
+                document.getElementById('meterSelectGroup').style.display = 'none';
                 entityType.disabled = false;
-                
                 billModal.style.display = 'flex';
             });
             
@@ -775,133 +805,58 @@
                 billModal.style.display = 'none';
             });
             
-            // Load entities when entity type changes
             entityType.addEventListener('change', () => {
                 const type = entityType.value;
-                
-                // Clear auto-filled fields
-                accountNumber.value = '';
-                meterNumber.value = '';
-                accountAutoIndicator.style.display = 'none';
-                meterAutoIndicator.style.display = 'none';
-                
-                // Hide both selectors initially
                 schoolSelector.style.display = 'none';
                 departmentSelector.style.display = 'none';
+                document.getElementById('accountSelectionSection').style.display = 'none';
                 
                 if (type === 'school') {
                     schoolSelector.style.display = 'block';
-                    departmentSelector.style.display = 'none';
-                    // Load schools
-                    fetch('/api/entities?type=school')
-                        .then(response => response.json())
-                        .then(data => {
-                            schoolId.innerHTML = '<option value="">Select School</option>';
-                            data.forEach(school => {
-                                const option = document.createElement('option');
-                                option.value = school.id;
-                                option.textContent = school.name;
-                                option.dataset.electricityAccount = school.electricity_account || '';
-                                option.dataset.electricityMeter = school.electricity_meter || '';
-                                schoolId.appendChild(option);
-                            });
-                        })
-                        .catch(error => {
-                            console.error('Error loading schools:', error);
-                        });
+                    populateSchoolDropdown();
                 } else if (type === 'department') {
                     departmentSelector.style.display = 'block';
-                    schoolSelector.style.display = 'none';
-                    // Load departments
-                    fetch('/api/entities?type=department')
-                        .then(response => response.json())
-                        .then(data => {
-                            departmentId.innerHTML = '<option value="">Select Department</option>';
-                            data.forEach(department => {
-                                const option = document.createElement('option');
-                                option.value = department.id;
-                                option.textContent = department.name;
-                                option.dataset.electricityAccount = department.electricity_account || '';
-                                option.dataset.electricityMeter = department.electricity_meter || '';
-                                departmentId.appendChild(option);
-                            });
-                        })
-                        .catch(error => {
-                            console.error('Error loading departments:', error);
-                        });
+                    populateDepartmentDropdown();
                 }
             });
 
-            // Auto-fill account and meter when school is selected
-            schoolId.addEventListener('change', function() {
-                const selected = this.options[this.selectedIndex];
-                if (selected && selected.value) {
-                    const electricityAccount = selected.dataset.electricityAccount;
-                    const electricityMeter = selected.dataset.electricityMeter;
-                    
-                    if (electricityAccount) {
-                        accountNumber.value = electricityAccount;
-                        accountAutoIndicator.style.display = 'inline';
-                    } else {
-                        accountNumber.value = '';
-                        accountAutoIndicator.style.display = 'none';
-                    }
-                    
-                    if (electricityMeter) {
-                        meterNumber.value = electricityMeter;
-                        meterAutoIndicator.style.display = 'inline';
-                    } else {
-                        meterNumber.value = '';
-                        meterAutoIndicator.style.display = 'none';
-                    }
+            document.getElementById('schoolId').addEventListener('change', function() {
+                const schoolId = this.value;
+                if (schoolId) {
+                    loadElectricityAccountsForEntity('school', schoolId);
                 } else {
-                    accountNumber.value = '';
-                    meterNumber.value = '';
-                    accountAutoIndicator.style.display = 'none';
-                    meterAutoIndicator.style.display = 'none';
+                    document.getElementById('accountSelectionSection').style.display = 'none';
                 }
             });
 
-            // Auto-fill account and meter when department is selected
-            departmentId.addEventListener('change', function() {
-                const selected = this.options[this.selectedIndex];
-                if (selected && selected.value) {
-                    const electricityAccount = selected.dataset.electricityAccount;
-                    const electricityMeter = selected.dataset.electricityMeter;
-                    
-                    if (electricityAccount) {
-                        accountNumber.value = electricityAccount;
-                        accountAutoIndicator.style.display = 'inline';
-                    } else {
-                        accountNumber.value = '';
-                        accountAutoIndicator.style.display = 'none';
-                    }
-                    
-                    if (electricityMeter) {
-                        meterNumber.value = electricityMeter;
-                        meterAutoIndicator.style.display = 'inline';
-                    } else {
-                        meterNumber.value = '';
-                        meterAutoIndicator.style.display = 'none';
-                    }
+            document.getElementById('departmentId').addEventListener('change', function() {
+                const departmentId = this.value;
+                if (departmentId) {
+                    loadElectricityAccountsForEntity('department', departmentId);
                 } else {
-                    accountNumber.value = '';
-                    meterNumber.value = '';
-                    accountAutoIndicator.style.display = 'none';
-                    meterAutoIndicator.style.display = 'none';
+                    document.getElementById('accountSelectionSection').style.display = 'none';
+                }
+            });
+
+            document.getElementById('accountSelect').addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    const meters = JSON.parse(selectedOption.getAttribute('data-meters') || '[]');
+                    populateMeterDropdown(meters);
+                    document.getElementById('meterSelectGroup').style.display = meters.length > 0 ? 'block' : 'none';
+                } else {
+                    document.getElementById('meterSelectGroup').style.display = 'none';
                 }
             });
             
-            // Image preview
             document.getElementById('billImage').addEventListener('change', function() {
                 const file = this.files[0];
                 const preview = document.getElementById('imagePreview');
-                
                 if (file) {
                     if (file.type.startsWith('image/')) {
                         const reader = new FileReader();
                         reader.onload = function(e) {
-                            preview.innerHTML = '<img src="' + e.target.result + '" class="image-preview" alt="Bill preview">';
+                            preview.innerHTML = `<img src="${e.target.result}" class="image-preview" alt="Bill preview">`;
                         }
                         reader.readAsDataURL(file);
                     } else if (file.type === 'application/pdf') {
@@ -912,81 +867,39 @@
                 }
             });
             
-            // Form submission
             billForm.addEventListener('submit', (e) => {
                 e.preventDefault();
+                const imageFile = document.getElementById('billImage').files[0];
                 
-                const entityTypeVal = entityType.value;
-                let entityIdVal = '';
-                
-                if (entityTypeVal === 'school') {
-                    entityIdVal = schoolId.value;
-                } else if (entityTypeVal === 'department') {
-                    entityIdVal = departmentId.value;
+                if (imageFile) {
+                    const formData = new FormData();
+                    formData.append('file', imageFile);
+                    
+                    fetch('/api/upload-bill-image', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.image_url) {
+                            saveBillData(data.image_url);
+                        } else {
+                            alert('Error uploading image: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error uploading image. Please try again.');
+                    });
+                } else {
+                    saveBillData(editingBill ? editingBill.bill_image : null);
                 }
-                
-                if (!entityIdVal) {
-                    alert('Please select a school or department');
-                    return;
-                }
-                
-                const billData = {
-                    utility_type: 'electricity',
-                    entity_type: entityTypeVal,
-                    entity_id: parseInt(entityIdVal),
-                    account_number: accountNumber.value,
-                    meter_number: meterNumber.value,
-                    current_charges: parseFloat(document.getElementById('currentCharges').value),
-                    late_charges: parseFloat(document.getElementById('lateCharges').value),
-                    unsettled_charges: parseFloat(document.getElementById('unsettledCharges').value),
-                    amount_paid: parseFloat(document.getElementById('amountPaid').value),
-                    consumption_kwh: parseFloat(document.getElementById('consumption').value),
-                    month: parseInt(document.getElementById('month').value),
-                    year: parseInt(document.getElementById('year').value),
-                    bill_month: parseInt(document.getElementById('billMonth').value),
-                    bill_year: parseInt(document.getElementById('billYear').value),
-                    bill_image: null
-                };
-                
-                let url = '/api/utility-bills';
-                let method = 'POST';
-                
-                if (editingBill) {
-                    url = '/api/utility-bills/' + editingBill.id;
-                    method = 'PUT';
-                }
-                
-                fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(billData)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message) {
-                        alert(data.message);
-                        billModal.style.display = 'none';
-                        billForm.reset();
-                        location.reload();
-                    } else {
-                        alert('Error saving bill: ' + (data.error || 'Unknown error'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error saving bill. Please try again.');
-                });
             });
             
-            // Filter event listeners
             document.getElementById('entityTypeFilter').addEventListener('change', function() {
                 const entityType = this.value;
                 const schoolSearchGroup = document.getElementById('schoolSearchGroup');
                 const departmentSearchGroup = document.getElementById('departmentSearchGroup');
-                
-                // Hide both search groups initially
                 schoolSearchGroup.style.display = 'none';
                 departmentSearchGroup.style.display = 'none';
                 
@@ -995,7 +908,6 @@
                 } else if (entityType === 'department') {
                     departmentSearchGroup.style.display = 'block';
                 }
-                
                 loadBills();
             });
             
@@ -1005,69 +917,202 @@
             document.getElementById('yearFilter').addEventListener('change', loadBills);
             document.getElementById('searchFilter').addEventListener('input', loadBills);
             
-            // Initial load
             loadBills();
         }
-        
-        function loadSchoolsForSearch() {
-            fetch('/api/entities?type=school')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch schools');
-                    }
-                    return response.json();
-                })
+
+        function loadSchoolsAndDepartments() {
+            fetch('/api/schools')
+                .then(response => response.json())
                 .then(data => {
-                    const schoolSearch = document.getElementById('schoolSearch');
-                    schoolSearch.innerHTML = '<option value="all">All Schools</option>';
-                    
-                    if (data && data.length > 0) {
-                        data.forEach(school => {
-                            const option = document.createElement('option');
-                            option.value = school.id;
-                            option.textContent = school.name;
-                            schoolSearch.appendChild(option);
-                        });
-                        console.log('Loaded ' + data.length + ' schools for search');
-                    } else {
-                        console.warn('No schools found for search dropdown');
-                    }
+                    schoolsData = data.sort((a, b) => a.id - b.id);
                 })
-                .catch(error => {
-                    console.error('Error loading schools for search:', error);
-                });
+                .catch(error => console.error('Error loading schools:', error));
+
+            fetch('/api/departments')
+                .then(response => response.json())
+                .then(data => {
+                    departmentsData = data.sort((a, b) => a.id - b.id);
+                })
+                .catch(error => console.error('Error loading departments:', error));
+        }
+
+        function populateSchoolDropdown() {
+            const schoolSelect = document.getElementById('schoolId');
+            schoolSelect.innerHTML = '<option value="">Select School</option>';
+            
+            const sortedSchools = [...schoolsData].sort((a, b) => a.id - b.id);
+            
+            sortedSchools.forEach(school => {
+                const option = document.createElement('option');
+                option.value = school.id;
+                let displayName = school.name;
+                if (school.school_number) {
+                    displayName = `${school.school_number} - ${school.name}`;
+                }
+                option.textContent = displayName;
+                schoolSelect.appendChild(option);
+            });
+        }
+
+        function populateDepartmentDropdown() {
+            const departmentSelect = document.getElementById('departmentId');
+            departmentSelect.innerHTML = '<option value="">Select Department</option>';
+            
+            const sortedDepartments = [...departmentsData].sort((a, b) => a.id - b.id);
+            
+            sortedDepartments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept.id;
+                let displayName = dept.unit_name || dept.name || 'Unknown';
+                if (dept.department_name) {
+                    displayName = `${dept.department_name} - ${dept.division_name} - ${displayName}`;
+                }
+                option.textContent = displayName;
+                departmentSelect.appendChild(option);
+            });
+        }
+
+        function loadElectricityAccountsForEntity(entityType, entityId) {
+            let entityData = null;
+            
+            if (entityType === 'school') {
+                entityData = schoolsData.find(s => s.id == entityId);
+            } else {
+                entityData = departmentsData.find(d => d.id == entityId);
+            }
+            
+            if (!entityData) {
+                console.error('Entity not found:', entityType, entityId);
+                return;
+            }
+            
+            let electricityAccounts = [];
+            
+            try {
+                if (entityData.electricity_accounts) {
+                    electricityAccounts = typeof entityData.electricity_accounts === 'string' 
+                        ? JSON.parse(entityData.electricity_accounts) 
+                        : entityData.electricity_accounts;
+                }
+            } catch(e) {
+                console.error('Error parsing electricity accounts:', e);
+            }
+            
+            if (electricityAccounts.length === 0) {
+                if (entityData.electricity_account) {
+                    electricityAccounts = [{
+                        accountNumber: entityData.electricity_account,
+                        meters: entityData.electricity_meter ? [{ meterNumber: entityData.electricity_meter }] : []
+                    }];
+                }
+            }
+            
+            const accountSelect = document.getElementById('accountSelect');
+            accountSelect.innerHTML = '<option value="">-- Select an account --</option>';
+            
+            electricityAccounts.forEach((account, index) => {
+                const option = document.createElement('option');
+                option.value = account.accountNumber;
+                option.textContent = `Account: ${account.accountNumber}`;
+                option.setAttribute('data-meters', JSON.stringify(account.meters || []));
+                accountSelect.appendChild(option);
+            });
+            
+            document.getElementById('accountSelectionSection').style.display = electricityAccounts.length > 0 ? 'block' : 'none';
+            
+            if (electricityAccounts.length === 0) {
+                alert('No electricity accounts found for this entity. Please add electricity account information in the Schools or Departments tab first.');
+            }
+        }
+
+        function populateMeterDropdown(meters) {
+            const meterSelect = document.getElementById('meterSelect');
+            meterSelect.innerHTML = '<option value="">-- Select a meter (optional) --</option>';
+            
+            meters.forEach(meter => {
+                const option = document.createElement('option');
+                option.value = meter.meterNumber;
+                let displayText = meter.meterNumber;
+                if (meter.location) displayText += ` - ${meter.location}`;
+                if (meter.notes) displayText += ` (${meter.notes})`;
+                option.textContent = displayText;
+                meterSelect.appendChild(option);
+            });
+        }
+
+        function saveBillData(imageUrl) {
+            const entityType = document.getElementById('entityType').value;
+            let entityId = '';
+            
+            if (entityType === 'school') {
+                entityId = document.getElementById('schoolId').value;
+            } else {
+                entityId = document.getElementById('departmentId').value;
+            }
+            
+            if (!entityId) {
+                alert('Please select a school or department');
+                return;
+            }
+            
+            const accountSelect = document.getElementById('accountSelect');
+            const accountNumber = accountSelect.value;
+            const meterSelect = document.getElementById('meterSelect');
+            const meterNumber = meterSelect.value;
+            
+            if (!accountNumber) {
+                alert('Please select an electricity account');
+                return;
+            }
+            
+            const billData = {
+                utility_type: 'electricity',
+                entity_type: entityType,
+                entity_id: parseInt(entityId),
+                account_number: accountNumber,
+                meter_number: meterNumber,
+                current_charges: parseFloat(document.getElementById('currentCharges').value),
+                late_charges: parseFloat(document.getElementById('lateCharges').value),
+                unsettled_charges: parseFloat(document.getElementById('unsettledCharges').value),
+                amount_paid: parseFloat(document.getElementById('amountPaid').value),
+                consumption_kwh: parseFloat(document.getElementById('consumption').value),
+                month: parseInt(document.getElementById('month').value),
+                year: parseInt(document.getElementById('year').value),
+                bill_month: parseInt(document.getElementById('billMonth').value),
+                bill_year: parseInt(document.getElementById('billYear').value),
+                bill_image: imageUrl
+            };
+            
+            let url = '/api/utility-bills';
+            let method = 'POST';
+            
+            if (editingBill) {
+                url = `/api/utility-bills/${editingBill.id}`;
+                method = 'PUT';
+            }
+            
+            fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(billData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    alert(data.message);
+                    document.getElementById('billModal').style.display = 'none';
+                    document.getElementById('billForm').reset();
+                    loadBills();
+                } else {
+                    alert('Error saving bill: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error saving bill. Please try again.');
+            });
         }
         
-        function loadDepartmentsForSearch() {
-            fetch('/api/entities?type=department')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch departments');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    const departmentSearch = document.getElementById('departmentSearch');
-                    departmentSearch.innerHTML = '<option value="all">All Departments</option>';
-                    
-                    if (data && data.length > 0) {
-                        data.forEach(department => {
-                            const option = document.createElement('option');
-                            option.value = department.id;
-                            option.textContent = department.name;
-                            departmentSearch.appendChild(option);
-                        });
-                        console.log('Loaded ' + data.length + ' departments for search');
-                    } else {
-                        console.warn('No departments found for search dropdown');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading departments for search:', error);
-                });
-        }
-        
-        // Load bills on page load
         function loadBills() {
             const entityTypeFilter = document.getElementById('entityTypeFilter').value;
             const schoolSearch = document.getElementById('schoolSearch').value;
@@ -1078,39 +1123,25 @@
             
             let url = '/api/utility-bills?utility_type=electricity';
             
-            // Add entity type filter to API call
             if (entityTypeFilter !== 'all') {
-                url += '&entity_type=' + entityTypeFilter;
+                url += `&entity_type=${entityTypeFilter}`;
             }
-            
-            // Add specific entity filter to API call
             if (entityTypeFilter === 'school' && schoolSearch !== 'all') {
-                url += '&entity_id=' + schoolSearch;
+                url += `&entity_id=${schoolSearch}`;
             } else if (entityTypeFilter === 'department' && departmentSearch !== 'all') {
-                url += '&entity_id=' + departmentSearch;
+                url += `&entity_id=${departmentSearch}`;
             }
-            
-            // Add month and year filters to API call
             if (monthFilter !== 'all') {
-                url += '&month=' + monthFilter;
+                url += `&month=${monthFilter}`;
             }
             if (yearFilter !== 'all') {
-                url += '&year=' + yearFilter;
+                url += `&year=${yearFilter}`;
             }
             
-            console.log('Loading bills with URL:', url);
-            
             fetch(url)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch bills');
-                    }
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
                     allBills = data;
-                    
-                    // Apply search filter if provided
                     if (searchFilter) {
                         data = data.filter(bill => 
                             bill.entity_name.toLowerCase().includes(searchFilter) ||
@@ -1118,8 +1149,6 @@
                             (bill.meter_number && bill.meter_number.toLowerCase().includes(searchFilter))
                         );
                     }
-                    
-                    console.log('Loaded ' + data.length + ' bills');
                     renderBillsTable(data);
                 })
                 .catch(error => {
@@ -1136,204 +1165,251 @@
                 tableBody.innerHTML = `
                     <tr class="no-data-row">
                         <td colspan="13" style="text-align: center; padding: 30px;">
-                            No electricity bills found matching your criteria. Try adjusting your filters or click "Add New Bill" to create one.
-                        </td>
-                    </tr>
+                            No electricity bills found matching your criteria.
+                        </div>
+                    </div>
                 `;
                 return;
             }
             
-            // Get the selected school/department name for display
             const entityTypeFilter = document.getElementById('entityTypeFilter').value;
             const schoolSearch = document.getElementById('schoolSearch');
             const departmentSearch = document.getElementById('departmentSearch');
             
             let selectedEntityName = '';
             if (entityTypeFilter === 'school' && schoolSearch.value !== 'all') {
-                selectedEntityName = schoolSearch.options[schoolSearch.selectedIndex].text;
+                selectedEntityName = schoolSearch.options[schoolSearch.selectedIndex]?.text;
             } else if (entityTypeFilter === 'department' && departmentSearch.value !== 'all') {
-                selectedEntityName = departmentSearch.options[departmentSearch.selectedIndex].text;
+                selectedEntityName = departmentSearch.options[departmentSearch.selectedIndex]?.text;
             }
             
-            // If a specific entity is selected, only show bills for that entity
             let filteredBills = bills;
             if (selectedEntityName) {
                 filteredBills = bills.filter(bill => bill.entity_name === selectedEntityName);
             }
             
-            // Sort bills by year (descending) and month (ascending)
             filteredBills.sort((a, b) => {
                 const yearA = a.bill_year || a.year;
                 const yearB = b.bill_year || b.year;
                 const monthA = a.bill_month || a.month;
                 const monthB = b.bill_month || b.month;
-                
-                if (yearA !== yearB) {
-                    return yearB - yearA;
-                }
+                if (yearA !== yearB) return yearB - yearA;
                 return monthA - monthB;
             });
             
-            // Render each bill
+            const groupedBills = {};
             filteredBills.forEach(bill => {
-                const row = document.createElement('tr');
-                
-                // Calculate status
-                const totalCharges = bill.current_charges + bill.late_charges + bill.unsettled_charges;
-                let status = 'pending';
-                let statusText = 'Pending';
-                
-                if (bill.amount_paid >= totalCharges) {
-                    status = 'paid';
-                    statusText = 'Paid';
-                } else if (bill.late_charges > 0) {
-                    status = 'overdue';
-                    statusText = 'Overdue';
+                if (!groupedBills[bill.entity_name]) {
+                    groupedBills[bill.entity_name] = [];
                 }
-                
-                let imageCell = '-';
-                if (bill.bill_image) {
-                    imageCell = '<a href="' + bill.bill_image + '" target="_blank">View Bill</a>';
-                }
-                
-                const displayMonth = bill.bill_month || bill.month;
-                const displayYear = bill.bill_year || bill.year;
-                const monthName = getMonthName(displayMonth);
-                
-                row.innerHTML = `
-                    <td>${bill.entity_name}</td>
-                    <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
-                    <td>
-                        <div class="period-cell">
-                            <span class="month-badge">${monthName}</span>
-                            <span class="year-badge">${displayYear}</span>
-                        </div>
-                    </td>
-                    <td>${bill.account_number || '-'}</td>
-                    <td>${bill.meter_number || '-'}</td>
-                    <td>${bill.consumption_kwh || 0}</td>
-                    <td>$${bill.current_charges.toFixed(2)}</td>
-                    <td>$${bill.late_charges.toFixed(2)}</td>
-                    <td>$${bill.unsettled_charges.toFixed(2)}</td>
-                    <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
-                    <td><span class="status-badge status-${status}">${statusText}</span></td>
-                    <td>${imageCell}</td>
-                    <td class="actions-cell">
-                        <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
-                        <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
-                    </td>
-                `;
-                tableBody.appendChild(row);
+                groupedBills[bill.entity_name].push(bill);
             });
             
-            // Add event listeners to edit buttons
-            document.querySelectorAll('.edit-btn').forEach(button => {
-                button.addEventListener('click', function() {
-                    const billId = this.getAttribute('data-id');
-                    editBill(billId);
+            Object.keys(groupedBills).forEach(entityName => {
+                const entityBills = groupedBills[entityName];
+                const entityType = entityBills[0].entity_type;
+                
+                const headerRow = document.createElement('tr');
+                headerRow.className = 'merged-row';
+                headerRow.innerHTML = `
+                    <td colspan="13">
+                        <span class="toggle-icon" data-entity="${entityName}">▶</span>
+                        <strong>${entityName}</strong> 
+                        <span class="badge ${entityType === 'school' ? 'badge-school' : 'badge-department'}" style="margin-left: 10px;">
+                            ${entityType}
+                        </span>
+                        <span style="margin-left: 10px; color: #666; font-size: 0.9em;">
+                            (${entityBills.length} bill${entityBills.length > 1 ? 's' : ''})
+                        </span>
+                    </div>
+                `;
+                tableBody.appendChild(headerRow);
+                
+                entityBills.forEach(bill => {
+                    const childRow = document.createElement('tr');
+                    childRow.className = 'child-row';
+                    childRow.style.display = 'none';
+                    childRow.setAttribute('data-entity', entityName);
+                    
+                    const totalCharges = bill.current_charges + bill.late_charges + bill.unsettled_charges;
+                    let status = 'pending';
+                    let statusText = 'Pending';
+                    
+                    if (bill.amount_paid >= totalCharges) {
+                        status = 'paid';
+                        statusText = 'Paid';
+                    } else if (bill.late_charges > 0) {
+                        status = 'overdue';
+                        statusText = 'Overdue';
+                    }
+                    
+                    let imageCell = '-';
+                    if (bill.bill_image) {
+                        imageCell = `<a href="${bill.bill_image}" target="_blank">View Bill</a>`;
+                    }
+                    
+                    const displayMonth = bill.bill_month || bill.month;
+                    const displayYear = bill.bill_year || bill.year;
+                    const monthName = getMonthName(displayMonth);
+                    
+                    childRow.innerHTML = `
+                        <td>${bill.entity_name}</td>
+                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type}</span></td>
+                        <td>
+                            <div class="period-cell">
+                                <span class="month-badge">${monthName}</span>
+                                <span class="year-badge">${displayYear}</span>
+                            </div>
+                        </td>
+                        <td>${bill.account_number || '-'}</td>
+                        <td>${bill.meter_number || '-'}</td>
+                        <td>${bill.consumption_kwh || 0}</td>
+                        <td>$${bill.current_charges.toFixed(2)}</td>
+                        <td>$${bill.late_charges.toFixed(2)}</td>
+                        <td>$${bill.unsettled_charges.toFixed(2)}</td>
+                        <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
+                        <td><span class="status-badge status-${status}">${statusText}</span></td>
+                        <td>${imageCell}</td>
+                        <td class="actions-cell">
+                            <button class="btn btn-warning btn-sm edit-btn" data-id="${bill.id}">Edit</button>
+                            <button class="btn btn-danger btn-sm delete-btn" data-id="${bill.id}">Delete</button>
+                        </td>
+                    `;
+                    tableBody.appendChild(childRow);
                 });
             });
             
-            // Add event listeners to delete buttons
+            document.querySelectorAll('.toggle-icon').forEach(icon => {
+                icon.addEventListener('click', function() {
+                    const entityName = this.getAttribute('data-entity');
+                    const childRows = document.querySelectorAll(`tr.child-row[data-entity="${entityName}"]`);
+                    const isExpanded = childRows.length > 0 && childRows[0].style.display !== 'none';
+                    
+                    if (isExpanded) {
+                        childRows.forEach(row => row.style.display = 'none');
+                        this.textContent = '▶';
+                    } else {
+                        childRows.forEach(row => row.style.display = '');
+                        this.textContent = '▼';
+                    }
+                });
+            });
+            
+            document.querySelectorAll('.edit-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    editBill(this.getAttribute('data-id'));
+                });
+            });
+            
             document.querySelectorAll('.delete-btn').forEach(button => {
                 button.addEventListener('click', function() {
-                    const billId = this.getAttribute('data-id');
-                    if (confirm('Are you sure you want to delete this bill? This action cannot be undone.')) {
-                        deleteBill(billId);
+                    if (confirm('Are you sure you want to delete this bill?')) {
+                        deleteBill(this.getAttribute('data-id'));
                     }
                 });
             });
         }
         
         function editBill(billId) {
-            // Find the bill in our stored data
             const bill = allBills.find(b => b.id == billId);
-            
             if (!bill) {
-                alert('Bill not found in local data. Please refresh the page and try again.');
+                alert('Bill not found.');
                 return;
             }
             
             editingBill = bill;
             document.getElementById('modalTitle').textContent = 'Edit Electricity Bill';
             document.getElementById('billId').value = bill.id;
-            
-            // Set current year as default
             document.getElementById('billYear').value = currentYear;
             document.getElementById('year').value = currentYear;
             
-            // Disable entity type when editing
-            document.getElementById('entityType').disabled = true;
-            
-            // First, set the entity type
             const entityType = document.getElementById('entityType');
             entityType.value = bill.entity_type;
+            entityType.disabled = true;
             
-            // Trigger change event to show appropriate selector
             const event = new Event('change');
             entityType.dispatchEvent(event);
             
-            // Wait a bit for the dropdown to populate, then set values
             setTimeout(() => {
-                // Now populate all form fields
-                document.getElementById('accountNumber').value = bill.account_number || '';
-                document.getElementById('meterNumber').value = bill.meter_number || '';
-                document.getElementById('consumption').value = bill.consumption_kwh || '';
-                document.getElementById('currentCharges').value = bill.current_charges || 0;
-                document.getElementById('lateCharges').value = bill.late_charges || 0;
-                document.getElementById('unsettledCharges').value = bill.unsettled_charges || 0;
-                document.getElementById('amountPaid').value = bill.amount_paid || 0;
-                document.getElementById('month').value = bill.month || '';
-                document.getElementById('year').value = bill.year || currentYear;
-                document.getElementById('billMonth').value = bill.bill_month || bill.month || '';
-                document.getElementById('billYear').value = bill.bill_year || bill.year || currentYear;
-                
-                // Show auto-fill indicators if values exist
-                if (bill.account_number) {
-                    document.getElementById('accountAutoIndicator').style.display = 'inline';
-                }
-                if (bill.meter_number) {
-                    document.getElementById('meterAutoIndicator').style.display = 'inline';
-                }
-                
-                // Show existing image
-                if (bill.bill_image) {
-                    document.getElementById('imagePreview').innerHTML = '<a href="' + bill.bill_image + '" target="_blank">View Current Bill Image</a>';
+                if (bill.entity_type === 'school') {
+                    const schoolSelect = document.getElementById('schoolId');
+                    for (let i = 0; i < schoolSelect.options.length; i++) {
+                        if (schoolSelect.options[i].value == bill.entity_id) {
+                            schoolSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                    const changeEvent = new Event('change');
+                    schoolSelect.dispatchEvent(changeEvent);
                 } else {
-                    document.getElementById('imagePreview').innerHTML = '';
+                    const deptSelect = document.getElementById('departmentId');
+                    for (let i = 0; i < deptSelect.options.length; i++) {
+                        if (deptSelect.options[i].value == bill.entity_id) {
+                            deptSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                    const changeEvent = new Event('change');
+                    deptSelect.dispatchEvent(changeEvent);
                 }
                 
-                document.getElementById('billModal').style.display = 'flex';
-            }, 500);
+                setTimeout(() => {
+                    const accountSelect = document.getElementById('accountSelect');
+                    for (let i = 0; i < accountSelect.options.length; i++) {
+                        if (accountSelect.options[i].value === bill.account_number) {
+                            accountSelect.selectedIndex = i;
+                            const accountEvent = new Event('change');
+                            accountSelect.dispatchEvent(accountEvent);
+                            break;
+                        }
+                    }
+                    
+                    setTimeout(() => {
+                        if (bill.meter_number) {
+                            const meterSelect = document.getElementById('meterSelect');
+                            for (let i = 0; i < meterSelect.options.length; i++) {
+                                if (meterSelect.options[i].value === bill.meter_number) {
+                                    meterSelect.selectedIndex = i;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        document.getElementById('consumption').value = bill.consumption_kwh || '';
+                        document.getElementById('currentCharges').value = bill.current_charges || 0;
+                        document.getElementById('lateCharges').value = bill.late_charges || 0;
+                        document.getElementById('unsettledCharges').value = bill.unsettled_charges || 0;
+                        document.getElementById('amountPaid').value = bill.amount_paid || 0;
+                        document.getElementById('month').value = bill.month || '';
+                        document.getElementById('year').value = bill.year || currentYear;
+                        document.getElementById('billMonth').value = bill.bill_month || bill.month || '';
+                        document.getElementById('billYear').value = bill.bill_year || bill.year || currentYear;
+                        
+                        if (bill.bill_image) {
+                            document.getElementById('imagePreview').innerHTML = `<a href="${bill.bill_image}" target="_blank">View Current Bill Image</a>`;
+                        }
+                    }, 200);
+                }, 200);
+            }, 300);
+            
+            document.getElementById('billModal').style.display = 'flex';
         }
         
         function deleteBill(billId) {
-            console.log('Deleting bill with ID:', billId);
-            
-            fetch('/api/utility-bills/' + billId, {
-                method: 'DELETE'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => {
-                        throw new Error(err.error || 'Server error: ' + response.status);
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Delete response:', data);
-                if (data.message) {
-                    alert(data.message);
-                    location.reload();
-                } else {
-                    alert('Error deleting bill: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error deleting bill:', error);
-                alert('Error deleting bill: ' + error.message);
-            });
+            fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        alert(data.message);
+                        loadBills();
+                    } else {
+                        alert('Error deleting bill: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error deleting bill:', error);
+                    alert('Error deleting bill.');
+                });
         }
         
         function getMonthName(month) {
