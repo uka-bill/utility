@@ -200,6 +200,7 @@ def create_financial_year():
             "water_allocated": float(data.get('waterAllocated', 15000)),
             "electricity_allocated": float(data.get('electricityAllocated', 35000)),
             "telephone_allocated": float(data.get('telephoneAllocated', 10000)),
+            "sut_office_allocated": float(data.get('sutOfficeAllocated', 0)),
             "created_at": datetime.now().isoformat()
         }
         
@@ -256,6 +257,9 @@ def update_financial_year(fy_id):
         if data.get('telephoneAllocated') is not None:
             financial_year_data["telephone_allocated"] = float(data.get('telephoneAllocated', 10000))
         
+        if data.get('sutOfficeAllocated') is not None:
+            financial_year_data["sut_office_allocated"] = float(data.get('sutOfficeAllocated', 0))
+        
         print(f"📅 Final update data: {financial_year_data}")
         
         response = supabase.table("financial_years").update(financial_year_data).eq("id", fy_id).execute()
@@ -310,6 +314,7 @@ def get_current_financial_year():
                 "water_allocated": 15000.00,
                 "electricity_allocated": 35000.00,
                 "telephone_allocated": 10000.00,
+                "sut_office_allocated": 0.00,
                 "created_at": datetime.now().isoformat()
             }
             
@@ -785,6 +790,7 @@ def dashboard_data():
                 "water_allocated": 15000.00,
                 "electricity_allocated": 35000.00,
                 "telephone_allocated": 10000.00,
+                "sut_office_allocated": 0.00,
                 "created_at": datetime.now().isoformat()
             }
             
@@ -799,7 +805,8 @@ def dashboard_data():
                     'total_allocated': 60000.00,
                     'water_allocated': 15000.00,
                     'electricity_allocated': 35000.00,
-                    'telephone_allocated': 10000.00
+                    'telephone_allocated': 10000.00,
+                    'sut_office_allocated': 0.00
                 }
         else:
             current_fy = fy_response.data[0]
@@ -847,6 +854,10 @@ def dashboard_data():
                     total_unsettled += float(bill['unsettled_charges'] or 0)
                     total_paid += float(bill.get('amount_paid') or 0)
         
+        # Get SUT Office budget (sut_office_allocated is a separate budget line)
+        # For now, SUT Office doesn't have utility bills, so used is 0
+        sut_office_used = 0
+        
         # Calculate budget usage and remaining
         budget_calculations = {
             'financial_year': current_fy['financial_year'],
@@ -856,17 +867,21 @@ def dashboard_data():
             'water_allocated': float(current_fy.get('water_allocated', 15000)),
             'electricity_allocated': float(current_fy.get('electricity_allocated', 35000)),
             'telephone_allocated': float(current_fy.get('telephone_allocated', 10000)),
+            'sut_office_allocated': float(current_fy.get('sut_office_allocated', 0)),
             'water_used': water_total,
             'electricity_used': electricity_total,
             'telephone_used': telephone_total,
+            'sut_office_used': sut_office_used,
             'total_used': total_current,
             'water_balance': float(current_fy.get('water_allocated', 15000)) - water_total,
             'electricity_balance': float(current_fy.get('electricity_allocated', 35000)) - electricity_total,
             'telephone_balance': float(current_fy.get('telephone_allocated', 10000)) - telephone_total,
+            'sut_office_balance': float(current_fy.get('sut_office_allocated', 0)) - sut_office_used,
             'total_balance': float(current_fy.get('total_allocated', 60000)) - total_current,
             'water_percentage': (water_total / float(current_fy.get('water_allocated', 15000))) * 100 if float(current_fy.get('water_allocated', 15000)) > 0 else 0,
             'electricity_percentage': (electricity_total / float(current_fy.get('electricity_allocated', 35000))) * 100 if float(current_fy.get('electricity_allocated', 35000)) > 0 else 0,
             'telephone_percentage': (telephone_total / float(current_fy.get('telephone_allocated', 10000))) * 100 if float(current_fy.get('telephone_allocated', 10000)) > 0 else 0,
+            'sut_office_percentage': (sut_office_used / float(current_fy.get('sut_office_allocated', 0))) * 100 if float(current_fy.get('sut_office_allocated', 0)) > 0 else 0,
             'total_percentage': (total_current / float(current_fy.get('total_allocated', 60000))) * 100 if float(current_fy.get('total_allocated', 60000)) > 0 else 0
         }
         
@@ -895,7 +910,7 @@ def dashboard_data():
         
         print(f"📈 Dashboard data prepared:")
         print(f"   FY: {current_fy['financial_year']}")
-        print(f"   Budget: Total=${current_fy.get('total_allocated', 60000)}, Water=${current_fy.get('water_allocated', 15000)}, Electricity=${current_fy.get('electricity_allocated', 35000)}, Telephone=${current_fy.get('telephone_allocated', 10000)}")
+        print(f"   Budget: Total=${current_fy.get('total_allocated', 60000)}, Water=${current_fy.get('water_allocated', 15000)}, Electricity=${current_fy.get('electricity_allocated', 35000)}, Telephone=${current_fy.get('telephone_allocated', 10000)}, SUT Office=${current_fy.get('sut_office_allocated', 0)}")
         print(f"   Used: Total=${total_current}, Water=${water_total}, Electricity=${electricity_total}, Telephone=${telephone_total}")
         
         return jsonify({
@@ -976,6 +991,7 @@ def yearly_budget_data():
                 'water_budget': float(fy.get('water_allocated', 15000)),
                 'electricity_budget': float(fy.get('electricity_allocated', 35000)),
                 'telephone_budget': float(fy.get('telephone_allocated', 10000)),
+                'sut_office_budget': float(fy.get('sut_office_allocated', 0)),
                 'total_budget': float(fy.get('total_allocated', 60000))
             })
         
