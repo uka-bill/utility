@@ -166,6 +166,22 @@ def backup_page():
 def sut_office():
     return render_template('sut_office.html')
 
+@app.route('/api/sut-office-expenses', methods=['GET'])
+def get_sut_office_expenses():
+    # ... code ...
+
+@app.route('/api/sut-office-expenses', methods=['POST'])
+def create_sut_office_expense():
+    # ... code ...
+
+@app.route('/api/sut-office-expenses/<int:expense_id>', methods=['PUT'])
+def update_sut_office_expense(expense_id):
+    # ... code ...
+
+@app.route('/api/sut-office-expenses/<int:expense_id>', methods=['DELETE'])
+def delete_sut_office_expense(expense_id):
+    # ... code ...
+
 # ============ API ROUTES ============
 
 @app.route('/api/financial-years', methods=['GET'])
