@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUT Office - Utility Bills Management</title>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #3f37c9;
+            --success: #4cc9f0;
+            --danger: #f72585;
+            --warning: #f8961e;
+            --info: #4895ef;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --gray: #6c757d;
+            --sut: #9c27b0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fb;
+            color: var(--dark);
+        }
+        
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 0 20px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+        
+        .logo span {
+            margin-left: 10px;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            list-style: none;
+        }
+        
+        .nav-tabs li {
+            margin: 0 5px;
+        }
+        
+        .nav-tabs a {
+            text-decoration: none;
+            color: var(--gray);
+            padding: 10px 20px;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .nav-tabs a:hover, .nav-tabs a.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .container {
+            margin-top: 90px;
+            padding: 20px;
+        }
+        
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .page-title {
+            color: var(--dark);
+            font-size: 1.8rem;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--secondary);
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-sut {
+            background: var(--sut);
+            color: white;
+        }
+        
+        .btn-sut:hover {
+            background: #7b1fa2;
+        }
+        
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+        }
+        
+        /* Budget Summary Card */
+        .budget-summary {
+            background: linear-gradient(135deg, var(--sut), #7b1fa2);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .budget-card {
+            text-align: center;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+        }
+        
+        .budget-card-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+        
+        .budget-card-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+        
+        .budget-card-sub {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+        
+        /* Filters */
+        .filters {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 150px;
+        }
+        
+        .filter-label {
+            font-size: 0.8rem;
+            margin-bottom: 5px;
+            color: var(--gray);
+        }
+        
+        .filter-select, .filter-input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+        
+        /* Data Table */
+        .data-table-container {
+            background: white;
+            border-radius: 10px;
+            overflow: auto;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 30px;
+            max-height: 60vh;
+            min-height: 300px;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 600px;
+        }
+        
+        .data-table th {
+            background: var(--sut);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .data-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .data-table tr:hover {
+            background: #f9f9f9;
+        }
+        
+        .actions-cell {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .no-data-row td {
+            text-align: center;
+            padding: 40px;
+            color: var(--gray);
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 30px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-title {
+            font-size: 1.5rem;
+            color: var(--dark);
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .form-label.required:after {
+            content: " *";
+            color: var(--danger);
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        
+        .btn-secondary {
+            background: var(--gray);
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            z-index: 3000;
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+        
+        .toast.error {
+            background: var(--danger);
+        }
+        
+        .toast.warning {
+            background: var(--warning);
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Spending indicator */
+        .spending-indicator {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .progress-bar {
+            height: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: var(--sut);
+            border-radius: 5px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--gray);
+        }
+        
+        /* Month badge */
+        .month-badge {
+            background: var(--sut);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            display: inline-block;
+        }
+        
+        .amount-spent {
+            font-weight: bold;
+            color: var(--danger);
+        }
+        
+        .amount-remaining {
+            font-weight: bold;
+            color: #4caf50;
+        }
+        
+        @media (max-width: 768px) {
+            .nav-tabs {
+                display: none;
+            }
+            
+            .page-title {
+                font-size: 1.2rem;
+            }
+            
+            .budget-summary {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">
+            <span>Utility Bills Management</span>
+        </div>
+        <ul class="nav-tabs">
+            <li><a href="/dashboard">Dashboard</a></li>
+            <li><a href="/departments">Departments</a></li>
+            <li><a href="/schools">Schools</a></li>
+            <li><a href="/water">Water</a></li>
+            <li><a href="/electricity">Electricity</a></li>
+            <li><a href="/telephone">Telephone</a></li>
+            <li><a href="/sut-office" class="active">SUT Office</a></li>
+            <li><a href="/reports">Reports & Print</a></li>
+            <li><a href="/backup">Backup & Restore</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1 class="page-title">SUT Office Expense Tracker</h1>
+            <button class="btn btn-sut" id="addExpenseBtn">+ Add Expense</button>
+        </div>
+        
+        <!-- Budget Summary -->
+        <div class="budget-summary" id="budgetSummary">
+            <div class="budget-card">
+                <div class="budget-card-label">Annual Budget</div>
+                <div class="budget-card-value" id="annualBudget">$0.00</div>
+                <div class="budget-card-sub">For current financial year</div>
+            </div>
+            <div class="budget-card">
+                <div class="budget-card-label">Total Spent</div>
+                <div class="budget-card-value" id="totalSpent">$0.00</div>
+                <div class="budget-card-sub">Year to date</div>
+            </div>
+            <div class="budget-card">
+                <div class="budget-card-label">Remaining Balance</div>
+                <div class="budget-card-value" id="remainingBalance">$0.00</div>
+                <div class="budget-card-sub">Budget left</div>
+            </div>
+        </div>
+        
+        <!-- Spending Progress -->
+        <div class="spending-indicator">
+            <div class="progress-text">
+                <span>Budget Usage Progress</span>
+                <span id="usagePercentage">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            <div class="progress-text">
+                <span id="usedAmount">$0.00</span>
+                <span id="budgetAmount">$0.00</span>
+            </div>
+        </div>
+        
+        <!-- Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <label class="filter-label">Year</label>
+                <select class="filter-select" id="yearFilter">
+                    <option value="all">All Years</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Month</label>
+                <select class="filter-select" id="monthFilter">
+                    <option value="all">All Months</option>
+                    <option value="1">January</option>
+                    <option value="2">February</option>
+                    <option value="3">March</option>
+                    <option value="4">April</option>
+                    <option value="5">May</option>
+                    <option value="6">June</option>
+                    <option value="7">July</option>
+                    <option value="8">August</option>
+                    <option value="9">September</option>
+                    <option value="10">October</option>
+                    <option value="11">November</option>
+                    <option value="12">December</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Description</label>
+                <input type="text" class="filter-input" id="descriptionFilter" placeholder="Search description...">
+            </div>
+            
+            <div class="filter-group">
+                <label class="filter-label">Sort By</label>
+                <select class="filter-select" id="sortFilter">
+                    <option value="date_desc">Date (Newest First)</option>
+                    <option value="date_asc">Date (Oldest First)</option>
+                    <option value="amount_desc">Amount (Highest First)</option>
+                    <option value="amount_asc">Amount (Lowest First)</option>
+                </select>
+            </div>
+            
+            <button class="btn btn-secondary btn-sm" id="clearFiltersBtn">Clear Filters</button>
+        </div>
+        
+        <!-- Expenses Table -->
+        <div class="data-table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th width="60">No.</th>
+                        <th width="120">Date</th>
+                        <th width="100">Month</th>
+                        <th width="100">Year</th>
+                        <th width="250">Description / Purpose</th>
+                        <th width="150">Amount Spent ($)</th>
+                        <th width="200">Remarks</th>
+                        <th width="100">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="expensesTable">
+                    <tr class="no-data-row">
+                        <td colspan="8">Loading expenses...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Add/Edit Expense Modal -->
+    <div class="modal" id="expenseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">Add SUT Office Expense</h3>
+                <button class="close-modal" id="closeModal">&times;</button>
+            </div>
+            
+            <form id="expenseForm">
+                <input type="hidden" id="expenseId">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label required">Date</label>
+                        <input type="date" class="form-control" id="expenseDate" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label required">Amount Spent ($)</label>
+                        <input type="number" class="form-control" id="amountSpent" required 
+                               step="0.01" min="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label required">Description / Purpose</label>
+                    <input type="text" class="form-control" id="description" required 
+                           placeholder="e.g., Office Supplies, Equipment, Training, etc.">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Remarks / Notes</label>
+                    <textarea class="form-control" id="remarks" rows="3" 
+                              placeholder="Additional notes about this expense..."></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-sut" id="submitBtn">Save Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let allExpenses = [];
+        let currentFinancialYear = null;
+        let editingExpenseId = null;
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializePage();
+        });
+
+        function initializePage() {
+            // Modal elements
+            const addExpenseBtn = document.getElementById('addExpenseBtn');
+            const expenseModal = document.getElementById('expenseModal');
+            const closeModal = document.getElementById('closeModal');
+            const cancelBtn = document.getElementById('cancelBtn');
+            const expenseForm = document.getElementById('expenseForm');
+            
+            addExpenseBtn.addEventListener('click', () => {
+                editingExpenseId = null;
+                document.getElementById('modalTitle').textContent = 'Add SUT Office Expense';
+                expenseForm.reset();
+                document.getElementById('expenseId').value = '';
+                document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+                expenseModal.style.display = 'flex';
+            });
+            
+            closeModal.addEventListener('click', () => {
+                expenseModal.style.display = 'none';
+            });
+            
+            cancelBtn.addEventListener('click', () => {
+                expenseModal.style.display = 'none';
+            });
+            
+            expenseForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await saveExpense();
+            });
+            
+            // Filter event listeners
+            document.getElementById('yearFilter').addEventListener('change', filterExpenses);
+            document.getElementById('monthFilter').addEventListener('change', filterExpenses);
+            document.getElementById('descriptionFilter').addEventListener('input', filterExpenses);
+            document.getElementById('sortFilter').addEventListener('change', filterExpenses);
+            document.getElementById('clearFiltersBtn').addEventListener('click', clearFilters);
+            
+            // Load initial data
+            await loadFinancialYear();
+            await loadExpenses();
+        }
+        
+        async function loadFinancialYear() {
+            try {
+                const response = await fetch('/api/financial-years/current');
+                if (response.ok) {
+                    currentFinancialYear = await response.json();
+                    console.log('Current financial year:', currentFinancialYear);
+                    updateBudgetSummary();
+                }
+            } catch (error) {
+                console.error('Error loading financial year:', error);
+            }
+        }
+        
+        async function loadExpenses() {
+            try {
+                const response = await fetch('/api/sut-office-expenses');
+                if (response.ok) {
+                    allExpenses = await response.json();
+                    console.log('Expenses loaded:', allExpenses);
+                    updateYearFilter();
+                    filterExpenses();
+                    updateBudgetSummary();
+                } else {
+                    allExpenses = [];
+                    renderExpensesTable([]);
+                }
+            } catch (error) {
+                console.error('Error loading expenses:', error);
+                showToast('Error loading expenses', 'error');
+                allExpenses = [];
+                renderExpensesTable([]);
+            }
+        }
+        
+        function updateYearFilter() {
+            const yearFilter = document.getElementById('yearFilter');
+            const years = new Set();
+            
+            allExpenses.forEach(expense => {
+                if (expense.year) {
+                    years.add(expense.year);
+                }
+            });
+            
+            const sortedYears = Array.from(years).sort((a, b) => b - a);
+            
+            yearFilter.innerHTML = '<option value="all">All Years</option>';
+            sortedYears.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearFilter.appendChild(option);
+            });
+        }
+        
+        function filterExpenses() {
+            const yearFilter = document.getElementById('yearFilter').value;
+            const monthFilter = document.getElementById('monthFilter').value;
+            const descriptionFilter = document.getElementById('descriptionFilter').value.toLowerCase();
+            const sortBy = document.getElementById('sortFilter').value;
+            
+            let filteredExpenses = [...allExpenses];
+            
+            // Apply year filter
+            if (yearFilter !== 'all') {
+                filteredExpenses = filteredExpenses.filter(expense => expense.year == yearFilter);
+            }
+            
+            // Apply month filter
+            if (monthFilter !== 'all') {
+                filteredExpenses = filteredExpenses.filter(expense => expense.month == monthFilter);
+            }
+            
+            // Apply description filter
+            if (descriptionFilter) {
+                filteredExpenses = filteredExpenses.filter(expense => 
+                    (expense.description && expense.description.toLowerCase().includes(descriptionFilter)) ||
+                    (expense.remarks && expense.remarks.toLowerCase().includes(descriptionFilter))
+                );
+            }
+            
+            // Apply sorting
+            if (sortBy === 'date_desc') {
+                filteredExpenses.sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date));
+            } else if (sortBy === 'date_asc') {
+                filteredExpenses.sort((a, b) => new Date(a.expense_date) - new Date(b.expense_date));
+            } else if (sortBy === 'amount_desc') {
+                filteredExpenses.sort((a, b) => b.amount_spent - a.amount_spent);
+            } else if (sortBy === 'amount_asc') {
+                filteredExpenses.sort((a, b) => a.amount_spent - b.amount_spent);
+            }
+            
+            renderExpensesTable(filteredExpenses);
+        }
+        
+        function clearFilters() {
+            document.getElementById('yearFilter').value = 'all';
+            document.getElementById('monthFilter').value = 'all';
+            document.getElementById('descriptionFilter').value = '';
+            document.getElementById('sortFilter').value = 'date_desc';
+            filterExpenses();
+        }
+        
+        function renderExpensesTable(expenses) {
+            const tableBody = document.getElementById('expensesTable');
+            
+            if (expenses.length === 0) {
+                tableBody.innerHTML = `
+                    <tr class="no-data-row">
+                        <td colspan="8">
+                            No expenses found.
+                            <br>
+                            <button onclick="document.getElementById('addExpenseBtn').click()" class="btn btn-sut btn-sm" style="margin-top: 10px;">Add First Expense</button>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tableBody.innerHTML = '';
+            
+            expenses.forEach((expense, index) => {
+                const row = document.createElement('tr');
+                const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const monthName = monthNames[expense.month - 1] || expense.month;
+                
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${formatDate(expense.expense_date)}</td>
+                    <td><span class="month-badge">${monthName}</span></td>
+                    <td>${expense.year}</td>
+                    <td><strong>${escapeHtml(expense.description || '-')}</strong></td>
+                    <td class="amount-spent">${formatCurrency(expense.amount_spent)}</td>
+                    <td>${escapeHtml(expense.remarks || '-')}</td>
+                    <td class="actions-cell">
+                        <button class="btn btn-warning btn-sm edit-btn" data-id="${expense.id}">Edit</button>
+                        <button class="btn btn-danger btn-sm delete-btn" data-id="${expense.id}">Delete</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            // Add event listeners to edit and delete buttons
+            document.querySelectorAll('.edit-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const expenseId = this.getAttribute('data-id');
+                    editExpense(expenseId);
+                });
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const expenseId = this.getAttribute('data-id');
+                    deleteExpense(expenseId);
+                });
+            });
+        }
+        
+        function updateBudgetSummary() {
+            if (!currentFinancialYear) {
+                document.getElementById('annualBudget').textContent = formatCurrency(0);
+                document.getElementById('totalSpent').textContent = formatCurrency(0);
+                document.getElementById('remainingBalance').textContent = formatCurrency(0);
+                document.getElementById('usedAmount').textContent = formatCurrency(0);
+                document.getElementById('budgetAmount').textContent = formatCurrency(0);
+                document.getElementById('usagePercentage').textContent = '0%';
+                document.getElementById('progressFill').style.width = '0%';
+                return;
+            }
+            
+            const annualBudget = currentFinancialYear.sut_office_allocated || 0;
+            
+            // Calculate total spent for current financial year
+            const currentYear = currentFinancialYear.start_year;
+            const currentFinancialYearExpenses = allExpenses.filter(expense => expense.year == currentYear);
+            const totalSpent = currentFinancialYearExpenses.reduce((sum, expense) => sum + expense.amount_spent, 0);
+            const remainingBalance = annualBudget - totalSpent;
+            const usagePercentage = annualBudget > 0 ? (totalSpent / annualBudget) * 100 : 0;
+            
+            document.getElementById('annualBudget').textContent = formatCurrency(annualBudget);
+            document.getElementById('totalSpent').textContent = formatCurrency(totalSpent);
+            
+            if (remainingBalance < 0) {
+                document.getElementById('remainingBalance').innerHTML = `<span style="color: #ff6b6b;">${formatCurrency(remainingBalance)}</span>`;
+                document.getElementById('remainingBalance').style.color = '#ff6b6b';
+            } else {
+                document.getElementById('remainingBalance').innerHTML = formatCurrency(remainingBalance);
+                document.getElementById('remainingBalance').style.color = 'white';
+            }
+            
+            document.getElementById('usedAmount').textContent = formatCurrency(totalSpent);
+            document.getElementById('budgetAmount').textContent = formatCurrency(annualBudget);
+            document.getElementById('usagePercentage').textContent = `${usagePercentage.toFixed(1)}%`;
+            document.getElementById('progressFill').style.width = `${Math.min(usagePercentage, 100)}%`;
+            
+            // Change color if over budget
+            if (usagePercentage > 100) {
+                document.getElementById('progressFill').style.backgroundColor = '#f72585';
+            } else {
+                document.getElementById('progressFill').style.backgroundColor = '#9c27b0';
+            }
+        }
+        
+        async function saveExpense() {
+            const expenseData = {
+                expenseDate: document.getElementById('expenseDate').value,
+                amountSpent: parseFloat(document.getElementById('amountSpent').value),
+                description: document.getElementById('description').value.trim(),
+                remarks: document.getElementById('remarks').value.trim()
+            };
+            
+            // Validate
+            if (!expenseData.expenseDate) {
+                showToast('Please select a date', 'error');
+                return;
+            }
+            
+            if (!expenseData.amountSpent || expenseData.amountSpent <= 0) {
+                showToast('Please enter a valid amount', 'error');
+                return;
+            }
+            
+            if (!expenseData.description) {
+                showToast('Please enter a description', 'error');
+                return;
+            }
+            
+            // Parse date to get month and year
+            const date = new Date(expenseData.expenseDate);
+            expenseData.month = date.getMonth() + 1;
+            expenseData.year = date.getFullYear();
+            
+            let url = '/api/sut-office-expenses';
+            let method = 'POST';
+            
+            if (editingExpenseId) {
+                url = `/api/sut-office-expenses/${editingExpenseId}`;
+                method = 'PUT';
+            }
+            
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(expenseData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showToast(data.message || 'Expense saved successfully!', 'success');
+                    document.getElementById('expenseModal').style.display = 'none';
+                    document.getElementById('expenseForm').reset();
+                    editingExpenseId = null;
+                    await loadExpenses();
+                    await loadFinancialYear();
+                } else {
+                    showToast('Error: ' + (data.error || 'Failed to save expense'), 'error');
+                }
+            } catch (error) {
+                console.error('Error saving expense:', error);
+                showToast('Error saving expense. Please try again.', 'error');
+            }
+        }
+        
+        function editExpense(expenseId) {
+            const expense = allExpenses.find(e => e.id == expenseId);
+            
+            if (!expense) {
+                showToast('Expense not found', 'error');
+                return;
+            }
+            
+            editingExpenseId = expenseId;
+            document.getElementById('modalTitle').textContent = 'Edit SUT Office Expense';
+            document.getElementById('expenseId').value = expense.id;
+            document.getElementById('expenseDate').value = expense.expense_date;
+            document.getElementById('amountSpent').value = expense.amount_spent;
+            document.getElementById('description').value = expense.description || '';
+            document.getElementById('remarks').value = expense.remarks || '';
+            
+            document.getElementById('expenseModal').style.display = 'flex';
+        }
+        
+        async function deleteExpense(expenseId) {
+            if (confirm('Are you sure you want to delete this expense? This action cannot be undone.')) {
+                try {
+                    const response = await fetch(`/api/sut-office-expenses/${expenseId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showToast(data.message || 'Expense deleted successfully!', 'success');
+                        await loadExpenses();
+                        await loadFinancialYear();
+                    } else {
+                        showToast('Error: ' + (data.error || 'Failed to delete expense'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error deleting expense:', error);
+                    showToast('Error deleting expense. Please try again.', 'error');
+                }
+            }
+        }
+        
+        function formatCurrency(amount) {
+            if (amount === undefined || amount === null) return '$0.00';
+            return '$' + parseFloat(amount).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type;
+            toast.style.display = 'block';
+            
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
