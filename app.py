@@ -107,7 +107,7 @@ def initialize_database_tables():
         
         print("🗄️ Checking required database tables...")
         
-        tables = ['financial_years', 'schools', 'departments', 'utility_bills', 'utility_accounts', 'backup_metadata']
+        tables = ['financial_years', 'schools', 'departments', 'utility_bills', 'utility_accounts', 'backup_metadata', 'sut_office_expenses']
         
         for table in tables:
             try:
@@ -161,6 +161,10 @@ def export_page():
 @app.route('/backup')
 def backup_page():
     return render_template('backup.html')
+
+@app.route('/sut-office')
+def sut_office():
+    return render_template('sut_office.html')
 
 # ============ API ROUTES ============
 
@@ -350,6 +354,148 @@ def delete_financial_year(fy_id):
     except Exception as e:
         print(f"❌ Financial year DELETE error: {e}")
         return jsonify({'error': f'Failed to delete financial year: {str(e)}'}), 500
+
+# ============ SUT OFFICE API ROUTES ============
+
+@app.route('/api/sut-office-expenses', methods=['GET'])
+def get_sut_office_expenses():
+    """Get all SUT Office expenses"""
+    try:
+        print("💰 GET /api/sut-office-expenses called")
+        
+        if not supabase:
+            return jsonify({'data': []}), 500
+        
+        response = supabase.table("sut_office_expenses").select("*").order("expense_date", desc=True).execute()
+        return jsonify(response.data if response.data else [])
+        
+    except Exception as e:
+        print(f"❌ SUT Office expenses GET error: {e}")
+        return jsonify({'data': []}), 500
+
+@app.route('/api/sut-office-expenses', methods=['POST'])
+def create_sut_office_expense():
+    """Create a new SUT Office expense"""
+    try:
+        print("💰 POST /api/sut-office-expenses called")
+        
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        data = request.get_json()
+        print(f"💰 Received expense data: {data}")
+        
+        # Parse date
+        expense_date = data.get('expenseDate')
+        if expense_date:
+            date_obj = datetime.strptime(expense_date, '%Y-%m-%d')
+            month = date_obj.month
+            year = date_obj.year
+        else:
+            month = datetime.now().month
+            year = datetime.now().year
+            expense_date = datetime.now().strftime('%Y-%m-%d')
+        
+        expense_data = {
+            "expense_date": expense_date,
+            "month": month,
+            "year": year,
+            "amount_spent": float(data.get('amountSpent', 0)),
+            "description": data.get('description', ''),
+            "remarks": data.get('remarks', ''),
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        response = supabase.table("sut_office_expenses").insert(expense_data).execute()
+        
+        if response.data:
+            print("✅ SUT Office expense created successfully")
+            return jsonify({
+                'success': True,
+                'message': 'Expense recorded successfully',
+                'expense': response.data[0]
+            })
+        else:
+            print("❌ Expense creation failed")
+            return jsonify({'error': 'Failed to create expense'}), 500
+            
+    except Exception as e:
+        print(f"❌ SUT Office expense POST error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to create expense: {str(e)}'}), 500
+
+@app.route('/api/sut-office-expenses/<int:expense_id>', methods=['PUT'])
+def update_sut_office_expense(expense_id):
+    """Update a SUT Office expense"""
+    try:
+        print(f"💰 PUT /api/sut-office-expenses/{expense_id} called")
+        
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        data = request.get_json()
+        print(f"💰 Update expense data: {data}")
+        
+        expense_date = data.get('expenseDate')
+        if expense_date:
+            date_obj = datetime.strptime(expense_date, '%Y-%m-%d')
+            month = date_obj.month
+            year = date_obj.year
+        else:
+            month = datetime.now().month
+            year = datetime.now().year
+        
+        expense_data = {
+            "expense_date": expense_date,
+            "month": month,
+            "year": year,
+            "amount_spent": float(data.get('amountSpent', 0)),
+            "description": data.get('description', ''),
+            "remarks": data.get('remarks', ''),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        response = supabase.table("sut_office_expenses").update(expense_data).eq("id", expense_id).execute()
+        
+        if response.data:
+            print("✅ SUT Office expense updated successfully")
+            return jsonify({
+                'success': True,
+                'message': 'Expense updated successfully',
+                'expense': response.data[0]
+            })
+        else:
+            print("❌ Expense update failed")
+            return jsonify({'error': 'Failed to update expense'}), 500
+            
+    except Exception as e:
+        print(f"❌ SUT Office expense PUT error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to update expense: {str(e)}'}), 500
+
+@app.route('/api/sut-office-expenses/<int:expense_id>', methods=['DELETE'])
+def delete_sut_office_expense(expense_id):
+    """Delete a SUT Office expense"""
+    try:
+        print(f"💰 DELETE /api/sut-office-expenses/{expense_id} called")
+        
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        response = supabase.table("sut_office_expenses").delete().eq("id", expense_id).execute()
+        
+        if response.data:
+            return jsonify({
+                'success': True,
+                'message': 'Expense deleted successfully'
+            })
+        else:
+            return jsonify({'error': 'Failed to delete expense'}), 500
+            
+    except Exception as e:
+        print(f"❌ SUT Office expense DELETE error: {e}")
+        return jsonify({'error': f'Failed to delete expense: {str(e)}'}), 500
 
 # ============ UTILITY ACCOUNTS API ROUTES ============
 
@@ -854,9 +1000,15 @@ def dashboard_data():
                     total_unsettled += float(bill['unsettled_charges'] or 0)
                     total_paid += float(bill.get('amount_paid') or 0)
         
-        # Get SUT Office budget (sut_office_allocated is a separate budget line)
-        # For now, SUT Office doesn't have utility bills, so used is 0
+        # Get SUT Office expenses for current financial year
         sut_office_used = 0
+        try:
+            sut_expenses_response = supabase.table("sut_office_expenses").select("*").eq("year", start_year).execute()
+            if sut_expenses_response.data:
+                for expense in sut_expenses_response.data:
+                    sut_office_used += float(expense.get('amount_spent', 0) or 0)
+        except Exception as e:
+            print(f"⚠️ Could not get SUT Office expenses: {e}")
         
         # Calculate budget usage and remaining
         budget_calculations = {
@@ -911,7 +1063,7 @@ def dashboard_data():
         print(f"📈 Dashboard data prepared:")
         print(f"   FY: {current_fy['financial_year']}")
         print(f"   Budget: Total=${current_fy.get('total_allocated', 60000)}, Water=${current_fy.get('water_allocated', 15000)}, Electricity=${current_fy.get('electricity_allocated', 35000)}, Telephone=${current_fy.get('telephone_allocated', 10000)}, SUT Office=${current_fy.get('sut_office_allocated', 0)}")
-        print(f"   Used: Total=${total_current}, Water=${water_total}, Electricity=${electricity_total}, Telephone=${telephone_total}")
+        print(f"   Used: Total=${total_current}, Water=${water_total}, Electricity=${electricity_total}, Telephone=${telephone_total}, SUT Office=${sut_office_used}")
         
         return jsonify({
             'budget_data': formatted_budget,
@@ -1832,7 +1984,7 @@ def backup_data():
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        tables = ['schools', 'departments', 'utility_bills', 'financial_years', 'utility_accounts']
+        tables = ['schools', 'departments', 'utility_bills', 'financial_years', 'utility_accounts', 'sut_office_expenses']
         backup_data = {}
         
         for table in tables:
@@ -1943,6 +2095,12 @@ def backup_all_data():
         financial_years_data = financial_years_response.data if financial_years_response.data else []
         backup_data['financial_years'] = financial_years_data
         
+        # Backup SUT Office expenses
+        print("💰 Backing up SUT Office expenses...")
+        sut_expenses_response = supabase.table("sut_office_expenses").select("*").execute()
+        sut_expenses_data = sut_expenses_response.data if sut_expenses_response.data else []
+        backup_data['sut_office_expenses'] = sut_expenses_data
+        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"uka_bill_backup_{timestamp}.json"
         
@@ -1954,7 +2112,8 @@ def backup_all_data():
                 'departments': len(departments_data),
                 'utility_accounts': len(accounts_data),
                 'utility_bills': len(bills_data),
-                'financial_years': len(financial_years_data)
+                'financial_years': len(financial_years_data),
+                'sut_office_expenses': len(sut_expenses_data)
             }
         }
         
@@ -2084,6 +2243,10 @@ def download_backup_direct():
         financial_years_data = financial_years_response.data if financial_years_response.data else []
         backup_data['financial_years'] = financial_years_data
         
+        sut_expenses_response = supabase.table("sut_office_expenses").select("*").execute()
+        sut_expenses_data = sut_expenses_response.data if sut_expenses_response.data else []
+        backup_data['sut_office_expenses'] = sut_expenses_data
+        
         backup_metadata = {
             'backup_date': datetime.now().isoformat(),
             'records_count': {
@@ -2091,7 +2254,8 @@ def download_backup_direct():
                 'departments': len(departments_data),
                 'utility_accounts': len(accounts_data),
                 'utility_bills': len(bills_data),
-                'financial_years': len(financial_years_data)
+                'financial_years': len(financial_years_data),
+                'sut_office_expenses': len(sut_expenses_data)
             }
         }
         
@@ -2376,6 +2540,7 @@ def restore_backup():
         
         # Delete in reverse order of dependencies
         try:
+            supabase.table("sut_office_expenses").delete().neq("id", 0).execute()
             supabase.table("utility_bills").delete().neq("id", 0).execute()
             supabase.table("utility_accounts").delete().neq("id", 0).execute()
             supabase.table("departments").delete().neq("id", 0).execute()
@@ -2474,6 +2639,22 @@ def restore_backup():
                 errors.append(f"Utility Bills: {str(e)}")
                 restoration_stats['utility_bills'] = f"Error: {str(e)}"
         
+        # Restore SUT Office expenses
+        if backup_data.get('sut_office_expenses'):
+            print(f"💰 Restoring {len(backup_data['sut_office_expenses'])} SUT Office expenses...")
+            try:
+                for expense in backup_data['sut_office_expenses']:
+                    expense_data = {k: v for k, v in expense.items() if k != 'id'}
+                    if 'created_at' not in expense_data:
+                        expense_data['created_at'] = datetime.now().isoformat()
+                    if 'updated_at' not in expense_data:
+                        expense_data['updated_at'] = datetime.now().isoformat()
+                    supabase.table("sut_office_expenses").insert(expense_data).execute()
+                restoration_stats['sut_office_expenses'] = len(backup_data['sut_office_expenses'])
+            except Exception as e:
+                errors.append(f"SUT Office Expenses: {str(e)}")
+                restoration_stats['sut_office_expenses'] = f"Error: {str(e)}"
+        
         if errors:
             print(f"⚠️ Restoration completed with errors: {errors}")
             return jsonify({
@@ -2543,6 +2724,7 @@ def restore_backup_from_file():
         
         # Delete in reverse order of dependencies
         try:
+            supabase.table("sut_office_expenses").delete().neq("id", 0).execute()
             supabase.table("utility_bills").delete().neq("id", 0).execute()
             supabase.table("utility_accounts").delete().neq("id", 0).execute()
             supabase.table("departments").delete().neq("id", 0).execute()
@@ -2640,6 +2822,22 @@ def restore_backup_from_file():
                 errors.append(f"Utility Bills: {str(e)}")
                 restoration_stats['utility_bills'] = f"Error: {str(e)}"
         
+        # Restore SUT Office expenses
+        if backup_data.get('sut_office_expenses'):
+            print(f"💰 Restoring {len(backup_data['sut_office_expenses'])} SUT Office expenses...")
+            try:
+                for expense in backup_data['sut_office_expenses']:
+                    expense_data = {k: v for k, v in expense.items() if k != 'id'}
+                    if 'created_at' not in expense_data:
+                        expense_data['created_at'] = datetime.now().isoformat()
+                    if 'updated_at' not in expense_data:
+                        expense_data['updated_at'] = datetime.now().isoformat()
+                    supabase.table("sut_office_expenses").insert(expense_data).execute()
+                restoration_stats['sut_office_expenses'] = len(backup_data['sut_office_expenses'])
+            except Exception as e:
+                errors.append(f"SUT Office Expenses: {str(e)}")
+                restoration_stats['sut_office_expenses'] = f"Error: {str(e)}"
+        
         if errors:
             return jsonify({
                 'success': False,
@@ -2675,14 +2873,17 @@ def export_csv():
         dept_data = []
         bills_data = []
         accounts_data = []
+        sut_expenses_data = []
         schools_csv_content = ""
         dept_csv_content = ""
         bills_csv_content = ""
         accounts_csv_content = ""
+        sut_csv_content = ""
         schools_filename = ""
         dept_filename = ""
         bills_filename = ""
         accounts_filename = ""
+        sut_filename = ""
         
         if export_type == 'schools' or export_type == 'all':
             schools_response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
@@ -2756,6 +2957,24 @@ def export_csv():
                 bills_csv_content = "No utility bills data available"
                 bills_filename = f"utility_bills_export_{timestamp}.csv"
         
+        if export_type == 'sut_office' or export_type == 'all':
+            sut_response = supabase.table("sut_office_expenses").select("*").order("year", desc=True).order("month", desc=True).execute()
+            sut_expenses_data = sut_response.data if sut_response.data else []
+            
+            if sut_expenses_data:
+                sut_csv = io.StringIO()
+                sut_writer = csv.writer(sut_csv)
+                sut_writer.writerow(sut_expenses_data[0].keys())
+                for expense in sut_expenses_data:
+                    sut_writer.writerow(expense.values())
+                
+                sut_csv.seek(0)
+                sut_filename = f"sut_office_expenses_export_{timestamp}.csv"
+                sut_csv_content = sut_csv.getvalue()
+            else:
+                sut_csv_content = "No SUT Office expenses data available"
+                sut_filename = f"sut_office_expenses_export_{timestamp}.csv"
+        
         if export_type == 'all':
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
@@ -2767,6 +2986,8 @@ def export_csv():
                     zip_file.writestr(accounts_filename, accounts_csv_content)
                 if bills_data:
                     zip_file.writestr(bills_filename, bills_csv_content)
+                if sut_expenses_data:
+                    zip_file.writestr(sut_filename, sut_csv_content)
             
             zip_buffer.seek(0)
             zip_filename = f"uka_bill_export_{timestamp}.zip"
@@ -2804,6 +3025,13 @@ def export_csv():
                     io.BytesIO(bills_csv_content.encode()),
                     as_attachment=True,
                     download_name=bills_filename,
+                    mimetype='text/csv'
+                )
+            elif export_type == 'sut_office':
+                return send_file(
+                    io.BytesIO(sut_csv_content.encode()),
+                    as_attachment=True,
+                    download_name=sut_filename,
                     mimetype='text/csv'
                 )
         
