@@ -357,7 +357,7 @@
             border-radius: 5px;
             font-size: 0.85rem;
             z-index: 2000;
-            animation: fadeOut 2s ease forwards;
+            animation: fadeOut 3s ease forwards;
         }
 
         @keyframes fadeOut {
@@ -411,6 +411,11 @@
             border-radius: 10px;
             font-size: 0.8rem;
             font-weight: normal;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -523,6 +528,7 @@
     let existingBills = [];
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
+    let isLoading = false;
 
     // Populate year dropdown (2020-2030)
     function populateYears() {
@@ -539,7 +545,7 @@
         }
     }
 
-    // Load all schools and departments and sort by ID (matches the order in Schools/Departments tabs)
+    // Load all schools and departments and sort by ID
     async function loadAllEntities() {
         try {
             const [schoolsRes, deptsRes] = await Promise.all([
@@ -578,7 +584,7 @@
     }
 
     // Extract water accounts from a school or department object
-    function extractWaterAccounts(entity, type) {
+    function extractWaterAccounts(entity) {
         let accounts = [];
         try {
             if (entity.water_accounts) {
@@ -605,7 +611,7 @@
         
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
-            const accounts = extractWaterAccounts(school, 'school');
+            const accounts = extractWaterAccounts(school);
             const displayName = school.name || `School #${school.id}`;
             const schoolSeq = idx + 1;
             
@@ -627,7 +633,7 @@
         
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
-            const accounts = extractWaterAccounts(dept, 'department');
+            const accounts = extractWaterAccounts(dept);
             const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
             const deptSeq = idx + 1;
             
@@ -670,6 +676,8 @@
     }
 
     async function saveBillForRow(rowElement, month, year) {
+        if (isLoading) return;
+        
         const entityType = rowElement.getAttribute('data-entity-type');
         const entityId = parseInt(rowElement.getAttribute('data-entity-id'));
         const accountNumber = rowElement.getAttribute('data-account');
@@ -706,6 +714,9 @@
             bill_image: null
         };
         
+        isLoading = true;
+        document.querySelector('.table-wrapper').classList.add('loading');
+        
         try {
             let url = '/api/utility-bills';
             let method = 'POST';
@@ -722,48 +733,63 @@
             
             const result = await resp.json();
             if (resp.ok && (result.message || result.success)) {
-                showToast(`✅ Saved successfully for ${entityType === 'school' ? 'School' : 'Department'}`);
+                showToast(`✅ Saved successfully`);
                 await renderWaterTable();
             } else {
                 showToast('Error: ' + (result.error || 'Failed to save'), true);
+                isLoading = false;
+                document.querySelector('.table-wrapper').classList.remove('loading');
             }
         } catch(err) {
             console.error(err);
             showToast('Network error while saving', true);
+            isLoading = false;
+            document.querySelector('.table-wrapper').classList.remove('loading');
         }
     }
     
     async function deleteBill(billId, rowElement) {
+        if (isLoading) return;
         if (!confirm('Delete this water bill permanently?')) return;
         
+        isLoading = true;
+        document.querySelector('.table-wrapper').classList.add('loading');
+        
         try {
+            console.log(`Deleting bill with ID: ${billId}`);
             const resp = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
+            
+            console.log(`Delete response status: ${resp.status}`);
             
             // Check if response is ok (status 200-299)
             if (resp.ok) {
                 // Try to parse response as JSON, but handle if it's empty
                 let result = {};
                 try {
-                    result = await resp.json();
+                    const text = await resp.text();
+                    if (text) {
+                        result = JSON.parse(text);
+                    }
                 } catch(e) {
-                    // Response might be empty or not JSON
-                    result = { message: 'Bill deleted successfully' };
+                    console.log('Response not JSON or empty');
                 }
                 
-                if (result.message || result.success || resp.ok) {
-                    showToast('🗑️ Bill deleted successfully');
-                    await renderWaterTable();
-                } else {
-                    showToast('Error: ' + (result.error || 'Delete failed'), true);
-                }
+                showToast('🗑️ Bill deleted successfully');
+                // Force refresh the table to remove the deleted bill
+                await renderWaterTable();
             } else {
-                // Handle non-ok response (404, 500, etc.)
+                // Handle non-ok response
                 const errorText = await resp.text();
-                showToast(`Delete failed: ${resp.status} ${errorText}`, true);
+                console.error(`Delete failed with status ${resp.status}: ${errorText}`);
+                showToast(`Delete failed: ${resp.status}`, true);
+                isLoading = false;
+                document.querySelector('.table-wrapper').classList.remove('loading');
             }
         } catch(err) {
             console.error('Delete error:', err);
-            showToast('Error deleting bill. Please check console for details.', true);
+            showToast('Error deleting bill. Please check console.', true);
+            isLoading = false;
+            document.querySelector('.table-wrapper').classList.remove('loading');
         }
     }
 
@@ -805,6 +831,8 @@
         
         if (filteredRows.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="no-data">No schools/departments with water accounts found.</td></tr>';
+            isLoading = false;
+            document.querySelector('.table-wrapper')?.classList.remove('loading');
             return;
         }
         
@@ -835,8 +863,9 @@
             const clusterSchools = schoolsByCluster.get(cluster);
             clusterSchools.sort((a, b) => a.seqNumber - b.seqNumber);
             
-            // Check if any school in this cluster passes status filter before showing separator
+            // Check if any school in this cluster passes status filter
             let hasVisibleSchools = false;
+            const visibleSchools = [];
             for (const school of clusterSchools) {
                 const existing = findExistingBill(school.entityType, school.entityId, school.accountNumber, school.meterNumber, month, year);
                 const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
@@ -849,24 +878,24 @@
                     (statusFilter === 'paid' && statusText === 'Paid') ||
                     (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
                     hasVisibleSchools = true;
-                    break;
+                    visibleSchools.push(school);
                 }
             }
             
-            if (hasVisibleSchools) {
+            if (hasVisibleSchools && visibleSchools.length > 0) {
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
                     <td colspan="10">
                         <div class="cluster-info">
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
-                            <span class="cluster-count">${clusterSchools.length} water account${clusterSchools.length > 1 ? 's' : ''}</span>
+                            <span class="cluster-count">${visibleSchools.length} water account${visibleSchools.length > 1 ? 's' : ''}</span>
                         </div>
                     </td>
                 `;
                 tbody.appendChild(separatorRow);
                 
-                for (const row of clusterSchools) {
+                for (const row of visibleSchools) {
                     await renderSingleRow(tbody, row, month, year, globalSerial++, statusFilter);
                 }
             }
@@ -876,6 +905,7 @@
         if (departmentsList.length > 0) {
             // Check if any department passes status filter
             let hasVisibleDepts = false;
+            const visibleDepts = [];
             for (const dept of departmentsList) {
                 const existing = findExistingBill(dept.entityType, dept.entityId, dept.accountNumber, dept.meterNumber, month, year);
                 const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
@@ -888,30 +918,33 @@
                     (statusFilter === 'paid' && statusText === 'Paid') ||
                     (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
                     hasVisibleDepts = true;
-                    break;
+                    visibleDepts.push(dept);
                 }
             }
             
-            if (hasVisibleDepts) {
+            if (hasVisibleDepts && visibleDepts.length > 0) {
                 const deptSeparator = document.createElement('tr');
                 deptSeparator.className = 'cluster-separator';
                 deptSeparator.innerHTML = `
                     <td colspan="10">
                         <div class="cluster-info">
                             <span>🏛️ DEPARTMENTS</span>
-                            <span class="cluster-count">${departmentsList.length} water account${departmentsList.length > 1 ? 's' : ''}</span>
+                            <span class="cluster-count">${visibleDepts.length} water account${visibleDepts.length > 1 ? 's' : ''}</span>
                         </div>
                     </td>
                 `;
                 tbody.appendChild(deptSeparator);
                 
-                departmentsList.sort((a, b) => a.seqNumber - b.seqNumber);
+                visibleDepts.sort((a, b) => a.seqNumber - b.seqNumber);
                 
-                for (const row of departmentsList) {
+                for (const row of visibleDepts) {
                     await renderSingleRow(tbody, row, month, year, globalSerial++, statusFilter);
                 }
             }
         }
+        
+        isLoading = false;
+        document.querySelector('.table-wrapper')?.classList.remove('loading');
     }
     
     async function renderSingleRow(tbody, row, month, year, serialNumber, statusFilter) {
@@ -985,6 +1018,27 @@
         });
     }
     
+    // Attach event listeners using event delegation (more reliable for dynamic content)
+    function attachGlobalEventListeners() {
+        // Save button delegation
+        document.getElementById('billsTableBody').addEventListener('click', async (e) => {
+            const saveBtn = e.target.closest('.save-row-btn');
+            if (saveBtn) {
+                const row = saveBtn.closest('tr');
+                await saveBillForRow(row, currentMonth, currentYear);
+            }
+            
+            const deleteBtn = e.target.closest('.delete-row-btn');
+            if (deleteBtn) {
+                const row = deleteBtn.closest('tr');
+                const billId = row.getAttribute('data-bill-id');
+                if (billId) {
+                    await deleteBill(billId, row);
+                }
+            }
+        });
+    }
+    
     // Initialize page
     document.addEventListener('DOMContentLoaded', async () => {
         populateYears();
@@ -993,6 +1047,7 @@
         document.getElementById('globalMonth').value = now.getMonth() + 1;
         document.getElementById('globalYear').value = now.getFullYear();
         
+        attachGlobalEventListeners();
         await renderWaterTable();
         
         document.getElementById('refreshTableBtn').addEventListener('click', async () => {
