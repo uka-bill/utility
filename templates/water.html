@@ -347,6 +347,19 @@
             animation: fadeOut 2s ease forwards;
         }
 
+        .error-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--danger);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 0.85rem;
+            z-index: 2000;
+            animation: fadeOut 2s ease forwards;
+        }
+
         @keyframes fadeOut {
             0% { opacity: 1; }
             70% { opacity: 1; }
@@ -535,12 +548,10 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                // Sort schools by ID (ascending) - this matches the order in Schools tab
                 allSchools.sort((a, b) => a.id - b.id);
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                // Sort departments by ID (ascending) - this matches the order in Departments tab
                 allDepartments.sort((a, b) => a.id - b.id);
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
@@ -588,11 +599,10 @@
         return accounts;
     }
 
-    // Build flat list of rows: each account+meter becomes a row
+    // Build flat list of rows
     function buildAllEntityRows() {
         const rows = [];
         
-        // Process Schools (already sorted by ID)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractWaterAccounts(school, 'school');
@@ -615,7 +625,6 @@
             }
         }
         
-        // Process Departments (already sorted by ID)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept, 'department');
@@ -641,7 +650,6 @@
         return rows;
     }
 
-    // Find existing bill
     function findExistingBill(entityType, entityId, accountNumber, meterNumber, month, year) {
         return existingBills.find(bill => 
             bill.entity_type === entityType &&
@@ -653,12 +661,12 @@
         );
     }
 
-    function showToast(message) {
+    function showToast(message, isError = false) {
         const toast = document.createElement('div');
-        toast.className = 'success-toast';
+        toast.className = isError ? 'error-toast' : 'success-toast';
         toast.textContent = message;
         document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 2000);
+        setTimeout(() => toast.remove(), 3000);
     }
 
     async function saveBillForRow(rowElement, month, year) {
@@ -713,31 +721,49 @@
             });
             
             const result = await resp.json();
-            if (result.message || result.success) {
-                showToast(`✅ Saved successfully`);
+            if (resp.ok && (result.message || result.success)) {
+                showToast(`✅ Saved successfully for ${entityType === 'school' ? 'School' : 'Department'}`);
                 await renderWaterTable();
             } else {
-                alert('Error: ' + (result.error || 'Unknown error'));
+                showToast('Error: ' + (result.error || 'Failed to save'), true);
             }
         } catch(err) {
             console.error(err);
-            alert('Network error while saving');
+            showToast('Network error while saving', true);
         }
     }
     
-    async function deleteBill(billId) {
+    async function deleteBill(billId, rowElement) {
         if (!confirm('Delete this water bill permanently?')) return;
+        
         try {
             const resp = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
-            const data = await resp.json();
-            if (data.message) {
-                showToast('🗑️ Bill deleted');
-                await renderWaterTable();
+            
+            // Check if response is ok (status 200-299)
+            if (resp.ok) {
+                // Try to parse response as JSON, but handle if it's empty
+                let result = {};
+                try {
+                    result = await resp.json();
+                } catch(e) {
+                    // Response might be empty or not JSON
+                    result = { message: 'Bill deleted successfully' };
+                }
+                
+                if (result.message || result.success || resp.ok) {
+                    showToast('🗑️ Bill deleted successfully');
+                    await renderWaterTable();
+                } else {
+                    showToast('Error: ' + (result.error || 'Delete failed'), true);
+                }
             } else {
-                alert('Delete failed');
+                // Handle non-ok response (404, 500, etc.)
+                const errorText = await resp.text();
+                showToast(`Delete failed: ${resp.status} ${errorText}`, true);
             }
         } catch(err) {
-            alert('Error deleting');
+            console.error('Delete error:', err);
+            showToast('Error deleting bill. Please check console for details.', true);
         }
     }
 
@@ -757,6 +783,7 @@
         
         const entityFilter = document.getElementById('entityTypeFilter').value;
         const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
+        const statusFilter = document.getElementById('statusFilter').value;
         
         let filteredRows = allRows.filter(row => {
             if (entityFilter !== 'all' && row.entityType !== entityFilter) return false;
@@ -808,64 +835,86 @@
             const clusterSchools = schoolsByCluster.get(cluster);
             clusterSchools.sort((a, b) => a.seqNumber - b.seqNumber);
             
-            const separatorRow = document.createElement('tr');
-            separatorRow.className = 'cluster-separator';
-            separatorRow.innerHTML = `
-                <td colspan="10">
-                    <div class="cluster-info">
-                        <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
-                        <span class="cluster-count">${clusterSchools.length} water account${clusterSchools.length > 1 ? 's' : ''}</span>
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(separatorRow);
+            // Check if any school in this cluster passes status filter before showing separator
+            let hasVisibleSchools = false;
+            for (const school of clusterSchools) {
+                const existing = findExistingBill(school.entityType, school.entityId, school.accountNumber, school.meterNumber, month, year);
+                const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
+                const amountPaid = existing?.amount_paid || 0;
+                let statusText = 'Pending';
+                if (totalDue > 0 && amountPaid >= totalDue) statusText = 'Paid';
+                else if (totalDue === 0 && !existing) statusText = 'Not entered';
+                
+                if (statusFilter === 'all' || 
+                    (statusFilter === 'paid' && statusText === 'Paid') ||
+                    (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
+                    hasVisibleSchools = true;
+                    break;
+                }
+            }
             
-            for (const row of clusterSchools) {
-                await renderSingleRow(tbody, row, month, year, globalSerial++);
+            if (hasVisibleSchools) {
+                const separatorRow = document.createElement('tr');
+                separatorRow.className = 'cluster-separator';
+                separatorRow.innerHTML = `
+                    <td colspan="10">
+                        <div class="cluster-info">
+                            <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
+                            <span class="cluster-count">${clusterSchools.length} water account${clusterSchools.length > 1 ? 's' : ''}</span>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(separatorRow);
+                
+                for (const row of clusterSchools) {
+                    await renderSingleRow(tbody, row, month, year, globalSerial++, statusFilter);
+                }
             }
         }
         
         // Render Departments
         if (departmentsList.length > 0) {
-            const deptSeparator = document.createElement('tr');
-            deptSeparator.className = 'cluster-separator';
-            deptSeparator.innerHTML = `
-                <td colspan="10">
-                    <div class="cluster-info">
-                        <span>🏛️ DEPARTMENTS</span>
-                        <span class="cluster-count">${departmentsList.length} water account${departmentsList.length > 1 ? 's' : ''}</span>
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(deptSeparator);
+            // Check if any department passes status filter
+            let hasVisibleDepts = false;
+            for (const dept of departmentsList) {
+                const existing = findExistingBill(dept.entityType, dept.entityId, dept.accountNumber, dept.meterNumber, month, year);
+                const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
+                const amountPaid = existing?.amount_paid || 0;
+                let statusText = 'Pending';
+                if (totalDue > 0 && amountPaid >= totalDue) statusText = 'Paid';
+                else if (totalDue === 0 && !existing) statusText = 'Not entered';
+                
+                if (statusFilter === 'all' || 
+                    (statusFilter === 'paid' && statusText === 'Paid') ||
+                    (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
+                    hasVisibleDepts = true;
+                    break;
+                }
+            }
             
-            departmentsList.sort((a, b) => a.seqNumber - b.seqNumber);
-            
-            for (const row of departmentsList) {
-                await renderSingleRow(tbody, row, month, year, globalSerial++);
+            if (hasVisibleDepts) {
+                const deptSeparator = document.createElement('tr');
+                deptSeparator.className = 'cluster-separator';
+                deptSeparator.innerHTML = `
+                    <td colspan="10">
+                        <div class="cluster-info">
+                            <span>🏛️ DEPARTMENTS</span>
+                            <span class="cluster-count">${departmentsList.length} water account${departmentsList.length > 1 ? 's' : ''}</span>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(deptSeparator);
+                
+                departmentsList.sort((a, b) => a.seqNumber - b.seqNumber);
+                
+                for (const row of departmentsList) {
+                    await renderSingleRow(tbody, row, month, year, globalSerial++, statusFilter);
+                }
             }
         }
-        
-        // Attach event listeners
-        document.querySelectorAll('.save-row-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const row = btn.closest('tr');
-                await saveBillForRow(row, currentMonth, currentYear);
-            });
-        });
-        
-        document.querySelectorAll('.delete-row-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const row = btn.closest('tr');
-                const billId = row.getAttribute('data-bill-id');
-                if (billId) {
-                    await deleteBill(billId);
-                }
-            });
-        });
     }
     
-    async function renderSingleRow(tbody, row, month, year, serialNumber) {
+    async function renderSingleRow(tbody, row, month, year, serialNumber, statusFilter) {
         const existing = findExistingBill(row.entityType, row.entityId, row.accountNumber, row.meterNumber, month, year);
         
         let consumption = existing ? (existing.consumption_m3 || 0) : 0;
@@ -886,6 +935,12 @@
             statusText = 'Partial';
         } else if (totalDue === 0 && !existing) {
             statusText = 'Not entered';
+        }
+        
+        // Apply status filter
+        if (statusFilter !== 'all') {
+            if (statusFilter === 'paid' && statusText !== 'Paid') return;
+            if (statusFilter === 'pending' && (statusText === 'Paid' || statusText === 'Not entered')) return;
         }
         
         const tr = document.createElement('tr');
