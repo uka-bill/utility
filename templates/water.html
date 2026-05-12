@@ -448,7 +448,7 @@
     </div>
 
     <div class="info-note">
-        ✅ <strong>Direct Entry Mode</strong> — Schools and Departments are displayed in the SAME ORDER as shown in Schools and Departments tabs (sorted by sequence number / database ID). 
+        ✅ <strong>Direct Entry Mode</strong> — Schools and Departments are displayed in the SAME ORDER as shown in Schools and Departments tabs. 
         Select month/year, enter consumption and charges, then click <strong>Save</strong> for each row.
     </div>
 
@@ -499,7 +499,7 @@
             <tbody id="billsTableBody">
                 <tr><td colspan="10" class="no-data">Loading schools & departments...</td></tr>
             </tbody>
-         </table>
+        </table>
     </div>
 </div>
 
@@ -589,7 +589,6 @@
     }
 
     // Build flat list of rows: each account+meter becomes a row
-    // Schools and Departments are already sorted by ID (matches tabs order)
     function buildAllEntityRows() {
         const rows = [];
         
@@ -598,7 +597,7 @@
             const school = allSchools[idx];
             const accounts = extractWaterAccounts(school, 'school');
             const displayName = school.name || `School #${school.id}`;
-            const schoolSeq = idx + 1; // Sequence number based on order (1, 2, 3...)
+            const schoolSeq = idx + 1;
             
             for (const acc of accounts) {
                 const meters = (acc.meters && acc.meters.length) ? acc.meters : [{ meterNumber: '—' }];
@@ -621,7 +620,7 @@
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept, 'department');
             const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-            const deptSeq = idx + 1; // Sequence number based on order (1, 2, 3...)
+            const deptSeq = idx + 1;
             
             for (const acc of accounts) {
                 const meters = (acc.meters && acc.meters.length) ? acc.meters : [{ meterNumber: '—' }];
@@ -642,7 +641,7 @@
         return rows;
     }
 
-    // Find existing bill for a specific entity + account + meter + period
+    // Find existing bill
     function findExistingBill(entityType, entityId, accountNumber, meterNumber, month, year) {
         return existingBills.find(bill => 
             bill.entity_type === entityType &&
@@ -654,7 +653,6 @@
         );
     }
 
-    // Show temporary success message
     function showToast(message) {
         const toast = document.createElement('div');
         toast.className = 'success-toast';
@@ -663,7 +661,6 @@
         setTimeout(() => toast.remove(), 2000);
     }
 
-    // Save a single row (create or update)
     async function saveBillForRow(rowElement, month, year) {
         const entityType = rowElement.getAttribute('data-entity-type');
         const entityId = parseInt(rowElement.getAttribute('data-entity-id'));
@@ -671,7 +668,6 @@
         const meterNumber = rowElement.getAttribute('data-meter');
         const existingBillId = rowElement.getAttribute('data-bill-id') ? parseInt(rowElement.getAttribute('data-bill-id')) : null;
         
-        // Get values from inputs
         const consumptionInput = rowElement.querySelector('.consumption-input');
         const currentInput = rowElement.querySelector('.current-charge-input');
         const lateInput = rowElement.querySelector('.late-input');
@@ -718,7 +714,7 @@
             
             const result = await resp.json();
             if (result.message || result.success) {
-                showToast(`✅ Saved: ${entityType} - $${currentCharges}`);
+                showToast(`✅ Saved successfully`);
                 await renderWaterTable();
             } else {
                 alert('Error: ' + (result.error || 'Unknown error'));
@@ -729,7 +725,6 @@
         }
     }
     
-    // Delete a bill
     async function deleteBill(billId) {
         if (!confirm('Delete this water bill permanently?')) return;
         try {
@@ -746,7 +741,6 @@
         }
     }
 
-    // Main render function
     async function renderWaterTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -761,10 +755,8 @@
         
         let allRows = buildAllEntityRows();
         
-        // Apply filters
         const entityFilter = document.getElementById('entityTypeFilter').value;
         const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
-        const statusFilter = document.getElementById('statusFilter').value;
         
         let filteredRows = allRows.filter(row => {
             if (entityFilter !== 'all' && row.entityType !== entityFilter) return false;
@@ -773,7 +765,6 @@
             return true;
         });
         
-        // Separate schools and departments for clustered display
         const schoolsList = [];
         const departmentsList = [];
         
@@ -793,7 +784,7 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        // Group schools by cluster (same as Schools tab)
+        // Group schools by cluster
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -803,7 +794,6 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
-        // Sort clusters numerically if possible
         const sortedClusters = Array.from(schoolsByCluster.keys()).sort((a, b) => {
             if (a === 'Unassigned') return 1;
             if (b === 'Unassigned') return -1;
@@ -816,11 +806,8 @@
         // Render Schools grouped by cluster
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
-            
-            // Sort schools within cluster by their sequence number (original order from schools tab)
             clusterSchools.sort((a, b) => a.seqNumber - b.seqNumber);
             
-            // Add cluster separator
             const separatorRow = document.createElement('tr');
             separatorRow.className = 'cluster-separator';
             separatorRow.innerHTML = `
@@ -829,7 +816,7 @@
                         <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
                         <span class="cluster-count">${clusterSchools.length} water account${clusterSchools.length > 1 ? 's' : ''}</span>
                     </div>
-                 </td>
+                </td>
             `;
             tbody.appendChild(separatorRow);
             
@@ -838,7 +825,7 @@
             }
         }
         
-        // Render Departments (if any)
+        // Render Departments
         if (departmentsList.length > 0) {
             const deptSeparator = document.createElement('tr');
             deptSeparator.className = 'cluster-separator';
@@ -848,11 +835,10 @@
                         <span>🏛️ DEPARTMENTS</span>
                         <span class="cluster-count">${departmentsList.length} water account${departmentsList.length > 1 ? 's' : ''}</span>
                     </div>
-                 </td>
+                </td>
             `;
             tbody.appendChild(deptSeparator);
             
-            // Departments are already sorted by ID (matches Departments tab order)
             departmentsList.sort((a, b) => a.seqNumber - b.seqNumber);
             
             for (const row of departmentsList) {
@@ -901,11 +887,6 @@
         } else if (totalDue === 0 && !existing) {
             statusText = 'Not entered';
         }
-        
-        // Apply status filter
-        const statusFilter = document.getElementById('statusFilter').value;
-        if (statusFilter === 'paid' && statusText !== 'Paid') return;
-        if (statusFilter === 'pending' && (statusText === 'Paid' || statusText === 'Not entered')) return;
         
         const tr = document.createElement('tr');
         tr.setAttribute('data-entity-type', row.entityType);
@@ -969,4 +950,4 @@
     });
 </script>
 </body>
-</html><
+</html>
