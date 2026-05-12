@@ -448,7 +448,7 @@
     </div>
 
     <div class="info-note">
-        ✅ <strong>Direct Entry Mode</strong> — All schools & departments are listed in order (same as in Schools/Departments tabs). 
+        ✅ <strong>Direct Entry Mode</strong> — Schools and Departments are displayed in the SAME ORDER as shown in Schools and Departments tabs (sorted by sequence number / database ID). 
         Select month/year, enter consumption and charges, then click <strong>Save</strong> for each row.
     </div>
 
@@ -485,7 +485,7 @@
             <thead>
                 <tr>
                     <th width="50">No.</th>
-                    <th width="200">Entity Name</th>
+                    <th width="220">Entity Name</th>
                     <th width="100">Type</th>
                     <th width="180">Account / Meter</th>
                     <th width="100">Consumption (m³)</th>
@@ -507,8 +507,6 @@
     // ==================== GLOBAL STATE ====================
     let allSchools = [];
     let allDepartments = [];
-    let schoolSequenceMap = new Map();     // school id -> sequence number (from schools tab)
-    let departmentSequenceMap = new Map(); // department id -> sequence number (from departments tab)
     let existingBills = [];
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
@@ -528,7 +526,7 @@
         }
     }
 
-    // Load all schools and departments
+    // Load all schools and departments and sort by ID (matches the order in Schools/Departments tabs)
     async function loadAllEntities() {
         try {
             const [schoolsRes, deptsRes] = await Promise.all([
@@ -537,29 +535,13 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                // Assign sequence numbers based on order in the schools array (maintained by backend)
-                allSchools.forEach((school, idx) => {
-                    schoolSequenceMap.set(school.id, idx + 1);
-                });
-                // Sort schools by their sequence number (No. from schools tab)
-                allSchools.sort((a, b) => {
-                    const seqA = schoolSequenceMap.get(a.id) || a.id;
-                    const seqB = schoolSequenceMap.get(b.id) || b.id;
-                    return seqA - seqB;
-                });
+                // Sort schools by ID (ascending) - this matches the order in Schools tab
+                allSchools.sort((a, b) => a.id - b.id);
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                // Assign sequence numbers based on order in the departments array
-                allDepartments.forEach((dept, idx) => {
-                    departmentSequenceMap.set(dept.id, idx + 1);
-                });
-                // Sort departments by their sequence number (No. from departments tab)
-                allDepartments.sort((a, b) => {
-                    const seqA = departmentSequenceMap.get(a.id) || a.id;
-                    const seqB = departmentSequenceMap.get(b.id) || b.id;
-                    return seqA - seqB;
-                });
+                // Sort departments by ID (ascending) - this matches the order in Departments tab
+                allDepartments.sort((a, b) => a.id - b.id);
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) {
@@ -607,14 +589,16 @@
     }
 
     // Build flat list of rows: each account+meter becomes a row
+    // Schools and Departments are already sorted by ID (matches tabs order)
     function buildAllEntityRows() {
         const rows = [];
         
-        // Process Schools (already sorted by sequence number)
-        for (const school of allSchools) {
+        // Process Schools (already sorted by ID)
+        for (let idx = 0; idx < allSchools.length; idx++) {
+            const school = allSchools[idx];
             const accounts = extractWaterAccounts(school, 'school');
             const displayName = school.name || `School #${school.id}`;
-            const schoolSeq = schoolSequenceMap.get(school.id) || school.id;
+            const schoolSeq = idx + 1; // Sequence number based on order (1, 2, 3...)
             
             for (const acc of accounts) {
                 const meters = (acc.meters && acc.meters.length) ? acc.meters : [{ meterNumber: '—' }];
@@ -632,11 +616,12 @@
             }
         }
         
-        // Process Departments (already sorted by sequence number)
-        for (const dept of allDepartments) {
+        // Process Departments (already sorted by ID)
+        for (let idx = 0; idx < allDepartments.length; idx++) {
+            const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept, 'department');
             const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-            const deptSeq = departmentSequenceMap.get(dept.id) || dept.id;
+            const deptSeq = idx + 1; // Sequence number based on order (1, 2, 3...)
             
             for (const acc of accounts) {
                 const meters = (acc.meters && acc.meters.length) ? acc.meters : [{ meterNumber: '—' }];
@@ -727,7 +712,7 @@
             
             const resp = await fetch(url, {
                 method: method,
-                headers: { 'Content-Type': application/json },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(billData)
             });
             
@@ -788,28 +773,17 @@
             return true;
         });
         
-        // Group schools by cluster for better organization (like schools tab)
-        const schoolsByCluster = new Map();
+        // Separate schools and departments for clustered display
+        const schoolsList = [];
         const departmentsList = [];
         
         for (const row of filteredRows) {
-            if (row.entityType === 'school' && row.clusterNumber) {
-                if (!schoolsByCluster.has(row.clusterNumber)) {
-                    schoolsByCluster.set(row.clusterNumber, []);
-                }
-                schoolsByCluster.get(row.clusterNumber).push(row);
-            } else if (row.entityType === 'department') {
+            if (row.entityType === 'school') {
+                schoolsList.push(row);
+            } else {
                 departmentsList.push(row);
             }
         }
-        
-        // Sort clusters numerically
-        const sortedClusters = Array.from(schoolsByCluster.keys()).sort((a, b) => {
-            const numA = parseInt(a);
-            const numB = parseInt(b);
-            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-            return String(a).localeCompare(String(b));
-        });
         
         if (filteredRows.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="no-data">No schools/departments with water accounts found.</td></tr>';
@@ -819,32 +793,52 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
+        // Group schools by cluster (same as Schools tab)
+        const schoolsByCluster = new Map();
+        for (const school of schoolsList) {
+            const cluster = school.clusterNumber || 'Unassigned';
+            if (!schoolsByCluster.has(cluster)) {
+                schoolsByCluster.set(cluster, []);
+            }
+            schoolsByCluster.get(cluster).push(school);
+        }
+        
+        // Sort clusters numerically if possible
+        const sortedClusters = Array.from(schoolsByCluster.keys()).sort((a, b) => {
+            if (a === 'Unassigned') return 1;
+            if (b === 'Unassigned') return -1;
+            const numA = parseInt(a);
+            const numB = parseInt(b);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return String(a).localeCompare(String(b));
+        });
+        
         // Render Schools grouped by cluster
         for (const cluster of sortedClusters) {
-            const clusterRows = schoolsByCluster.get(cluster);
+            const clusterSchools = schoolsByCluster.get(cluster);
             
-            // Add cluster separator row
+            // Sort schools within cluster by their sequence number (original order from schools tab)
+            clusterSchools.sort((a, b) => a.seqNumber - b.seqNumber);
+            
+            // Add cluster separator
             const separatorRow = document.createElement('tr');
             separatorRow.className = 'cluster-separator';
             separatorRow.innerHTML = `
                 <td colspan="10">
                     <div class="cluster-info">
-                        <span>🏫 CLUSTER ${cluster}</span>
-                        <span class="cluster-count">${clusterRows.length} water account${clusterRows.length > 1 ? 's' : ''}</span>
+                        <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
+                        <span class="cluster-count">${clusterSchools.length} water account${clusterSchools.length > 1 ? 's' : ''}</span>
                     </div>
                  </td>
             `;
             tbody.appendChild(separatorRow);
             
-            // Sort rows within cluster by sequence number
-            clusterRows.sort((a, b) => a.seqNumber - b.seqNumber);
-            
-            for (const row of clusterRows) {
+            for (const row of clusterSchools) {
                 await renderSingleRow(tbody, row, month, year, globalSerial++);
             }
         }
         
-        // Render Departments (grouped separately)
+        // Render Departments (if any)
         if (departmentsList.length > 0) {
             const deptSeparator = document.createElement('tr');
             deptSeparator.className = 'cluster-separator';
@@ -858,6 +852,7 @@
             `;
             tbody.appendChild(deptSeparator);
             
+            // Departments are already sorted by ID (matches Departments tab order)
             departmentsList.sort((a, b) => a.seqNumber - b.seqNumber);
             
             for (const row of departmentsList) {
@@ -974,4 +969,4 @@
     });
 </script>
 </body>
-</html>
+</html><
