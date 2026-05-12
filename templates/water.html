@@ -2,6 +2,772 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Water Bills - Simplified Entry</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background: #f0f4f8;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* navbar */
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 64px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .logo {
+            font-weight: 700;
+            font-size: 1.4rem;
+            color: #1e4a76;
+        }
+        .nav-tabs {
+            display: flex;
+            list-style: none;
+            gap: 8px;
+        }
+        .nav-tabs a {
+            text-decoration: none;
+            padding: 8px 18px;
+            border-radius: 30px;
+            color: #2c3e66;
+            font-weight: 500;
+        }
+        .nav-tabs a.active, .nav-tabs a:hover {
+            background: #1e4a76;
+            color: white;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 24px auto;
+            padding: 0 20px;
+        }
+
+        /* header + global controls */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+        .page-title {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #0b2b44;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .water-icon {
+            background: #00a6c4;
+            border-radius: 40px;
+            padding: 6px 14px;
+            color: white;
+            font-size: 0.9rem;
+        }
+
+        .controls-card {
+            background: white;
+            border-radius: 24px;
+            padding: 16px 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            align-items: flex-end;
+            border: 1px solid #e2edf2;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 150px;
+        }
+        .filter-group label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #4b6f8c;
+        }
+        select, .date-sim {
+            padding: 10px 14px;
+            border-radius: 48px;
+            border: 1px solid #cbdbe2;
+            background: white;
+            font-size: 0.9rem;
+            outline: none;
+        }
+        .btn {
+            border: none;
+            padding: 10px 22px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-primary {
+            background: #1e6f5c;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0e5a48;
+            transform: scale(0.98);
+        }
+        .btn-outline {
+            background: white;
+            border: 1px solid #b9cedb;
+        }
+        .btn-sm {
+            padding: 6px 14px;
+            font-size: 0.8rem;
+        }
+
+        /* main table */
+        .table-wrapper {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.03);
+            overflow-x: auto;
+            border: 1px solid #e9eef3;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1100px;
+        }
+        .data-table th {
+            background: #f8fafd;
+            padding: 16px 12px;
+            font-weight: 600;
+            color: #1e405e;
+            border-bottom: 2px solid #dee4ec;
+            text-align: left;
+        }
+        .data-table td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #eef2f8;
+            vertical-align: middle;
+        }
+        .entity-badge {
+            background: #eef2ff;
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .school-bg { background: #e0f2fe; color: #0369a1; }
+        .dept-bg { background: #f1e6ff; color: #6b21a5; }
+
+        /* inline bill row */
+        .inline-bill-row {
+            background: #fefce8;
+            border-top: 2px solid #facc15;
+        }
+        .inline-bill-row td {
+            padding: 12px 8px;
+        }
+        .bill-input-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .bill-input-group input, .bill-input-group select {
+            padding: 8px 12px;
+            border-radius: 28px;
+            border: 1px solid #cfdee9;
+            background: white;
+            min-width: 110px;
+        }
+        .meter-note {
+            font-size: 0.75rem;
+            color: #4b5563;
+        }
+        .action-icons {
+            display: flex;
+            gap: 8px;
+        }
+        .save-icon {
+            background: #289672;
+            color: white;
+            border-radius: 30px;
+            padding: 6px 16px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+        .cancel-icon {
+            background: #afc1cf;
+            border-radius: 30px;
+            padding: 6px 16px;
+            cursor: pointer;
+        }
+        .edit-link, .delete-link {
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.8rem;
+            margin-right: 10px;
+            text-decoration: underline;
+        }
+        .edit-link { color: #2c7da0; }
+        .delete-link { color: #bc5a2c; }
+
+        .status-paid {
+            background: #dff9e6;
+            color: #1f6e43;
+            padding: 4px 10px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .status-pending {
+            background: #fff1dd;
+            color: #b45309;
+        }
+        .empty-row td {
+            text-align: center;
+            padding: 40px;
+            color: #7e8b9c;
+        }
+        .text-muted { color: #6f8eab; font-size: 0.75rem; }
+        .amount-field {
+            font-weight: 600;
+            color: #0f3b2c;
+        }
+        @media (max-width: 700px) {
+            .controls-card { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar">
+    <div class="logo">💧 Utility Manager</div>
+    <ul class="nav-tabs">
+        <li><a href="/dashboard">Dashboard</a></li>
+        <li><a href="/departments">Departments</a></li>
+        <li><a href="/schools">Schools</a></li>
+        <li><a href="/water" class="active">Water</a></li>
+        <li><a href="/electricity">Electricity</a></li>
+        <li><a href="/telephone">Telephone</a></li>
+        <li><a href="/reports">Reports</a></li>
+    </ul>
+</nav>
+
+<div class="container">
+    <div class="page-header">
+        <div class="page-title">
+            <span>💧 Water Bills</span>
+            <span class="water-icon">fast entry</span>
+        </div>
+        <div>
+            <button id="globalAddBtn" class="btn btn-primary">+ New bill row (monthly)</button>
+        </div>
+    </div>
+
+    <!-- quick filters & month preset -->
+    <div class="controls-card">
+        <div class="filter-group">
+            <label>📌 Entity type</label>
+            <select id="filterEntityType">
+                <option value="all">All</option>
+                <option value="school">Schools</option>
+                <option value="department">Departments</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>🏫 School / Dept</label>
+            <select id="filterSpecificEntity">
+                <option value="all">All entities</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>📅 Bill month (for new entry)</label>
+            <select id="bulkMonthSelect">
+                <option value="">-- select month --</option>
+                <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+                <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+                <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+                <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>🗓️ Year</label>
+            <input type="number" id="bulkYearInput" value="2025" style="width:90px; border-radius:40px;">
+        </div>
+        <div class="filter-group">
+            <label>🔍 Search (entity/account)</label>
+            <input type="text" id="searchInput" placeholder="name / meter ..." style="border-radius:40px;">
+        </div>
+        <button id="applyFiltersBtn" class="btn-outline btn-sm">⟳ Refresh</button>
+    </div>
+
+    <div class="table-wrapper">
+        <table class="data-table" id="mainWaterTable">
+            <thead>
+                <tr>
+                    <th>#</th><th>Entity</th><th>Type</th><th>Account / Meter</th>
+                    <th>Current Charges ($)</th><th>Consumption (m³)</th><th>Period</th><th>Status</th><th>Actions</th>
+                </tr>
+                </thead>
+                <tbody id="waterBillsTbody">
+                    <tr class="empty-row"><td colspan="9">Loading data...</td></tr>
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // ---------- GLOBALS ----------
+    let allBills = [];        // all water bills from API
+    let allSchools = [];
+    let allDepartments = [];
+    let activeInlineRow = null;   // entity id that is showing inline add form
+    let currentFilter = { entityType: 'all', specificId: 'all', search: '', year: 2025, month: '' };
+    
+    // Helper: fetch schools & departments & bills
+    async function fetchMasterData() {
+        try {
+            const [schoolsRes, deptsRes, billsRes] = await Promise.all([
+                fetch('/api/schools').then(r => r.json()),
+                fetch('/api/departments').then(r => r.json()),
+                fetch('/api/utility-bills?utility_type=water').then(r => r.json())
+            ]);
+            allSchools = schoolsRes;
+            allDepartments = deptsRes;
+            allBills = billsRes.map(b => ({ ...b, entity_type: b.entity_type, entity_id: b.entity_id }));
+            // parse water accounts & enrich entity info
+            return true;
+        } catch(e) { console.warn(e); return false; }
+    }
+
+    // get water accounts list for entity (school/dept) -> returns [{accountNumber, meters:[]}]
+    function getWaterAccountsForEntity(type, id) {
+        let entity = null;
+        if (type === 'school') entity = allSchools.find(s => s.id == id);
+        else entity = allDepartments.find(d => d.id == id);
+        if (!entity) return [];
+        let rawAccounts = entity.water_accounts;
+        if (!rawAccounts) return [];
+        try {
+            let accounts = typeof rawAccounts === 'string' ? JSON.parse(rawAccounts) : rawAccounts;
+            if (!Array.isArray(accounts)) accounts = [];
+            return accounts;
+        } catch(e) { return []; }
+    }
+
+    // get the display name for entity
+    function getEntityName(type, id) {
+        if (type === 'school') {
+            let s = allSchools.find(sc => sc.id == id);
+            return s ? s.name : `School ${id}`;
+        } else {
+            let d = allDepartments.find(dp => dp.id == id);
+            return d ? (d.unit_name || d.department_name || `Dept ${id}`) : `Department ${id}`;
+        }
+    }
+
+    // retrieve all possible entities (schools + departments) with their water account info
+    function getAllEntitiesWithWater() {
+        let entities = [];
+        allSchools.forEach(school => {
+            let accounts = getWaterAccountsForEntity('school', school.id);
+            if (accounts.length === 0) return;
+            entities.push({
+                id: school.id,
+                type: 'school',
+                name: school.name,
+                accounts: accounts
+            });
+        });
+        allDepartments.forEach(dept => {
+            let accounts = getWaterAccountsForEntity('department', dept.id);
+            if (accounts.length === 0) return;
+            let displayName = dept.unit_name || dept.department_name || dept.name || `Dept ${dept.id}`;
+            entities.push({
+                id: dept.id,
+                type: 'department',
+                name: displayName,
+                accounts: accounts
+            });
+        });
+        return entities;
+    }
+
+    // combine bills with entity info and latest month filter
+    function getCombinedBillsData() {
+        let billsMap = new Map(); // key: entityType|entityId|account|meter => latest bill for period? we just use existing bills
+        // but for display we need each existing bill row + we can inline add new month
+        
+        // create flat list of existing bills
+        let enriched = allBills.map(bill => {
+            let entityName = getEntityName(bill.entity_type, bill.entity_id);
+            let accountNum = bill.account_number || '—';
+            let meterNum = bill.meter_number || '—';
+            let periodStr = `${bill.bill_month || bill.month}/${bill.bill_year || bill.year}`;
+            let status = 'pending';
+            let totalDue = (bill.current_charges||0) + (bill.late_charges||0) + (bill.unsettled_charges||0);
+            if (bill.amount_paid >= totalDue && totalDue>0) status = 'paid';
+            else if (bill.late_charges > 0) status = 'overdue';
+            else status = 'pending';
+            return {
+                id: bill.id,
+                entity_type: bill.entity_type,
+                entity_id: bill.entity_id,
+                entityName: entityName,
+                account_number: accountNum,
+                meter_number: meterNum,
+                current_charges: bill.current_charges || 0,
+                consumption: bill.consumption_m3 || 0,
+                month: bill.bill_month || bill.month,
+                year: bill.bill_year || bill.year,
+                period: periodStr,
+                statusText: status,
+                statusClass: status === 'paid' ? 'status-paid' : (status === 'overdue' ? 'status-pending' : 'status-pending'),
+                rawBill: bill
+            };
+        });
+        return enriched;
+    }
+
+    // render main table + handle inline add row for specific entity/month
+    function renderTable() {
+        let combinedBills = getCombinedBillsData();
+        // filters
+        let filtered = combinedBills;
+        if (currentFilter.entityType !== 'all') {
+            filtered = filtered.filter(b => b.entity_type === currentFilter.entityType);
+        }
+        if (currentFilter.specificId !== 'all') {
+            filtered = filtered.filter(b => b.entity_id == currentFilter.specificId);
+        }
+        if (currentFilter.search.trim()) {
+            let kw = currentFilter.search.toLowerCase();
+            filtered = filtered.filter(b => b.entityName.toLowerCase().includes(kw) || b.account_number.toLowerCase().includes(kw) || b.meter_number.toLowerCase().includes(kw));
+        }
+        if (currentFilter.year) {
+            filtered = filtered.filter(b => b.year == currentFilter.year);
+        }
+        if (currentFilter.month) {
+            filtered = filtered.filter(b => b.month == currentFilter.month);
+        }
+        // sort by entity name then year-month desc
+        filtered.sort((a,b) => a.entityName.localeCompare(b.entityName) || (b.year*12 + b.month) - (a.year*12 + a.month));
+        
+        const tbody = document.getElementById('waterBillsTbody');
+        tbody.innerHTML = '';
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="9">📭 No water bills found. Use "New bill row" button to add.</td></tr>';
+            return;
+        }
+        
+        let lastEntityKey = '';
+        filtered.forEach((bill, idx) => {
+            const row = document.createElement('tr');
+            const entityUnique = `${bill.entity_type}_${bill.entity_id}`;
+            const showSeparator = (lastEntityKey !== entityUnique);
+            lastEntityKey = entityUnique;
+            
+            row.innerHTML = `
+                <td style="font-weight:500;">${idx+1}</td>
+                <td><strong>${bill.entityName}</strong> ${showSeparator ? '<span class="entity-badge school-bg" style="margin-left:6px;">📌</span>' : ''}</td>
+                <td><span class="entity-badge ${bill.entity_type==='school'?'school-bg':'dept-bg'}">${bill.entity_type==='school'?'🏫 School':'🏛️ Dept'}</span></td>
+                <td><div><span class="text-muted">Account:</span> ${bill.account_number}<br><span class="text-muted">Meter:</span> ${bill.meter_number}</div></td>
+                <td class="amount-field">$${bill.current_charges.toFixed(2)}</td>
+                <td>${bill.consumption} m³</td>
+                <td><span class="month-badge" style="background:#eef2fa; padding:4px 10px; border-radius:24px;">${bill.period}</span></td>
+                <td><span class="${bill.statusClass}" style="padding:4px 12px;">${bill.statusText === 'paid' ? '✅ Paid' : (bill.statusText==='overdue' ? '⚠️ Overdue' : '⏳ Pending')}</span></td>
+                <td class="action-icons">
+                    <span class="edit-link" data-id="${bill.id}">✏️ Edit</span>
+                    <span class="delete-link" data-id="${bill.id}">🗑️ Del</span>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        // attach edit/delete events
+        document.querySelectorAll('.edit-link').forEach(el => {
+            el.addEventListener('click', (e) => {
+                let bid = parseInt(el.getAttribute('data-id'));
+                editExistingBill(bid);
+            });
+        });
+        document.querySelectorAll('.delete-link').forEach(el => {
+            el.addEventListener('click', async (e) => {
+                let bid = parseInt(el.getAttribute('data-id'));
+                if(confirm('Delete this water bill?')){
+                    await fetch(`/api/utility-bills/${bid}`, { method:'DELETE' });
+                    await refreshAll();
+                }
+            });
+        });
+    }
+    
+    // Show inline row under specific entity for a chosen month/year
+    function showInlineAdderForEntity(entityType, entityId, month, year) {
+        // close any existing inline row
+        if (activeInlineRow) removeInlineRow();
+        const entityName = getEntityName(entityType, entityId);
+        const accounts = getWaterAccountsForEntity(entityType, entityId);
+        if (!accounts.length) {
+            alert(`❌ No water accounts configured for ${entityName}. Please add water accounts in Schools/Departments tab first.`);
+            return;
+        }
+        // find position in table to insert after that entity's rows? we will insert before first row of that entity? Simpler: add fixed below header via DOM
+        const tbody = document.getElementById('waterBillsTbody');
+        const firstRowOfEntity = findFirstRowOfEntity(entityType, entityId);
+        if (!firstRowOfEntity) {
+            // just prepend
+            const newRow = createInlineFormRow(entityType, entityId, entityName, accounts, month, year);
+            tbody.prepend(newRow);
+        } else {
+            const newRow = createInlineFormRow(entityType, entityId, entityName, accounts, month, year);
+            firstRowOfEntity.parentNode.insertBefore(newRow, firstRowOfEntity);
+        }
+        activeInlineRow = { entityType, entityId };
+    }
+    
+    function findFirstRowOfEntity(entityType, entityId) {
+        const rows = document.querySelectorAll('#waterBillsTbody tr');
+        for(let row of rows) {
+            if(row.classList.contains('inline-add-row')) continue;
+            let secondCell = row.cells[1];
+            if(secondCell) {
+                let nameCell = secondCell.innerText;
+                let entityNameExpected = getEntityName(entityType, entityId);
+                if(nameCell.includes(entityNameExpected)) return row;
+            }
+        }
+        return null;
+    }
+    
+    function createInlineFormRow(entityType, entityId, entityName, accounts, presetMonth, presetYear) {
+        const tr = document.createElement('tr');
+        tr.classList.add('inline-add-row');
+        tr.style.background = '#fff7e5';
+        const firstAccount = accounts[0];
+        const defaultAccountNumber = firstAccount.accountNumber;
+        const metersList = firstAccount.meters || [];
+        // Build meter options
+        let meterOptions = '<option value="">-- no meter --</option>';
+        metersList.forEach(m => { meterOptions += `<option value="${escapeHtml(m.meterNumber)}">${escapeHtml(m.meterNumber)}${m.location ? ' ('+m.location+')' : ''}</option>`; });
+        
+        tr.innerHTML = `
+            <td colspan="9" style="padding:12px 20px;">
+                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:12px;">
+                    <div><strong>➕ New bill for ${escapeHtml(entityName)}</strong></div>
+                    <select id="inline_accountSelect" style="border-radius:40px; padding:6px 12px;">
+                        ${accounts.map(acc => `<option value="${escapeHtml(acc.accountNumber)}" ${acc.accountNumber === defaultAccountNumber ? 'selected' : ''}>📄 ${escapeHtml(acc.accountNumber)}</option>`).join('')}
+                    </select>
+                    <select id="inline_meterSelect" style="border-radius:40px; padding:6px 12px;">
+                        ${meterOptions}
+                    </select>
+                    <input type="number" id="inline_currentCharges" placeholder="Amount $" step="0.01" style="width:130px; border-radius:40px; padding:8px;">
+                    <input type="number" id="inline_consumption" placeholder="m³" step="0.01" style="width:100px; border-radius:40px;">
+                    <span style="display:flex; gap:5px;">
+                        <select id="inline_monthSelect" style="border-radius:40px;">
+                            ${Array.from({length:12}, (_,i)=> `<option value="${i+1}" ${(presetMonth==i+1)?'selected':''}>${getMonthName(i+1)}</option>`).join('')}
+                        </select>
+                        <input type="number" id="inline_yearInput" value="${presetYear}" style="width:80px; border-radius:40px;">
+                    </span>
+                    <button id="inlineSaveBtn" class="save-icon">✓ Save</button>
+                    <button id="inlineCancelBtn" class="cancel-icon">✗ Cancel</button>
+                </div>
+                <div class="meter-note" style="margin-top:8px;">💡 Select account & meter, then fill charges + consumption</div>
+            </td>
+        `;
+        // dynamic meter list when account changes
+        const accountSelect = tr.querySelector('#inline_accountSelect');
+        const meterSelect = tr.querySelector('#inline_meterSelect');
+        accountSelect.addEventListener('change', () => {
+            const selectedAccNum = accountSelect.value;
+            const selectedAccount = accounts.find(a => a.accountNumber === selectedAccNum);
+            let meters = selectedAccount?.meters || [];
+            meterSelect.innerHTML = '<option value="">-- no meter --</option>';
+            meters.forEach(m => {
+                meterSelect.innerHTML += `<option value="${escapeHtml(m.meterNumber)}">${escapeHtml(m.meterNumber)}${m.location ? ' ('+m.location+')' : ''}</option>`;
+            });
+        });
+        tr.querySelector('#inlineSaveBtn').addEventListener('click', async () => {
+            const accountNumber = accountSelect.value;
+            const meterNumber = meterSelect.value || '';
+            const currentCharges = parseFloat(tr.querySelector('#inline_currentCharges').value) || 0;
+            const consumption = parseFloat(tr.querySelector('#inline_consumption').value) || 0;
+            const monthVal = parseInt(tr.querySelector('#inline_monthSelect').value);
+            const yearVal = parseInt(tr.querySelector('#inline_yearInput').value);
+            if (!accountNumber) { alert('Please select an account'); return; }
+            if (currentCharges <= 0 && consumption <= 0) { alert('Enter amount or consumption'); return; }
+            const newBill = {
+                utility_type: 'water',
+                entity_type: entityType,
+                entity_id: entityId,
+                account_number: accountNumber,
+                meter_number: meterNumber,
+                current_charges: currentCharges,
+                consumption_m3: consumption,
+                late_charges: 0,
+                unsettled_charges: 0,
+                amount_paid: 0,
+                month: monthVal,
+                year: yearVal,
+                bill_month: monthVal,
+                bill_year: yearVal
+            };
+            try {
+                const res = await fetch('/api/utility-bills', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newBill)
+                });
+                const data = await res.json();
+                if (data.message || res.ok) {
+                    alert('✅ Bill added!');
+                    removeInlineRow();
+                    await refreshAll();
+                } else alert('Error: ' + (data.error || 'unknown'));
+            } catch(e) { alert('Network error'); }
+        });
+        tr.querySelector('#inlineCancelBtn').addEventListener('click', () => removeInlineRow());
+        return tr;
+    }
+    
+    function removeInlineRow() {
+        const existing = document.querySelector('.inline-add-row');
+        if(existing) existing.remove();
+        activeInlineRow = null;
+    }
+    
+    async function editExistingBill(billId) {
+        let bill = allBills.find(b => b.id == billId);
+        if(!bill) return;
+        let newCharges = prompt(`Edit current charges for bill #${billId} (current: $${(bill.current_charges||0).toFixed(2)})`, bill.current_charges);
+        if(newCharges !== null){
+            let newConsumption = prompt(`Edit consumption m³ (current: ${bill.consumption_m3||0})`, bill.consumption_m3);
+            let updateData = {
+                ...bill,
+                current_charges: parseFloat(newCharges) || 0,
+                consumption_m3: parseFloat(newConsumption) || 0
+            };
+            try {
+                const res = await fetch(`/api/utility-bills/${billId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify(updateData)
+                });
+                if(res.ok) await refreshAll();
+                else alert('Update failed');
+            } catch(e){ alert('Error'); }
+        }
+    }
+    
+    async function refreshAll() {
+        await fetchMasterData();
+        renderTable();
+        updateEntityFilterSelect();
+    }
+    
+    function updateEntityFilterSelect() {
+        const specSelect = document.getElementById('filterSpecificEntity');
+        const type = currentFilter.entityType;
+        let entities = [];
+        if (type === 'school') {
+            entities = allSchools.map(s => ({id:s.id, name:s.name}));
+        } else if (type === 'department') {
+            entities = allDepartments.map(d => ({id:d.id, name: d.unit_name || d.department_name || `Dept ${d.id}`}));
+        } else {
+            // both
+            let allEnt = [];
+            allSchools.forEach(s => allEnt.push({id:s.id, typeLabel:'School', name:s.name, val:`school_${s.id}`}));
+            allDepartments.forEach(d => allEnt.push({id:d.id, typeLabel:'Dept', name: d.unit_name || d.department_name || `Dept ${d.id}`, val:`department_${d.id}`}));
+            specSelect.innerHTML = '<option value="all">All entities</option>' + allEnt.map(e => `<option value="${e.val}">${e.typeLabel} - ${e.name}</option>`).join('');
+            return;
+        }
+        specSelect.innerHTML = '<option value="all">All entities</option>' + entities.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+    }
+    
+    function getMonthName(m) { return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]; }
+    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+    
+    // global add: choose entity from dropdown?
+    document.getElementById('globalAddBtn').addEventListener('click', () => {
+        const month = document.getElementById('bulkMonthSelect').value;
+        const year = parseInt(document.getElementById('bulkYearInput').value);
+        if(!month) { alert('Select a month first (top panel)'); return; }
+        // choose entity from entities that have water accounts
+        let entitiesWithWater = getAllEntitiesWithWater();
+        if(entitiesWithWater.length === 0){
+            alert('No schools/departments have water accounts. Please add water accounts first.');
+            return;
+        }
+        // simple prompt: show selection dialog
+        let entityOptions = entitiesWithWater.map(e => `${e.type}::${e.id}::${e.name}`).join(',');
+        let selected = prompt(`Add bill for which entity? (type name or id)\nAvailable:\n${entitiesWithWater.map(e => `- [${e.type}] ${e.name}`).join('\n')}\n\nEnter entity name (partial) or type "school:ID" `);
+        if(!selected) return;
+        let found = null;
+        for(let e of entitiesWithWater){
+            if(e.name.toLowerCase().includes(selected.toLowerCase()) || selected === `${e.type}_${e.id}`){
+                found = e; break;
+            }
+        }
+        if(!found) { alert('Entity not recognized'); return; }
+        showInlineAdderForEntity(found.type, found.id, parseInt(month), year);
+    });
+    
+    // filter handling
+    document.getElementById('applyFiltersBtn').addEventListener('click', () => {
+        let entityType = document.getElementById('filterEntityType').value;
+        let specificRaw = document.getElementById('filterSpecificEntity').value;
+        let searchTerm = document.getElementById('searchInput').value;
+        let yearVal = parseInt(document.getElementById('bulkYearInput').value);
+        let monthVal = document.getElementById('bulkMonthSelect').value;
+        let specificId = 'all';
+        if(specificRaw && specificRaw !== 'all') {
+            if(specificRaw.includes('_')) {
+                let parts = specificRaw.split('_');
+                // ignore for now complex
+            } else specificId = specificRaw;
+        }
+        currentFilter = { entityType, specificId: specificRaw === 'all' ? 'all' : specificRaw, search: searchTerm, year: yearVal, month: monthVal === '' ? '' : parseInt(monthVal) };
+        renderTable();
+    });
+    document.getElementById('filterEntityType').addEventListener('change', () => {
+        updateEntityFilterSelect();
+        document.getElementById('applyFiltersBtn').click();
+    });
+    
+    async function init() {
+        await fetchMasterData();
+        updateEntityFilterSelect();
+        document.getElementById('bulkYearInput').value = new Date().getFullYear();
+        currentFilter = { entityType:'all', specificId:'all', search:'', year: new Date().getFullYear(), month: '' };
+        renderTable();
+    }
+    init();
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Water Utility - Bills Management</title>
     <style>
