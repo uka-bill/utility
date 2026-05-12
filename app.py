@@ -386,8 +386,7 @@ def create_sut_office_expense():
             "amount_spent": float(data.get('amountSpent', 0)),
             "description": data.get('description', ''),
             "remarks": data.get('remarks', ''),
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat()
         }
         
         response = supabase.table("sut_office_expenses").insert(expense_data).execute()
@@ -435,8 +434,7 @@ def update_sut_office_expense(expense_id):
             "year": year,
             "amount_spent": float(data.get('amountSpent', 0)),
             "description": data.get('description', ''),
-            "remarks": data.get('remarks', ''),
-            "updated_at": datetime.now().isoformat()
+            "remarks": data.get('remarks', '')
         }
         
         response = supabase.table("sut_office_expenses").update(expense_data).eq("id", expense_id).execute()
@@ -1009,15 +1007,19 @@ def create_utility_bill():
         current_date = datetime.now()
         
         # Check if a bill already exists for this combination
-        existing_bill = supabase.table("utility_bills").select("*")\
+        query = supabase.table("utility_bills").select("*")\
             .eq("utility_type", data.get('utility_type'))\
             .eq("entity_type", data.get('entity_type'))\
             .eq("entity_id", int(data.get('entity_id')))\
-            .eq("account_number", data.get('account_number', ''))\
-            .eq("meter_number", data.get('meter_number', ''))\
             .eq("month", int(data.get('month', current_date.month)))\
-            .eq("year", int(data.get('year', current_date.year)))\
-            .execute()
+            .eq("year", int(data.get('year', current_date.year)))
+        
+        # Only filter by account number if provided and not placeholder
+        account_number = data.get('account_number', '')
+        if account_number and account_number != '—':
+            query = query.eq("account_number", account_number)
+        
+        existing_bill = query.execute()
         
         if existing_bill.data and len(existing_bill.data) > 0:
             # Update existing bill instead of creating new one
@@ -1026,8 +1028,7 @@ def create_utility_bill():
                 "current_charges": float(data.get('current_charges', 0)),
                 "late_charges": float(data.get('late_charges', 0)),
                 "unsettled_charges": float(data.get('unsettled_charges', 0)),
-                "amount_paid": float(data.get('amount_paid', 0)),
-                "updated_at": datetime.now().isoformat()
+                "amount_paid": float(data.get('amount_paid', 0))
             }
             
             # Add consumption if provided
@@ -1035,6 +1036,10 @@ def create_utility_bill():
                 bill_data["consumption_m3"] = float(data.get('consumption_m3'))
             if data.get('consumption_kwh') is not None:
                 bill_data["consumption_kwh"] = float(data.get('consumption_kwh'))
+            
+            # Update meter number if provided
+            if data.get('meter_number') and data.get('meter_number') != '—':
+                bill_data["meter_number"] = data.get('meter_number')
             
             response = supabase.table("utility_bills").update(bill_data).eq("id", bill_id).execute()
             
@@ -1054,8 +1059,8 @@ def create_utility_bill():
             "entity_id": int(data.get('entity_id')),
             "entity_name": entity_name,
             "account_id": data.get('account_id') if data.get('account_id') else None,
-            "account_number": data.get('account_number', ''),
-            "meter_number": data.get('meter_number', ''),
+            "account_number": data.get('account_number', '') if data.get('account_number', '') != '—' else '',
+            "meter_number": data.get('meter_number', '') if data.get('meter_number', '') != '—' else '',
             "phone_number": data.get('phone_number', ''),
             "current_charges": float(data.get('current_charges', 0)),
             "late_charges": float(data.get('late_charges', 0)),
@@ -1068,8 +1073,7 @@ def create_utility_bill():
             "bill_month": int(data.get('bill_month', current_date.month)),
             "bill_year": int(data.get('bill_year', current_date.year)),
             "bill_image": data.get('bill_image'),
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat()
         }
         
         response = supabase.table("utility_bills").insert(bill_data).execute()
@@ -1103,8 +1107,7 @@ def update_utility_bill(bill_id):
             "current_charges": float(data.get('current_charges', 0)),
             "late_charges": float(data.get('late_charges', 0)),
             "unsettled_charges": float(data.get('unsettled_charges', 0)),
-            "amount_paid": float(data.get('amount_paid', 0)),
-            "updated_at": datetime.now().isoformat()
+            "amount_paid": float(data.get('amount_paid', 0))
         }
         
         # Add consumption if provided
@@ -1114,9 +1117,9 @@ def update_utility_bill(bill_id):
             bill_data["consumption_kwh"] = float(data.get('consumption_kwh'))
         
         # Update account/meter information if provided
-        if data.get('account_number') is not None:
+        if data.get('account_number') is not None and data.get('account_number') != '—':
             bill_data["account_number"] = data.get('account_number')
-        if data.get('meter_number') is not None:
+        if data.get('meter_number') is not None and data.get('meter_number') != '—':
             bill_data["meter_number"] = data.get('meter_number')
         if data.get('phone_number') is not None:
             bill_data["phone_number"] = data.get('phone_number')
