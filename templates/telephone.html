@@ -207,6 +207,7 @@
         .data-table td {
             padding: 12px;
             border-bottom: 1px solid #eee;
+            vertical-align: middle;
         }
 
         .data-table tr:hover {
@@ -374,6 +375,7 @@
         .seq-number {
             font-weight: bold;
             color: var(--primary);
+            text-align: center;
         }
         
         .entity-header {
@@ -437,14 +439,11 @@
             padding-left: 35px;
         }
         
-        .account-row td:first-child {
-            padding-left: 20px;
-        }
-        
         .entity-actions {
             display: flex;
             gap: 8px;
             align-items: center;
+            white-space: nowrap;
         }
         
         .entity-status {
@@ -456,6 +455,10 @@
             font-size: 0.7rem;
             color: #666;
             margin-left: 10px;
+        }
+        
+        .text-center {
+            text-align: center;
         }
     </style>
 </head>
@@ -543,15 +546,15 @@
             <thead>
                 <tr>
                     <th width="50">No.</th>
-                    <th width="220">Entity Name</th>
-                    <th width="100">Type</th>
-                    <th width="150">Account Number</th>
+                    <th width="200">Entity Name</th>
+                    <th width="90">Type</th>
+                    <th width="140">Account Number</th>
                     <th width="130">Phone Number</th>
                     <th width="110">Current Charges ($)</th>
                     <th width="160">Late / Unsettled</th>
                     <th width="100">Amount Paid ($)</th>
                     <th width="200">Notes</th>
-                    <th width="100">Status</th>
+                    <th width="90">Status</th>
                     <th width="140">Actions</th>
                 </tr>
             </thead>
@@ -757,8 +760,14 @@
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         
-        // Get all phone rows under this entity
-        const phoneRows = entityRow.querySelectorAll('.phone-row');
+        // Get all phone rows under this entity (next siblings until next entity row)
+        let phoneRows = [];
+        let nextRow = entityRow.nextElementSibling;
+        while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
+            phoneRows.push(nextRow);
+            nextRow = nextRow.nextElementSibling;
+        }
+        
         const billsToSave = [];
         
         for (const row of phoneRows) {
@@ -861,10 +870,15 @@
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         
-        // Get all phone rows under this entity that have bill IDs
-        const phoneRows = entityRow.querySelectorAll('.phone-row');
-        const billIdsToDelete = [];
+        // Get all phone rows under this entity
+        let phoneRows = [];
+        let nextRow = entityRow.nextElementSibling;
+        while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
+            phoneRows.push(nextRow);
+            nextRow = nextRow.nextElementSibling;
+        }
         
+        const billIdsToDelete = [];
         for (const row of phoneRows) {
             const billId = row.getAttribute('data-bill-id');
             if (billId) {
@@ -1099,12 +1113,12 @@
         let serial = startSerial;
         
         // Calculate overall entity status
-        let allPhoneRowsHtml = '';
+        let phoneRowsData = [];
         let entityTotalDue = 0;
         let entityTotalPaid = 0;
         let hasAnyBill = false;
         
-        // Build phone rows HTML first to calculate totals
+        // Build phone rows data first to calculate totals
         for (const account of entity.accountGroups) {
             let isFirstPhoneForAccount = true;
             
@@ -1123,24 +1137,20 @@
                 
                 const locationDisplay = phone.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(phone.location)}</div>` : '';
                 
-                allPhoneRowsHtml += `
-                    <tr class="phone-row" data-account="${escapeHtml(account.accountNumber)}" data-phone="${escapeHtml(phone.phoneNumber)}" data-bill-id="${phone.billId || ''}">
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td>${isFirstPhoneForAccount ? `<span class="account-number">📋 ${escapeHtml(account.accountNumber)}</span>` : ''}</td>
-                        <td>
-                            <div>📞 ${escapeHtml(phone.phoneNumber)}</div>
-                            ${locationDisplay}
-                        </td>
-                        <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${currentCharges.toFixed(2)}" placeholder="$"></td>
-                        <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input" value="${lateCharges.toFixed(2)}" placeholder="Late"><input type="number" step="0.01" class="inline-input small-input unsettled-input" value="${unsettled.toFixed(2)}" placeholder="Unsettled"></div></td>
-                        <td><input type="number" step="0.01" class="inline-input paid-input" value="${amountPaid.toFixed(2)}" placeholder="Paid"></td>
-                        <td><input type="text" class="inline-input notes-input" value="${escapeHtml(notes)}" placeholder="Notes..."></td>
-                        <td></td>
-                        <td></td>
-                    </tr>
-                `;
+                phoneRowsData.push({
+                    serial: serial,
+                    accountNumber: account.accountNumber,
+                    phoneNumber: phone.phoneNumber,
+                    locationDisplay: locationDisplay,
+                    currentCharges: currentCharges,
+                    lateCharges: lateCharges,
+                    unsettled: unsettled,
+                    amountPaid: amountPaid,
+                    notes: notes,
+                    billId: phone.billId,
+                    isFirstPhoneForAccount: isFirstPhoneForAccount
+                });
+                
                 isFirstPhoneForAccount = false;
                 serial++;
             }
@@ -1173,7 +1183,11 @@
                 <span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>
             </td>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></td>
-            <td colspan="6"></td>
+            <td colspan="2"></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></td>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
@@ -1183,12 +1197,31 @@
         
         tbody.appendChild(entityRow);
         
-        // Insert the phone rows as a temporary div, then move them after the entity row
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = allPhoneRowsHtml;
-        const phoneRows = tempDiv.children;
-        while (phoneRows.length > 0) {
-            tbody.appendChild(phoneRows[0]);
+        // Add phone rows
+        for (const phoneData of phoneRowsData) {
+            const phoneRow = document.createElement('tr');
+            phoneRow.className = 'phone-row';
+            phoneRow.setAttribute('data-account', escapeHtml(phoneData.accountNumber));
+            phoneRow.setAttribute('data-phone', escapeHtml(phoneData.phoneNumber));
+            if (phoneData.billId) phoneRow.setAttribute('data-bill-id', phoneData.billId);
+            
+            phoneRow.innerHTML = `
+                <td class="seq-number">${phoneData.serial}</td>
+                <td></td>
+                <td></td>
+                <td>${phoneData.isFirstPhoneForAccount ? `<span class="account-number">📋 ${escapeHtml(phoneData.accountNumber)}</span>` : ''}</td>
+                <td>
+                    <div>📞 ${escapeHtml(phoneData.phoneNumber)}</div>
+                    ${phoneData.locationDisplay}
+                </td>
+                <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${phoneData.currentCharges.toFixed(2)}" placeholder="$"></td>
+                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input" value="${phoneData.lateCharges.toFixed(2)}" placeholder="Late"><input type="number" step="0.01" class="inline-input small-input unsettled-input" value="${phoneData.unsettled.toFixed(2)}" placeholder="Unsettled"></div></td>
+                <td><input type="number" step="0.01" class="inline-input paid-input" value="${phoneData.amountPaid.toFixed(2)}" placeholder="$"></td>
+                <td><input type="text" class="inline-input notes-input" value="${escapeHtml(phoneData.notes)}" placeholder="Notes..."></td>
+                <td></td>
+                <td></td>
+            `;
+            tbody.appendChild(phoneRow);
         }
         
         return serial;
