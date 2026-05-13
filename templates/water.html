@@ -451,6 +451,11 @@
             color: #666;
             margin-left: 5px;
         }
+        
+        .placeholder-text {
+            color: #999;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -502,6 +507,8 @@
     <div class="info-note">
         ✅ <strong>Direct Entry Mode</strong> — Each school/department has ONE Save button. All water meters under that entity are saved together.
         Select month/year, enter consumption (m³) and charges, add notes, then click the entity's <strong>Save</strong> button.
+        <br>
+        💡 <strong>Note:</strong> Entities without water accounts configured will show "No water account configured" and cannot save until you add water account information in the Schools/Departments tab.
     </div>
 
     <div class="filters-bar">
@@ -515,7 +522,7 @@
         </div>
         <div class="filter-group">
             <label>🔍 Search</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Name or account...">
+            <input type="text" id="searchFilter" class="filter-input" placeholder="Name...">
         </div>
         <div class="filter-group">
             <label>Filter by status</label>
@@ -588,12 +595,10 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                // Sort by ID ascending to match Schools tab display order
                 allSchools.sort((a, b) => a.id - b.id);
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                // Sort by ID ascending to match Departments tab display order
                 allDepartments.sort((a, b) => a.id - b.id);
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
@@ -618,51 +623,81 @@
         }
     }
 
+    // Extract water accounts from a school or department object - returns array of accounts with meters
     function extractWaterAccounts(entity) {
         let accounts = [];
         try {
-            if (entity.water_accounts) {
-                accounts = typeof entity.water_accounts === 'string' ? JSON.parse(entity.water_accounts) : entity.water_accounts;
+            if (entity.water_accounts && typeof entity.water_accounts === 'string') {
+                const parsed = JSON.parse(entity.water_accounts);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    accounts = parsed;
+                }
+            } else if (entity.water_accounts && Array.isArray(entity.water_accounts)) {
+                accounts = entity.water_accounts;
             } else if (entity.water_account) {
-                accounts = [{ accountNumber: entity.water_account, meters: entity.water_meter ? [{ meterNumber: entity.water_meter, location: '', notes: '' }] : [] }];
+                // Legacy single account
+                const meters = [];
+                if (entity.water_meter) {
+                    meters.push({ meterNumber: entity.water_meter, location: '', notes: '' });
+                }
+                accounts = [{ accountNumber: entity.water_account, meters: meters }];
             }
         } catch(e) {
-            accounts = [];
+            console.error("Error parsing water accounts:", e);
         }
         
-        if (accounts.length === 0) {
-            return [];
-        }
+        // If no accounts found, return empty array (will show placeholder)
         return accounts;
     }
 
-    // Build entities in EXACT order as Schools/Departments tabs (by ID ascending)
+    // Build entity list - includes ALL schools and departments (even without accounts)
     function buildEntityList() {
         const entities = [];
         
-        // Add schools in ID order (same as Schools tab)
+        // Add ALL schools (even without water accounts)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractWaterAccounts(school);
-            if (accounts.length === 0) continue;
             
-            const displayName = school.name || `School #${school.id}`;
+            // If no accounts, create a placeholder account
+            let accountGroups = accounts;
+            let hasAccounts = accounts.length > 0;
+            
+            if (!hasAccounts) {
+                accountGroups = [{
+                    accountNumber: '—',
+                    meters: [{ meterNumber: '—', location: '', notes: '' }],
+                    isPlaceholder: true
+                }];
+            }
+            
             entities.push({
                 id: school.id,
-                name: displayName,
+                name: school.name || `School #${school.id}`,
                 type: 'school',
                 typeLabel: '🏫 School',
                 clusterNumber: school.cluster_number || null,
                 displayOrder: idx,
-                accountGroups: accounts
+                accountGroups: accountGroups,
+                hasAccounts: hasAccounts
             });
         }
         
-        // Add departments in ID order (same as Departments tab)
+        // Add ALL departments (even without water accounts)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept);
-            if (accounts.length === 0) continue;
+            
+            let accountGroups = accounts;
+            let hasAccounts = accounts.length > 0;
+            
+            if (!hasAccounts) {
+                accountGroups = [{
+                    accountNumber: '—',
+                    meters: [{ meterNumber: '—', location: '', notes: '' }],
+                    isPlaceholder: true
+                }];
+            }
             
             const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
             entities.push({
@@ -672,7 +707,8 @@
                 typeLabel: '🏛️ Department',
                 clusterNumber: null,
                 displayOrder: allSchools.length + idx,
-                accountGroups: accounts
+                accountGroups: accountGroups,
+                hasAccounts: hasAccounts
             });
         }
         
@@ -703,6 +739,12 @@
         
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
+        const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
+        
+        if (!hasAccounts) {
+            showToast('❌ Cannot save: No water account configured for this entity. Please add water account information in the Schools/Departments tab first.', true);
+            return;
+        }
         
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
@@ -885,19 +927,12 @@
         // Apply filters
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
-            if (searchTerm) {
-                const matchesEntity = entity.name.toLowerCase().includes(searchTerm);
-                const matchesAccount = entity.accountGroups.some(acc => 
-                    acc.accountNumber.toLowerCase().includes(searchTerm) ||
-                    (acc.meters && acc.meters.some(m => m.meterNumber.toLowerCase().includes(searchTerm)))
-                );
-                return matchesEntity || matchesAccount;
-            }
+            if (searchTerm && !entity.name.toLowerCase().includes(searchTerm)) return false;
             return true;
         });
         
         if (filteredEntities.length === 0) {
-            tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No schools/departments with water accounts found.</td></tr>';
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No matching entities found.</td></tr>';
             isLoading = false;
             return;
         }
@@ -905,7 +940,7 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        // Group schools by cluster only for visual separation
+        // Separate schools and departments
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
@@ -928,10 +963,9 @@
             return String(a).localeCompare(String(b));
         });
         
-        // Render Schools grouped by cluster (maintaining ID order within cluster)
+        // Render Schools grouped by cluster
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
-            // Sort by displayOrder (which is based on ID order)
             clusterSchools.sort((a, b) => a.displayOrder - b.displayOrder);
             
             let hasVisibleInCluster = false;
@@ -942,10 +976,10 @@
                 let hasAnyVisible = false;
                 
                 for (const account of entity.accountGroups) {
-                    const meters = account.meters || (account.meterNumber ? [{ meterNumber: account.meterNumber }] : []);
+                    const meters = account.meters || [];
                     const visibleMeters = [];
                     for (const meter of meters) {
-                        const meterNum = meter.meterNumber || account.meterNumber || '—';
+                        const meterNum = meter.meterNumber || '—';
                         const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                         const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
                         const amountPaid = existing?.amount_paid || 0;
@@ -963,7 +997,8 @@
                                 existing: existing,
                                 billId: existing?.id,
                                 totalDue: totalDue,
-                                amountPaid: amountPaid
+                                amountPaid: amountPaid,
+                                isPlaceholder: account.isPlaceholder
                             });
                         }
                     }
@@ -971,7 +1006,8 @@
                         hasAnyVisible = true;
                         visibleAccounts.push({
                             accountNumber: account.accountNumber,
-                            meters: visibleMeters
+                            meters: visibleMeters,
+                            isPlaceholder: account.isPlaceholder
                         });
                     }
                 }
@@ -1003,9 +1039,8 @@
             }
         }
         
-        // Render Departments (maintaining ID order)
+        // Render Departments
         if (departmentsList.length > 0) {
-            // Sort by displayOrder (which is based on ID order)
             departmentsList.sort((a, b) => a.displayOrder - b.displayOrder);
             
             let hasVisibleDepts = false;
@@ -1016,10 +1051,10 @@
                 let hasAnyVisible = false;
                 
                 for (const account of entity.accountGroups) {
-                    const meters = account.meters || (account.meterNumber ? [{ meterNumber: account.meterNumber }] : []);
+                    const meters = account.meters || [];
                     const visibleMeters = [];
                     for (const meter of meters) {
-                        const meterNum = meter.meterNumber || account.meterNumber || '—';
+                        const meterNum = meter.meterNumber || '—';
                         const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                         const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
                         const amountPaid = existing?.amount_paid || 0;
@@ -1037,7 +1072,8 @@
                                 existing: existing,
                                 billId: existing?.id,
                                 totalDue: totalDue,
-                                amountPaid: amountPaid
+                                amountPaid: amountPaid,
+                                isPlaceholder: account.isPlaceholder
                             });
                         }
                     }
@@ -1045,7 +1081,8 @@
                         hasAnyVisible = true;
                         visibleAccounts.push({
                             accountNumber: account.accountNumber,
-                            meters: visibleMeters
+                            meters: visibleMeters,
+                            isPlaceholder: account.isPlaceholder
                         });
                     }
                 }
@@ -1088,23 +1125,32 @@
         let entityTotalDue = 0;
         let entityTotalPaid = 0;
         let hasAnyBill = false;
+        let isPlaceholder = false;
         
         for (const account of entity.accountGroups) {
             let isFirstMeterForAccount = true;
+            if (account.isPlaceholder) isPlaceholder = true;
             
             for (const meter of account.meters) {
                 const existing = meter.existing;
                 const consumption = existing ? (existing.consumption_m3 || 0) : 0;
-                const currentCharges = existing ? (existing.current_charges || 0) : 0;
-                const lateCharges = existing ? (existing.late_charges || 0) : 0;
-                const unsettled = existing ? (existing.unsettled_charges || 0) : 0;
-                const amountPaid = existing ? (existing.amount_paid || 0) : 0;
+                let currentCharges = existing ? (existing.current_charges || 0) : 0;
+                let lateCharges = existing ? (existing.late_charges || 0) : 0;
+                let unsettled = existing ? (existing.unsettled_charges || 0) : 0;
+                let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 const notes = existing ? (existing.notes || meter.notes || '') : (meter.notes || '');
                 
+                // If placeholder, disable inputs
+                const isPlaceholderAccount = account.isPlaceholder || meter.isPlaceholder;
+                const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
+                const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
+                
                 const totalDue = currentCharges + lateCharges + unsettled;
-                entityTotalDue += totalDue;
-                entityTotalPaid += amountPaid;
-                if (existing) hasAnyBill = true;
+                if (!isPlaceholderAccount) {
+                    entityTotalDue += totalDue;
+                    entityTotalPaid += amountPaid;
+                    if (existing) hasAnyBill = true;
+                }
                 
                 const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
                 
@@ -1120,7 +1166,10 @@
                     amountPaid: amountPaid,
                     notes: notes,
                     billId: meter.billId,
-                    isFirstMeterForAccount: isFirstMeterForAccount
+                    isFirstMeterForAccount: isFirstMeterForAccount,
+                    isPlaceholder: isPlaceholderAccount,
+                    disabledAttr: disabledAttr,
+                    placeholderClass: placeholderClass
                 });
                 
                 isFirstMeterForAccount = false;
@@ -1130,14 +1179,18 @@
         
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
-        if (entityTotalDue > 0 && entityTotalPaid >= entityTotalDue) {
-            entityStatusClass = 'status-paid';
-            entityStatusText = 'Paid';
-        } else if (hasAnyBill && entityTotalPaid > 0 && entityTotalPaid < entityTotalDue) {
-            entityStatusClass = 'status-partial';
-            entityStatusText = 'Partial';
-        } else if (!hasAnyBill) {
-            entityStatusText = 'Not entered';
+        if (!isPlaceholder) {
+            if (entityTotalDue > 0 && entityTotalPaid >= entityTotalDue) {
+                entityStatusClass = 'status-paid';
+                entityStatusText = 'Paid';
+            } else if (hasAnyBill && entityTotalPaid > 0 && entityTotalPaid < entityTotalDue) {
+                entityStatusClass = 'status-partial';
+                entityStatusText = 'Partial';
+            } else if (!hasAnyBill) {
+                entityStatusText = 'Not entered';
+            }
+        } else {
+            entityStatusText = 'No account';
         }
         
         const entityRow = document.createElement('tr');
@@ -1145,12 +1198,13 @@
         entityRow.setAttribute('data-entity-type', entity.type);
         entityRow.setAttribute('data-entity-id', entity.id);
         entityRow.setAttribute('data-entity-name', entity.name);
+        entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
             <td class="seq-number">${startSerial}</td>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                <span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>
+                ${!isPlaceholder ? `<span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
             </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
             <td colspan="2"></div>
@@ -1160,8 +1214,8 @@
             <td></div>
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
-                <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
-                ${hasAnyBill ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
+                <button class="btn btn-success btn-sm save-entity-btn" ${isPlaceholder ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>💾 Save All</button>
+                ${hasAnyBill && !isPlaceholder ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
             </div>
         `;
         
@@ -1182,11 +1236,11 @@
                     <div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>
                     ${meterData.locationDisplay}
                 </div>
-                <td><input type="number" step="0.01" class="inline-input consumption-input" value="${meterData.consumption.toFixed(2)}" placeholder="m³"><span class="consumption-unit">m³</span></div>
-                <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${meterData.currentCharges.toFixed(2)}" placeholder="$"></div>
-                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input" value="${meterData.lateCharges.toFixed(2)}" placeholder="Late"><input type="number" step="0.01" class="inline-input small-input unsettled-input" value="${meterData.unsettled.toFixed(2)}" placeholder="Unsettled"></div></div>
-                <td><input type="number" step="0.01" class="inline-input paid-input" value="${meterData.amountPaid.toFixed(2)}" placeholder="$"></div>
-                <td><input type="text" class="inline-input notes-input" value="${escapeHtml(meterData.notes)}" placeholder="Notes..."></div>
+                <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="m³" ${meterData.disabledAttr}><span class="consumption-unit">m³</span></div>
+                <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input ${meterData.placeholderClass}" value="${meterData.lateCharges.toFixed(2)}" placeholder="Late" ${meterData.disabledAttr}><input type="number" step="0.01" class="inline-input small-input unsettled-input ${meterData.placeholderClass}" value="${meterData.unsettled.toFixed(2)}" placeholder="Unsettled" ${meterData.disabledAttr}></div></div>
+                <td><input type="number" step="0.01" class="inline-input paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="text" class="inline-input notes-input ${meterData.placeholderClass}" value="${escapeHtml(meterData.notes)}" placeholder="Notes..." ${meterData.disabledAttr}></div>
                 <td></div>
                 <td></div>
             `;
@@ -1209,7 +1263,7 @@
     function attachGlobalEventListeners() {
         document.getElementById('billsTableBody').addEventListener('click', async (e) => {
             const saveBtn = e.target.closest('.save-entity-btn');
-            if (saveBtn) {
+            if (saveBtn && !saveBtn.disabled) {
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
                     await saveEntityBills(entityRow, currentMonth, currentYear);
