@@ -380,8 +380,7 @@
             text-align: right;
             padding: 10px;
             background: #f8f9fa;
-            border-radius:
-5px;
+            border-radius: 5px;
             margin-bottom: 10px;
             font-size: 0.8rem;
             color: var(--gray);
@@ -501,7 +500,7 @@
     </div>
 
     <div class="info-note">
-        ✅ <strong>Direct Entry Mode</strong> — Each school/department has ONE Save button. All electricity meters under that entity are saved together.
+        ✅ <strong>Direct Entry Mode</strong> — Schools are ordered by ID (same as Schools tab), grouped by cluster. Each school/department has ONE Save button. All electricity meters under that entity are saved together.
         Enter consumption (kWh) and charges for each meter, add notes, then click the entity's <strong>Save</strong> button.
     </div>
 
@@ -589,6 +588,7 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
+                // Sort schools by ID to maintain same order as Schools tab
                 allSchools.sort((a, b) => a.id - b.id);
             }
             if (deptsRes.ok) {
@@ -638,6 +638,7 @@
     function buildGroupedRows() {
         const entities = [];
         
+        // Process Schools - maintain original ID order
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
@@ -672,12 +673,13 @@
                     type: 'school',
                     typeLabel: '🏫 School',
                     clusterNumber: school.cluster_number || null,
-                    seqNumber: idx + 1,
+                    originalIndex: idx,  // Preserve original order
                     accountGroups: accountGroups
                 });
             }
         }
         
+        // Process Departments - maintain original ID order
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
@@ -712,7 +714,7 @@
                     type: 'department',
                     typeLabel: '🏛️ Department',
                     clusterNumber: null,
-                    seqNumber: idx + 1,
+                    originalIndex: idx,
                     accountGroups: accountGroups
                 });
             }
@@ -916,7 +918,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...</div></div>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -927,6 +929,7 @@
         const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
         
+        // Apply filters first
         let filteredEntities = groupedEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
             if (searchTerm) {
@@ -940,8 +943,15 @@
             return true;
         });
         
-        const schoolsList = filteredEntities.filter(e => e.type === 'school');
-        const departmentsList = filteredEntities.filter(e => e.type === 'department');
+        // Separate schools and departments
+        let schoolsList = filteredEntities.filter(e => e.type === 'school');
+        let departmentsList = filteredEntities.filter(e => e.type === 'department');
+        
+        // Sort schools by original ID order (preserve the order from Schools tab)
+        schoolsList.sort((a, b) => a.id - b.id);
+        
+        // Sort departments by original ID order
+        departmentsList.sort((a, b) => a.id - b.id);
         
         if (filteredEntities.length === 0) {
             tbody.innerHTML = '<tr class="no-data-row"><td colspan="12" class="no-data">No schools/departments with electricity accounts found.</div></div>';
@@ -953,6 +963,7 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
+        // Group schools by cluster while preserving ID order within each cluster
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -962,6 +973,7 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
+        // Sort clusters
         const sortedClusters = Array.from(schoolsByCluster.keys()).sort((a, b) => {
             if (a === 'Unassigned') return 1;
             if (b === 'Unassigned') return -1;
@@ -971,8 +983,13 @@
             return String(a).localeCompare(String(b));
         });
         
+        // Render Schools grouped by cluster
         for (const cluster of sortedClusters) {
-            const clusterSchools = schoolsByCluster.get(cluster);
+            let clusterSchools = schoolsByCluster.get(cluster);
+            // Sort schools within cluster by ID to maintain original order
+            clusterSchools.sort((a, b) => a.id - b.id);
+            
+            // Check status filter for each school
             let hasVisibleInCluster = false;
             const visibleClusterEntities = [];
             
@@ -1029,6 +1046,7 @@
             }
         }
         
+        // Render Departments (no clustering, just by ID order)
         if (departmentsList.length > 0) {
             let hasVisibleDepts = false;
             const visibleDeptEntities = [];
