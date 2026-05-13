@@ -250,6 +250,11 @@
             width: 80px;
         }
 
+        .notes-input {
+            width: 180px;
+            text-align: left;
+        }
+
         .account-number {
             font-family: monospace;
             background: #f5f5f5;
@@ -398,6 +403,19 @@
             font-size: 0.9rem;
         }
         
+        .entity-separator {
+            background-color: #f0f7ff;
+            border-top: 1px solid var(--primary);
+            border-bottom: 1px solid var(--primary);
+        }
+        
+        .entity-separator td {
+            padding: 10px 15px;
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 0.9rem;
+        }
+        
         .cluster-info {
             display: flex;
             align-items: center;
@@ -416,6 +434,28 @@
         .loading {
             opacity: 0.6;
             pointer-events: none;
+        }
+        
+        .account-group-row {
+            background-color: #fafafa;
+        }
+        
+        .account-group-row td:first-child {
+            padding-left: 30px;
+        }
+        
+        .account-header {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+        
+        .phone-row {
+            border-left: 3px solid var(--success);
+        }
+        
+        .phone-number-cell {
+            padding-left: 50px !important;
         }
     </style>
 </head>
@@ -466,8 +506,8 @@
     </div>
 
     <div class="info-note">
-        ✅ <strong>Direct Entry Mode</strong> — Schools and Departments are displayed in the SAME ORDER as shown in Schools and Departments tabs. 
-        Select month/year, enter charges, then click <strong>Save</strong> for each row.
+        ✅ <strong>Direct Entry Mode</strong> — Schools and Departments are grouped by entity name, then by account number. 
+        Each phone number appears on its own row. Select month/year, enter charges, add notes if needed, then click <strong>Save</strong> for each row.
     </div>
 
     <div class="filters-bar">
@@ -481,7 +521,7 @@
         </div>
         <div class="filter-group">
             <label>🔍 Search</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Name or account...">
+            <input type="text" id="searchFilter" class="filter-input" placeholder="Name, account or phone...">
         </div>
         <div class="filter-group">
             <label>Filter by status</label>
@@ -505,16 +545,18 @@
                     <th width="50">No.</th>
                     <th width="220">Entity Name</th>
                     <th width="100">Type</th>
-                    <th width="180">Account / Phone Number</th>
+                    <th width="150">Account Number</th>
+                    <th width="130">Phone Number</th>
                     <th width="110">Current Charges ($)</th>
-                    <th width="180">Late / Unsettled</th>
+                    <th width="160">Late / Unsettled</th>
                     <th width="100">Amount Paid ($)</th>
+                    <th width="200">Notes</th>
                     <th width="90">Status</th>
                     <th width="130">Actions</th>
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="9" class="no-data">Loading schools & departments...</td></tr>
+                <tr><td colspan="11" class="no-data">Loading schools & departments...</td></tr>
             </tbody>
         </table>
     </div>
@@ -596,63 +638,99 @@
         }
         
         if (accounts.length === 0) {
-            return [{
-                accountNumber: '—',
-                numbers: [{ phoneNumber: '—' }]
-            }];
+            return [];
         }
         return accounts;
     }
 
-    // Build flat list of rows
-    function buildAllEntityRows() {
-        const rows = [];
+    // Build grouped rows - entity > account > phone numbers
+    function buildGroupedRows() {
+        const entities = [];
         
+        // Process Schools
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractTelephoneAccounts(school);
-            const displayName = school.name || `School #${school.id}`;
-            const schoolSeq = idx + 1;
+            if (accounts.length === 0) continue;
             
+            const displayName = school.name || `School #${school.id}`;
+            const entityKey = `school_${school.id}`;
+            
+            const accountGroups = [];
             for (const acc of accounts) {
-                const numbers = (acc.numbers && acc.numbers.length) ? acc.numbers : [{ phoneNumber: '—' }];
-                for (const number of numbers) {
-                    rows.push({
-                        seqNumber: schoolSeq,
-                        entityType: 'school',
-                        entityId: school.id,
-                        entityName: displayName,
-                        accountNumber: acc.accountNumber || '—',
-                        phoneNumber: number.phoneNumber || '—',
-                        clusterNumber: school.cluster_number || null
+                const numbers = (acc.numbers && acc.numbers.length) ? acc.numbers : [];
+                if (numbers.length === 0) continue;
+                
+                const phoneNumbers = [];
+                for (const num of numbers) {
+                    phoneNumbers.push({
+                        phoneNumber: num.phoneNumber || '—',
+                        location: num.location || '',
+                        notes: num.notes || ''
                     });
                 }
+                
+                accountGroups.push({
+                    accountNumber: acc.accountNumber || '—',
+                    phoneNumbers: phoneNumbers
+                });
+            }
+            
+            if (accountGroups.length > 0) {
+                entities.push({
+                    id: school.id,
+                    name: displayName,
+                    type: 'school',
+                    typeLabel: '🏫 School',
+                    clusterNumber: school.cluster_number || null,
+                    seqNumber: idx + 1,
+                    accountGroups: accountGroups
+                });
             }
         }
         
+        // Process Departments
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractTelephoneAccounts(dept);
-            const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-            const deptSeq = idx + 1;
+            if (accounts.length === 0) continue;
             
+            const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
+            
+            const accountGroups = [];
             for (const acc of accounts) {
-                const numbers = (acc.numbers && acc.numbers.length) ? acc.numbers : [{ phoneNumber: '—' }];
-                for (const number of numbers) {
-                    rows.push({
-                        seqNumber: deptSeq,
-                        entityType: 'department',
-                        entityId: dept.id,
-                        entityName: displayName,
-                        accountNumber: acc.accountNumber || '—',
-                        phoneNumber: number.phoneNumber || '—',
-                        clusterNumber: null
+                const numbers = (acc.numbers && acc.numbers.length) ? acc.numbers : [];
+                if (numbers.length === 0) continue;
+                
+                const phoneNumbers = [];
+                for (const num of numbers) {
+                    phoneNumbers.push({
+                        phoneNumber: num.phoneNumber || '—',
+                        location: num.location || '',
+                        notes: num.notes || ''
                     });
                 }
+                
+                accountGroups.push({
+                    accountNumber: acc.accountNumber || '—',
+                    phoneNumbers: phoneNumbers
+                });
+            }
+            
+            if (accountGroups.length > 0) {
+                entities.push({
+                    id: dept.id,
+                    name: displayName,
+                    type: 'department',
+                    typeLabel: '🏛️ Department',
+                    clusterNumber: null,
+                    seqNumber: idx + 1,
+                    accountGroups: accountGroups
+                });
             }
         }
         
-        return rows;
+        return entities;
     }
 
     function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
@@ -687,11 +765,13 @@
         const lateInput = rowElement.querySelector('.late-input');
         const unsettledInput = rowElement.querySelector('.unsettled-input');
         const paidInput = rowElement.querySelector('.paid-input');
+        const notesInput = rowElement.querySelector('.notes-input');
         
         const currentCharges = parseFloat(currentInput?.value) || 0;
         const lateCharges = parseFloat(lateInput?.value) || 0;
         const unsettledCharges = parseFloat(unsettledInput?.value) || 0;
         const amountPaid = parseFloat(paidInput?.value) || 0;
+        const notes = notesInput?.value || '';
         
         const billData = {
             utility_type: 'telephone',
@@ -707,7 +787,8 @@
             year: year,
             bill_month: month,
             bill_year: year,
-            bill_image: null
+            bill_image: null,
+            notes: notes
         };
         
         isLoading = true;
@@ -792,38 +873,37 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="9" class="no-data">Loading data...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="no-data">Loading data...</tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
         
-        let allRows = buildAllEntityRows();
+        let groupedEntities = buildGroupedRows();
         
         const entityFilter = document.getElementById('entityTypeFilter').value;
         const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
         
-        let filteredRows = allRows.filter(row => {
-            if (entityFilter !== 'all' && row.entityType !== entityFilter) return false;
-            if (searchTerm && !row.entityName.toLowerCase().includes(searchTerm) && 
-                !row.accountNumber.toLowerCase().includes(searchTerm) &&
-                !row.phoneNumber.toLowerCase().includes(searchTerm)) return false;
+        // Apply filters
+        let filteredEntities = groupedEntities.filter(entity => {
+            if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
+            if (searchTerm) {
+                const matchesEntity = entity.name.toLowerCase().includes(searchTerm);
+                const matchesAccount = entity.accountGroups.some(acc => 
+                    acc.accountNumber.toLowerCase().includes(searchTerm) ||
+                    acc.phoneNumbers.some(p => p.phoneNumber.toLowerCase().includes(searchTerm))
+                );
+                return matchesEntity || matchesAccount;
+            }
             return true;
         });
         
-        const schoolsList = [];
-        const departmentsList = [];
+        // Separate schools and departments
+        const schoolsList = filteredEntities.filter(e => e.type === 'school');
+        const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        for (const row of filteredRows) {
-            if (row.entityType === 'school') {
-                schoolsList.push(row);
-            } else {
-                departmentsList.push(row);
-            }
-        }
-        
-        if (filteredRows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="no-data">No schools/departments with telephone accounts found.</td></tr>';
+        if (filteredEntities.length === 0) {
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No schools/departments with telephone accounts found.</td></tr>';
             isLoading = false;
             document.querySelector('.table-wrapper')?.classList.remove('loading');
             return;
@@ -854,84 +934,112 @@
         // Render Schools grouped by cluster
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
-            clusterSchools.sort((a, b) => a.seqNumber - b.seqNumber);
             
-            // Check if any school in this cluster passes status filter
-            let hasVisibleSchools = false;
-            const visibleSchools = [];
-            for (const school of clusterSchools) {
-                const existing = findExistingBill(school.entityType, school.entityId, school.accountNumber, school.phoneNumber, month, year);
-                const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
-                const amountPaid = existing?.amount_paid || 0;
-                let statusText = 'Pending';
-                if (totalDue > 0 && amountPaid >= totalDue) statusText = 'Paid';
-                else if (totalDue === 0 && !existing) statusText = 'Not entered';
-                
-                if (statusFilter === 'all' || 
-                    (statusFilter === 'paid' && statusText === 'Paid') ||
-                    (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
-                    hasVisibleSchools = true;
-                    visibleSchools.push(school);
+            // Check if any school in this cluster has visible phone numbers after status filter
+            let hasVisibleInCluster = false;
+            const visibleClusterEntities = [];
+            
+            for (const entity of clusterSchools) {
+                const visibleAccounts = [];
+                for (const account of entity.accountGroups) {
+                    const visiblePhones = [];
+                    for (const phone of account.phoneNumbers) {
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phone.phoneNumber, month, year);
+                        const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
+                        const amountPaid = existing?.amount_paid || 0;
+                        let statusText = 'Pending';
+                        if (totalDue > 0 && amountPaid >= totalDue) statusText = 'Paid';
+                        else if (totalDue === 0 && !existing) statusText = 'Not entered';
+                        
+                        if (statusFilter === 'all' || 
+                            (statusFilter === 'paid' && statusText === 'Paid') ||
+                            (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
+                            visiblePhones.push({...phone, existing, billId: existing?.id});
+                        }
+                    }
+                    if (visiblePhones.length > 0) {
+                        visibleAccounts.push({...account, phoneNumbers: visiblePhones});
+                    }
+                }
+                if (visibleAccounts.length > 0) {
+                    hasVisibleInCluster = true;
+                    visibleClusterEntities.push({...entity, accountGroups: visibleAccounts});
                 }
             }
             
-            if (hasVisibleSchools && visibleSchools.length > 0) {
+            if (hasVisibleInCluster && visibleClusterEntities.length > 0) {
+                const totalPhones = visibleClusterEntities.reduce((sum, e) => 
+                    sum + e.accountGroups.reduce((s, a) => s + a.phoneNumbers.length, 0), 0);
+                
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
-                    <td colspan="9">
+                    <td colspan="11">
                         <div class="cluster-info">
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
-                            <span class="cluster-count">${visibleSchools.length} telephone account${visibleSchools.length > 1 ? 's' : ''}</span>
+                            <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalPhones} phone number${totalPhones > 1 ? 's' : ''}</span>
                         </div>
                     </td>
                 `;
                 tbody.appendChild(separatorRow);
                 
-                for (const row of visibleSchools) {
-                    await renderSingleRow(tbody, row, month, year, globalSerial++, statusFilter);
+                for (const entity of visibleClusterEntities) {
+                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
                 }
             }
         }
         
         // Render Departments
         if (departmentsList.length > 0) {
-            // Check if any department passes status filter
             let hasVisibleDepts = false;
-            const visibleDepts = [];
-            for (const dept of departmentsList) {
-                const existing = findExistingBill(dept.entityType, dept.entityId, dept.accountNumber, dept.phoneNumber, month, year);
-                const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
-                const amountPaid = existing?.amount_paid || 0;
-                let statusText = 'Pending';
-                if (totalDue > 0 && amountPaid >= totalDue) statusText = 'Paid';
-                else if (totalDue === 0 && !existing) statusText = 'Not entered';
-                
-                if (statusFilter === 'all' || 
-                    (statusFilter === 'paid' && statusText === 'Paid') ||
-                    (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
+            const visibleDeptEntities = [];
+            
+            for (const entity of departmentsList) {
+                const visibleAccounts = [];
+                for (const account of entity.accountGroups) {
+                    const visiblePhones = [];
+                    for (const phone of account.phoneNumbers) {
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phone.phoneNumber, month, year);
+                        const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
+                        const amountPaid = existing?.amount_paid || 0;
+                        let statusText = 'Pending';
+                        if (totalDue > 0 && amountPaid >= totalDue) statusText = 'Paid';
+                        else if (totalDue === 0 && !existing) statusText = 'Not entered';
+                        
+                        if (statusFilter === 'all' || 
+                            (statusFilter === 'paid' && statusText === 'Paid') ||
+                            (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
+                            visiblePhones.push({...phone, existing, billId: existing?.id});
+                        }
+                    }
+                    if (visiblePhones.length > 0) {
+                        visibleAccounts.push({...account, phoneNumbers: visiblePhones});
+                    }
+                }
+                if (visibleAccounts.length > 0) {
                     hasVisibleDepts = true;
-                    visibleDepts.push(dept);
+                    visibleDeptEntities.push({...entity, accountGroups: visibleAccounts});
                 }
             }
             
-            if (hasVisibleDepts && visibleDepts.length > 0) {
+            if (hasVisibleDepts && visibleDeptEntities.length > 0) {
+                const totalPhones = visibleDeptEntities.reduce((sum, e) => 
+                    sum + e.accountGroups.reduce((s, a) => s + a.phoneNumbers.length, 0), 0);
+                
                 const deptSeparator = document.createElement('tr');
                 deptSeparator.className = 'cluster-separator';
                 deptSeparator.innerHTML = `
-                    <td colspan="9">
+                    <td colspan="11">
                         <div class="cluster-info">
                             <span>🏛️ DEPARTMENTS</span>
-                            <span class="cluster-count">${visibleDepts.length} telephone account${visibleDepts.length > 1 ? 's' : ''}</span>
+                            <span class="cluster-count">${visibleDeptEntities.length} entit${visibleDeptEntities.length > 1 ? 'ies' : 'y'}, ${totalPhones} phone number${totalPhones > 1 ? 's' : ''}</span>
                         </div>
                     </td>
                 `;
                 tbody.appendChild(deptSeparator);
                 
-                visibleDepts.sort((a, b) => a.seqNumber - b.seqNumber);
-                
-                for (const row of visibleDepts) {
-                    await renderSingleRow(tbody, row, month, year, globalSerial++, statusFilter);
+                for (const entity of visibleDeptEntities) {
+                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
                 }
             }
         }
@@ -940,63 +1048,81 @@
         document.querySelector('.table-wrapper')?.classList.remove('loading');
     }
     
-    async function renderSingleRow(tbody, row, month, year, serialNumber, statusFilter) {
-        const existing = findExistingBill(row.entityType, row.entityId, row.accountNumber, row.phoneNumber, month, year);
+    async function renderEntity(tbody, entity, month, year, startSerial, statusFilter) {
+        let serial = startSerial;
+        let isFirstRow = true;
         
-        let currentCharges = existing ? (existing.current_charges || 0) : 0;
-        let lateCharges = existing ? (existing.late_charges || 0) : 0;
-        let unsettled = existing ? (existing.unsettled_charges || 0) : 0;
-        let amountPaid = existing ? (existing.amount_paid || 0) : 0;
-        const billId = existing ? existing.id : null;
-        
-        const totalDue = currentCharges + lateCharges + unsettled;
-        let statusClass = 'status-pending';
-        let statusText = 'Pending';
-        if (totalDue > 0 && amountPaid >= totalDue) {
-            statusClass = 'status-paid';
-            statusText = 'Paid';
-        } else if (amountPaid > 0 && amountPaid < totalDue) {
-            statusClass = 'status-partial';
-            statusText = 'Partial';
-        } else if (totalDue === 0 && !existing) {
-            statusText = 'Not entered';
+        for (const account of entity.accountGroups) {
+            let isFirstPhoneForAccount = true;
+            
+            for (const phone of account.phoneNumbers) {
+                const existing = phone.existing;
+                const billId = phone.billId;
+                
+                let currentCharges = existing ? (existing.current_charges || 0) : 0;
+                let lateCharges = existing ? (existing.late_charges || 0) : 0;
+                let unsettled = existing ? (existing.unsettled_charges || 0) : 0;
+                let amountPaid = existing ? (existing.amount_paid || 0) : 0;
+                let notes = existing ? (existing.notes || phone.notes || '') : (phone.notes || '');
+                
+                const totalDue = currentCharges + lateCharges + unsettled;
+                let statusClass = 'status-pending';
+                let statusText = 'Pending';
+                if (totalDue > 0 && amountPaid >= totalDue) {
+                    statusClass = 'status-paid';
+                    statusText = 'Paid';
+                } else if (amountPaid > 0 && amountPaid < totalDue) {
+                    statusClass = 'status-partial';
+                    statusText = 'Partial';
+                } else if (totalDue === 0 && !existing) {
+                    statusText = 'Not entered';
+                }
+                
+                const tr = document.createElement('tr');
+                tr.setAttribute('data-entity-type', entity.type);
+                tr.setAttribute('data-entity-id', entity.id);
+                tr.setAttribute('data-account', account.accountNumber);
+                tr.setAttribute('data-phone', phone.phoneNumber);
+                if (billId) tr.setAttribute('data-bill-id', billId);
+                
+                if (!isFirstRow) {
+                    tr.classList.add('phone-row');
+                }
+                
+                // Build location display if available
+                let locationDisplay = '';
+                if (phone.location) {
+                    locationDisplay = `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(phone.location)}</div>`;
+                }
+                
+                tr.innerHTML = `
+                    <td class="seq-number">${serial}${!isFirstRow ? '' : ''}</td>
+                    <td class="entity-header">${isFirstRow ? escapeHtml(entity.name) : ''}</td>
+                    <td>${isFirstRow ? `<span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span>` : ''}</td>
+                    <td>${isFirstPhoneForAccount ? `<span class="account-number">📋 ${escapeHtml(account.accountNumber)}</span>` : ''}</td>
+                    <td>
+                        <div>📞 ${escapeHtml(phone.phoneNumber)}</div>
+                        ${locationDisplay}
+                    </td>
+                    <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${currentCharges.toFixed(2)}" placeholder="$"></td>
+                    <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input" value="${lateCharges.toFixed(2)}" placeholder="Late"><input type="number" step="0.01" class="inline-input small-input unsettled-input" value="${unsettled.toFixed(2)}" placeholder="Unsettled"></div></td>
+                    <td><input type="number" step="0.01" class="inline-input paid-input" value="${amountPaid.toFixed(2)}" placeholder="Paid"></td>
+                    <td><input type="text" class="inline-input notes-input" value="${escapeHtml(notes)}" placeholder="Notes..."></td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td class="action-buttons">
+                        <button class="btn btn-success btn-sm save-row-btn">💾 Save</button>
+                        ${billId ? '<button class="btn btn-danger btn-sm delete-row-btn">🗑️ Delete</button>' : ''}
+                    </td>
+                `;
+                
+                tbody.appendChild(tr);
+                serial++;
+                isFirstRow = false;
+                isFirstPhoneForAccount = false;
+            }
         }
         
-        // Apply status filter
-        if (statusFilter !== 'all') {
-            if (statusFilter === 'paid' && statusText !== 'Paid') return;
-            if (statusFilter === 'pending' && (statusText === 'Paid' || statusText === 'Not entered')) return;
-        }
-        
-        const tr = document.createElement('tr');
-        tr.setAttribute('data-entity-type', row.entityType);
-        tr.setAttribute('data-entity-id', row.entityId);
-        tr.setAttribute('data-account', row.accountNumber);
-        tr.setAttribute('data-phone', row.phoneNumber);
-        if (billId) tr.setAttribute('data-bill-id', billId);
-        
-        let accountPhoneHtml = `<div><span class="account-number">📋 ${escapeHtml(row.accountNumber)}</span>`;
-        if (row.phoneNumber && row.phoneNumber !== '—') {
-            accountPhoneHtml += `<div class="phone-number">📞 Phone: ${escapeHtml(row.phoneNumber)}</div>`;
-        }
-        accountPhoneHtml += `</div>`;
-        
-        tr.innerHTML = `
-            <td class="seq-number">${serialNumber}</td>
-            <td class="entity-header">${escapeHtml(row.entityName)}</td>
-            <td><span class="badge ${row.entityType === 'school' ? 'badge-school' : 'badge-department'}">${row.entityType === 'school' ? '🏫 School' : '🏛️ Department'}</span></td>
-            <td>${accountPhoneHtml}</td>
-            <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${currentCharges.toFixed(2)}" placeholder="$"></td>
-            <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input" value="${lateCharges.toFixed(2)}" placeholder="Late"><input type="number" step="0.01" class="inline-input small-input unsettled-input" value="${unsettled.toFixed(2)}" placeholder="Unsettled"></div></td>
-            <td><input type="number" step="0.01" class="inline-input paid-input" value="${amountPaid.toFixed(2)}" placeholder="Paid"></td>
-            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-            <td class="action-buttons">
-                <button class="btn btn-success btn-sm save-row-btn">💾 Save</button>
-                ${billId ? '<button class="btn btn-danger btn-sm delete-row-btn">🗑️ Delete</button>' : ''}
-            </td>
-        `;
-        
-        tbody.appendChild(tr);
+        return serial;
     }
     
     function escapeHtml(str) {
@@ -1009,9 +1135,8 @@
         });
     }
     
-    // Attach event listeners using event delegation (more reliable for dynamic content)
+    // Attach event listeners using event delegation
     function attachGlobalEventListeners() {
-        // Save button delegation
         document.getElementById('billsTableBody').addEventListener('click', async (e) => {
             const saveBtn = e.target.closest('.save-row-btn');
             if (saveBtn) {
