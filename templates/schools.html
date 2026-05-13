@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Schools Management - Full Inline Edit</title>
+    <title>Schools Management - Expanded Utility View</title>
     <style>
         :root {
             --primary: #4361ee;
@@ -178,21 +178,24 @@
             background: white;
             border-radius: 24px;
             overflow-x: auto;
+            overflow-y: visible;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
             border: 1px solid var(--border);
+            max-height: 75vh;
+            position: relative;
         }
         
         .data-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.8rem;
-            min-width: 1800px;
+            min-width: 2200px;
         }
         
         .data-table th {
             background: #f8fafd;
             color: var(--dark);
-            padding: 14px 8px;
+            padding: 14px 10px;
             text-align: left;
             font-weight: 600;
             border-bottom: 2px solid var(--border);
@@ -203,7 +206,7 @@
         }
         
         .data-table td {
-            padding: 12px 8px;
+            padding: 12px 10px;
             border-bottom: 1px solid var(--border);
             vertical-align: top;
             background-color: white;
@@ -241,6 +244,7 @@
             display: flex;
             gap: 8px;
             white-space: nowrap;
+            flex-wrap: wrap;
         }
         
         .cluster-separator {
@@ -291,59 +295,125 @@
         .inline-save-btn { background: var(--success); color: white; }
         .inline-cancel-btn { background: var(--gray); color: white; }
         
-        .utility-group {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+        /* Expanded Utility Styles - Vertical scroll per cell */
+        .utility-cell {
+            max-height: 280px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 4px;
         }
         
-        .account-card {
+        .utility-cell::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .utility-cell::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        
+        .utility-cell::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 10px;
+        }
+        
+        .account-block {
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 10px;
+            border-radius: 14px;
+            margin-bottom: 12px;
             background: #fefefe;
-            margin-bottom: 8px;
+            overflow: hidden;
         }
         
         .account-header {
+            background: #f8fafc;
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border);
             display: flex;
             gap: 8px;
             align-items: center;
-            margin-bottom: 8px;
             flex-wrap: wrap;
         }
         
-        .meter-item, .number-item {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-            margin-top: 6px;
-            flex-wrap: wrap;
-            background: #f9f9ff;
-            padding: 6px 8px;
-            border-radius: 12px;
+        .account-number-input {
+            flex: 2;
+            min-width: 120px;
+            padding: 6px 10px;
+            border-radius: 30px;
+            border: 1px solid #ddd;
+            font-size: 0.7rem;
+            font-family: monospace;
         }
         
-        .remove-row-btn {
+        .remove-account-btn {
             background: var(--danger);
             color: white;
             border: none;
             border-radius: 30px;
-            width: 24px;
-            height: 24px;
+            width: 28px;
+            height: 28px;
             font-size: 0.7rem;
             cursor: pointer;
         }
         
-        .add-subitem-btn {
+        .items-list {
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .meter-row, .phone-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+            background: #f9f9ff;
+            padding: 8px;
+            border-radius: 12px;
+            border-left: 3px solid var(--info);
+        }
+        
+        .meter-number-input, .phone-number-input {
+            flex: 2;
+            min-width: 100px;
+            padding: 6px 8px;
+            border-radius: 20px;
+            border: 1px solid #ddd;
+            font-size: 0.7rem;
+            font-family: monospace;
+        }
+        
+        .location-input, .notes-input {
+            flex: 1;
+            min-width: 80px;
+            padding: 6px 8px;
+            border-radius: 20px;
+            border: 1px solid #ddd;
+            font-size: 0.7rem;
+        }
+        
+        .remove-item-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            width: 26px;
+            height: 26px;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
+        
+        .add-item-btn {
             background: var(--info);
             color: white;
             border: none;
             border-radius: 30px;
-            padding: 4px 12px;
+            padding: 5px 12px;
             font-size: 0.65rem;
             cursor: pointer;
-            margin-top: 6px;
+            margin: 6px 8px 10px 8px;
+            display: inline-block;
         }
         
         .add-account-btn {
@@ -354,17 +424,37 @@
             padding: 6px 12px;
             font-size: 0.7rem;
             cursor: pointer;
-            margin-top: 8px;
-            width: 100%;
+            width: calc(100% - 16px);
+            margin: 8px;
         }
         
-        .compact-input {
-            flex: 1;
-            min-width: 100px;
-            padding: 6px 8px;
-            border-radius: 10px;
-            border: 1px solid #ddd;
+        .section-label {
             font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 6px;
+            padding-left: 4px;
+        }
+        
+        .view-mode-text {
+            font-size: 0.7rem;
+            line-height: 1.4;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        
+        .view-account-item {
+            padding: 6px;
+            border-bottom: 1px dashed #eee;
+            margin-bottom: 4px;
+        }
+        
+        .view-meter {
+            font-size: 0.7rem;
+            color: #2c3e50;
+            padding-left: 12px;
+            margin-top: 3px;
+            font-family: monospace;
         }
         
         .toast-message {
@@ -394,11 +484,9 @@
             margin-bottom: 12px;
         }
         
-        .section-title {
-            font-weight: 700;
-            font-size: 0.7rem;
-            margin-bottom: 6px;
-            color: var(--primary);
+        .fixed-width-col {
+            min-width: 280px;
+            max-width: 320px;
         }
     </style>
 </head>
@@ -421,8 +509,8 @@
 
 <div class="container">
     <div class="page-header">
-        <h1 class="page-title">🏫 Schools · Full Inline Editor</h1>
-        <button class="btn btn-primary" id="addNewSchoolBtn">➕ Add New School (Inline)</button>
+        <h1 class="page-title">🏫 Schools · Expanded Utility View</h1>
+        <button class="btn btn-primary" id="addNewSchoolBtn">➕ Add New School</button>
     </div>
 
     <div class="filters-bar">
@@ -431,16 +519,17 @@
         <div class="filter-group"><label>🔄 Sort</label><select id="sortFilter" class="filter-select"><option value="seq">ID</option><option value="name">Name</option><option value="cluster">Cluster</option></select></div>
         <button id="refreshBtn" class="btn btn-primary" style="background:#6c757d;">⟳ Refresh</button>
     </div>
-    <div class="scroll-hint">↔️ Scroll → Edit water/electricity/telephone accounts & meters directly | ✏️ Each account editable inline</div>
+    <div class="scroll-hint">↔️ Scroll horizontally | 📋 Each utility column has vertical scroll for many accounts/meters | ✏️ Edit mode shows full details</div>
 
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
-                <tr><th width="40">#</th><th width="180">School Name</th><th width="80">Cluster</th><th width="100">School No.</th>
-                    <th width="280">💧 Water Accounts & Meters</th>
-                    <th width="280">⚡ Electricity Accounts & Meters</th>
-                    <th width="280">📞 Telephone Accounts & Numbers</th>
-                    <th width="120">BMO Name</th><th width="120">BMO Phone</th><th width="160">Address</th><th width="100">Actions</th></tr>
+                <tr><th width="45">#</th><th width="180">School Name</th><th width="80">Cluster</th><th width="100">School No.</th>
+                    <th width="300" class="fixed-width-col">💧 WATER Accounts & Meters</th>
+                    <th width="300" class="fixed-width-col">⚡ ELECTRICITY Accounts & Meters</th>
+                    <th width="300" class="fixed-width-col">📞 TELEPHONE Accounts & Numbers</th>
+                    <th width="130">BMO Name</th><th width="130">BMO Phone</th><th width="180">Address</th><th width="110">Actions</th>
+                </tr>
             </thead>
             <tbody id="schoolsTbody"></tbody>
         </table>
@@ -450,7 +539,6 @@
 <script>
     let allSchoolsRaw = [];
     let currentEditingId = null;
-    let editingTempData = {};   // store full utility structures while editing
 
     function showMessage(msg, isError = false) {
         const toast = document.createElement('div');
@@ -508,222 +596,217 @@
         return filtered;
     }
 
-    // Helper to render inline editing UI for utilities (water, electricity, telephone)
-    function renderUtilityEditor(utilityType, accounts, schoolId) {
-        if (!Array.isArray(accounts)) accounts = [];
+    // RENDER EXPANDED EDITOR UI (vertical scrollable)
+    function renderExpandedUtilityEditor(utilityType, accounts, schoolId) {
         const containerId = `${utilityType}-editor-${schoolId}`;
-        let html = `<div class="utility-group" id="${containerId}">`;
+        let html = `<div class="utility-cell" id="${containerId}">`;
+        if (!accounts.length) {
+            html += `<div style="color:#aaa; text-align:center; padding:20px;">No accounts</div>`;
+        }
         accounts.forEach((acc, accIdx) => {
             const accNumber = acc.accountNumber || acc.account_number || '';
-            html += `<div class="account-card" data-acc-index="${accIdx}">
+            html += `<div class="account-block" data-acc-index="${accIdx}">
                         <div class="account-header">
-                            <input type="text" class="compact-input acc-num-input" value="${escapeHtml(accNumber)}" placeholder="Account #" style="width:140px;">
-                            <button type="button" class="remove-row-btn remove-account-btn" data-util="${utilityType}" data-accidx="${accIdx}">🗑️</button>
-                        </div>`;
+                            <input type="text" class="account-number-input acc-num-input" value="${escapeHtml(accNumber)}" placeholder="Account Number">
+                            <button type="button" class="remove-account-btn" data-util="${utilityType}" data-accidx="${accIdx}">🗑️</button>
+                        </div>
+                        <div class="items-list" data-items-type="${utilityType === 'telephone' ? 'numbers' : 'meters'}">`;
+            
             if (utilityType === 'telephone') {
                 const numbers = acc.numbers || [];
-                html += `<div class="subitems-list" data-subtype="numbers">`;
                 numbers.forEach((num, idx) => {
-                    html += `<div class="meter-item" data-subidx="${idx}">
-                                <input type="text" class="compact-input phone-number-input" value="${escapeHtml(num.phoneNumber || '')}" placeholder="Phone Number" style="width:130px;">
-                                <input type="text" class="compact-input location-input" value="${escapeHtml(num.location || '')}" placeholder="Location" style="width:100px;">
-                                <input type="text" class="compact-input notes-input" value="${escapeHtml(num.notes || '')}" placeholder="Notes" style="width:100px;">
-                                <button type="button" class="remove-row-btn remove-subitem" data-util="${utilityType}" data-accidx="${accIdx}" data-subidx="${idx}">✖</button>
+                    html += `<div class="phone-row" data-subidx="${idx}">
+                                <input type="text" class="phone-number-input" value="${escapeHtml(num.phoneNumber || '')}" placeholder="Phone Number">
+                                <input type="text" class="location-input" value="${escapeHtml(num.location || '')}" placeholder="Location">
+                                <input type="text" class="notes-input" value="${escapeHtml(num.notes || '')}" placeholder="Notes">
+                                <button type="button" class="remove-item-btn remove-subitem" data-util="${utilityType}" data-accidx="${accIdx}" data-subidx="${idx}">✖</button>
                             </div>`;
                 });
-                html += `</div><button type="button" class="add-subitem-btn add-number-btn" data-util="${utilityType}" data-accidx="${accIdx}">+ Add Phone Number</button>`;
             } else {
                 const meters = acc.meters || [];
-                html += `<div class="subitems-list" data-subtype="meters">`;
                 meters.forEach((meter, idx) => {
-                    html += `<div class="meter-item" data-subidx="${idx}">
-                                <input type="text" class="compact-input meter-number-input" value="${escapeHtml(meter.meterNumber || '')}" placeholder="Meter #" style="width:120px;">
-                                <input type="text" class="compact-input location-input" value="${escapeHtml(meter.location || '')}" placeholder="Location" style="width:100px;">
-                                <input type="text" class="compact-input notes-input" value="${escapeHtml(meter.notes || '')}" placeholder="Notes" style="width:100px;">
-                                <button type="button" class="remove-row-btn remove-subitem" data-util="${utilityType}" data-accidx="${accIdx}" data-subidx="${idx}">✖</button>
+                    html += `<div class="meter-row" data-subidx="${idx}">
+                                <input type="text" class="meter-number-input" value="${escapeHtml(meter.meterNumber || '')}" placeholder="Meter Number">
+                                <input type="text" class="location-input" value="${escapeHtml(meter.location || '')}" placeholder="Location">
+                                <input type="text" class="notes-input" value="${escapeHtml(meter.notes || '')}" placeholder="Notes">
+                                <button type="button" class="remove-item-btn remove-subitem" data-util="${utilityType}" data-accidx="${accIdx}" data-subidx="${idx}">✖</button>
                             </div>`;
                 });
-                html += `</div><button type="button" class="add-subitem-btn add-meter-btn" data-util="${utilityType}" data-accidx="${accIdx}">+ Add Meter</button>`;
             }
-            html += `</div>`;
+            html += `</div><button type="button" class="add-item-btn" data-util="${utilityType}" data-accidx="${accIdx}">+ Add ${utilityType === 'telephone' ? 'Number' : 'Meter'}</button></div>`;
         });
-        html += `<button type="button" class="add-account-btn add-account-util" data-util="${utilityType}">+ Add ${utilityType === 'water' ? 'Water' : utilityType === 'electricity' ? 'Electricity' : 'Telephone'} Account</button></div>`;
+        html += `<button type="button" class="add-account-btn add-account-util" data-util="${utilityType}">+ Add ${utilityType === 'water' ? 'Water Account' : utilityType === 'electricity' ? 'Electricity Account' : 'Telephone Account'}</button></div>`;
         return html;
     }
-
-    function collectUtilityDataFromDOM(schoolId) {
+    
+    // Collect data from expanded editors
+    function collectUtilityData(schoolId) {
         const waterAccounts = [];
-        document.querySelectorAll(`#water-editor-${schoolId} .account-card`).forEach((card, idx) => {
-            const accNum = card.querySelector('.acc-num-input')?.value || '';
-            const items = [];
-            card.querySelectorAll('.meter-item').forEach(item => {
-                const meterNum = item.querySelector('.meter-number-input')?.value || '';
-                const location = item.querySelector('.location-input')?.value || '';
-                const notes = item.querySelector('.notes-input')?.value || '';
-                if(meterNum) items.push({ meterNumber: meterNum, location, notes });
+        document.querySelectorAll(`#water-editor-${schoolId} .account-block`).forEach(block => {
+            const accNum = block.querySelector('.acc-num-input')?.value || '';
+            const meters = [];
+            block.querySelectorAll('.meter-row').forEach(row => {
+                const meterNum = row.querySelector('.meter-number-input')?.value || '';
+                const location = row.querySelector('.location-input')?.value || '';
+                const notes = row.querySelector('.notes-input')?.value || '';
+                if(meterNum) meters.push({ meterNumber: meterNum, location, notes });
             });
-            if(accNum || items.length) waterAccounts.push({ accountNumber: accNum, meters: items });
+            if(accNum || meters.length) waterAccounts.push({ accountNumber: accNum, meters });
         });
         
         const electricityAccounts = [];
-        document.querySelectorAll(`#electricity-editor-${schoolId} .account-card`).forEach(card => {
-            const accNum = card.querySelector('.acc-num-input')?.value || '';
-            const items = [];
-            card.querySelectorAll('.meter-item').forEach(item => {
-                const meterNum = item.querySelector('.meter-number-input')?.value || '';
-                const location = item.querySelector('.location-input')?.value || '';
-                const notes = item.querySelector('.notes-input')?.value || '';
-                if(meterNum) items.push({ meterNumber: meterNum, location, notes });
+        document.querySelectorAll(`#electricity-editor-${schoolId} .account-block`).forEach(block => {
+            const accNum = block.querySelector('.acc-num-input')?.value || '';
+            const meters = [];
+            block.querySelectorAll('.meter-row').forEach(row => {
+                const meterNum = row.querySelector('.meter-number-input')?.value || '';
+                const location = row.querySelector('.location-input')?.value || '';
+                const notes = row.querySelector('.notes-input')?.value || '';
+                if(meterNum) meters.push({ meterNumber: meterNum, location, notes });
             });
-            if(accNum || items.length) electricityAccounts.push({ accountNumber: accNum, meters: items });
+            if(accNum || meters.length) electricityAccounts.push({ accountNumber: accNum, meters });
         });
         
         const telephoneAccounts = [];
-        document.querySelectorAll(`#telephone-editor-${schoolId} .account-card`).forEach(card => {
-            const accNum = card.querySelector('.acc-num-input')?.value || '';
+        document.querySelectorAll(`#telephone-editor-${schoolId} .account-block`).forEach(block => {
+            const accNum = block.querySelector('.acc-num-input')?.value || '';
             const numbers = [];
-            card.querySelectorAll('.meter-item').forEach(item => {
-                const phoneNum = item.querySelector('.phone-number-input')?.value || '';
-                const location = item.querySelector('.location-input')?.value || '';
-                const notes = item.querySelector('.notes-input')?.value || '';
-                if(phoneNum) numbers.push({ phoneNumber: phoneNum, location, notes });
+            block.querySelectorAll('.phone-row').forEach(row => {
+                const phone = row.querySelector('.phone-number-input')?.value || '';
+                const location = row.querySelector('.location-input')?.value || '';
+                const notes = row.querySelector('.notes-input')?.value || '';
+                if(phone) numbers.push({ phoneNumber: phone, location, notes });
             });
             if(accNum || numbers.length) telephoneAccounts.push({ accountNumber: accNum, numbers });
         });
         return { waterAccounts, electricityAccounts, telephoneAccounts };
     }
-
-    async function saveFullInlineEdit(schoolId) {
+    
+    async function saveFullEdit(schoolId) {
         const nameInput = document.getElementById(`edit-name-${schoolId}`);
         const clusterInput = document.getElementById(`edit-cluster-${schoolId}`);
         const schoolNoInput = document.getElementById(`edit-schno-${schoolId}`);
-        const bmoNameInput = document.getElementById(`edit-bmoname-${schoolId}`);
-        const bmoPhoneInput = document.getElementById(`edit-bmophone-${schoolId}`);
-        const addressInput = document.getElementById(`edit-address-${schoolId}`);
+        const bmoName = document.getElementById(`edit-bmoname-${schoolId}`)?.value.trim() || '';
+        const bmoPhone = document.getElementById(`edit-bmophone-${schoolId}`)?.value.trim() || '';
+        const address = document.getElementById(`edit-address-${schoolId}`)?.value.trim() || '';
         
         if (!nameInput || !clusterInput || !schoolNoInput) { showMessage("Missing required fields", true); return; }
         const updatedBasic = {
             name: nameInput.value.trim(),
             clusterNumber: clusterInput.value.trim(),
             schoolNumber: schoolNoInput.value.trim(),
-            bmoName: bmoNameInput ? bmoNameInput.value.trim() : '',
-            bmoPhone: bmoPhoneInput ? bmoPhoneInput.value.trim() : '',
-            address: addressInput ? addressInput.value.trim() : '',
-            notes: ''
+            bmoName, bmoPhone, address, notes: ''
         };
         if (!updatedBasic.name || !updatedBasic.clusterNumber || !updatedBasic.schoolNumber) {
-            showMessage("School Name, Cluster and School Number are required", true); return;
+            showMessage("School Name, Cluster and School Number required", true); return;
         }
-        
-        const utilities = collectUtilityDataFromDOM(schoolId);
-        
-        const payload = {
-            ...updatedBasic,
-            waterAccounts: utilities.waterAccounts,
-            electricityAccounts: utilities.electricityAccounts,
-            telephoneAccounts: utilities.telephoneAccounts
-        };
+        const utilities = collectUtilityData(schoolId);
+        const payload = { ...updatedBasic, waterAccounts: utilities.waterAccounts, electricityAccounts: utilities.electricityAccounts, telephoneAccounts: utilities.telephoneAccounts };
         
         try {
-            const res = await fetch(`/api/schools/${schoolId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            const res = await fetch(`/api/schools/${schoolId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const result = await res.json();
-            if (res.ok && result.success) {
-                showMessage(`✅ School "${updatedBasic.name}" saved`);
-                currentEditingId = null;
-                await loadSchools();
-            } else { showMessage(`Error: ${result.error || 'Update failed'}`, true); renderSchools(); }
+            if (res.ok && result.success) { showMessage(`✅ Saved "${updatedBasic.name}"`); currentEditingId = null; await loadSchools(); }
+            else { showMessage(`Error: ${result.error || 'Update failed'}`, true); renderSchools(); }
         } catch(err) { showMessage('Network error', true); }
     }
     
-    function startInlineEdit(school) {
-        if (currentEditingId) return;
-        currentEditingId = school.id;
-        renderSchools();
+    // VIEW MODE: expanded readable format with vertical scroll
+    function renderViewModeUtility(accounts, type) {
+        if (!accounts || accounts.length === 0) return '<div style="color:#aaa; padding:10px; text-align:center;">— No data —</div>';
+        let html = `<div class="view-mode-text utility-cell">`;
+        accounts.forEach(acc => {
+            const accNum = acc.accountNumber || acc.account_number || '?';
+            html += `<div class="view-account-item"><strong>📁 ${escapeHtml(accNum)}</strong>`;
+            if (type === 'telephone') {
+                const numbers = acc.numbers || [];
+                numbers.forEach(num => {
+                    html += `<div class="view-meter">📞 ${escapeHtml(num.phoneNumber || '')} ${num.location ? '📍 ' + escapeHtml(num.location) : ''} ${num.notes ? '(' + escapeHtml(num.notes) + ')' : ''}</div>`;
+                });
+            } else {
+                const meters = acc.meters || [];
+                meters.forEach(m => {
+                    html += `<div class="view-meter">🔢 ${escapeHtml(m.meterNumber || '')} ${m.location ? '📍 ' + escapeHtml(m.location) : ''} ${m.notes ? '(' + escapeHtml(m.notes) + ')' : ''}</div>`;
+                });
+            }
+            html += `</div>`;
+        });
+        html += `</div>`;
+        return html;
     }
     
-    function cancelInlineEdit() { currentEditingId = null; renderSchools(); }
-    
-    function attachDynamicUtilityEvents(schoolId) {
-        // add account buttons
+    function attachEditorEvents(schoolId) {
+        // Add Account
         document.querySelectorAll(`.add-account-util`).forEach(btn => {
-            btn.removeEventListener('click', window.accountHandler);
-            const handler = (e) => {
+            btn.onclick = (e) => {
                 const util = btn.getAttribute('data-util');
                 const container = document.getElementById(`${util}-editor-${schoolId}`);
                 if (!container) return;
-                const newCard = document.createElement('div');
-                newCard.className = 'account-card';
-                newCard.innerHTML = `<div class="account-header"><input type="text" class="compact-input acc-num-input" placeholder="Account #" style="width:140px;"><button type="button" class="remove-row-btn remove-account-btn">🗑️</button></div>
-                <div class="subitems-list"></div>
-                <button type="button" class="add-subitem-btn ${util === 'telephone' ? 'add-number-btn' : 'add-meter-btn'}">+ ${util === 'telephone' ? 'Add Number' : 'Add Meter'}</button>`;
-                container.appendChild(newCard);
-                attachAccountEvents(newCard, util, schoolId);
-            };
-            btn.addEventListener('click', handler);
-            window.accountHandler = handler;
-        });
-        
-        // attach remove account
-        document.querySelectorAll(`.remove-account-btn`).forEach(btn => {
-            btn.onclick = (e) => { btn.closest('.account-card')?.remove(); };
-        });
-        
-        // attach add meter/number inside each card
-        document.querySelectorAll(`.add-meter-btn, .add-number-btn`).forEach(btn => {
-            btn.onclick = (e) => {
-                const card = btn.closest('.account-card');
-                const util = btn.classList.contains('add-meter-btn') ? (btn.closest('#water-editor') ? 'water' : 'electricity') : 'telephone';
-                const subList = card.querySelector('.subitems-list');
-                const newDiv = document.createElement('div');
-                newDiv.className = 'meter-item';
-                if(util === 'telephone') {
-                    newDiv.innerHTML = `<input type="text" class="compact-input phone-number-input" placeholder="Phone Number" style="width:130px;"><input type="text" class="compact-input location-input" placeholder="Location" style="width:100px;"><input type="text" class="compact-input notes-input" placeholder="Notes" style="width:100px;"><button type="button" class="remove-row-btn remove-subitem">✖</button>`;
-                } else {
-                    newDiv.innerHTML = `<input type="text" class="compact-input meter-number-input" placeholder="Meter #" style="width:120px;"><input type="text" class="compact-input location-input" placeholder="Location" style="width:100px;"><input type="text" class="compact-input notes-input" placeholder="Notes" style="width:100px;"><button type="button" class="remove-row-btn remove-subitem">✖</button>`;
-                }
-                subList.appendChild(newDiv);
-                newDiv.querySelector('.remove-subitem')?.addEventListener('click', () => newDiv.remove());
+                const newBlock = document.createElement('div'); newBlock.className = 'account-block';
+                newBlock.innerHTML = `<div class="account-header"><input type="text" class="account-number-input acc-num-input" placeholder="Account Number"><button type="button" class="remove-account-btn">🗑️</button></div>
+                <div class="items-list"></div><button type="button" class="add-item-btn">+ Add ${util === 'telephone' ? 'Number' : 'Meter'}</button>`;
+                container.insertBefore(newBlock, container.lastElementChild);
+                attachBlockEvents(newBlock, util, schoolId);
             };
         });
         
-        document.querySelectorAll(`.remove-subitem`).forEach(btn => { btn.onclick = (e) => btn.closest('.meter-item')?.remove(); });
-    }
-    
-    function attachAccountEvents(card, util, schoolId) {
-        card.querySelector('.remove-account-btn')?.addEventListener('click', () => card.remove());
-        const addBtn = card.querySelector(`.add-meter-btn, .add-number-btn`);
-        if(addBtn) {
-            addBtn.onclick = () => {
-                const subList = card.querySelector('.subitems-list');
-                const newDiv = document.createElement('div'); newDiv.className = 'meter-item';
-                if(util === 'telephone') newDiv.innerHTML = `<input type="text" class="compact-input phone-number-input" placeholder="Phone Number"><input type="text" class="compact-input location-input" placeholder="Location"><input type="text" class="compact-input notes-input" placeholder="Notes"><button type="button" class="remove-row-btn remove-subitem">✖</button>`;
-                else newDiv.innerHTML = `<input type="text" class="compact-input meter-number-input" placeholder="Meter #"><input type="text" class="compact-input location-input" placeholder="Location"><input type="text" class="compact-input notes-input" placeholder="Notes"><button type="button" class="remove-row-btn remove-subitem">✖</button>`;
-                subList.appendChild(newDiv);
-                newDiv.querySelector('.remove-subitem')?.addEventListener('click', () => newDiv.remove());
-            };
+        function attachBlockEvents(block, util, sid) {
+            block.querySelector('.remove-account-btn')?.addEventListener('click', () => block.remove());
+            const addBtn = block.querySelector('.add-item-btn');
+            if(addBtn) {
+                addBtn.onclick = () => {
+                    const itemsList = block.querySelector('.items-list');
+                    const newItem = document.createElement('div');
+                    newItem.className = util === 'telephone' ? 'phone-row' : 'meter-row';
+                    if(util === 'telephone') {
+                        newItem.innerHTML = `<input type="text" class="phone-number-input" placeholder="Phone Number"><input type="text" class="location-input" placeholder="Location"><input type="text" class="notes-input" placeholder="Notes"><button type="button" class="remove-item-btn">✖</button>`;
+                    } else {
+                        newItem.innerHTML = `<input type="text" class="meter-number-input" placeholder="Meter Number"><input type="text" class="location-input" placeholder="Location"><input type="text" class="notes-input" placeholder="Notes"><button type="button" class="remove-item-btn">✖</button>`;
+                    }
+                    itemsList.appendChild(newItem);
+                    newItem.querySelector('.remove-item-btn')?.addEventListener('click', () => newItem.remove());
+                };
+            }
+            block.querySelectorAll('.remove-item-btn').forEach(rm => { rm.onclick = (e) => rm.closest('.meter-row, .phone-row')?.remove(); });
         }
+        
+        document.querySelectorAll(`.remove-account-btn`).forEach(btn => { btn.onclick = (e) => btn.closest('.account-block')?.remove(); });
+        document.querySelectorAll(`.remove-subitem`).forEach(btn => { btn.onclick = (e) => btn.closest('.meter-row, .phone-row')?.remove(); });
+        document.querySelectorAll(`.add-item-btn`).forEach(btn => {
+            if(!btn.hasAttribute('data-listener')) {
+                btn.setAttribute('data-listener', 'true');
+                btn.onclick = (e) => {
+                    const block = btn.closest('.account-block');
+                    const util = block.closest('[id^="water"]') ? 'water' : (block.closest('[id^="electricity"]') ? 'electricity' : 'telephone');
+                    const itemsList = block.querySelector('.items-list');
+                    const newItem = document.createElement('div');
+                    newItem.className = util === 'telephone' ? 'phone-row' : 'meter-row';
+                    if(util === 'telephone') newItem.innerHTML = `<input type="text" class="phone-number-input" placeholder="Phone Number"><input type="text" class="location-input" placeholder="Location"><input type="text" class="notes-input" placeholder="Notes"><button type="button" class="remove-item-btn">✖</button>`;
+                    else newItem.innerHTML = `<input type="text" class="meter-number-input" placeholder="Meter Number"><input type="text" class="location-input" placeholder="Location"><input type="text" class="notes-input" placeholder="Notes"><button type="button" class="remove-item-btn">✖</button>`;
+                    itemsList.appendChild(newItem);
+                    newItem.querySelector('.remove-item-btn')?.addEventListener('click', () => newItem.remove());
+                };
+            }
+        });
     }
     
     function renderSchools() {
         const filtered = getFilteredSchools();
         const tbody = document.getElementById('schoolsTbody');
         tbody.innerHTML = '';
-        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="11" style="text-align:center">No schools<\/td></tr>'; return; }
+        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="11" style="text-align:center">No schools</td></tr>'; return; }
         
         const clusterMap = new Map();
         filtered.forEach(s => { let c = s.cluster_number || 'Unassigned'; if(!clusterMap.has(c)) clusterMap.set(c, []); clusterMap.get(c).push(s); });
         const sortedClusters = Array.from(clusterMap.keys()).sort((a,b) => a==='Unassigned'?1:b==='Unassigned'?-1:(parseInt(a)||0)-(parseInt(b)||0));
-        let seq=1;
+        let seq = 1;
         
         for(let cluster of sortedClusters) {
             const schools = clusterMap.get(cluster);
-            const sep = document.createElement('tr'); sep.className='cluster-separator';
-            sep.innerHTML = `<td colspan="11"><div class="cluster-info"><span>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</span><span class="cluster-count">${schools.length} schools</span></div></td>`;
-            tbody.appendChild(sep);
+            const sepRow = document.createElement('tr'); sepRow.className='cluster-separator';
+            sepRow.innerHTML = `<td colspan="11"><div class="cluster-info"><span>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</span><span class="cluster-count">${schools.length} schools</span></div></td>`;
+            tbody.appendChild(sepRow);
+            
             for(let school of schools) {
                 const isEditing = (currentEditingId === school.id);
                 const row = document.createElement('tr');
@@ -733,33 +816,29 @@
                         <td><input type="text" id="edit-name-${school.id}" class="inline-edit-input" value="${escapeHtml(school.name||'')}"></td>
                         <td><input type="text" id="edit-cluster-${school.id}" class="inline-edit-input" value="${escapeHtml(school.cluster_number||'')}"></td>
                         <td><input type="text" id="edit-schno-${school.id}" class="inline-edit-input" value="${escapeHtml(school.school_number||'')}"></td>
-                        <td>${renderUtilityEditor('water', school.water_accounts || [], school.id)}</td>
-                        <td>${renderUtilityEditor('electricity', school.electricity_accounts || [], school.id)}</td>
-                        <td>${renderUtilityEditor('telephone', school.telephone_accounts || [], school.id)}</td>
+                        <td>${renderExpandedUtilityEditor('water', school.water_accounts || [], school.id)}</td>
+                        <td>${renderExpandedUtilityEditor('electricity', school.electricity_accounts || [], school.id)}</td>
+                        <td>${renderExpandedUtilityEditor('telephone', school.telephone_accounts || [], school.id)}</td>
                         <td><input type="text" id="edit-bmoname-${school.id}" class="inline-edit-input" value="${escapeHtml(school.bmo_name||'')}"></td>
                         <td><input type="text" id="edit-bmophone-${school.id}" class="inline-edit-input" value="${escapeHtml(school.bmo_phone||'')}"></td>
                         <td><input type="text" id="edit-address-${school.id}" class="inline-edit-input" value="${escapeHtml(school.address||'')}"></td>
-                        <td class="entity-actions"><button class="inline-save-btn" data-id="${school.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${school.id}">✖ Cancel</button></td>
+                        <td><div class="entity-actions"><button class="inline-save-btn" data-id="${school.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${school.id}">✖ Cancel</button></div></td>
                     `;
                     tbody.appendChild(row);
-                    setTimeout(() => { attachDynamicUtilityEvents(school.id); }, 10);
+                    setTimeout(() => attachEditorEvents(school.id), 10);
                 } else {
-                    // preview mode
-                    const waterPreview = (school.water_accounts||[]).map(a => `${a.accountNumber||'?'} (${(a.meters||[]).length}m)`).join(', ') || '—';
-                    const elecPreview = (school.electricity_accounts||[]).map(a => `${a.accountNumber||'?'} (${(a.meters||[]).length}m)`).join(', ') || '—';
-                    const telPreview = (school.telephone_accounts||[]).map(a => `${a.accountNumber||'?'} (${(a.numbers||[]).length}#)`).join(', ') || '—';
                     row.innerHTML = `
                         <td>${seq}</td>
                         <td><strong>${escapeHtml(school.name||'')}</strong></td>
                         <td><span class="badge badge-cluster">${escapeHtml(school.cluster_number||'-')}</span></td>
                         <td>${escapeHtml(school.school_number||'-')}</td>
-                        <td><div style="font-size:0.7rem; background:#f1f5f9; padding:6px; border-radius:12px;">${escapeHtml(waterPreview)}</div></td>
-                        <td><div style="font-size:0.7rem; background:#f1f5f9; padding:6px; border-radius:12px;">${escapeHtml(elecPreview)}</div></td>
-                        <td><div style="font-size:0.7rem; background:#f1f5f9; padding:6px; border-radius:12px;">${escapeHtml(telPreview)}</div></td>
+                        <td>${renderViewModeUtility(school.water_accounts, 'water')}</td>
+                        <td>${renderViewModeUtility(school.electricity_accounts, 'electricity')}</td>
+                        <td>${renderViewModeUtility(school.telephone_accounts, 'telephone')}</td>
                         <td>${escapeHtml(school.bmo_name||'-')}</td>
                         <td>${escapeHtml(school.bmo_phone||'-')}</td>
                         <td>${escapeHtml(school.address||'-')}</td>
-                        <td class="entity-actions"><button class="btn btn-warning btn-sm edit-school-btn" data-id="${school.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-school-btn" data-id="${school.id}">🗑️ Del</button></td>
+                        <td><div class="entity-actions"><button class="btn btn-warning btn-sm edit-school-btn" data-id="${school.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-school-btn" data-id="${school.id}">🗑️ Del</button></div></td>
                     `;
                     tbody.appendChild(row);
                 }
@@ -767,13 +846,13 @@
             }
         }
         
-        document.querySelectorAll('.edit-school-btn').forEach(btn => { btn.addEventListener('click', (e) => { const id = parseInt(btn.getAttribute('data-id')); const school = allSchoolsRaw.find(s=>s.id===id); if(school) startInlineEdit(school); }); });
-        document.querySelectorAll('.delete-school-btn').forEach(btn => { btn.addEventListener('click', async (e) => { const id = parseInt(btn.getAttribute('data-id')); if(confirm('Delete school?')) await deleteSchoolById(id); }); });
-        document.querySelectorAll('.inline-save-btn').forEach(btn => { btn.addEventListener('click', (e) => { const id = parseInt(btn.getAttribute('data-id')); saveFullInlineEdit(id); }); });
-        document.querySelectorAll('.inline-cancel-btn').forEach(btn => { btn.addEventListener('click', () => cancelInlineEdit()); });
+        document.querySelectorAll('.edit-school-btn').forEach(btn => { btn.addEventListener('click', () => { const id = parseInt(btn.getAttribute('data-id')); currentEditingId = id; renderSchools(); }); });
+        document.querySelectorAll('.delete-school-btn').forEach(btn => { btn.addEventListener('click', async () => { const id = parseInt(btn.getAttribute('data-id')); if(confirm('Delete school?')) await deleteSchool(id); }); });
+        document.querySelectorAll('.inline-save-btn').forEach(btn => { btn.addEventListener('click', (e) => { const id = parseInt(btn.getAttribute('data-id')); saveFullEdit(id); }); });
+        document.querySelectorAll('.inline-cancel-btn').forEach(btn => { btn.addEventListener('click', () => { currentEditingId = null; renderSchools(); }); });
     }
     
-    async function deleteSchoolById(id) {
+    async function deleteSchool(id) {
         try {
             const res = await fetch(`/api/schools/${id}`, { method: 'DELETE' });
             const data = await res.json();
@@ -781,36 +860,35 @@
         } catch(e) { showMessage('Delete failed', true); }
     }
     
-    let addingActive = false;
-    async function enableInlineAdd() {
-        if(addingActive) return;
-        addingActive = true;
+    let addingMode = false;
+    async function inlineAddSchool() {
+        if(addingMode) return;
+        addingMode = true;
         const tbody = document.getElementById('schoolsTbody');
         const addRow = document.createElement('tr'); addRow.className='add-new-row'; addRow.id='inline-add-row';
         addRow.innerHTML = `<td>✨</td><td><input id="new-name" class="inline-edit-input" placeholder="Name *"></td><td><input id="new-cluster" class="inline-edit-input" placeholder="Cluster *"></td><td><input id="new-schno" class="inline-edit-input" placeholder="School No *"></td>
-        <td colspan="3"><span style="font-size:0.7rem;">(Add utilities after creation)</span></td>
+        <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Add utilities after creation)</span></td>
         <td><input id="new-bmoname" class="inline-edit-input" placeholder="BMO"></td><td><input id="new-bmophone" class="inline-edit-input" placeholder="Phone"></td><td><input id="new-address" class="inline-edit-input" placeholder="Address"></td>
         <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button></td>`;
         const first = tbody.firstChild; if(first) tbody.insertBefore(addRow, first); else tbody.appendChild(addRow);
         document.getElementById('confirmAddBtn')?.addEventListener('click', async () => {
             const name = document.getElementById('new-name')?.value.trim(); const cluster = document.getElementById('new-cluster')?.value.trim(); const schno = document.getElementById('new-schno')?.value.trim();
-            if(!name || !cluster || !schno) { showMessage("Required fields missing", true); return; }
+            if(!name || !cluster || !schno) { showMessage("Required fields", true); return; }
             const payload = { name, clusterNumber: cluster, schoolNumber: schno, bmoName: document.getElementById('new-bmoname')?.value.trim()||'', bmoPhone: document.getElementById('new-bmophone')?.value.trim()||'', address: document.getElementById('new-address')?.value.trim()||'', notes:'', waterAccounts:[], electricityAccounts:[], telephoneAccounts:[] };
             try {
                 const res = await fetch('/api/schools', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
                 const result = await res.json();
-                if(res.ok && result.success) { showMessage(`School "${name}" created`); addingActive=false; await loadSchools(); } else showMessage(result.error||'Creation failed', true);
-            } catch(e) { showMessage('Network error', true); } finally { addingActive=false; renderSchools(); }
+                if(res.ok && result.success) { showMessage(`School "${name}" created`); addingMode=false; await loadSchools(); } else showMessage(result.error||'Creation failed', true);
+            } catch(e) { showMessage('Network error', true); } finally { addingMode=false; renderSchools(); }
         });
-        document.getElementById('cancelAddBtn')?.addEventListener('click', () => { addingActive=false; renderSchools(); });
+        document.getElementById('cancelAddBtn')?.addEventListener('click', () => { addingMode=false; renderSchools(); });
     }
     
-    document.getElementById('addNewSchoolBtn').addEventListener('click', () => { if(currentEditingId) showMessage('Finish current edit first', true); else enableInlineAdd(); });
+    document.getElementById('addNewSchoolBtn').addEventListener('click', () => { if(currentEditingId) showMessage('Finish current edit first', true); else inlineAddSchool(); });
     document.getElementById('refreshBtn').addEventListener('click', () => loadSchools());
     document.getElementById('searchFilter').addEventListener('input', () => renderSchools());
     document.getElementById('clusterFilter').addEventListener('change', () => renderSchools());
     document.getElementById('sortFilter').addEventListener('change', () => renderSchools());
-    
     function escapeHtml(str) { if(!str) return ''; return String(str).replace(/[&<>]/g, m => m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); }
     loadSchools();
 </script>
