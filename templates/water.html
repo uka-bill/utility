@@ -191,7 +191,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
-            min-width: 1400px;
+            min-width: 1500px;
         }
 
         .data-table th {
@@ -252,7 +252,7 @@
         }
 
         .notes-input {
-            width: 180px;
+            width: 200px;
             text-align: left;
         }
 
@@ -537,9 +537,9 @@
             <thead>
                 <tr>
                     <th width="50">No.</th>
-                    <th width="200">Entity Name</th>
+                    <th width="220">Entity Name</th>
                     <th width="90">Type</th>
-                    <th width="140">Account / Meter</th>
+                    <th width="160">Account / Meter</th>
                     <th width="110">Consumption (m³)</th>
                     <th width="110">Current Charges ($)</th>
                     <th width="160">Late / Unsettled</th>
@@ -565,7 +565,6 @@
     let currentYear = new Date().getFullYear();
     let isLoading = false;
 
-    // Populate year dropdown (2020-2030)
     function populateYears() {
         const yearSelect = document.getElementById('globalYear');
         yearSelect.innerHTML = '';
@@ -580,7 +579,7 @@
         }
     }
 
-    // Load all schools and departments - keep original order from database (by ID ascending)
+    // Load schools and departments - sort by ID to match Schools/Departments tabs
     async function loadAllEntities() {
         try {
             const [schoolsRes, deptsRes] = await Promise.all([
@@ -589,11 +588,13 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                // Keep original order (by ID ascending as from API)
+                // Sort by ID ascending to match Schools tab display order
+                allSchools.sort((a, b) => a.id - b.id);
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                // Keep original order (by ID ascending as from API)
+                // Sort by ID ascending to match Departments tab display order
+                allDepartments.sort((a, b) => a.id - b.id);
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) {
@@ -601,7 +602,6 @@
         }
     }
 
-    // Load existing water bills for selected month/year
     async function loadExistingBills(month, year) {
         try {
             const url = `/api/utility-bills?utility_type=water&month=${month}&year=${year}`;
@@ -618,7 +618,6 @@
         }
     }
 
-    // Extract water accounts from a school or department object
     function extractWaterAccounts(entity) {
         let accounts = [];
         try {
@@ -637,90 +636,44 @@
         return accounts;
     }
 
-    // Build grouped rows - entity > account > meters
-    function buildGroupedRows() {
+    // Build entities in EXACT order as Schools/Departments tabs (by ID ascending)
+    function buildEntityList() {
         const entities = [];
         
-        // Process Schools - maintain original order
+        // Add schools in ID order (same as Schools tab)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractWaterAccounts(school);
             if (accounts.length === 0) continue;
             
             const displayName = school.name || `School #${school.id}`;
-            
-            const accountGroups = [];
-            for (const acc of accounts) {
-                const meters = (acc.meters && acc.meters.length) ? acc.meters : [];
-                if (meters.length === 0) continue;
-                
-                const meterList = [];
-                for (const meter of meters) {
-                    meterList.push({
-                        meterNumber: meter.meterNumber || '—',
-                        location: meter.location || '',
-                        notes: meter.notes || ''
-                    });
-                }
-                
-                accountGroups.push({
-                    accountNumber: acc.accountNumber || '—',
-                    meters: meterList
-                });
-            }
-            
-            if (accountGroups.length > 0) {
-                entities.push({
-                    id: school.id,
-                    name: displayName,
-                    type: 'school',
-                    typeLabel: '🏫 School',
-                    clusterNumber: school.cluster_number || null,
-                    originalIndex: idx,
-                    accountGroups: accountGroups
-                });
-            }
+            entities.push({
+                id: school.id,
+                name: displayName,
+                type: 'school',
+                typeLabel: '🏫 School',
+                clusterNumber: school.cluster_number || null,
+                displayOrder: idx,
+                accountGroups: accounts
+            });
         }
         
-        // Process Departments - maintain original order
+        // Add departments in ID order (same as Departments tab)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept);
             if (accounts.length === 0) continue;
             
             const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-            
-            const accountGroups = [];
-            for (const acc of accounts) {
-                const meters = (acc.meters && acc.meters.length) ? acc.meters : [];
-                if (meters.length === 0) continue;
-                
-                const meterList = [];
-                for (const meter of meters) {
-                    meterList.push({
-                        meterNumber: meter.meterNumber || '—',
-                        location: meter.location || '',
-                        notes: meter.notes || ''
-                    });
-                }
-                
-                accountGroups.push({
-                    accountNumber: acc.accountNumber || '—',
-                    meters: meterList
-                });
-            }
-            
-            if (accountGroups.length > 0) {
-                entities.push({
-                    id: dept.id,
-                    name: displayName,
-                    type: 'department',
-                    typeLabel: '🏛️ Department',
-                    clusterNumber: null,
-                    originalIndex: idx,
-                    accountGroups: accountGroups
-                });
-            }
+            entities.push({
+                id: dept.id,
+                name: displayName,
+                type: 'department',
+                typeLabel: '🏛️ Department',
+                clusterNumber: null,
+                displayOrder: allSchools.length + idx,
+                accountGroups: accounts
+            });
         }
         
         return entities;
@@ -751,7 +704,6 @@
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         
-        // Get all meter rows under this entity
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
@@ -862,7 +814,6 @@
         const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
         if (!confirm(`Delete ALL water bills for ${entityName} for ${month}/${year}? This action cannot be undone.`)) return;
         
-        // Get all meter rows under this entity
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
@@ -925,39 +876,38 @@
         await loadAllEntities();
         await loadExistingBills(month, year);
         
-        let groupedEntities = buildGroupedRows();
+        let allEntities = buildEntityList();
         
         const entityFilter = document.getElementById('entityTypeFilter').value;
         const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
         
         // Apply filters
-        let filteredEntities = groupedEntities.filter(entity => {
+        let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
             if (searchTerm) {
                 const matchesEntity = entity.name.toLowerCase().includes(searchTerm);
                 const matchesAccount = entity.accountGroups.some(acc => 
                     acc.accountNumber.toLowerCase().includes(searchTerm) ||
-                    acc.meters.some(m => m.meterNumber.toLowerCase().includes(searchTerm))
+                    (acc.meters && acc.meters.some(m => m.meterNumber.toLowerCase().includes(searchTerm)))
                 );
                 return matchesEntity || matchesAccount;
             }
             return true;
         });
         
-        // Separate schools and departments
-        const schoolsList = filteredEntities.filter(e => e.type === 'school');
-        const departmentsList = filteredEntities.filter(e => e.type === 'department');
-        
         if (filteredEntities.length === 0) {
             tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No schools/departments with water accounts found.</td></tr>';
             isLoading = false;
-            document.querySelector('.table-wrapper')?.classList.remove('loading');
             return;
         }
         
         tbody.innerHTML = '';
         let globalSerial = 1;
+        
+        // Group schools by cluster only for visual separation
+        const schoolsList = filteredEntities.filter(e => e.type === 'school');
+        const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
         // Group schools by cluster
         const schoolsByCluster = new Map();
@@ -978,11 +928,11 @@
             return String(a).localeCompare(String(b));
         });
         
-        // Render Schools grouped by cluster (maintaining original order within cluster)
+        // Render Schools grouped by cluster (maintaining ID order within cluster)
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
-            // Sort by original index to maintain Schools tab order
-            clusterSchools.sort((a, b) => a.originalIndex - b.originalIndex);
+            // Sort by displayOrder (which is based on ID order)
+            clusterSchools.sort((a, b) => a.displayOrder - b.displayOrder);
             
             let hasVisibleInCluster = false;
             const visibleClusterEntities = [];
@@ -992,9 +942,11 @@
                 let hasAnyVisible = false;
                 
                 for (const account of entity.accountGroups) {
+                    const meters = account.meters || (account.meterNumber ? [{ meterNumber: account.meterNumber }] : []);
                     const visibleMeters = [];
-                    for (const meter of account.meters) {
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meter.meterNumber, month, year);
+                    for (const meter of meters) {
+                        const meterNum = meter.meterNumber || account.meterNumber || '—';
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                         const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
                         const amountPaid = existing?.amount_paid || 0;
                         let statusText = 'Pending';
@@ -1004,12 +956,23 @@
                         if (statusFilter === 'all' || 
                             (statusFilter === 'paid' && statusText === 'Paid') ||
                             (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
-                            visibleMeters.push({...meter, existing, billId: existing?.id, totalDue, amountPaid, statusText});
+                            visibleMeters.push({
+                                meterNumber: meterNum,
+                                location: meter.location || '',
+                                notes: meter.notes || '',
+                                existing: existing,
+                                billId: existing?.id,
+                                totalDue: totalDue,
+                                amountPaid: amountPaid
+                            });
                         }
                     }
                     if (visibleMeters.length > 0) {
                         hasAnyVisible = true;
-                        visibleAccounts.push({...account, meters: visibleMeters});
+                        visibleAccounts.push({
+                            accountNumber: account.accountNumber,
+                            meters: visibleMeters
+                        });
                     }
                 }
                 if (hasAnyVisible) {
@@ -1040,10 +1003,10 @@
             }
         }
         
-        // Render Departments (maintaining original order)
+        // Render Departments (maintaining ID order)
         if (departmentsList.length > 0) {
-            // Sort by original index to maintain Departments tab order
-            departmentsList.sort((a, b) => a.originalIndex - b.originalIndex);
+            // Sort by displayOrder (which is based on ID order)
+            departmentsList.sort((a, b) => a.displayOrder - b.displayOrder);
             
             let hasVisibleDepts = false;
             const visibleDeptEntities = [];
@@ -1053,9 +1016,11 @@
                 let hasAnyVisible = false;
                 
                 for (const account of entity.accountGroups) {
+                    const meters = account.meters || (account.meterNumber ? [{ meterNumber: account.meterNumber }] : []);
                     const visibleMeters = [];
-                    for (const meter of account.meters) {
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meter.meterNumber, month, year);
+                    for (const meter of meters) {
+                        const meterNum = meter.meterNumber || account.meterNumber || '—';
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                         const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
                         const amountPaid = existing?.amount_paid || 0;
                         let statusText = 'Pending';
@@ -1065,12 +1030,23 @@
                         if (statusFilter === 'all' || 
                             (statusFilter === 'paid' && statusText === 'Paid') ||
                             (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
-                            visibleMeters.push({...meter, existing, billId: existing?.id, totalDue, amountPaid, statusText});
+                            visibleMeters.push({
+                                meterNumber: meterNum,
+                                location: meter.location || '',
+                                notes: meter.notes || '',
+                                existing: existing,
+                                billId: existing?.id,
+                                totalDue: totalDue,
+                                amountPaid: amountPaid
+                            });
                         }
                     }
                     if (visibleMeters.length > 0) {
                         hasAnyVisible = true;
-                        visibleAccounts.push({...account, meters: visibleMeters});
+                        visibleAccounts.push({
+                            accountNumber: account.accountNumber,
+                            meters: visibleMeters
+                        });
                     }
                 }
                 if (hasAnyVisible) {
@@ -1108,7 +1084,6 @@
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         
-        // Build meter rows data first to calculate totals
         let meterRowsData = [];
         let entityTotalDue = 0;
         let entityTotalPaid = 0;
@@ -1153,7 +1128,6 @@
             }
         }
         
-        // Determine entity status
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
         if (entityTotalDue > 0 && entityTotalPaid >= entityTotalDue) {
@@ -1166,7 +1140,6 @@
             entityStatusText = 'Not entered';
         }
         
-        // Create entity row with Save and Delete buttons
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
@@ -1178,23 +1151,22 @@
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
                 <span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>
-            </td>
-            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></td>
-            <td colspan="2"></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></td>
+            </div>
+            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
+            <td colspan="2"></div>
+            <td></div>
+            <td></div>
+            <td></div>
+            <td></div>
+            <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
                 ${hasAnyBill ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
-            </td>
+            </div>
         `;
         
         tbody.appendChild(entityRow);
         
-        // Add meter rows
         for (const meterData of meterRowsData) {
             const meterRow = document.createElement('tr');
             meterRow.className = 'meter-row';
@@ -1203,21 +1175,20 @@
             if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
             
             meterRow.innerHTML = `
-                <td class="seq-number">${meterData.serial}</td>
-                <td></td>
-                <td></td>
+                <td class="seq-number">${meterData.serial}</div>
+                <td></div>
+                <td></div>
                 <td>${meterData.isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span>` : ''}
-                    ${!meterData.isFirstMeterForAccount ? `<div style="margin-left:20px;"></div>` : ''}
                     <div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>
                     ${meterData.locationDisplay}
-                </td>
-                <td><input type="number" step="0.01" class="inline-input consumption-input" value="${meterData.consumption.toFixed(2)}" placeholder="m³"><span class="consumption-unit">m³</span></td>
-                <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${meterData.currentCharges.toFixed(2)}" placeholder="$"></td>
-                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input" value="${meterData.lateCharges.toFixed(2)}" placeholder="Late"><input type="number" step="0.01" class="inline-input small-input unsettled-input" value="${meterData.unsettled.toFixed(2)}" placeholder="Unsettled"></div></td>
-                <td><input type="number" step="0.01" class="inline-input paid-input" value="${meterData.amountPaid.toFixed(2)}" placeholder="$"></td>
-                <td><input type="text" class="inline-input notes-input" value="${escapeHtml(meterData.notes)}" placeholder="Notes..."></td>
-                <td></td>
-                <td></td>
+                </div>
+                <td><input type="number" step="0.01" class="inline-input consumption-input" value="${meterData.consumption.toFixed(2)}" placeholder="m³"><span class="consumption-unit">m³</span></div>
+                <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${meterData.currentCharges.toFixed(2)}" placeholder="$"></div>
+                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input" value="${meterData.lateCharges.toFixed(2)}" placeholder="Late"><input type="number" step="0.01" class="inline-input small-input unsettled-input" value="${meterData.unsettled.toFixed(2)}" placeholder="Unsettled"></div></div>
+                <td><input type="number" step="0.01" class="inline-input paid-input" value="${meterData.amountPaid.toFixed(2)}" placeholder="$"></div>
+                <td><input type="text" class="inline-input notes-input" value="${escapeHtml(meterData.notes)}" placeholder="Notes..."></div>
+                <td></div>
+                <td></div>
             `;
             tbody.appendChild(meterRow);
         }
@@ -1235,7 +1206,6 @@
         });
     }
     
-    // Attach event listeners using event delegation
     function attachGlobalEventListeners() {
         document.getElementById('billsTableBody').addEventListener('click', async (e) => {
             const saveBtn = e.target.closest('.save-entity-btn');
@@ -1256,7 +1226,6 @@
         });
     }
     
-    // Initialize page
     document.addEventListener('DOMContentLoaded', async () => {
         populateYears();
         
