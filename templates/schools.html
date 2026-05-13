@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Schools Management - Inline Edit</title>
+    <title>Schools Management - Full Inline Edit</title>
     <style>
         :root {
             --primary: #4361ee;
@@ -15,7 +15,7 @@
             --light: #f8f9fa;
             --dark: #2c3e50;
             --gray: #7f8c8d;
-            --border: #ecf0f1;
+            --border: #e2e8f0;
         }
         
         * {
@@ -26,7 +26,7 @@
         }
         
         body {
-            background-color: #f4f7fc;
+            background-color: #f1f5f9;
             color: var(--dark);
         }
         
@@ -185,26 +185,27 @@
         .data-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.85rem;
-            min-width: 1400px;
+            font-size: 0.8rem;
+            min-width: 1800px;
         }
         
         .data-table th {
             background: #f8fafd;
             color: var(--dark);
-            padding: 16px 12px;
+            padding: 14px 8px;
             text-align: left;
             font-weight: 600;
             border-bottom: 2px solid var(--border);
             position: sticky;
             top: 0;
             background: white;
+            z-index: 10;
         }
         
         .data-table td {
-            padding: 14px 12px;
+            padding: 12px 8px;
             border-bottom: 1px solid var(--border);
-            vertical-align: middle;
+            vertical-align: top;
             background-color: white;
         }
         
@@ -213,7 +214,7 @@
             padding: 8px 10px;
             border-radius: 12px;
             border: 1px solid #ddd;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             transition: 0.2s;
         }
         
@@ -278,39 +279,93 @@
             background: #fffbee;
         }
         
-        .inline-save-btn {
-            background: var(--success);
-            border: none;
-            color: white;
-            border-radius: 30px;
+        .inline-save-btn, .inline-cancel-btn {
             padding: 6px 14px;
+            border-radius: 30px;
             font-weight: bold;
-            cursor: pointer;
-        }
-        
-        .inline-cancel-btn {
-            background: var(--gray);
             border: none;
-            color: white;
-            border-radius: 30px;
-            padding: 6px 14px;
             cursor: pointer;
+            font-size: 0.7rem;
         }
         
-        .action-icons {
+        .inline-save-btn { background: var(--success); color: white; }
+        .inline-cancel-btn { background: var(--gray); color: white; }
+        
+        .utility-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .account-card {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 10px;
+            background: #fefefe;
+            margin-bottom: 8px;
+        }
+        
+        .account-header {
             display: flex;
             gap: 8px;
             align-items: center;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
         }
         
-        .edit-icon, .delete-icon {
+        .meter-item, .number-item {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            margin-top: 6px;
+            flex-wrap: wrap;
+            background: #f9f9ff;
+            padding: 6px 8px;
+            border-radius: 12px;
+        }
+        
+        .remove-row-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            width: 24px;
+            height: 24px;
+            font-size: 0.7rem;
             cursor: pointer;
-            font-size: 1.2rem;
-            transition: 0.2s;
         }
         
-        .edit-icon:hover { color: var(--warning); transform: scale(1.1); }
-        .delete-icon:hover { color: var(--danger); transform: scale(1.1); }
+        .add-subitem-btn {
+            background: var(--info);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 4px 12px;
+            font-size: 0.65rem;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+        
+        .add-account-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 6px 12px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            margin-top: 8px;
+            width: 100%;
+        }
+        
+        .compact-input {
+            flex: 1;
+            min-width: 100px;
+            padding: 6px 8px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+            font-size: 0.7rem;
+        }
         
         .toast-message {
             position: fixed;
@@ -339,20 +394,11 @@
             margin-bottom: 12px;
         }
         
-        .inline-group {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        
-        .meter-badge {
+        .section-title {
+            font-weight: 700;
             font-size: 0.7rem;
-            background: #ecfdf5;
-            color: #047857;
-            padding: 2px 8px;
-            border-radius: 30px;
-            display: inline-block;
-            margin: 2px;
+            margin-bottom: 6px;
+            color: var(--primary);
         }
     </style>
 </head>
@@ -375,48 +421,26 @@
 
 <div class="container">
     <div class="page-header">
-        <h1 class="page-title">🏫 Schools Management · Inline Editing</h1>
+        <h1 class="page-title">🏫 Schools · Full Inline Editor</h1>
         <button class="btn btn-primary" id="addNewSchoolBtn">➕ Add New School (Inline)</button>
     </div>
 
     <div class="filters-bar">
-        <div class="filter-group">
-            <label>🔍 Search</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Name, cluster, school no...">
-        </div>
-        <div class="filter-group">
-            <label>📌 Cluster Filter</label>
-            <select id="clusterFilter" class="filter-select"></select>
-        </div>
-        <div class="filter-group">
-            <label>🔄 Sort By</label>
-            <select id="sortFilter" class="filter-select">
-                <option value="seq">ID (Default)</option>
-                <option value="name">Name A-Z</option>
-                <option value="cluster">Cluster Number</option>
-                <option value="schoolNumber">School Number</option>
-            </select>
-        </div>
+        <div class="filter-group"><label>🔍 Search</label><input type="text" id="searchFilter" class="filter-input" placeholder="Name, cluster..."></div>
+        <div class="filter-group"><label>📌 Cluster</label><select id="clusterFilter" class="filter-select"></select></div>
+        <div class="filter-group"><label>🔄 Sort</label><select id="sortFilter" class="filter-select"><option value="seq">ID</option><option value="name">Name</option><option value="cluster">Cluster</option></select></div>
         <button id="refreshBtn" class="btn btn-primary" style="background:#6c757d;">⟳ Refresh</button>
     </div>
-    <div class="scroll-hint">↔️ Scroll horizontally | ✏️ Click edit to modify fields directly | 🏫 Add schools inline without modals</div>
+    <div class="scroll-hint">↔️ Scroll → Edit water/electricity/telephone accounts & meters directly | ✏️ Each account editable inline</div>
 
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
-                <tr>
-                    <th width="50">#</th>
-                    <th width="200">School Name</th>
-                    <th width="90">Cluster</th>
-                    <th width="110">School No.</th>
-                    <th width="220">Water (Accounts/Meters)</th>
-                    <th width="220">Electricity (Accounts/Meters)</th>
-                    <th width="220">Telephone (Accounts/Numbers)</th>
-                    <th width="130">BMO Name</th>
-                    <th width="130">BMO Phone</th>
-                    <th width="150">Address</th>
-                    <th width="140">Actions</th>
-                </tr>
+                <tr><th width="40">#</th><th width="180">School Name</th><th width="80">Cluster</th><th width="100">School No.</th>
+                    <th width="280">💧 Water Accounts & Meters</th>
+                    <th width="280">⚡ Electricity Accounts & Meters</th>
+                    <th width="280">📞 Telephone Accounts & Numbers</th>
+                    <th width="120">BMO Name</th><th width="120">BMO Phone</th><th width="160">Address</th><th width="100">Actions</th></tr>
             </thead>
             <tbody id="schoolsTbody"></tbody>
         </table>
@@ -424,12 +448,10 @@
 </div>
 
 <script>
-    // ---------- Global state ----------
-    let allSchoolsRaw = [];      // original from API
-    let currentEditingId = null;   // store the school id being edited (inline)
-    let tempEditData = {};          // store temporary values while editing
-    
-    // Helper: show toast
+    let allSchoolsRaw = [];
+    let currentEditingId = null;
+    let editingTempData = {};   // store full utility structures while editing
+
     function showMessage(msg, isError = false) {
         const toast = document.createElement('div');
         toast.className = 'toast-message';
@@ -438,14 +460,19 @@
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 2500);
     }
-    
-    // Load schools from API
+
+    function parseJsonField(field) {
+        if (!field) return [];
+        if (Array.isArray(field)) return field;
+        if (typeof field === 'string') { try { return JSON.parse(field); } catch(e) { return []; } }
+        return [];
+    }
+
     async function loadSchools() {
         try {
             const res = await fetch('/api/schools');
-            if (!res.ok) throw new Error('Failed to fetch schools');
+            if (!res.ok) throw new Error('Fetch failed');
             let data = await res.json();
-            // parse JSON fields for each school
             allSchoolsRaw = data.map(s => ({
                 ...s,
                 water_accounts: parseJsonField(s.water_accounts),
@@ -455,407 +482,336 @@
             allSchoolsRaw.sort((a,b) => a.id - b.id);
             updateClusterFilter();
             renderSchools();
-        } catch(err) {
-            console.error(err);
-            showMessage('Error loading schools: ' + err.message, true);
-            document.getElementById('schoolsTbody').innerHTML = '<tr><td colspan="11" style="text-align:center">Failed to load data. Try refresh.</td></tr>';
-        }
+        } catch(err) { showMessage('Error loading schools', true); console.error(err); }
     }
-    
-    function parseJsonField(field) {
-        if (!field) return [];
-        if (Array.isArray(field)) return field;
-        if (typeof field === 'string') {
-            try { return JSON.parse(field); } catch(e) { return []; }
-        }
-        return [];
-    }
-    
-    // update cluster filter dropdown
+
     function updateClusterFilter() {
-        const clusterSet = new Set();
-        allSchoolsRaw.forEach(s => { if(s.cluster_number) clusterSet.add(s.cluster_number); });
-        const sorted = Array.from(clusterSet).sort((a,b) => {
-            let na = parseInt(a), nb = parseInt(b);
-            if(!isNaN(na) && !isNaN(nb)) return na - nb;
-            return String(a).localeCompare(String(b));
-        });
+        const set = new Set();
+        allSchoolsRaw.forEach(s => { if(s.cluster_number) set.add(s.cluster_number); });
         const select = document.getElementById('clusterFilter');
         select.innerHTML = '<option value="all">All Clusters</option>';
-        sorted.forEach(c => {
-            let opt = document.createElement('option');
-            opt.value = c;
-            opt.textContent = `Cluster ${c}`;
-            select.appendChild(opt);
+        Array.from(set).sort((a,b)=> (parseInt(a)||0) - (parseInt(b)||0)).forEach(c => {
+            let opt = document.createElement('option'); opt.value = c; opt.textContent = `Cluster ${c}`; select.appendChild(opt);
         });
     }
-    
-    // filter & sort logic
+
     function getFilteredSchools() {
         let filtered = [...allSchoolsRaw];
         const search = document.getElementById('searchFilter').value.toLowerCase();
-        const clusterVal = document.getElementById('clusterFilter').value;
+        const cluster = document.getElementById('clusterFilter').value;
         const sortBy = document.getElementById('sortFilter').value;
-        
-        if (search) {
-            filtered = filtered.filter(s => 
-                s.name?.toLowerCase().includes(search) ||
-                s.cluster_number?.toLowerCase().includes(search) ||
-                s.school_number?.toLowerCase().includes(search) ||
-                s.bmo_name?.toLowerCase().includes(search)
-            );
-        }
-        if (clusterVal !== 'all') {
-            filtered = filtered.filter(s => s.cluster_number === clusterVal);
-        }
-        
-        // sort
-        if (sortBy === 'name') filtered.sort((a,b) => (a.name || '').localeCompare(b.name || ''));
-        else if (sortBy === 'cluster') filtered.sort((a,b) => (a.cluster_number || '').localeCompare(b.cluster_number || ''));
-        else if (sortBy === 'schoolNumber') filtered.sort((a,b) => (a.school_number || '').localeCompare(b.school_number || ''));
-        else filtered.sort((a,b) => a.id - b.id);
-        
+        if(search) filtered = filtered.filter(s => s.name?.toLowerCase().includes(search) || s.cluster_number?.toLowerCase().includes(search) || s.school_number?.toLowerCase().includes(search));
+        if(cluster !== 'all') filtered = filtered.filter(s => s.cluster_number === cluster);
+        if(sortBy === 'name') filtered.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+        else if(sortBy === 'cluster') filtered.sort((a,b)=> (a.cluster_number||'').localeCompare(b.cluster_number||''));
+        else filtered.sort((a,b)=> a.id - b.id);
         return filtered;
     }
-    
-    // Helper: format utilities summary (inline friendly)
-    function formatUtilityPreview(accounts, type) {
-        if (!accounts || accounts.length === 0) return '<span style="color:#aaa;">—</span>';
-        let summary = [];
-        accounts.forEach(acc => {
-            let accNum = acc.accountNumber || acc.account_number || '?';
-            let count = 0;
-            if (type === 'telephone') count = acc.numbers?.length || 0;
-            else count = acc.meters?.length || 0;
-            summary.push(`${accNum} (${count})`);
-        });
-        return `<div style="font-size:0.75rem; background:#f8f9fa; padding:4px 8px; border-radius:16px;">${summary.join(', ')}</div>`;
-    }
-    
-    // Render main table with inline editing support
-    function renderSchools() {
-        const filtered = getFilteredSchools();
-        const tbody = document.getElementById('schoolsTbody');
-        tbody.innerHTML = '';
-        
-        if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:40px;">No schools found. Click "Add New School"</td></tr>';
-            return;
-        }
-        
-        // group by cluster
-        const clusterMap = new Map();
-        filtered.forEach(s => {
-            const cluster = s.cluster_number || 'Unassigned';
-            if (!clusterMap.has(cluster)) clusterMap.set(cluster, []);
-            clusterMap.get(cluster).push(s);
-        });
-        
-        const sortedClusters = Array.from(clusterMap.keys()).sort((a,b) => {
-            if (a === 'Unassigned') return 1;
-            if (b === 'Unassigned') return -1;
-            let na = parseInt(a), nb = parseInt(b);
-            if (!isNaN(na) && !isNaN(nb)) return na - nb;
-            return String(a).localeCompare(String(b));
-        });
-        
-        let globalSeq = 1;
-        for (let cluster of sortedClusters) {
-            const schoolsInCluster = clusterMap.get(cluster);
-            // cluster separator
-            const sepRow = document.createElement('tr');
-            sepRow.className = 'cluster-separator';
-            sepRow.innerHTML = `<td colspan="11"><div class="cluster-info"><span>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED CLUSTER' : `CLUSTER ${cluster}`}</span><span class="cluster-count">${schoolsInCluster.length} schools</span></div></td>`;
-            tbody.appendChild(sepRow);
-            
-            for (let school of schoolsInCluster) {
-                const isEditing = (currentEditingId === school.id);
-                const row = document.createElement('tr');
-                row.setAttribute('data-school-id', school.id);
-                
-                if (isEditing) {
-                    // ----- INLINE EDIT MODE -----
-                    const editName = tempEditData.name !== undefined ? tempEditData.name : (school.name || '');
-                    const editCluster = tempEditData.cluster_number !== undefined ? tempEditData.cluster_number : (school.cluster_number || '');
-                    const editSchoolNo = tempEditData.school_number !== undefined ? tempEditData.school_number : (school.school_number || '');
-                    const editBmoName = tempEditData.bmo_name !== undefined ? tempEditData.bmo_name : (school.bmo_name || '');
-                    const editBmoPhone = tempEditData.bmo_phone !== undefined ? tempEditData.bmo_phone : (school.bmo_phone || '');
-                    const editAddress = tempEditData.address !== undefined ? tempEditData.address : (school.address || '');
-                    const editNotes = tempEditData.notes !== undefined ? tempEditData.notes : (school.notes || '');
-                    
-                    row.innerHTML = `
-                        <td class="seq-cell">${globalSeq}</td>
-                        <td><input type="text" class="inline-edit-input" id="edit-name-${school.id}" value="${escapeHtml(editName)}" placeholder="School Name"></td>
-                        <td><input type="text" class="inline-edit-input" id="edit-cluster-${school.id}" value="${escapeHtml(editCluster)}" placeholder="Cluster"></td>
-                        <td><input type="text" class="inline-edit-input" id="edit-schno-${school.id}" value="${escapeHtml(editSchoolNo)}" placeholder="School No"></td>
-                        <td>${formatUtilityPreview(school.water_accounts, 'water')}</td>
-                        <td>${formatUtilityPreview(school.electricity_accounts, 'electricity')}</td>
-                        <td>${formatUtilityPreview(school.telephone_accounts, 'telephone')}</td>
-                        <td><input type="text" class="inline-edit-input" id="edit-bmoname-${school.id}" value="${escapeHtml(editBmoName)}"></td>
-                        <td><input type="text" class="inline-edit-input" id="edit-bmophone-${school.id}" value="${escapeHtml(editBmoPhone)}"></td>
-                        <td><input type="text" class="inline-edit-input" id="edit-address-${school.id}" value="${escapeHtml(editAddress)}"></td>
-                        <td class="entity-actions">
-                            <button class="inline-save-btn" data-id="${school.id}">💾 Save</button>
-                            <button class="inline-cancel-btn" data-id="${school.id}">✖ Cancel</button>
-                        </td>
-                    `;
-                } else {
-                    // ----- NORMAL VIEW MODE -----
-                    // show basic info with edit/delete buttons
-                    row.innerHTML = `
-                        <td class="seq-cell">${globalSeq}</td>
-                        <td><strong>${escapeHtml(school.name || '')}</strong></td>
-                        <td><span class="badge badge-cluster">${escapeHtml(school.cluster_number || '-')}</span></td>
-                        <td>${escapeHtml(school.school_number || '-')}</td>
-                        <td>${formatUtilityPreview(school.water_accounts, 'water')}</td>
-                        <td>${formatUtilityPreview(school.electricity_accounts, 'electricity')}</td>
-                        <td>${formatUtilityPreview(school.telephone_accounts, 'telephone')}</td>
-                        <td>${escapeHtml(school.bmo_name || '-')}</td>
-                        <td>${escapeHtml(school.bmo_phone || '-')}</td>
-                        <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(school.address || '-')}</td>
-                        <td class="entity-actions">
-                            <button class="btn btn-warning btn-sm edit-school-btn" data-id="${school.id}">✏️ Edit</button>
-                            <button class="btn btn-danger btn-sm delete-school-btn" data-id="${school.id}">🗑️ Del</button>
-                        </td>
-                    `;
-                }
-                tbody.appendChild(row);
-                globalSeq++;
+
+    // Helper to render inline editing UI for utilities (water, electricity, telephone)
+    function renderUtilityEditor(utilityType, accounts, schoolId) {
+        if (!Array.isArray(accounts)) accounts = [];
+        const containerId = `${utilityType}-editor-${schoolId}`;
+        let html = `<div class="utility-group" id="${containerId}">`;
+        accounts.forEach((acc, accIdx) => {
+            const accNumber = acc.accountNumber || acc.account_number || '';
+            html += `<div class="account-card" data-acc-index="${accIdx}">
+                        <div class="account-header">
+                            <input type="text" class="compact-input acc-num-input" value="${escapeHtml(accNumber)}" placeholder="Account #" style="width:140px;">
+                            <button type="button" class="remove-row-btn remove-account-btn" data-util="${utilityType}" data-accidx="${accIdx}">🗑️</button>
+                        </div>`;
+            if (utilityType === 'telephone') {
+                const numbers = acc.numbers || [];
+                html += `<div class="subitems-list" data-subtype="numbers">`;
+                numbers.forEach((num, idx) => {
+                    html += `<div class="meter-item" data-subidx="${idx}">
+                                <input type="text" class="compact-input phone-number-input" value="${escapeHtml(num.phoneNumber || '')}" placeholder="Phone Number" style="width:130px;">
+                                <input type="text" class="compact-input location-input" value="${escapeHtml(num.location || '')}" placeholder="Location" style="width:100px;">
+                                <input type="text" class="compact-input notes-input" value="${escapeHtml(num.notes || '')}" placeholder="Notes" style="width:100px;">
+                                <button type="button" class="remove-row-btn remove-subitem" data-util="${utilityType}" data-accidx="${accIdx}" data-subidx="${idx}">✖</button>
+                            </div>`;
+                });
+                html += `</div><button type="button" class="add-subitem-btn add-number-btn" data-util="${utilityType}" data-accidx="${accIdx}">+ Add Phone Number</button>`;
+            } else {
+                const meters = acc.meters || [];
+                html += `<div class="subitems-list" data-subtype="meters">`;
+                meters.forEach((meter, idx) => {
+                    html += `<div class="meter-item" data-subidx="${idx}">
+                                <input type="text" class="compact-input meter-number-input" value="${escapeHtml(meter.meterNumber || '')}" placeholder="Meter #" style="width:120px;">
+                                <input type="text" class="compact-input location-input" value="${escapeHtml(meter.location || '')}" placeholder="Location" style="width:100px;">
+                                <input type="text" class="compact-input notes-input" value="${escapeHtml(meter.notes || '')}" placeholder="Notes" style="width:100px;">
+                                <button type="button" class="remove-row-btn remove-subitem" data-util="${utilityType}" data-accidx="${accIdx}" data-subidx="${idx}">✖</button>
+                            </div>`;
+                });
+                html += `</div><button type="button" class="add-subitem-btn add-meter-btn" data-util="${utilityType}" data-accidx="${accIdx}">+ Add Meter</button>`;
             }
-        }
-        
-        // attach event handlers for edit/save/cancel/delete
-        document.querySelectorAll('.edit-school-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = parseInt(btn.getAttribute('data-id'));
-                startInlineEdit(id);
-            });
+            html += `</div>`;
         });
-        
-        document.querySelectorAll('.delete-school-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const id = parseInt(btn.getAttribute('data-id'));
-                if (confirm('⚠️ Delete this school? This will also remove associations in electricity/water/telephone bills (if any).')) {
-                    await deleteSchoolById(id);
-                }
-            });
-        });
-        
-        // save / cancel inline
-        document.querySelectorAll('.inline-save-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const id = parseInt(btn.getAttribute('data-id'));
-                await saveInlineEdit(id);
-            });
-        });
-        document.querySelectorAll('.inline-cancel-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                currentEditingId = null;
-                tempEditData = {};
-                renderSchools();
-            });
-        });
+        html += `<button type="button" class="add-account-btn add-account-util" data-util="${utilityType}">+ Add ${utilityType === 'water' ? 'Water' : utilityType === 'electricity' ? 'Electricity' : 'Telephone'} Account</button></div>`;
+        return html;
     }
-    
-    function startInlineEdit(id) {
-        const school = allSchoolsRaw.find(s => s.id === id);
-        if (!school) return;
-        currentEditingId = id;
-        tempEditData = {
-            name: school.name,
-            cluster_number: school.cluster_number,
-            school_number: school.school_number,
-            bmo_name: school.bmo_name,
-            bmo_phone: school.bmo_phone,
-            address: school.address,
-            notes: school.notes
-        };
-        renderSchools();
+
+    function collectUtilityDataFromDOM(schoolId) {
+        const waterAccounts = [];
+        document.querySelectorAll(`#water-editor-${schoolId} .account-card`).forEach((card, idx) => {
+            const accNum = card.querySelector('.acc-num-input')?.value || '';
+            const items = [];
+            card.querySelectorAll('.meter-item').forEach(item => {
+                const meterNum = item.querySelector('.meter-number-input')?.value || '';
+                const location = item.querySelector('.location-input')?.value || '';
+                const notes = item.querySelector('.notes-input')?.value || '';
+                if(meterNum) items.push({ meterNumber: meterNum, location, notes });
+            });
+            if(accNum || items.length) waterAccounts.push({ accountNumber: accNum, meters: items });
+        });
+        
+        const electricityAccounts = [];
+        document.querySelectorAll(`#electricity-editor-${schoolId} .account-card`).forEach(card => {
+            const accNum = card.querySelector('.acc-num-input')?.value || '';
+            const items = [];
+            card.querySelectorAll('.meter-item').forEach(item => {
+                const meterNum = item.querySelector('.meter-number-input')?.value || '';
+                const location = item.querySelector('.location-input')?.value || '';
+                const notes = item.querySelector('.notes-input')?.value || '';
+                if(meterNum) items.push({ meterNumber: meterNum, location, notes });
+            });
+            if(accNum || items.length) electricityAccounts.push({ accountNumber: accNum, meters: items });
+        });
+        
+        const telephoneAccounts = [];
+        document.querySelectorAll(`#telephone-editor-${schoolId} .account-card`).forEach(card => {
+            const accNum = card.querySelector('.acc-num-input')?.value || '';
+            const numbers = [];
+            card.querySelectorAll('.meter-item').forEach(item => {
+                const phoneNum = item.querySelector('.phone-number-input')?.value || '';
+                const location = item.querySelector('.location-input')?.value || '';
+                const notes = item.querySelector('.notes-input')?.value || '';
+                if(phoneNum) numbers.push({ phoneNumber: phoneNum, location, notes });
+            });
+            if(accNum || numbers.length) telephoneAccounts.push({ accountNumber: accNum, numbers });
+        });
+        return { waterAccounts, electricityAccounts, telephoneAccounts };
     }
-    
-    async function saveInlineEdit(id) {
-        // gather values from inputs
-        const nameInput = document.getElementById(`edit-name-${id}`);
-        const clusterInput = document.getElementById(`edit-cluster-${id}`);
-        const schoolNoInput = document.getElementById(`edit-schno-${id}`);
-        const bmoNameInput = document.getElementById(`edit-bmoname-${id}`);
-        const bmoPhoneInput = document.getElementById(`edit-bmophone-${id}`);
-        const addressInput = document.getElementById(`edit-address-${id}`);
+
+    async function saveFullInlineEdit(schoolId) {
+        const nameInput = document.getElementById(`edit-name-${schoolId}`);
+        const clusterInput = document.getElementById(`edit-cluster-${schoolId}`);
+        const schoolNoInput = document.getElementById(`edit-schno-${schoolId}`);
+        const bmoNameInput = document.getElementById(`edit-bmoname-${schoolId}`);
+        const bmoPhoneInput = document.getElementById(`edit-bmophone-${schoolId}`);
+        const addressInput = document.getElementById(`edit-address-${schoolId}`);
         
-        if (!nameInput || !clusterInput || !schoolNoInput) {
-            showMessage("Missing required fields", true);
-            return;
-        }
-        
-        const updatedData = {
+        if (!nameInput || !clusterInput || !schoolNoInput) { showMessage("Missing required fields", true); return; }
+        const updatedBasic = {
             name: nameInput.value.trim(),
             clusterNumber: clusterInput.value.trim(),
             schoolNumber: schoolNoInput.value.trim(),
             bmoName: bmoNameInput ? bmoNameInput.value.trim() : '',
             bmoPhone: bmoPhoneInput ? bmoPhoneInput.value.trim() : '',
             address: addressInput ? addressInput.value.trim() : '',
-            notes: '' // keep existing notes if any (we can preserve original but optional)
+            notes: ''
         };
-        
-        if (!updatedData.name || !updatedData.clusterNumber || !updatedData.schoolNumber) {
-            showMessage("School Name, Cluster and School Number are required", true);
-            return;
+        if (!updatedBasic.name || !updatedBasic.clusterNumber || !updatedBasic.schoolNumber) {
+            showMessage("School Name, Cluster and School Number are required", true); return;
         }
         
-        // preserve utility accounts from original school object (so we don't lose water/electricity/telephone data)
-        const originalSchool = allSchoolsRaw.find(s => s.id === id);
-        if (!originalSchool) return;
+        const utilities = collectUtilityDataFromDOM(schoolId);
         
         const payload = {
-            name: updatedData.name,
-            clusterNumber: updatedData.clusterNumber,
-            schoolNumber: updatedData.schoolNumber,
-            bmoName: updatedData.bmoName,
-            bmoPhone: updatedData.bmoPhone,
-            address: updatedData.address,
-            notes: originalSchool.notes || '',
-            waterAccounts: originalSchool.water_accounts,
-            electricityAccounts: originalSchool.electricity_accounts,
-            telephoneAccounts: originalSchool.telephone_accounts
+            ...updatedBasic,
+            waterAccounts: utilities.waterAccounts,
+            electricityAccounts: utilities.electricityAccounts,
+            telephoneAccounts: utilities.telephoneAccounts
         };
         
         try {
-            const res = await fetch(`/api/schools/${id}`, {
+            const res = await fetch(`/api/schools/${schoolId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             const result = await res.json();
             if (res.ok && result.success) {
-                showMessage(`✅ School "${updatedData.name}" updated`);
+                showMessage(`✅ School "${updatedBasic.name}" saved`);
                 currentEditingId = null;
-                tempEditData = {};
-                await loadSchools();   // reload fresh data
-            } else {
-                showMessage(`Error: ${result.error || 'Update failed'}`, true);
-                renderSchools(); // revert
-            }
-        } catch(err) {
-            showMessage('Network error', true);
-            console.error(err);
+                await loadSchools();
+            } else { showMessage(`Error: ${result.error || 'Update failed'}`, true); renderSchools(); }
+        } catch(err) { showMessage('Network error', true); }
+    }
+    
+    function startInlineEdit(school) {
+        if (currentEditingId) return;
+        currentEditingId = school.id;
+        renderSchools();
+    }
+    
+    function cancelInlineEdit() { currentEditingId = null; renderSchools(); }
+    
+    function attachDynamicUtilityEvents(schoolId) {
+        // add account buttons
+        document.querySelectorAll(`.add-account-util`).forEach(btn => {
+            btn.removeEventListener('click', window.accountHandler);
+            const handler = (e) => {
+                const util = btn.getAttribute('data-util');
+                const container = document.getElementById(`${util}-editor-${schoolId}`);
+                if (!container) return;
+                const newCard = document.createElement('div');
+                newCard.className = 'account-card';
+                newCard.innerHTML = `<div class="account-header"><input type="text" class="compact-input acc-num-input" placeholder="Account #" style="width:140px;"><button type="button" class="remove-row-btn remove-account-btn">🗑️</button></div>
+                <div class="subitems-list"></div>
+                <button type="button" class="add-subitem-btn ${util === 'telephone' ? 'add-number-btn' : 'add-meter-btn'}">+ ${util === 'telephone' ? 'Add Number' : 'Add Meter'}</button>`;
+                container.appendChild(newCard);
+                attachAccountEvents(newCard, util, schoolId);
+            };
+            btn.addEventListener('click', handler);
+            window.accountHandler = handler;
+        });
+        
+        // attach remove account
+        document.querySelectorAll(`.remove-account-btn`).forEach(btn => {
+            btn.onclick = (e) => { btn.closest('.account-card')?.remove(); };
+        });
+        
+        // attach add meter/number inside each card
+        document.querySelectorAll(`.add-meter-btn, .add-number-btn`).forEach(btn => {
+            btn.onclick = (e) => {
+                const card = btn.closest('.account-card');
+                const util = btn.classList.contains('add-meter-btn') ? (btn.closest('#water-editor') ? 'water' : 'electricity') : 'telephone';
+                const subList = card.querySelector('.subitems-list');
+                const newDiv = document.createElement('div');
+                newDiv.className = 'meter-item';
+                if(util === 'telephone') {
+                    newDiv.innerHTML = `<input type="text" class="compact-input phone-number-input" placeholder="Phone Number" style="width:130px;"><input type="text" class="compact-input location-input" placeholder="Location" style="width:100px;"><input type="text" class="compact-input notes-input" placeholder="Notes" style="width:100px;"><button type="button" class="remove-row-btn remove-subitem">✖</button>`;
+                } else {
+                    newDiv.innerHTML = `<input type="text" class="compact-input meter-number-input" placeholder="Meter #" style="width:120px;"><input type="text" class="compact-input location-input" placeholder="Location" style="width:100px;"><input type="text" class="compact-input notes-input" placeholder="Notes" style="width:100px;"><button type="button" class="remove-row-btn remove-subitem">✖</button>`;
+                }
+                subList.appendChild(newDiv);
+                newDiv.querySelector('.remove-subitem')?.addEventListener('click', () => newDiv.remove());
+            };
+        });
+        
+        document.querySelectorAll(`.remove-subitem`).forEach(btn => { btn.onclick = (e) => btn.closest('.meter-item')?.remove(); });
+    }
+    
+    function attachAccountEvents(card, util, schoolId) {
+        card.querySelector('.remove-account-btn')?.addEventListener('click', () => card.remove());
+        const addBtn = card.querySelector(`.add-meter-btn, .add-number-btn`);
+        if(addBtn) {
+            addBtn.onclick = () => {
+                const subList = card.querySelector('.subitems-list');
+                const newDiv = document.createElement('div'); newDiv.className = 'meter-item';
+                if(util === 'telephone') newDiv.innerHTML = `<input type="text" class="compact-input phone-number-input" placeholder="Phone Number"><input type="text" class="compact-input location-input" placeholder="Location"><input type="text" class="compact-input notes-input" placeholder="Notes"><button type="button" class="remove-row-btn remove-subitem">✖</button>`;
+                else newDiv.innerHTML = `<input type="text" class="compact-input meter-number-input" placeholder="Meter #"><input type="text" class="compact-input location-input" placeholder="Location"><input type="text" class="compact-input notes-input" placeholder="Notes"><button type="button" class="remove-row-btn remove-subitem">✖</button>`;
+                subList.appendChild(newDiv);
+                newDiv.querySelector('.remove-subitem')?.addEventListener('click', () => newDiv.remove());
+            };
         }
+    }
+    
+    function renderSchools() {
+        const filtered = getFilteredSchools();
+        const tbody = document.getElementById('schoolsTbody');
+        tbody.innerHTML = '';
+        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="11" style="text-align:center">No schools<\/td></tr>'; return; }
+        
+        const clusterMap = new Map();
+        filtered.forEach(s => { let c = s.cluster_number || 'Unassigned'; if(!clusterMap.has(c)) clusterMap.set(c, []); clusterMap.get(c).push(s); });
+        const sortedClusters = Array.from(clusterMap.keys()).sort((a,b) => a==='Unassigned'?1:b==='Unassigned'?-1:(parseInt(a)||0)-(parseInt(b)||0));
+        let seq=1;
+        
+        for(let cluster of sortedClusters) {
+            const schools = clusterMap.get(cluster);
+            const sep = document.createElement('tr'); sep.className='cluster-separator';
+            sep.innerHTML = `<td colspan="11"><div class="cluster-info"><span>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</span><span class="cluster-count">${schools.length} schools</span></div></td>`;
+            tbody.appendChild(sep);
+            for(let school of schools) {
+                const isEditing = (currentEditingId === school.id);
+                const row = document.createElement('tr');
+                if(isEditing) {
+                    row.innerHTML = `
+                        <td>${seq}</td>
+                        <td><input type="text" id="edit-name-${school.id}" class="inline-edit-input" value="${escapeHtml(school.name||'')}"></td>
+                        <td><input type="text" id="edit-cluster-${school.id}" class="inline-edit-input" value="${escapeHtml(school.cluster_number||'')}"></td>
+                        <td><input type="text" id="edit-schno-${school.id}" class="inline-edit-input" value="${escapeHtml(school.school_number||'')}"></td>
+                        <td>${renderUtilityEditor('water', school.water_accounts || [], school.id)}</td>
+                        <td>${renderUtilityEditor('electricity', school.electricity_accounts || [], school.id)}</td>
+                        <td>${renderUtilityEditor('telephone', school.telephone_accounts || [], school.id)}</td>
+                        <td><input type="text" id="edit-bmoname-${school.id}" class="inline-edit-input" value="${escapeHtml(school.bmo_name||'')}"></td>
+                        <td><input type="text" id="edit-bmophone-${school.id}" class="inline-edit-input" value="${escapeHtml(school.bmo_phone||'')}"></td>
+                        <td><input type="text" id="edit-address-${school.id}" class="inline-edit-input" value="${escapeHtml(school.address||'')}"></td>
+                        <td class="entity-actions"><button class="inline-save-btn" data-id="${school.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${school.id}">✖ Cancel</button></td>
+                    `;
+                    tbody.appendChild(row);
+                    setTimeout(() => { attachDynamicUtilityEvents(school.id); }, 10);
+                } else {
+                    // preview mode
+                    const waterPreview = (school.water_accounts||[]).map(a => `${a.accountNumber||'?'} (${(a.meters||[]).length}m)`).join(', ') || '—';
+                    const elecPreview = (school.electricity_accounts||[]).map(a => `${a.accountNumber||'?'} (${(a.meters||[]).length}m)`).join(', ') || '—';
+                    const telPreview = (school.telephone_accounts||[]).map(a => `${a.accountNumber||'?'} (${(a.numbers||[]).length}#)`).join(', ') || '—';
+                    row.innerHTML = `
+                        <td>${seq}</td>
+                        <td><strong>${escapeHtml(school.name||'')}</strong></td>
+                        <td><span class="badge badge-cluster">${escapeHtml(school.cluster_number||'-')}</span></td>
+                        <td>${escapeHtml(school.school_number||'-')}</td>
+                        <td><div style="font-size:0.7rem; background:#f1f5f9; padding:6px; border-radius:12px;">${escapeHtml(waterPreview)}</div></td>
+                        <td><div style="font-size:0.7rem; background:#f1f5f9; padding:6px; border-radius:12px;">${escapeHtml(elecPreview)}</div></td>
+                        <td><div style="font-size:0.7rem; background:#f1f5f9; padding:6px; border-radius:12px;">${escapeHtml(telPreview)}</div></td>
+                        <td>${escapeHtml(school.bmo_name||'-')}</td>
+                        <td>${escapeHtml(school.bmo_phone||'-')}</td>
+                        <td>${escapeHtml(school.address||'-')}</td>
+                        <td class="entity-actions"><button class="btn btn-warning btn-sm edit-school-btn" data-id="${school.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-school-btn" data-id="${school.id}">🗑️ Del</button></td>
+                    `;
+                    tbody.appendChild(row);
+                }
+                seq++;
+            }
+        }
+        
+        document.querySelectorAll('.edit-school-btn').forEach(btn => { btn.addEventListener('click', (e) => { const id = parseInt(btn.getAttribute('data-id')); const school = allSchoolsRaw.find(s=>s.id===id); if(school) startInlineEdit(school); }); });
+        document.querySelectorAll('.delete-school-btn').forEach(btn => { btn.addEventListener('click', async (e) => { const id = parseInt(btn.getAttribute('data-id')); if(confirm('Delete school?')) await deleteSchoolById(id); }); });
+        document.querySelectorAll('.inline-save-btn').forEach(btn => { btn.addEventListener('click', (e) => { const id = parseInt(btn.getAttribute('data-id')); saveFullInlineEdit(id); }); });
+        document.querySelectorAll('.inline-cancel-btn').forEach(btn => { btn.addEventListener('click', () => cancelInlineEdit()); });
     }
     
     async function deleteSchoolById(id) {
         try {
             const res = await fetch(`/api/schools/${id}`, { method: 'DELETE' });
             const data = await res.json();
-            if (data.success) {
-                showMessage(`School deleted successfully`);
-                if (currentEditingId === id) currentEditingId = null;
-                await loadSchools();
-            } else {
-                showMessage(`Delete error: ${data.error}`, true);
-            }
-        } catch(err) {
-            showMessage('Failed to delete', true);
-        }
+            if(data.success) { showMessage('School deleted'); await loadSchools(); } else showMessage(data.error||'Error', true);
+        } catch(e) { showMessage('Delete failed', true); }
     }
     
-    // Inline add new school: insert a temporary row at the top (or bottom) without modal
-    let addingModeActive = false;
+    let addingActive = false;
     async function enableInlineAdd() {
-        if (addingModeActive) return;
-        addingModeActive = true;
+        if(addingActive) return;
+        addingActive = true;
         const tbody = document.getElementById('schoolsTbody');
-        // create an "add new" row at the top after clusters? easier: prepend dummy row
-        const addRow = document.createElement('tr');
-        addRow.className = 'add-new-row';
-        addRow.id = 'inline-add-row';
-        addRow.innerHTML = `
-            <td>✨</td>
-            <td><input type="text" id="new-name" class="inline-edit-input" placeholder="School Name *"></td>
-            <td><input type="text" id="new-cluster" class="inline-edit-input" placeholder="Cluster *"></td>
-            <td><input type="text" id="new-schno" class="inline-edit-input" placeholder="School No *"></td>
-            <td><span style="font-size:0.7rem;">(Add later via edit)</span></td>
-            <td><span style="font-size:0.7rem;">(Add later via edit)</span></td>
-            <td><span style="font-size:0.7rem;">(Add later via edit)</span></td>
-            <td><input type="text" id="new-bmoname" class="inline-edit-input" placeholder="BMO Name"></td>
-            <td><input type="text" id="new-bmophone" class="inline-edit-input" placeholder="BMO Phone"></td>
-            <td><input type="text" id="new-address" class="inline-edit-input" placeholder="Address"></td>
-            <td class="entity-actions">
-                <button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button>
-                <button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button>
-            </td>
-        `;
-        // find first cluster separator or insert at top
-        const firstRow = tbody.firstChild;
-        if (firstRow) tbody.insertBefore(addRow, firstRow);
-        else tbody.appendChild(addRow);
-        
+        const addRow = document.createElement('tr'); addRow.className='add-new-row'; addRow.id='inline-add-row';
+        addRow.innerHTML = `<td>✨</td><td><input id="new-name" class="inline-edit-input" placeholder="Name *"></td><td><input id="new-cluster" class="inline-edit-input" placeholder="Cluster *"></td><td><input id="new-schno" class="inline-edit-input" placeholder="School No *"></td>
+        <td colspan="3"><span style="font-size:0.7rem;">(Add utilities after creation)</span></td>
+        <td><input id="new-bmoname" class="inline-edit-input" placeholder="BMO"></td><td><input id="new-bmophone" class="inline-edit-input" placeholder="Phone"></td><td><input id="new-address" class="inline-edit-input" placeholder="Address"></td>
+        <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button></td>`;
+        const first = tbody.firstChild; if(first) tbody.insertBefore(addRow, first); else tbody.appendChild(addRow);
         document.getElementById('confirmAddBtn')?.addEventListener('click', async () => {
-            const newName = document.getElementById('new-name')?.value.trim();
-            const newCluster = document.getElementById('new-cluster')?.value.trim();
-            const newSchoolNo = document.getElementById('new-schno')?.value.trim();
-            if (!newName || !newCluster || !newSchoolNo) {
-                showMessage("Please fill School Name, Cluster and School Number", true);
-                return;
-            }
-            const newBmoName = document.getElementById('new-bmoname')?.value.trim() || '';
-            const newBmoPhone = document.getElementById('new-bmophone')?.value.trim() || '';
-            const newAddress = document.getElementById('new-address')?.value.trim() || '';
-            
-            const payload = {
-                name: newName,
-                clusterNumber: newCluster,
-                schoolNumber: newSchoolNo,
-                bmoName: newBmoName,
-                bmoPhone: newBmoPhone,
-                address: newAddress,
-                notes: '',
-                waterAccounts: [],
-                electricityAccounts: [],
-                telephoneAccounts: []
-            };
-            
+            const name = document.getElementById('new-name')?.value.trim(); const cluster = document.getElementById('new-cluster')?.value.trim(); const schno = document.getElementById('new-schno')?.value.trim();
+            if(!name || !cluster || !schno) { showMessage("Required fields missing", true); return; }
+            const payload = { name, clusterNumber: cluster, schoolNumber: schno, bmoName: document.getElementById('new-bmoname')?.value.trim()||'', bmoPhone: document.getElementById('new-bmophone')?.value.trim()||'', address: document.getElementById('new-address')?.value.trim()||'', notes:'', waterAccounts:[], electricityAccounts:[], telephoneAccounts:[] };
             try {
-                const res = await fetch('/api/schools', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+                const res = await fetch('/api/schools', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
                 const result = await res.json();
-                if (res.ok && result.success) {
-                    showMessage(`🏫 School "${newName}" created`);
-                    addingModeActive = false;
-                    await loadSchools();
-                } else {
-                    showMessage(`Error: ${result.error || 'Creation failed'}`, true);
-                }
-            } catch(err) {
-                showMessage('Network error', true);
-            } finally {
-                addingModeActive = false;
-                renderSchools();
-            }
+                if(res.ok && result.success) { showMessage(`School "${name}" created`); addingActive=false; await loadSchools(); } else showMessage(result.error||'Creation failed', true);
+            } catch(e) { showMessage('Network error', true); } finally { addingActive=false; renderSchools(); }
         });
-        
-        document.getElementById('cancelAddBtn')?.addEventListener('click', () => {
-            addingModeActive = false;
-            renderSchools();
-        });
+        document.getElementById('cancelAddBtn')?.addEventListener('click', () => { addingActive=false; renderSchools(); });
     }
     
-    function escapeHtml(str) { if(!str) return ''; return String(str).replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
-    
-    // event listeners and init
-    document.getElementById('addNewSchoolBtn').addEventListener('click', () => {
-        if (currentEditingId) {
-            showMessage('Please finish current edit first', true);
-            return;
-        }
-        enableInlineAdd();
-    });
-    document.getElementById('refreshBtn').addEventListener('click', () => { loadSchools(); });
+    document.getElementById('addNewSchoolBtn').addEventListener('click', () => { if(currentEditingId) showMessage('Finish current edit first', true); else enableInlineAdd(); });
+    document.getElementById('refreshBtn').addEventListener('click', () => loadSchools());
     document.getElementById('searchFilter').addEventListener('input', () => renderSchools());
     document.getElementById('clusterFilter').addEventListener('change', () => renderSchools());
     document.getElementById('sortFilter').addEventListener('change', () => renderSchools());
     
+    function escapeHtml(str) { if(!str) return ''; return String(str).replace(/[&<>]/g, m => m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); }
     loadSchools();
 </script>
 </body>
