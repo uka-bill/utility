@@ -257,33 +257,6 @@
             flex-wrap: wrap;
         }
         
-        .department-separator {
-            background-color: #f8fafc;
-            border-top: 2px solid var(--primary);
-            border-bottom: 2px solid var(--primary);
-        }
-        
-        .department-separator td {
-            padding: 10px 16px;
-            font-weight: bold;
-            background-color: #f0f6ff;
-            color: #1e3a8a;
-        }
-        
-        .dept-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .dept-count {
-            background: var(--primary);
-            color: white;
-            padding: 2px 10px;
-            border-radius: 30px;
-            font-size: 0.7rem;
-        }
-        
         .add-new-row {
             background: #fef9e3;
             border-top: 2px dashed var(--warning);
@@ -498,6 +471,31 @@
             min-width: 280px;
             max-width: 320px;
         }
+        
+        .seq-cell {
+            font-weight: bold;
+            color: #2c5282;
+            text-align: center;
+            background-color: #f8f9fa;
+            border-right: 2px solid #dee2e6;
+        }
+        
+        .sequence-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+        
+        .sequence-number {
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+        
+        .db-id-label {
+            font-size: 0.7rem;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
@@ -519,7 +517,7 @@
 
 <div class="container">
     <div class="page-header">
-        <h1 class="page-title">🏢 Departments · Expanded Utility View</h1>
+        <h1 class="page-title">🏢 Departments Management</h1>
         <button class="btn btn-primary" id="addNewDeptBtn">➕ Add New Department</button>
     </div>
 
@@ -527,19 +525,24 @@
         <div class="filter-group"><label>🔍 Search</label><input type="text" id="searchFilter" class="filter-input" placeholder="Unit, division, department..."></div>
         <div class="filter-group"><label>📌 Department</label><select id="departmentFilter" class="filter-select"></select></div>
         <div class="filter-group"><label>🏷️ Division</label><select id="divisionFilter" class="filter-select"></select></div>
-        <div class="filter-group"><label>🔄 Sort</label><select id="sortFilter" class="filter-select"><option value="seq">ID</option><option value="unitName">Unit Name</option><option value="divisionName">Division</option><option value="departmentName">Department</option></select></div>
+        <div class="filter-group"><label>🔄 Sort By</label><select id="sortFilter" class="filter-select">
+            <option value="id">Database ID (Original Order)</option>
+            <option value="unitName">Unit Name (A-Z)</option>
+            <option value="divisionName">Division Name</option>
+            <option value="departmentName">Department Name</option>
+        </select></div>
         <button id="refreshBtn" class="btn btn-primary" style="background:#6c757d;">⟳ Refresh</button>
     </div>
-    <div class="scroll-hint">↔️ Scroll horizontally | 📋 Each utility column has vertical scroll for many accounts/meters | ✏️ Edit mode shows full details</div>
+    <div class="scroll-hint">↔️ Scroll horizontally | 📋 Each utility column has vertical scroll for many accounts/meters | ✏️ Click Edit to modify</div>
 
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
-                <tr><th width="45">#</th><th width="180">Unit Name</th><th width="130">Division Name</th><th width="150">Department Name</th>
+                <tr><th width="80">No.</th><th width="200">Unit Name</th><th width="150">Division Name</th><th width="150">Department Name</th>
                     <th width="300" class="fixed-width-col">💧 WATER Accounts & Meters</th>
                     <th width="300" class="fixed-width-col">⚡ ELECTRICITY Accounts & Meters</th>
                     <th width="300" class="fixed-width-col">📞 TELEPHONE Accounts & Numbers</th>
-                    <th width="150">Hotline Numbers</th><th width="180">Address</th><th width="180">Notes</th><th width="110">Actions</th>
+                    <th width="150">Hotline Numbers</th><th width="200">Address</th><th width="200">Notes</th><th width="120">Actions</th>
                 </tr>
             </thead>
             <tbody id="deptsTbody"></tbody>
@@ -563,7 +566,10 @@
     function parseJsonField(field) {
         if (!field) return [];
         if (Array.isArray(field)) return field;
-        if (typeof field === 'string') { try { return JSON.parse(field); } catch(e) { return []; } }
+        if (typeof field === 'string') { 
+            try { return JSON.parse(field); } 
+            catch(e) { return []; } 
+        }
         return [];
     }
 
@@ -578,6 +584,7 @@
                 electricity_accounts: parseJsonField(d.electricity_accounts),
                 telephone_accounts: parseJsonField(d.telephone_accounts)
             }));
+            // Keep original order as returned from database (by ID ascending)
             allDepartmentsRaw.sort((a,b) => a.id - b.id);
             updateFilterDropdowns();
             renderDepartments();
@@ -587,13 +594,26 @@
     function updateFilterDropdowns() {
         const deptSet = new Set();
         const divSet = new Set();
-        allDepartmentsRaw.forEach(d => { if(d.department_name) deptSet.add(d.department_name); if(d.division_name) divSet.add(d.division_name); });
+        allDepartmentsRaw.forEach(d => { 
+            if(d.department_name) deptSet.add(d.department_name); 
+            if(d.division_name) divSet.add(d.division_name); 
+        });
         const deptSelect = document.getElementById('departmentFilter');
         const divSelect = document.getElementById('divisionFilter');
         deptSelect.innerHTML = '<option value="all">All Departments</option>';
-        Array.from(deptSet).sort().forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.textContent = d; deptSelect.appendChild(opt); });
+        Array.from(deptSet).sort().forEach(d => { 
+            let opt = document.createElement('option'); 
+            opt.value = d; 
+            opt.textContent = d; 
+            deptSelect.appendChild(opt); 
+        });
         divSelect.innerHTML = '<option value="all">All Divisions</option>';
-        Array.from(divSet).sort().forEach(d => { let opt = document.createElement('option'); opt.value = d; opt.textContent = d; divSelect.appendChild(opt); });
+        Array.from(divSet).sort().forEach(d => { 
+            let opt = document.createElement('option'); 
+            opt.value = d; 
+            opt.textContent = d; 
+            divSelect.appendChild(opt); 
+        });
     }
 
     function getFilteredDepartments() {
@@ -603,14 +623,29 @@
         const divFilter = document.getElementById('divisionFilter').value;
         const sortBy = document.getElementById('sortFilter').value;
         
-        if(search) filtered = filtered.filter(d => (d.unit_name||'').toLowerCase().includes(search) || (d.division_name||'').toLowerCase().includes(search) || (d.department_name||'').toLowerCase().includes(search) || (d.hotline_numbers||'').toLowerCase().includes(search));
+        if(search) {
+            filtered = filtered.filter(d => 
+                (d.unit_name || '').toLowerCase().includes(search) || 
+                (d.division_name || '').toLowerCase().includes(search) || 
+                (d.department_name || '').toLowerCase().includes(search) || 
+                (d.hotline_numbers || '').toLowerCase().includes(search) ||
+                (d.address || '').toLowerCase().includes(search)
+            );
+        }
         if(deptFilter !== 'all') filtered = filtered.filter(d => d.department_name === deptFilter);
         if(divFilter !== 'all') filtered = filtered.filter(d => d.division_name === divFilter);
         
-        if(sortBy === 'unitName') filtered.sort((a,b)=> (a.unit_name||'').localeCompare(b.unit_name||''));
-        else if(sortBy === 'divisionName') filtered.sort((a,b)=> (a.division_name||'').localeCompare(b.division_name||''));
-        else if(sortBy === 'departmentName') filtered.sort((a,b)=> (a.department_name||'').localeCompare(b.department_name||''));
-        else filtered.sort((a,b)=> a.id - b.id);
+        // Apply sorting based on user selection
+        if(sortBy === 'unitName') {
+            filtered.sort((a,b)=> (a.unit_name || '').localeCompare(b.unit_name || ''));
+        } else if(sortBy === 'divisionName') {
+            filtered.sort((a,b)=> (a.division_name || '').localeCompare(b.division_name || ''));
+        } else if(sortBy === 'departmentName') {
+            filtered.sort((a,b)=> (a.department_name || '').localeCompare(b.department_name || ''));
+        } else {
+            // Default: sort by ID (original order)
+            filtered.sort((a,b)=> a.id - b.id);
+        }
         return filtered;
     }
 
@@ -660,43 +695,52 @@
     // Collect data from expanded editors
     function collectUtilityData(deptId) {
         const waterAccounts = [];
-        document.querySelectorAll(`#water-editor-${deptId} .account-block`).forEach(block => {
-            const accNum = block.querySelector('.acc-num-input')?.value || '';
-            const meters = [];
-            block.querySelectorAll('.meter-row').forEach(row => {
-                const meterNum = row.querySelector('.meter-number-input')?.value || '';
-                const location = row.querySelector('.location-input')?.value || '';
-                const notes = row.querySelector('.notes-input')?.value || '';
-                if(meterNum) meters.push({ meterNumber: meterNum, location, notes });
+        const waterContainer = document.querySelector(`#water-editor-${deptId}`);
+        if(waterContainer) {
+            waterContainer.querySelectorAll('.account-block').forEach(block => {
+                const accNum = block.querySelector('.acc-num-input')?.value || '';
+                const meters = [];
+                block.querySelectorAll('.meter-row').forEach(row => {
+                    const meterNum = row.querySelector('.meter-number-input')?.value || '';
+                    const location = row.querySelector('.location-input')?.value || '';
+                    const notes = row.querySelector('.notes-input')?.value || '';
+                    if(meterNum) meters.push({ meterNumber: meterNum, location, notes });
+                });
+                if(accNum || meters.length) waterAccounts.push({ accountNumber: accNum, meters });
             });
-            if(accNum || meters.length) waterAccounts.push({ accountNumber: accNum, meters });
-        });
+        }
         
         const electricityAccounts = [];
-        document.querySelectorAll(`#electricity-editor-${deptId} .account-block`).forEach(block => {
-            const accNum = block.querySelector('.acc-num-input')?.value || '';
-            const meters = [];
-            block.querySelectorAll('.meter-row').forEach(row => {
-                const meterNum = row.querySelector('.meter-number-input')?.value || '';
-                const location = row.querySelector('.location-input')?.value || '';
-                const notes = row.querySelector('.notes-input')?.value || '';
-                if(meterNum) meters.push({ meterNumber: meterNum, location, notes });
+        const electricityContainer = document.querySelector(`#electricity-editor-${deptId}`);
+        if(electricityContainer) {
+            electricityContainer.querySelectorAll('.account-block').forEach(block => {
+                const accNum = block.querySelector('.acc-num-input')?.value || '';
+                const meters = [];
+                block.querySelectorAll('.meter-row').forEach(row => {
+                    const meterNum = row.querySelector('.meter-number-input')?.value || '';
+                    const location = row.querySelector('.location-input')?.value || '';
+                    const notes = row.querySelector('.notes-input')?.value || '';
+                    if(meterNum) meters.push({ meterNumber: meterNum, location, notes });
+                });
+                if(accNum || meters.length) electricityAccounts.push({ accountNumber: accNum, meters });
             });
-            if(accNum || meters.length) electricityAccounts.push({ accountNumber: accNum, meters });
-        });
+        }
         
         const telephoneAccounts = [];
-        document.querySelectorAll(`#telephone-editor-${deptId} .account-block`).forEach(block => {
-            const accNum = block.querySelector('.acc-num-input')?.value || '';
-            const numbers = [];
-            block.querySelectorAll('.phone-row').forEach(row => {
-                const phone = row.querySelector('.phone-number-input')?.value || '';
-                const location = row.querySelector('.location-input')?.value || '';
-                const notes = row.querySelector('.notes-input')?.value || '';
-                if(phone) numbers.push({ phoneNumber: phone, location, notes });
+        const telephoneContainer = document.querySelector(`#telephone-editor-${deptId}`);
+        if(telephoneContainer) {
+            telephoneContainer.querySelectorAll('.account-block').forEach(block => {
+                const accNum = block.querySelector('.acc-num-input')?.value || '';
+                const numbers = [];
+                block.querySelectorAll('.phone-row').forEach(row => {
+                    const phone = row.querySelector('.phone-number-input')?.value || '';
+                    const location = row.querySelector('.location-input')?.value || '';
+                    const notes = row.querySelector('.notes-input')?.value || '';
+                    if(phone) numbers.push({ phoneNumber: phone, location, notes });
+                });
+                if(accNum || numbers.length) telephoneAccounts.push({ accountNumber: accNum, numbers });
             });
-            if(accNum || numbers.length) telephoneAccounts.push({ accountNumber: accNum, numbers });
-        });
+        }
         return { waterAccounts, electricityAccounts, telephoneAccounts };
     }
     
@@ -718,17 +762,35 @@
             notes: notesInput?.value.trim() || ''
         };
         if (!updatedBasic.unitName || !updatedBasic.divisionName || !updatedBasic.departmentName) {
-            showMessage("Unit Name, Division Name and Department Name are required", true); return;
+            showMessage("Unit Name, Division Name and Department Name are required", true); 
+            return;
         }
         const utilities = collectUtilityData(deptId);
-        const payload = { ...updatedBasic, waterAccounts: utilities.waterAccounts, electricityAccounts: utilities.electricityAccounts, telephoneAccounts: utilities.telephoneAccounts };
+        const payload = { 
+            ...updatedBasic, 
+            waterAccounts: utilities.waterAccounts, 
+            electricityAccounts: utilities.electricityAccounts, 
+            telephoneAccounts: utilities.telephoneAccounts 
+        };
         
         try {
-            const res = await fetch(`/api/departments/${deptId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const res = await fetch(`/api/departments/${deptId}`, { 
+                method: 'PUT', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(payload) 
+            });
             const result = await res.json();
-            if (res.ok && result.success) { showMessage(`✅ Saved "${updatedBasic.unitName}"`); currentEditingId = null; await loadDepartments(); }
-            else { showMessage(`Error: ${result.error || 'Update failed'}`, true); renderDepartments(); }
-        } catch(err) { showMessage('Network error', true); }
+            if (res.ok && result.success) { 
+                showMessage(`✅ Saved "${updatedBasic.unitName}"`); 
+                currentEditingId = null; 
+                await loadDepartments(); 
+            } else { 
+                showMessage(`Error: ${result.error || 'Update failed'}`, true); 
+                renderDepartments(); 
+            }
+        } catch(err) { 
+            showMessage('Network error', true); 
+        }
     }
     
     // VIEW MODE: expanded readable format with vertical scroll
@@ -756,13 +818,17 @@
     }
     
     function attachEditorEvents(deptId) {
-        // Add Account
-        document.querySelectorAll(`.add-account-util`).forEach(btn => {
+        // Add Account buttons
+        document.querySelectorAll(`#water-editor-${deptId} .add-account-util, #electricity-editor-${deptId} .add-account-util, #telephone-editor-${deptId} .add-account-util`).forEach(btn => {
             btn.onclick = (e) => {
                 const util = btn.getAttribute('data-util');
-                const container = document.getElementById(`${util}-editor-${deptId}`);
+                let container;
+                if(util === 'water') container = document.getElementById(`water-editor-${deptId}`);
+                else if(util === 'electricity') container = document.getElementById(`electricity-editor-${deptId}`);
+                else container = document.getElementById(`telephone-editor-${deptId}`);
                 if (!container) return;
-                const newBlock = document.createElement('div'); newBlock.className = 'account-block';
+                const newBlock = document.createElement('div'); 
+                newBlock.className = 'account-block';
                 newBlock.innerHTML = `<div class="account-header"><input type="text" class="account-number-input acc-num-input" placeholder="Account Number"><button type="button" class="remove-account-btn">🗑️</button></div>
                 <div class="items-list"></div><button type="button" class="add-item-btn">+ Add ${util === 'telephone' ? 'Number' : 'Meter'}</button>`;
                 container.insertBefore(newBlock, container.lastElementChild);
@@ -787,12 +853,18 @@
                     newItem.querySelector('.remove-item-btn')?.addEventListener('click', () => newItem.remove());
                 };
             }
-            block.querySelectorAll('.remove-item-btn').forEach(rm => { rm.onclick = (e) => rm.closest('.meter-row, .phone-row')?.remove(); });
+            block.querySelectorAll('.remove-item-btn').forEach(rm => { 
+                rm.onclick = (e) => rm.closest('.meter-row, .phone-row')?.remove(); 
+            });
         }
         
-        document.querySelectorAll(`.remove-account-btn`).forEach(btn => { btn.onclick = (e) => btn.closest('.account-block')?.remove(); });
-        document.querySelectorAll(`.remove-subitem`).forEach(btn => { btn.onclick = (e) => btn.closest('.meter-row, .phone-row')?.remove(); });
-        document.querySelectorAll(`.add-item-btn`).forEach(btn => {
+        // Handle remove account buttons
+        document.querySelectorAll(`#water-editor-${deptId} .remove-account-btn, #electricity-editor-${deptId} .remove-account-btn, #telephone-editor-${deptId} .remove-account-btn`).forEach(btn => { 
+            btn.onclick = (e) => btn.closest('.account-block')?.remove(); 
+        });
+        
+        // Handle add item buttons
+        document.querySelectorAll(`#water-editor-${deptId} .add-item-btn, #electricity-editor-${deptId} .add-item-btn, #telephone-editor-${deptId} .add-item-btn`).forEach(btn => {
             if(!btn.hasAttribute('data-listener')) {
                 btn.setAttribute('data-listener', 'true');
                 btn.onclick = (e) => {
@@ -801,8 +873,11 @@
                     const itemsList = block.querySelector('.items-list');
                     const newItem = document.createElement('div');
                     newItem.className = util === 'telephone' ? 'phone-row' : 'meter-row';
-                    if(util === 'telephone') newItem.innerHTML = `<input type="text" class="phone-number-input" placeholder="Phone Number"><input type="text" class="location-input" placeholder="Location"><input type="text" class="notes-input" placeholder="Notes"><button type="button" class="remove-item-btn">✖</button>`;
-                    else newItem.innerHTML = `<input type="text" class="meter-number-input" placeholder="Meter Number"><input type="text" class="location-input" placeholder="Location"><input type="text" class="notes-input" placeholder="Notes"><button type="button" class="remove-item-btn">✖</button>`;
+                    if(util === 'telephone') {
+                        newItem.innerHTML = `<input type="text" class="phone-number-input" placeholder="Phone Number"><input type="text" class="location-input" placeholder="Location"><input type="text" class="notes-input" placeholder="Notes"><button type="button" class="remove-item-btn">✖</button>`;
+                    } else {
+                        newItem.innerHTML = `<input type="text" class="meter-number-input" placeholder="Meter Number"><input type="text" class="location-input" placeholder="Location"><input type="text" class="notes-input" placeholder="Notes"><button type="button" class="remove-item-btn">✖</button>`;
+                    }
                     itemsList.appendChild(newItem);
                     newItem.querySelector('.remove-item-btn')?.addEventListener('click', () => newItem.remove());
                 };
@@ -814,80 +889,126 @@
         const filtered = getFilteredDepartments();
         const tbody = document.getElementById('deptsTbody');
         tbody.innerHTML = '';
-        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="11" style="text-align:center">No departments found</td></tr>'; return; }
-        
-        // Group by department name
-        const deptMap = new Map();
-        filtered.forEach(d => { let deptName = d.department_name || 'Other'; if(!deptMap.has(deptName)) deptMap.set(deptName, []); deptMap.get(deptName).push(d); });
-        const sortedDepts = Array.from(deptMap.keys()).sort();
-        let seq = 1;
-        
-        for(let deptName of sortedDepts) {
-            const departments = deptMap.get(deptName);
-            const sepRow = document.createElement('tr'); sepRow.className='department-separator';
-            sepRow.innerHTML = `<td colspan="11"><div class="dept-info"><span>🏢 ${deptName.toUpperCase()}</span><span class="dept-count">${departments.length} unit${departments.length > 1 ? 's' : ''}</span></div></td>`;
-            tbody.appendChild(sepRow);
-            
-            for(let dept of departments) {
-                const isEditing = (currentEditingId === dept.id);
-                const row = document.createElement('tr');
-                if(isEditing) {
-                    row.innerHTML = `
-                        <td>${seq}</td>
-                        <td><input type="text" id="edit-unit-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.unit_name||'')}"></td>
-                        <td><input type="text" id="edit-division-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.division_name||'')}"></td>
-                        <td><input type="text" id="edit-department-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.department_name||'')}"></td>
-                        <td>${renderExpandedUtilityEditor('water', dept.water_accounts || [], dept.id)}</td>
-                        <td>${renderExpandedUtilityEditor('electricity', dept.electricity_accounts || [], dept.id)}</td>
-                        <td>${renderExpandedUtilityEditor('telephone', dept.telephone_accounts || [], dept.id)}</td>
-                        <td><input type="text" id="edit-hotline-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.hotline_numbers||'')}"></td>
-                        <td><input type="text" id="edit-address-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.address||'')}"></td>
-                        <td><input type="text" id="edit-notes-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.notes||'')}"></td>
-                        <td><div class="entity-actions"><button class="inline-save-btn" data-id="${dept.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${dept.id}">✖ Cancel</button></div></td>
-                    `;
-                    tbody.appendChild(row);
-                    setTimeout(() => attachEditorEvents(dept.id), 10);
-                } else {
-                    row.innerHTML = `
-                        <td>${seq}</td>
-                        <td><strong>${escapeHtml(dept.unit_name||'-')}</strong></td>
-                        <td><span class="badge badge-division">${escapeHtml(dept.division_name||'-')}</span></td>
-                        <td><span class="badge badge-department">${escapeHtml(dept.department_name||'-')}</span></td>
-                        <td>${renderViewModeUtility(dept.water_accounts, 'water')}</td>
-                        <td>${renderViewModeUtility(dept.electricity_accounts, 'electricity')}</td>
-                        <td>${renderViewModeUtility(dept.telephone_accounts, 'telephone')}</td>
-                        <td>${escapeHtml(dept.hotline_numbers||'-')}</td>
-                        <td>${escapeHtml(dept.address||'-')}</td>
-                        <td>${escapeHtml(dept.notes||'-')}</td>
-                        <td><div class="entity-actions"><button class="btn btn-warning btn-sm edit-dept-btn" data-id="${dept.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-dept-btn" data-id="${dept.id}">🗑️ Del</button></div></td>
-                    `;
-                    tbody.appendChild(row);
-                }
-                seq++;
-            }
+        if(filtered.length === 0) { 
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center">No departments found</td></tr>'; 
+            return; 
         }
         
-        document.querySelectorAll('.edit-dept-btn').forEach(btn => { btn.addEventListener('click', () => { const id = parseInt(btn.getAttribute('data-id')); currentEditingId = id; renderDepartments(); }); });
-        document.querySelectorAll('.delete-dept-btn').forEach(btn => { btn.addEventListener('click', async () => { const id = parseInt(btn.getAttribute('data-id')); if(confirm('Delete this department? It cannot be undone if bills exist.')) await deleteDepartment(id); }); });
-        document.querySelectorAll('.inline-save-btn').forEach(btn => { btn.addEventListener('click', (e) => { const id = parseInt(btn.getAttribute('data-id')); saveFullEdit(id); }); });
-        document.querySelectorAll('.inline-cancel-btn').forEach(btn => { btn.addEventListener('click', () => { currentEditingId = null; renderDepartments(); }); });
+        let seq = 1;
+        
+        for(let dept of filtered) {
+            const isEditing = (currentEditingId === dept.id);
+            const row = document.createElement('tr');
+            if(isEditing) {
+                row.innerHTML = `
+                    <td class="seq-cell">
+                        <div class="sequence-info">
+                            <span class="sequence-number">${seq}</span>
+                            <span class="db-id-label">ID: ${dept.id}</span>
+                        </div>
+                    </td>
+                    <td><input type="text" id="edit-unit-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.unit_name || '')}"></td>
+                    <td><input type="text" id="edit-division-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.division_name || '')}"></td>
+                    <td><input type="text" id="edit-department-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.department_name || '')}"></td>
+                    <td>${renderExpandedUtilityEditor('water', dept.water_accounts || [], dept.id)}</td>
+                    <td>${renderExpandedUtilityEditor('electricity', dept.electricity_accounts || [], dept.id)}</td>
+                    <td>${renderExpandedUtilityEditor('telephone', dept.telephone_accounts || [], dept.id)}</td>
+                    <td><input type="text" id="edit-hotline-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.hotline_numbers || '')}"></td>
+                    <td><input type="text" id="edit-address-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.address || '')}"></td>
+                    <td><input type="text" id="edit-notes-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.notes || '')}"></td>
+                    <td class="actions-cell">
+                        <button class="inline-save-btn" data-id="${dept.id}">💾 Save</button>
+                        <button class="inline-cancel-btn" data-id="${dept.id}">✖ Cancel</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+                setTimeout(() => attachEditorEvents(dept.id), 10);
+            } else {
+                row.innerHTML = `
+                    <td class="seq-cell">
+                        <div class="sequence-info">
+                            <span class="sequence-number">${seq}</span>
+                            <span class="db-id-label">ID: ${dept.id}</span>
+                        </div>
+                    </td>
+                    <td><strong>${escapeHtml(dept.unit_name || '-')}</strong></td>
+                    <td><span class="badge badge-division">${escapeHtml(dept.division_name || '-')}</span></td>
+                    <td><span class="badge badge-department">${escapeHtml(dept.department_name || '-')}</span></td>
+                    <td>${renderViewModeUtility(dept.water_accounts, 'water')}</td>
+                    <td>${renderViewModeUtility(dept.electricity_accounts, 'electricity')}</td>
+                    <td>${renderViewModeUtility(dept.telephone_accounts, 'telephone')}</td>
+                    <td>${escapeHtml(dept.hotline_numbers || '-')}</td>
+                    <td>${escapeHtml(dept.address || '-')}</td>
+                    <td>${escapeHtml(dept.notes || '-')}</td>
+                    <td class="actions-cell">
+                        <button class="btn btn-warning btn-sm edit-dept-btn" data-id="${dept.id}">✏️ Edit</button>
+                        <button class="btn btn-danger btn-sm delete-dept-btn" data-id="${dept.id}">🗑️ Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            }
+            seq++;
+        }
+        
+        // Attach event listeners
+        document.querySelectorAll('.edit-dept-btn').forEach(btn => { 
+            btn.addEventListener('click', () => { 
+                const id = parseInt(btn.getAttribute('data-id')); 
+                currentEditingId = id; 
+                renderDepartments(); 
+            }); 
+        });
+        
+        document.querySelectorAll('.delete-dept-btn').forEach(btn => { 
+            btn.addEventListener('click', async () => { 
+                const id = parseInt(btn.getAttribute('data-id')); 
+                if(confirm('Delete this department? This action cannot be undone if bills exist.')) 
+                    await deleteDepartment(id); 
+            }); 
+        });
+        
+        document.querySelectorAll('.inline-save-btn').forEach(btn => { 
+            btn.addEventListener('click', (e) => { 
+                const id = parseInt(btn.getAttribute('data-id')); 
+                saveFullEdit(id); 
+            }); 
+        });
+        
+        document.querySelectorAll('.inline-cancel-btn').forEach(btn => { 
+            btn.addEventListener('click', () => { 
+                currentEditingId = null; 
+                renderDepartments(); 
+            }); 
+        });
     }
     
     async function deleteDepartment(id) {
         try {
             const res = await fetch(`/api/departments/${id}`, { method: 'DELETE' });
             const data = await res.json();
-            if(data.success) { showMessage('Department deleted'); await loadDepartments(); } else showMessage(data.error||'Cannot delete: has linked bills', true);
-        } catch(e) { showMessage('Delete failed', true); }
+            if(data.success) { 
+                showMessage('Department deleted'); 
+                await loadDepartments(); 
+            } else { 
+                showMessage(data.error || 'Cannot delete: has linked bills', true); 
+            }
+        } catch(e) { 
+            showMessage('Delete failed', true); 
+        }
     }
     
     let addingMode = false;
     async function inlineAddDepartment() {
         if(addingMode) return;
         addingMode = true;
+        currentEditingId = null;
+        
         const tbody = document.getElementById('deptsTbody');
-        const addRow = document.createElement('tr'); addRow.className='add-new-row'; addRow.id='inline-add-row';
-        addRow.innerHTML = `<td>✨</td>
+        const addRow = document.createElement('tr'); 
+        addRow.className = 'add-new-row'; 
+        addRow.id = 'inline-add-row';
+        addRow.innerHTML = `
+            <td style="text-align:center">✨</td>
             <td><input id="new-unit" class="inline-edit-input" placeholder="Unit Name *"></td>
             <td><input id="new-division" class="inline-edit-input" placeholder="Division Name *"></td>
             <td><input id="new-department" class="inline-edit-input" placeholder="Department Name *"></td>
@@ -895,38 +1016,81 @@
             <td><input id="new-hotline" class="inline-edit-input" placeholder="Hotline Numbers"></td>
             <td><input id="new-address" class="inline-edit-input" placeholder="Address"></td>
             <td><input id="new-notes" class="inline-edit-input" placeholder="Notes"></td>
-            <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button></td>`;
-        const first = tbody.firstChild; if(first) tbody.insertBefore(addRow, first); else tbody.appendChild(addRow);
+            <td class="actions-cell">
+                <button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button>
+                <button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button>
+            </td>
+        `;
+        
+        const firstRow = tbody.firstChild;
+        if(firstRow) tbody.insertBefore(addRow, firstRow);
+        else tbody.appendChild(addRow);
+        
         document.getElementById('confirmAddBtn')?.addEventListener('click', async () => {
             const unitName = document.getElementById('new-unit')?.value.trim(); 
             const divisionName = document.getElementById('new-division')?.value.trim(); 
             const departmentName = document.getElementById('new-department')?.value.trim();
-            if(!unitName || !divisionName || !departmentName) { showMessage("Unit Name, Division Name and Department Name are required", true); return; }
+            
+            if(!unitName || !divisionName || !departmentName) { 
+                showMessage("Unit Name, Division Name and Department Name are required", true); 
+                return; 
+            }
+            
             const payload = { 
                 unitName, divisionName, departmentName,
-                hotlineNumbers: document.getElementById('new-hotline')?.value.trim()||'', 
-                address: document.getElementById('new-address')?.value.trim()||'', 
-                notes: document.getElementById('new-notes')?.value.trim()||'',
-                waterAccounts:[], electricityAccounts:[], telephoneAccounts:[]
+                hotlineNumbers: document.getElementById('new-hotline')?.value.trim() || '', 
+                address: document.getElementById('new-address')?.value.trim() || '', 
+                notes: document.getElementById('new-notes')?.value.trim() || '',
+                waterAccounts: [], 
+                electricityAccounts: [], 
+                telephoneAccounts: []
             };
+            
             try {
-                const res = await fetch('/api/departments', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+                const res = await fetch('/api/departments', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(payload) 
+                });
                 const result = await res.json();
-                if(res.ok && result.success) { showMessage(`Department "${unitName}" created`); addingMode=false; await loadDepartments(); } else showMessage(result.error||'Creation failed', true);
-            } catch(e) { showMessage('Network error', true); } finally { addingMode=false; renderDepartments(); }
+                if(res.ok && result.success) { 
+                    showMessage(`Department "${unitName}" created`); 
+                    addingMode = false; 
+                    await loadDepartments(); 
+                } else { 
+                    showMessage(result.error || 'Creation failed', true); 
+                }
+            } catch(e) { 
+                showMessage('Network error', true); 
+            } finally { 
+                addingMode = false; 
+                renderDepartments(); 
+            }
         });
-        document.getElementById('cancelAddBtn')?.addEventListener('click', () => { addingMode=false; renderDepartments(); });
+        
+        document.getElementById('cancelAddBtn')?.addEventListener('click', () => { 
+            addingMode = false; 
+            renderDepartments(); 
+        });
     }
     
-    document.getElementById('addNewDeptBtn').addEventListener('click', () => { if(currentEditingId) showMessage('Finish current edit first', true); else inlineAddDepartment(); });
+    // Event Listeners
+    document.getElementById('addNewDeptBtn').addEventListener('click', () => { 
+        if(currentEditingId) showMessage('Please save or cancel current edit first', true); 
+        else inlineAddDepartment(); 
+    });
     document.getElementById('refreshBtn').addEventListener('click', () => loadDepartments());
     document.getElementById('searchFilter').addEventListener('input', () => renderDepartments());
     document.getElementById('departmentFilter').addEventListener('change', () => renderDepartments());
     document.getElementById('divisionFilter').addEventListener('change', () => renderDepartments());
     document.getElementById('sortFilter').addEventListener('change', () => renderDepartments());
     
-    function escapeHtml(str) { if(!str) return ''; return String(str).replace(/[&<>]/g, m => m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); }
+    function escapeHtml(str) { 
+        if(!str) return ''; 
+        return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); 
+    }
     
+    // Initial load
     loadDepartments();
 </script>
 </body>
