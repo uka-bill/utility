@@ -252,7 +252,7 @@
         }
 
         .notes-input {
-            width: 180px;
+            width: 200px;
             text-align: left;
         }
 
@@ -386,26 +386,26 @@
             color: var(--gray);
         }
         
-        .cluster-separator {
+        .cluster-separator, .department-group-separator {
             background-color: #e8f4ff;
             border-top: 2px solid var(--primary);
             border-bottom: 2px solid var(--primary);
         }
         
-        .cluster-separator td {
+        .cluster-separator td, .department-group-separator td {
             padding: 8px 15px;
             font-weight: bold;
             color: #2c5282;
             font-size: 0.9rem;
         }
         
-        .cluster-info {
+        .cluster-info, .dept-group-info {
             display: flex;
             align-items: center;
             gap: 10px;
         }
         
-        .cluster-count {
+        .cluster-count, .dept-group-count {
             background-color: var(--primary);
             color: white;
             padding: 2px 8px;
@@ -450,6 +450,20 @@
             font-size: 0.7rem;
             color: #666;
             margin-left: 5px;
+        }
+        
+        .placeholder-text {
+            color: #999;
+            font-style: italic;
+        }
+        
+        .department-name-badge {
+            background: #7b1fa2;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -500,8 +514,10 @@
     </div>
 
     <div class="info-note">
-        ✅ <strong>Direct Entry Mode</strong> — Schools are ordered by ID (same as Schools tab), grouped by cluster. Each school/department has ONE Save button. All electricity meters under that entity are saved together.
-        Enter consumption (kWh) and charges for each meter, add notes, then click the entity's <strong>Save</strong> button.
+        ✅ <strong>Direct Entry Mode</strong> — Each school/department has ONE Save button. All electricity meters under that entity are saved together.
+        Select month/year, enter consumption (kWh) and charges, add notes, then click the entity's <strong>Save</strong> button.
+        <br>
+        💡 <strong>Schools are grouped by Cluster | Departments are grouped by Department Name (same as Departments page)</strong>
     </div>
 
     <div class="filters-bar">
@@ -515,7 +531,7 @@
         </div>
         <div class="filter-group">
             <label>🔍 Search</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Name or account...">
+            <input type="text" id="searchFilter" class="filter-input" placeholder="Name...">
         </div>
         <div class="filter-group">
             <label>Filter by status</label>
@@ -537,11 +553,10 @@
             <thead>
                 <tr>
                     <th width="50">No.</th>
-                    <th width="200">Entity Name</th>
+                    <th width="220">Entity Name</th>
                     <th width="90">Type</th>
-                    <th width="140">Account Number</th>
-                    <th width="130">Meter Number</th>
-                    <th width="120">Consumption (kWh)</th>
+                    <th width="160">Account / Meter</th>
+                    <th width="110">Consumption (kWh)</th>
                     <th width="110">Current Charges ($)</th>
                     <th width="160">Late / Unsettled</th>
                     <th width="100">Amount Paid ($)</th>
@@ -551,7 +566,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="12" class="no-data">Loading schools & departments...</div></div>
+                <tr><td colspan="11" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -588,7 +603,6 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                // Sort schools by ID to maintain same order as Schools tab
                 allSchools.sort((a, b) => a.id - b.id);
             }
             if (deptsRes.ok) {
@@ -620,104 +634,87 @@
     function extractElectricityAccounts(entity) {
         let accounts = [];
         try {
-            if (entity.electricity_accounts) {
-                accounts = typeof entity.electricity_accounts === 'string' ? JSON.parse(entity.electricity_accounts) : entity.electricity_accounts;
+            if (entity.electricity_accounts && typeof entity.electricity_accounts === 'string') {
+                const parsed = JSON.parse(entity.electricity_accounts);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    accounts = parsed;
+                }
+            } else if (entity.electricity_accounts && Array.isArray(entity.electricity_accounts)) {
+                accounts = entity.electricity_accounts;
             } else if (entity.electricity_account) {
-                accounts = [{ accountNumber: entity.electricity_account, meters: entity.electricity_meter ? [{ meterNumber: entity.electricity_meter }] : [] }];
+                const meters = [];
+                if (entity.electricity_meter) {
+                    meters.push({ meterNumber: entity.electricity_meter, location: '', notes: '' });
+                }
+                accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
             }
         } catch(e) {
-            accounts = [];
-        }
-        
-        if (accounts.length === 0) {
-            return [];
+            console.error("Error parsing electricity accounts:", e);
         }
         return accounts;
     }
 
-    function buildGroupedRows() {
+    // Build entity list
+    function buildEntityList() {
         const entities = [];
         
-        // Process Schools - maintain original ID order
+        // Add ALL schools
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
-            if (accounts.length === 0) continue;
             
-            const displayName = school.name || `School #${school.id}`;
-            const accountGroups = [];
+            let accountGroups = accounts;
+            let hasAccounts = accounts.length > 0;
             
-            for (const acc of accounts) {
-                const meters = (acc.meters && acc.meters.length) ? acc.meters : [];
-                if (meters.length === 0) continue;
-                
-                const meterList = [];
-                for (const meter of meters) {
-                    meterList.push({
-                        meterNumber: meter.meterNumber || '—',
-                        location: meter.location || '',
-                        notes: meter.notes || ''
-                    });
-                }
-                
-                accountGroups.push({
-                    accountNumber: acc.accountNumber || '—',
-                    meters: meterList
-                });
+            if (!hasAccounts) {
+                accountGroups = [{
+                    accountNumber: '—',
+                    meters: [{ meterNumber: '—', location: '', notes: '' }],
+                    isPlaceholder: true
+                }];
             }
             
-            if (accountGroups.length > 0) {
-                entities.push({
-                    id: school.id,
-                    name: displayName,
-                    type: 'school',
-                    typeLabel: '🏫 School',
-                    clusterNumber: school.cluster_number || null,
-                    originalIndex: idx,  // Preserve original order
-                    accountGroups: accountGroups
-                });
-            }
+            entities.push({
+                id: school.id,
+                name: school.name || `School #${school.id}`,
+                type: 'school',
+                typeLabel: '🏫 School',
+                clusterNumber: school.cluster_number || null,
+                departmentName: null,
+                displayOrder: idx,
+                accountGroups: accountGroups,
+                hasAccounts: hasAccounts
+            });
         }
         
-        // Process Departments - maintain original ID order
+        // Add ALL departments
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
-            if (accounts.length === 0) continue;
+            
+            let accountGroups = accounts;
+            let hasAccounts = accounts.length > 0;
+            
+            if (!hasAccounts) {
+                accountGroups = [{
+                    accountNumber: '—',
+                    meters: [{ meterNumber: '—', location: '', notes: '' }],
+                    isPlaceholder: true
+                }];
+            }
             
             const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-            const accountGroups = [];
-            
-            for (const acc of accounts) {
-                const meters = (acc.meters && acc.meters.length) ? acc.meters : [];
-                if (meters.length === 0) continue;
-                
-                const meterList = [];
-                for (const meter of meters) {
-                    meterList.push({
-                        meterNumber: meter.meterNumber || '—',
-                        location: meter.location || '',
-                        notes: meter.notes || ''
-                    });
-                }
-                
-                accountGroups.push({
-                    accountNumber: acc.accountNumber || '—',
-                    meters: meterList
-                });
-            }
-            
-            if (accountGroups.length > 0) {
-                entities.push({
-                    id: dept.id,
-                    name: displayName,
-                    type: 'department',
-                    typeLabel: '🏛️ Department',
-                    clusterNumber: null,
-                    originalIndex: idx,
-                    accountGroups: accountGroups
-                });
-            }
+            entities.push({
+                id: dept.id,
+                name: displayName,
+                type: 'department',
+                typeLabel: '🏛️ Department',
+                clusterNumber: null,
+                departmentName: dept.department_name || 'Other',
+                displayOrder: allSchools.length + idx,
+                accountGroups: accountGroups,
+                hasAccounts: hasAccounts
+            });
         }
         
         return entities;
@@ -747,6 +744,12 @@
         
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
+        const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
+        
+        if (!hasAccounts) {
+            showToast('❌ Cannot save: No electricity account configured for this entity. Please add electricity account information in the Schools/Departments tab first.', true);
+            return;
+        }
         
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
@@ -858,9 +861,6 @@
         const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
         if (!confirm(`Delete ALL electricity bills for ${entityName} for ${month}/${year}? This action cannot be undone.`)) return;
         
-        const entityType = entityRow.getAttribute('data-entity-type');
-        const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
-        
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
@@ -918,52 +918,37 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...</div></div>';
+        tbody.innerHTML = '<tr><td colspan="11" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
         
-        let groupedEntities = buildGroupedRows();
+        let allEntities = buildEntityList();
         
         const entityFilter = document.getElementById('entityTypeFilter').value;
         const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
         
-        // Apply filters first
-        let filteredEntities = groupedEntities.filter(entity => {
+        let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
-            if (searchTerm) {
-                const matchesEntity = entity.name.toLowerCase().includes(searchTerm);
-                const matchesAccount = entity.accountGroups.some(acc => 
-                    acc.accountNumber.toLowerCase().includes(searchTerm) ||
-                    acc.meters.some(m => m.meterNumber.toLowerCase().includes(searchTerm))
-                );
-                return matchesEntity || matchesAccount;
-            }
+            if (searchTerm && !entity.name.toLowerCase().includes(searchTerm)) return false;
             return true;
         });
         
-        // Separate schools and departments
-        let schoolsList = filteredEntities.filter(e => e.type === 'school');
-        let departmentsList = filteredEntities.filter(e => e.type === 'department');
-        
-        // Sort schools by original ID order (preserve the order from Schools tab)
-        schoolsList.sort((a, b) => a.id - b.id);
-        
-        // Sort departments by original ID order
-        departmentsList.sort((a, b) => a.id - b.id);
-        
         if (filteredEntities.length === 0) {
-            tbody.innerHTML = '<tr class="no-data-row"><td colspan="12" class="no-data">No schools/departments with electricity accounts found.</div></div>';
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No matching entities found.<\/td><\/tr>';
             isLoading = false;
-            document.querySelector('.table-wrapper')?.classList.remove('loading');
             return;
         }
         
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        // Group schools by cluster while preserving ID order within each cluster
+        // Separate schools and departments
+        const schoolsList = filteredEntities.filter(e => e.type === 'school');
+        const departmentsList = filteredEntities.filter(e => e.type === 'department');
+        
+        // ==================== SCHOOLS SECTION (grouped by cluster) ====================
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -973,7 +958,6 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
-        // Sort clusters
         const sortedClusters = Array.from(schoolsByCluster.keys()).sort((a, b) => {
             if (a === 'Unassigned') return 1;
             if (b === 'Unassigned') return -1;
@@ -983,13 +967,11 @@
             return String(a).localeCompare(String(b));
         });
         
-        // Render Schools grouped by cluster
+        // Render Schools
         for (const cluster of sortedClusters) {
-            let clusterSchools = schoolsByCluster.get(cluster);
-            // Sort schools within cluster by ID to maintain original order
-            clusterSchools.sort((a, b) => a.id - b.id);
+            const clusterSchools = schoolsByCluster.get(cluster);
+            clusterSchools.sort((a, b) => a.displayOrder - b.displayOrder);
             
-            // Check status filter for each school
             let hasVisibleInCluster = false;
             const visibleClusterEntities = [];
             
@@ -998,9 +980,11 @@
                 let hasAnyVisible = false;
                 
                 for (const account of entity.accountGroups) {
+                    const meters = account.meters || [];
                     const visibleMeters = [];
-                    for (const meter of account.meters) {
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meter.meterNumber, month, year);
+                    for (const meter of meters) {
+                        const meterNum = meter.meterNumber || '—';
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                         const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
                         const amountPaid = existing?.amount_paid || 0;
                         let statusText = 'Pending';
@@ -1010,12 +994,25 @@
                         if (statusFilter === 'all' || 
                             (statusFilter === 'paid' && statusText === 'Paid') ||
                             (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
-                            visibleMeters.push({...meter, existing, billId: existing?.id, totalDue, amountPaid, statusText});
+                            visibleMeters.push({
+                                meterNumber: meterNum,
+                                location: meter.location || '',
+                                notes: meter.notes || '',
+                                existing: existing,
+                                billId: existing?.id,
+                                totalDue: totalDue,
+                                amountPaid: amountPaid,
+                                isPlaceholder: account.isPlaceholder
+                            });
                         }
                     }
                     if (visibleMeters.length > 0) {
                         hasAnyVisible = true;
-                        visibleAccounts.push({...account, meters: visibleMeters});
+                        visibleAccounts.push({
+                            accountNumber: account.accountNumber,
+                            meters: visibleMeters,
+                            isPlaceholder: account.isPlaceholder
+                        });
                     }
                 }
                 if (hasAnyVisible) {
@@ -1031,12 +1028,12 @@
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
-                    <td colspan="12">
+                    <td colspan="11">
                         <div class="cluster-info">
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
                             <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
                         </div>
-                    </div>
+                     </div>
                 `;
                 tbody.appendChild(separatorRow);
                 
@@ -1046,19 +1043,42 @@
             }
         }
         
-        // Render Departments (no clustering, just by ID order)
-        if (departmentsList.length > 0) {
-            let hasVisibleDepts = false;
-            const visibleDeptEntities = [];
+        // ==================== DEPARTMENTS SECTION (grouped by DEPARTMENT NAME) ====================
+        // Group departments by department_name
+        const deptByDepartmentName = new Map();
+        for (const dept of departmentsList) {
+            const deptName = dept.departmentName || 'Other';
+            if (!deptByDepartmentName.has(deptName)) {
+                deptByDepartmentName.set(deptName, []);
+            }
+            deptByDepartmentName.get(deptName).push(dept);
+        }
+        
+        // Get the order of first occurrence based on original department order (by ID)
+        const deptGroupOrder = [];
+        for (const dept of departmentsList) {
+            const deptName = dept.departmentName || 'Other';
+            if (!deptGroupOrder.includes(deptName)) {
+                deptGroupOrder.push(deptName);
+            }
+        }
+        
+        // Render Departments grouped by Department Name
+        for (const deptName of deptGroupOrder) {
+            const deptsInGroup = deptByDepartmentName.get(deptName) || [];
             
-            for (const entity of departmentsList) {
+            // Filter each department for status visibility
+            const visibleDeptEntities = [];
+            for (const entity of deptsInGroup) {
                 const visibleAccounts = [];
                 let hasAnyVisible = false;
                 
                 for (const account of entity.accountGroups) {
+                    const meters = account.meters || [];
                     const visibleMeters = [];
-                    for (const meter of account.meters) {
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meter.meterNumber, month, year);
+                    for (const meter of meters) {
+                        const meterNum = meter.meterNumber || '—';
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                         const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
                         const amountPaid = existing?.amount_paid || 0;
                         let statusText = 'Pending';
@@ -1068,35 +1088,50 @@
                         if (statusFilter === 'all' || 
                             (statusFilter === 'paid' && statusText === 'Paid') ||
                             (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
-                            visibleMeters.push({...meter, existing, billId: existing?.id, totalDue, amountPaid, statusText});
+                            visibleMeters.push({
+                                meterNumber: meterNum,
+                                location: meter.location || '',
+                                notes: meter.notes || '',
+                                existing: existing,
+                                billId: existing?.id,
+                                totalDue: totalDue,
+                                amountPaid: amountPaid,
+                                isPlaceholder: account.isPlaceholder
+                            });
                         }
                     }
                     if (visibleMeters.length > 0) {
                         hasAnyVisible = true;
-                        visibleAccounts.push({...account, meters: visibleMeters});
+                        visibleAccounts.push({
+                            accountNumber: account.accountNumber,
+                            meters: visibleMeters,
+                            isPlaceholder: account.isPlaceholder
+                        });
                     }
                 }
                 if (hasAnyVisible) {
-                    hasVisibleDepts = true;
                     visibleDeptEntities.push({...entity, accountGroups: visibleAccounts});
                 }
             }
             
-            if (hasVisibleDepts && visibleDeptEntities.length > 0) {
+            if (visibleDeptEntities.length > 0) {
                 const totalMeters = visibleDeptEntities.reduce((sum, e) => 
                     sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
                 
                 const deptSeparator = document.createElement('tr');
-                deptSeparator.className = 'cluster-separator';
+                deptSeparator.className = 'department-group-separator';
                 deptSeparator.innerHTML = `
-                    <td colspan="12">
-                        <div class="cluster-info">
-                            <span>🏛️ DEPARTMENTS</span>
-                            <span class="cluster-count">${visibleDeptEntities.length} entit${visibleDeptEntities.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
+                    <td colspan="11">
+                        <div class="dept-group-info">
+                            <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
+                            <span class="dept-group-count">${visibleDeptEntities.length} unit${visibleDeptEntities.length > 1 ? 's' : ''}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
                         </div>
-                    </div>
+                     </div>
                 `;
                 tbody.appendChild(deptSeparator);
+                
+                // Sort units within department group by ID (original order)
+                visibleDeptEntities.sort((a, b) => a.displayOrder - b.displayOrder);
                 
                 for (const entity of visibleDeptEntities) {
                     globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
@@ -1110,27 +1145,36 @@
     
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
+        
         let meterRowsData = [];
         let entityTotalDue = 0;
         let entityTotalPaid = 0;
         let hasAnyBill = false;
+        let isPlaceholder = false;
         
         for (const account of entity.accountGroups) {
             let isFirstMeterForAccount = true;
+            if (account.isPlaceholder) isPlaceholder = true;
             
             for (const meter of account.meters) {
                 const existing = meter.existing;
                 const consumption = existing ? (existing.consumption_kwh || 0) : 0;
-                const currentCharges = existing ? (existing.current_charges || 0) : 0;
-                const lateCharges = existing ? (existing.late_charges || 0) : 0;
-                const unsettled = existing ? (existing.unsettled_charges || 0) : 0;
-                const amountPaid = existing ? (existing.amount_paid || 0) : 0;
+                let currentCharges = existing ? (existing.current_charges || 0) : 0;
+                let lateCharges = existing ? (existing.late_charges || 0) : 0;
+                let unsettled = existing ? (existing.unsettled_charges || 0) : 0;
+                let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 const notes = existing ? (existing.notes || meter.notes || '') : (meter.notes || '');
                 
+                const isPlaceholderAccount = account.isPlaceholder || meter.isPlaceholder;
+                const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
+                const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
+                
                 const totalDue = currentCharges + lateCharges + unsettled;
-                entityTotalDue += totalDue;
-                entityTotalPaid += amountPaid;
-                if (existing) hasAnyBill = true;
+                if (!isPlaceholderAccount) {
+                    entityTotalDue += totalDue;
+                    entityTotalPaid += amountPaid;
+                    if (existing) hasAnyBill = true;
+                }
                 
                 const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
                 
@@ -1146,7 +1190,10 @@
                     amountPaid: amountPaid,
                     notes: notes,
                     billId: meter.billId,
-                    isFirstMeterForAccount: isFirstMeterForAccount
+                    isFirstMeterForAccount: isFirstMeterForAccount,
+                    isPlaceholder: isPlaceholderAccount,
+                    disabledAttr: disabledAttr,
+                    placeholderClass: placeholderClass
                 });
                 
                 isFirstMeterForAccount = false;
@@ -1156,38 +1203,43 @@
         
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
-        if (entityTotalDue > 0 && entityTotalPaid >= entityTotalDue) {
-            entityStatusClass = 'status-paid';
-            entityStatusText = 'Paid';
-        } else if (hasAnyBill && entityTotalPaid > 0 && entityTotalPaid < entityTotalDue) {
-            entityStatusClass = 'status-partial';
-            entityStatusText = 'Partial';
-        } else if (!hasAnyBill) {
-            entityStatusText = 'Not entered';
+        if (!isPlaceholder) {
+            if (entityTotalDue > 0 && entityTotalPaid >= entityTotalDue) {
+                entityStatusClass = 'status-paid';
+                entityStatusText = 'Paid';
+            } else if (hasAnyBill && entityTotalPaid > 0 && entityTotalPaid < entityTotalDue) {
+                entityStatusClass = 'status-partial';
+                entityStatusText = 'Partial';
+            } else if (!hasAnyBill) {
+                entityStatusText = 'Not entered';
+            }
+        } else {
+            entityStatusText = 'No account';
         }
         
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
         entityRow.setAttribute('data-entity-id', entity.id);
+        entityRow.setAttribute('data-entity-name', entity.name);
+        entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
-            <td class="seq-number">${startSerial}</div>
+            <td class="seq-number">${startSerial}</td>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                <span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>
-            </div>
-            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
-            <td colspan="2"></div>
+                ${!isPlaceholder ? `<span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No electricity account configured)</span>'}
+            </td>
+            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></td>
+            <td colspan="2"></td>
             <td></div>
             <td></div>
             <td></div>
             <td></div>
-            <td></div>
-            <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
+            <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></td>
             <td class="entity-actions">
-                <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
-                ${hasAnyBill ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
+                <button class="btn btn-success btn-sm save-entity-btn" ${isPlaceholder ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>💾 Save All</button>
+                ${hasAnyBill && !isPlaceholder ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
             </div>
         `;
         
@@ -1201,19 +1253,18 @@
             if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
             
             meterRow.innerHTML = `
-                <td class="seq-number">${meterData.serial}</div>
+                <td class="seq-number">${meterData.serial}</td>
                 <td></div>
                 <td></div>
-                <td>${meterData.isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span>` : ''}</div>
-                <td>
-                    <div>🔢 ${escapeHtml(meterData.meterNumber)}</div>
+                <td>${meterData.isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span>` : ''}
+                    <div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>
                     ${meterData.locationDisplay}
                 </div>
-                <td><input type="number" step="0.01" class="inline-input consumption-input" value="${meterData.consumption}" placeholder="kWh"><span class="consumption-unit">kWh</span></div>
-                <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${meterData.currentCharges.toFixed(2)}" placeholder="$"></div>
-                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input" value="${meterData.lateCharges.toFixed(2)}" placeholder="Late"><input type="number" step="0.01" class="inline-input small-input unsettled-input" value="${meterData.unsettled.toFixed(2)}" placeholder="Unsettled"></div></div>
-                <td><input type="number" step="0.01" class="inline-input paid-input" value="${meterData.amountPaid.toFixed(2)}" placeholder="$"></div>
-                <td><input type="text" class="inline-input notes-input" value="${escapeHtml(meterData.notes)}" placeholder="Notes..."></div>
+                <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="kWh" ${meterData.disabledAttr}><span class="consumption-unit">kWh</span></div>
+                <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input ${meterData.placeholderClass}" value="${meterData.lateCharges.toFixed(2)}" placeholder="Late" ${meterData.disabledAttr}><input type="number" step="0.01" class="inline-input small-input unsettled-input ${meterData.placeholderClass}" value="${meterData.unsettled.toFixed(2)}" placeholder="Unsettled" ${meterData.disabledAttr}></div></div>
+                <td><input type="number" step="0.01" class="inline-input paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="text" class="inline-input notes-input ${meterData.placeholderClass}" value="${escapeHtml(meterData.notes)}" placeholder="Notes..." ${meterData.disabledAttr}></div>
                 <td></div>
                 <td></div>
             `;
@@ -1236,7 +1287,7 @@
     function attachGlobalEventListeners() {
         document.getElementById('billsTableBody').addEventListener('click', async (e) => {
             const saveBtn = e.target.closest('.save-entity-btn');
-            if (saveBtn) {
+            if (saveBtn && !saveBtn.disabled) {
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
                     await saveEntityBills(entityRow, currentMonth, currentYear);
