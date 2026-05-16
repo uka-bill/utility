@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Departments Management - Grouped View</title>
+    <title>Departments Management - Grouped by Name</title>
     <style>
         :root {
             --primary: #4361ee;
@@ -454,14 +454,14 @@
             max-width: 320px;
         }
         
-        /* Department Group Separator - matching original design */
-        .dept-group-separator {
-            background-color: #e8f4ff;
+        /* Group separator styles - similar to water.html cluster separator but for name groups */
+        .group-separator {
+            background-color: #f0f4ff;
             border-top: 2px solid var(--primary);
             border-bottom: 2px solid var(--primary);
         }
         
-        .dept-group-separator td {
+        .group-separator td {
             padding: 10px 16px;
             font-weight: bold;
             background-color: #eef2ff;
@@ -492,19 +492,32 @@
             justify-content: center;
             border-radius: 50%;
             font-weight: bold;
-            font-size: 1rem;
-        }
-        
-        .seq-cell {
-            font-weight: 600;
-            color: var(--primary);
-            text-align: center;
+            font-size: 1.1rem;
         }
         
         .db-id-hint {
             font-size: 0.65rem;
             color: #6c757d;
             margin-left: 8px;
+        }
+        
+        .entity-header {
+            font-weight: 600;
+        }
+        
+        .seq-number {
+            font-weight: bold;
+            color: var(--primary);
+            text-align: center;
+        }
+        
+        .info-note {
+            background: #e3f2fd;
+            border-left: 4px solid var(--primary);
+            padding: 12px 18px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-size: 0.85rem;
         }
     </style>
 </head>
@@ -527,28 +540,30 @@
 
 <div class="container">
     <div class="page-header">
-        <h1 class="page-title">🏛️ Departments · Grouped by Name</h1>
+        <h1 class="page-title">🏛️ Departments Management</h1>
         <button class="btn btn-primary" id="addNewDeptBtn">➕ Add New Department</button>
+    </div>
+
+    <div class="info-note">
+        ✅ <strong>Departments are arranged by ID ascending</strong> and grouped by the first letter of the department name.<br>
+        💡 <strong>Click Edit</strong> to modify department details and manage water, electricity, and telephone accounts/meters.<br>
+        🔢 Each department shows its Database ID for reference.
     </div>
 
     <div class="filters-bar">
         <div class="filter-group"><label>🔍 Search</label><input type="text" id="searchFilter" class="filter-input" placeholder="Name, unit, contact..."></div>
-        <div class="filter-group"><label>📌 Group By</label><select id="groupFilter" class="filter-select">
-            <option value="name">Department Name (A-Z Groups)</option>
-            <option value="id">ID Order (No Groups)</option>
-        </select></div>
         <button id="refreshBtn" class="btn btn-primary" style="background:#6c757d;">⟳ Refresh</button>
     </div>
-    <div class="scroll-hint">↔️ Scroll horizontally | 📋 Departments ordered by ID ascending, grouped alphabetically by department name | ✏️ Edit mode shows full utility details</div>
+    <div class="scroll-hint">↔️ Scroll horizontally | 📋 Departments ordered by ID ascending, grouped by first letter of name | ✏️ Edit mode shows full utility details</div>
 
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
-                <tr><th width="45">#</th><th width="210">Department Name <span class="db-id-hint">(ID)</span></th><th width="120">Unit Name</th><th width="140">Head/Contact Person</th>
+                <tr><th width="50">No.</th><th width="220">Department Name <span class="db-id-hint">(ID)</span></th><th width="130">Unit Name</th><th width="150">Head/Contact Person</th>
                     <th width="300" class="fixed-width-col">💧 WATER Accounts & Meters</th>
                     <th width="300" class="fixed-width-col">⚡ ELECTRICITY Accounts & Meters</th>
                     <th width="300" class="fixed-width-col">📞 TELEPHONE Accounts & Numbers</th>
-                    <th width="130">Phone</th><th width="180">Email / Address</th><th width="110">Actions</th>
+                    <th width="130">Phone</th><th width="180">Email / Address</th><th width="120">Actions</th>
                 </tr>
             </thead>
             <tbody id="departmentsTbody"></tbody>
@@ -590,8 +605,8 @@
                 electricity_accounts: parseJsonField(d.electricity_accounts),
                 telephone_accounts: parseJsonField(d.telephone_accounts)
             }));
-            // Sort by ID ascending as primary order
-            allDepartmentsRaw.sort((a,b) => a.id - b.id);
+            // Sort by ID ascending - similar to water.html
+            allDepartmentsRaw.sort((a, b) => a.id - b.id);
             renderDepartments();
         } catch(err) { 
             showMessage('Error loading departments: ' + err.message, true); 
@@ -600,7 +615,7 @@
         }
     }
 
-    function getFilteredDepartments() {
+    function getFilteredAndGroupedDepartments() {
         let filtered = [...allDepartmentsRaw];
         const search = document.getElementById('searchFilter').value.toLowerCase();
         if(search) {
@@ -611,29 +626,25 @@
                 (d.contact_phone || '').includes(search)
             );
         }
-        return filtered;
-    }
-    
-    // Group departments by first letter of name (case insensitive)
-    function groupByName(filteredDepartments) {
+        
+        // Group by department name's first letter (like water.html groups by cluster)
         const groups = new Map();
-        filteredDepartments.forEach(dept => {
+        filtered.forEach(dept => {
             const name = dept.name || 'Unnamed';
-            const firstChar = name.trim().charAt(0).toUpperCase();
-            // Determine group key: A-Z or # for others
-            const groupKey = /[A-Z]/.test(firstChar) ? firstChar : '#';
+            const firstLetter = name.trim().charAt(0).toUpperCase();
+            const groupKey = /[A-Z]/.test(firstLetter) ? firstLetter : '#';
             if (!groups.has(groupKey)) groups.set(groupKey, []);
             groups.get(groupKey).push(dept);
         });
         
-        // Sort group keys: A-Z first, then # at the end
-        const sortedKeys = Array.from(groups.keys()).sort((a,b) => {
+        // Sort groups alphabetically, with '#' at the end (like water.html sorts clusters)
+        const sortedGroups = Array.from(groups.keys()).sort((a, b) => {
             if (a === '#') return 1;
             if (b === '#') return -1;
             return a.localeCompare(b);
         });
         
-        return { groups, sortedKeys };
+        return { groups, sortedGroups };
     }
 
     // RENDER EXPANDED EDITOR UI (vertical scrollable)
@@ -865,98 +876,77 @@
     }
     
     function renderDepartments() {
-        let filtered = getFilteredDepartments();
-        const groupMode = document.getElementById('groupFilter').value;
-        
+        const { groups, sortedGroups } = getFilteredAndGroupedDepartments();
         const tbody = document.getElementById('departmentsTbody');
         tbody.innerHTML = '';
         
-        if (filtered.length === 0) { 
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px;">No departments found. Click "Add New Department"</td></tr>';
+        if (sortedGroups.length === 0) { 
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px;">No departments found. Click "Add New Department"</div></tr>'; 
             return; 
         }
         
         let globalSeq = 1;
         
-        if (groupMode === 'id') {
-            // No grouping, just display all departments sorted by ID
-            for (let dept of filtered) {
-                renderDepartmentRow(tbody, dept, globalSeq);
+        // Similar to water.html: for each group, create a separator row then list departments
+        for (let groupKey of sortedGroups) {
+            const deptsInGroup = groups.get(groupKey);
+            // Departments within group are already sorted by ID ascending (from loadDepartments)
+            
+            // Group separator row (similar to cluster separator in water.html)
+            const separatorRow = document.createElement('tr');
+            separatorRow.className = 'group-separator';
+            const displayLetter = groupKey === '#' ? '#' : groupKey;
+            separatorRow.innerHTML = `
+                <td colspan="10">
+                    <div class="group-info">
+                        <span class="letter-badge">${escapeHtml(displayLetter)}</span>
+                        <span>DEPARTMENTS STARTING WITH "${escapeHtml(displayLetter)}"</span>
+                        <span class="group-count">${deptsInGroup.length} department${deptsInGroup.length > 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+            `;
+            tbody.appendChild(separatorRow);
+            
+            // Render each department in this group
+            for (let dept of deptsInGroup) {
+                const isEditing = (currentEditingId === dept.id);
+                const row = document.createElement('tr');
+                
+                if(isEditing) {
+                    row.innerHTML = `
+                        <td class="seq-number">${globalSeq}</div>
+                        <td class="entity-header"><input type="text" id="edit-name-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.name || '')}" placeholder="Department Name *"><span class="db-id-hint">ID: ${dept.id}</span></div>
+                        <td><input type="text" id="edit-unitname-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.unit_name || '')}" placeholder="Unit Name"></div>
+                        <td><input type="text" id="edit-headname-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.head_name || '')}" placeholder="Head/Contact Person"></div>
+                        <td class="fixed-width-col">${renderExpandedUtilityEditor('water', dept.water_accounts || [], dept.id)}</div>
+                        <td class="fixed-width-col">${renderExpandedUtilityEditor('electricity', dept.electricity_accounts || [], dept.id)}</div>
+                        <td class="fixed-width-col">${renderExpandedUtilityEditor('telephone', dept.telephone_accounts || [], dept.id)}</div>
+                        <td><input type="text" id="edit-phone-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.contact_phone || '')}" placeholder="Phone"></div>
+                        <td><input type="text" id="edit-email-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.email || dept.address || '')}" placeholder="Email/Address"></div>
+                        <td><div class="entity-actions"><button class="inline-save-btn" data-id="${dept.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${dept.id}">✖ Cancel</button></div></div>
+                    `;
+                    tbody.appendChild(row);
+                    setTimeout(() => attachEditorEvents(dept.id), 10);
+                } else {
+                    row.innerHTML = `
+                        <td class="seq-number">${globalSeq}</div>
+                        <td class="entity-header"><strong>${escapeHtml(dept.name || '')}</strong><span class="db-id-hint"> (ID: ${dept.id})</span></div>
+                        <td>${escapeHtml(dept.unit_name || '-')}</div>
+                        <td>${escapeHtml(dept.head_name || '-')}</div>
+                        <td class="fixed-width-col">${renderViewModeUtility(dept.water_accounts, 'water')}</div>
+                        <td class="fixed-width-col">${renderViewModeUtility(dept.electricity_accounts, 'electricity')}</div>
+                        <td class="fixed-width-col">${renderViewModeUtility(dept.telephone_accounts, 'telephone')}</div>
+                        <td>${escapeHtml(dept.contact_phone || '-')}</div>
+                        <td>${escapeHtml(dept.email || dept.address || '-')}</div>
+                        <td><div class="entity-actions"><button class="btn btn-warning btn-sm edit-dept-btn" data-id="${dept.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-dept-btn" data-id="${dept.id}">🗑️ Del</button></div></div>
+                    `;
+                    tbody.appendChild(row);
+                }
                 globalSeq++;
             }
-        } else {
-            // Group by name first letter (A-Z groups)
-            const { groups, sortedKeys } = groupByName(filtered);
-            
-            for (let groupKey of sortedKeys) {
-                const deptsInGroup = groups.get(groupKey);
-                // Departments are already sorted by ID within group (from global sort)
-                
-                // Add group separator row
-                const separatorRow = document.createElement('tr');
-                separatorRow.className = 'dept-group-separator';
-                const displayLetter = groupKey === '#' ? '#' : groupKey;
-                const groupName = groupKey === '#' ? 'OTHER / NUMERIC' : `LETTER "${displayLetter}"`;
-                separatorRow.innerHTML = `
-                    <td colspan="10">
-                        <div class="group-info">
-                            <span class="letter-badge">${escapeHtml(displayLetter)}</span>
-                            <span>DEPARTMENTS STARTING WITH ${groupName}</span>
-                            <span class="group-count">${deptsInGroup.length} department${deptsInGroup.length > 1 ? 's' : ''}</span>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(separatorRow);
-                
-                // Render each department in this group
-                for (let dept of deptsInGroup) {
-                    renderDepartmentRow(tbody, dept, globalSeq);
-                    globalSeq++;
-                }
-            }
         }
         
-        // Attach event listeners after rendering
-        attachAllEventListeners();
-    }
-    
-    function renderDepartmentRow(tbody, dept, seqNumber) {
-        const isEditing = (currentEditingId === dept.id);
-        const row = document.createElement('tr');
-        
-        if(isEditing) {
-            row.innerHTML = `
-                <td class="seq-cell">${seqNumber}</td>
-                <td><input type="text" id="edit-name-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.name || '')}" placeholder="Department Name *"><span class="db-id-hint">ID: ${dept.id}</span></td>
-                <td><input type="text" id="edit-unitname-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.unit_name || '')}" placeholder="Unit Name"></td>
-                <td><input type="text" id="edit-headname-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.head_name || '')}" placeholder="Head/Contact Person"></td>
-                <td>${renderExpandedUtilityEditor('water', dept.water_accounts || [], dept.id)}</td>
-                <td>${renderExpandedUtilityEditor('electricity', dept.electricity_accounts || [], dept.id)}</td>
-                <td>${renderExpandedUtilityEditor('telephone', dept.telephone_accounts || [], dept.id)}</td>
-                <td><input type="text" id="edit-phone-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.contact_phone || '')}" placeholder="Phone"></td>
-                <td><input type="text" id="edit-email-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.email || dept.address || '')}" placeholder="Email/Address"></td>
-                <td><div class="entity-actions"><button class="inline-save-btn" data-id="${dept.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${dept.id}">✖ Cancel</button></div></td>
-            `;
-            tbody.appendChild(row);
-            setTimeout(() => attachEditorEvents(dept.id), 10);
-        } else {
-            row.innerHTML = `
-                <td class="seq-cell">${seqNumber}</td>
-                <td><strong>${escapeHtml(dept.name || '')}</strong><span class="db-id-hint"> (ID: ${dept.id})</span></td>
-                <td>${escapeHtml(dept.unit_name || '-')}</td>
-                <td>${escapeHtml(dept.head_name || '-')}</td>
-                <td>${renderViewModeUtility(dept.water_accounts, 'water')}</td>
-                <td>${renderViewModeUtility(dept.electricity_accounts, 'electricity')}</td>
-                <td>${renderViewModeUtility(dept.telephone_accounts, 'telephone')}</td>
-                <td>${escapeHtml(dept.contact_phone || '-')}</td>
-                <td>${escapeHtml(dept.email || dept.address || '-')}</td>
-                <td><div class="entity-actions"><button class="btn btn-warning btn-sm edit-dept-btn" data-id="${dept.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-dept-btn" data-id="${dept.id}">🗑️ Del</button></div></td>
-            `;
-            tbody.appendChild(row);
-        }
-    }
-    
-    function attachAllEventListeners() {
+        // Attach event listeners for buttons
         document.querySelectorAll('.edit-dept-btn').forEach(btn => { 
             btn.addEventListener('click', () => { 
                 const id = parseInt(btn.getAttribute('data-id')); 
@@ -1013,18 +1003,22 @@
         addRow.className = 'add-new-row'; 
         addRow.id = 'inline-add-row';
         addRow.innerHTML = `
-            <td>✨</td>
-            <td><input id="new-name" class="inline-edit-input" placeholder="Department Name *"></td>
-            <td><input id="new-unitname" class="inline-edit-input" placeholder="Unit Name"></td>
-            <td><input id="new-headname" class="inline-edit-input" placeholder="Head/Contact Person"></td>
-            <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Add utilities after creation)</span></td>
-            <td><input id="new-phone" class="inline-edit-input" placeholder="Phone"></td>
-            <td><input id="new-email" class="inline-edit-input" placeholder="Email/Address"></td>
-            <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button></td>
+            <td>✨</div>
+            <td><input id="new-name" class="inline-edit-input" placeholder="Department Name *"></div>
+            <td><input id="new-unitname" class="inline-edit-input" placeholder="Unit Name"></div>
+            <td><input id="new-headname" class="inline-edit-input" placeholder="Head/Contact Person"></div>
+            <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Add utilities after creation)</span></div>
+            <td><input id="new-phone" class="inline-edit-input" placeholder="Phone"></div>
+            <td><input id="new-email" class="inline-edit-input" placeholder="Email/Address"></div>
+            <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button></div>
         `;
+        // Insert at the top, before any group separator
         const firstRow = tbody.firstChild;
-        if(firstRow) tbody.insertBefore(addRow, firstRow);
-        else tbody.appendChild(addRow);
+        if (firstRow) {
+            tbody.insertBefore(addRow, firstRow);
+        } else {
+            tbody.appendChild(addRow);
+        }
         
         document.getElementById('confirmAddBtn')?.addEventListener('click', async () => {
             const name = document.getElementById('new-name')?.value.trim();
@@ -1076,7 +1070,6 @@
     });
     document.getElementById('refreshBtn').addEventListener('click', () => loadDepartments());
     document.getElementById('searchFilter').addEventListener('input', () => renderDepartments());
-    document.getElementById('groupFilter').addEventListener('change', () => renderDepartments());
     
     function escapeHtml(str) { 
         if(!str) return ''; 
