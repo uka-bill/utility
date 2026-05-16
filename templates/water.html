@@ -386,26 +386,26 @@
             color: var(--gray);
         }
         
-        .cluster-separator {
+        .cluster-separator, .group-separator {
             background-color: #e8f4ff;
             border-top: 2px solid var(--primary);
             border-bottom: 2px solid var(--primary);
         }
         
-        .cluster-separator td {
+        .cluster-separator td, .group-separator td {
             padding: 8px 15px;
             font-weight: bold;
             color: #2c5282;
             font-size: 0.9rem;
         }
         
-        .cluster-info {
+        .cluster-info, .group-info {
             display: flex;
             align-items: center;
             gap: 10px;
         }
         
-        .cluster-count {
+        .cluster-count, .group-count {
             background-color: var(--primary);
             color: white;
             padding: 2px 8px;
@@ -455,6 +455,19 @@
         .placeholder-text {
             color: #999;
             font-style: italic;
+        }
+        
+        .letter-badge {
+            background: var(--secondary);
+            color: white;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 1.1rem;
         }
     </style>
 </head>
@@ -508,7 +521,7 @@
         ✅ <strong>Direct Entry Mode</strong> — Each school/department has ONE Save button. All water meters under that entity are saved together.
         Select month/year, enter consumption (m³) and charges, add notes, then click the entity's <strong>Save</strong> button.
         <br>
-        💡 <strong>Note:</strong> Entities without water accounts configured will show "No water account configured" and cannot save until you add water account information in the Schools/Departments tab.
+        💡 <strong>Departments are grouped by first letter of name and ordered by ID ascending.</strong>
     </div>
 
     <div class="filters-bar">
@@ -557,7 +570,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="11" class="no-data">Loading schools & departments...</td></tr>
+                <tr><td colspan="11" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -586,7 +599,6 @@
         }
     }
 
-    // Load schools and departments - sort by ID to match Schools/Departments tabs
     async function loadAllEntities() {
         try {
             const [schoolsRes, deptsRes] = await Promise.all([
@@ -623,7 +635,6 @@
         }
     }
 
-    // Extract water accounts from a school or department object - returns array of accounts with meters
     function extractWaterAccounts(entity) {
         let accounts = [];
         try {
@@ -635,7 +646,6 @@
             } else if (entity.water_accounts && Array.isArray(entity.water_accounts)) {
                 accounts = entity.water_accounts;
             } else if (entity.water_account) {
-                // Legacy single account
                 const meters = [];
                 if (entity.water_meter) {
                     meters.push({ meterNumber: entity.water_meter, location: '', notes: '' });
@@ -645,21 +655,18 @@
         } catch(e) {
             console.error("Error parsing water accounts:", e);
         }
-        
-        // If no accounts found, return empty array (will show placeholder)
         return accounts;
     }
 
-    // Build entity list - includes ALL schools and departments (even without accounts)
+    // Build entity list - departments sorted by ID ascending
     function buildEntityList() {
         const entities = [];
         
-        // Add ALL schools (even without water accounts)
+        // Add ALL schools
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractWaterAccounts(school);
             
-            // If no accounts, create a placeholder account
             let accountGroups = accounts;
             let hasAccounts = accounts.length > 0;
             
@@ -679,11 +686,12 @@
                 clusterNumber: school.cluster_number || null,
                 displayOrder: idx,
                 accountGroups: accountGroups,
-                hasAccounts: hasAccounts
+                hasAccounts: hasAccounts,
+                nameGroup: school.name ? school.name.charAt(0).toUpperCase() : '#'
             });
         }
         
-        // Add ALL departments (even without water accounts)
+        // Add ALL departments - already sorted by ID from load
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept);
@@ -708,7 +716,8 @@
                 clusterNumber: null,
                 displayOrder: allSchools.length + idx,
                 accountGroups: accountGroups,
-                hasAccounts: hasAccounts
+                hasAccounts: hasAccounts,
+                nameGroup: displayName ? displayName.charAt(0).toUpperCase() : '#'
             });
         }
         
@@ -913,7 +922,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="11" class="no-data">Loading data...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -924,7 +933,6 @@
         const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
         
-        // Apply filters
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
             if (searchTerm && !entity.name.toLowerCase().includes(searchTerm)) return false;
@@ -932,7 +940,7 @@
         });
         
         if (filteredEntities.length === 0) {
-            tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No matching entities found.</td></tr>';
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No matching entities found.<\/td><\/tr>';
             isLoading = false;
             return;
         }
@@ -944,7 +952,22 @@
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // Group schools by cluster
+        // GROUP DEPARTMENTS BY FIRST LETTER OF NAME
+        const deptGroups = new Map();
+        for (const dept of departmentsList) {
+            const firstLetter = dept.nameGroup;
+            const groupKey = /[A-Z]/.test(firstLetter) ? firstLetter : '#';
+            if (!deptGroups.has(groupKey)) deptGroups.set(groupKey, []);
+            deptGroups.get(groupKey).push(dept);
+        }
+        
+        const sortedDeptGroups = Array.from(deptGroups.keys()).sort((a, b) => {
+            if (a === '#') return 1;
+            if (b === '#') return -1;
+            return a.localeCompare(b);
+        });
+        
+        // Render Schools grouped by cluster
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -963,7 +986,7 @@
             return String(a).localeCompare(String(b));
         });
         
-        // Render Schools grouped by cluster
+        // Render Schools
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
             clusterSchools.sort((a, b) => a.displayOrder - b.displayOrder);
@@ -1029,7 +1052,7 @@
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
                             <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
                         </div>
-                    </td>
+                     </div>
                 `;
                 tbody.appendChild(separatorRow);
                 
@@ -1039,14 +1062,12 @@
             }
         }
         
-        // Render Departments
-        if (departmentsList.length > 0) {
-            departmentsList.sort((a, b) => a.displayOrder - b.displayOrder);
-            
-            let hasVisibleDepts = false;
+        // Render Departments - GROUPED BY FIRST LETTER OF NAME
+        for (const groupKey of sortedDeptGroups) {
+            const deptsInGroup = deptGroups.get(groupKey);
+            // Filter each department for status visibility
             const visibleDeptEntities = [];
-            
-            for (const entity of departmentsList) {
+            for (const entity of deptsInGroup) {
                 const visibleAccounts = [];
                 let hasAnyVisible = false;
                 
@@ -1087,24 +1108,24 @@
                     }
                 }
                 if (hasAnyVisible) {
-                    hasVisibleDepts = true;
                     visibleDeptEntities.push({...entity, accountGroups: visibleAccounts});
                 }
             }
             
-            if (hasVisibleDepts && visibleDeptEntities.length > 0) {
+            if (visibleDeptEntities.length > 0) {
                 const totalMeters = visibleDeptEntities.reduce((sum, e) => 
                     sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
                 
                 const deptSeparator = document.createElement('tr');
-                deptSeparator.className = 'cluster-separator';
+                deptSeparator.className = 'group-separator';
                 deptSeparator.innerHTML = `
                     <td colspan="11">
-                        <div class="cluster-info">
-                            <span>🏛️ DEPARTMENTS</span>
-                            <span class="cluster-count">${visibleDeptEntities.length} entit${visibleDeptEntities.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
+                        <div class="group-info">
+                            <span class="letter-badge">${escapeHtml(groupKey)}</span>
+                            <span>DEPARTMENTS STARTING WITH "${escapeHtml(groupKey)}"</span>
+                            <span class="group-count">${visibleDeptEntities.length} entit${visibleDeptEntities.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
                         </div>
-                    </td>
+                     </div>
                 `;
                 tbody.appendChild(deptSeparator);
                 
@@ -1140,7 +1161,6 @@
                 let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 const notes = existing ? (existing.notes || meter.notes || '') : (meter.notes || '');
                 
-                // If placeholder, disable inputs
                 const isPlaceholderAccount = account.isPlaceholder || meter.isPlaceholder;
                 const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
                 const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
@@ -1201,7 +1221,7 @@
         entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
-            <td class="seq-number">${startSerial}</td>
+            <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
                 ${!isPlaceholder ? `<span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
