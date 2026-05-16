@@ -191,7 +191,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
-            min-width: 1400px;
+            min-width: 1500px;
         }
 
         .data-table th {
@@ -252,7 +252,7 @@
         }
 
         .notes-input {
-            width: 180px;
+            width: 200px;
             text-align: left;
         }
 
@@ -293,12 +293,6 @@
         .status-partial {
             background: #cce5ff;
             color: #004085;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
         }
 
         .btn-sm {
@@ -392,26 +386,26 @@
             color: var(--gray);
         }
         
-        .cluster-separator {
+        .cluster-separator, .department-group-separator {
             background-color: #e8f4ff;
             border-top: 2px solid var(--primary);
             border-bottom: 2px solid var(--primary);
         }
         
-        .cluster-separator td {
+        .cluster-separator td, .department-group-separator td {
             padding: 8px 15px;
             font-weight: bold;
             color: #2c5282;
             font-size: 0.9rem;
         }
         
-        .cluster-info {
+        .cluster-info, .dept-group-info {
             display: flex;
             align-items: center;
             gap: 10px;
         }
         
-        .cluster-count {
+        .cluster-count, .dept-group-count {
             background-color: var(--primary);
             color: white;
             padding: 2px 8px;
@@ -446,19 +440,24 @@
             white-space: nowrap;
         }
         
-        .entity-status {
-            font-size: 0.8rem;
-            margin-right: 10px;
-        }
-        
         .total-due {
             font-size: 0.7rem;
             color: #666;
             margin-left: 10px;
         }
         
-        .text-center {
-            text-align: center;
+        .placeholder-text {
+            color: #999;
+            font-style: italic;
+        }
+        
+        .department-name-badge {
+            background: #7b1fa2;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -510,7 +509,9 @@
 
     <div class="info-note">
         ✅ <strong>Direct Entry Mode</strong> — Each school/department has ONE Save button. All phone numbers under that entity are saved together.
-        Enter charges for each phone number, add notes, then click the entity's <strong>Save</strong> button.
+        Select month/year, enter charges for each phone number, add notes, then click the entity's <strong>Save</strong> button.
+        <br>
+        💡 <strong>Schools are grouped by Cluster | Departments are grouped by Department Name (same as Departments page)</strong>
     </div>
 
     <div class="filters-bar">
@@ -524,7 +525,7 @@
         </div>
         <div class="filter-group">
             <label>🔍 Search</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Name, account or phone...">
+            <input type="text" id="searchFilter" class="filter-input" placeholder="Name...">
         </div>
         <div class="filter-group">
             <label>Filter by status</label>
@@ -546,10 +547,9 @@
             <thead>
                 <tr>
                     <th width="50">No.</th>
-                    <th width="200">Entity Name</th>
+                    <th width="220">Entity Name</th>
                     <th width="90">Type</th>
-                    <th width="140">Account Number</th>
-                    <th width="130">Phone Number</th>
+                    <th width="160">Account / Phone</th>
                     <th width="110">Current Charges ($)</th>
                     <th width="160">Late / Unsettled</th>
                     <th width="100">Amount Paid ($)</th>
@@ -559,7 +559,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="11" class="no-data">Loading schools & departments...</td></tr>
+                <tr><td colspan="10" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -574,7 +574,6 @@
     let currentYear = new Date().getFullYear();
     let isLoading = false;
 
-    // Populate year dropdown (2020-2030)
     function populateYears() {
         const yearSelect = document.getElementById('globalYear');
         yearSelect.innerHTML = '';
@@ -589,7 +588,6 @@
         }
     }
 
-    // Load all schools and departments and sort by ID
     async function loadAllEntities() {
         try {
             const [schoolsRes, deptsRes] = await Promise.all([
@@ -610,7 +608,6 @@
         }
     }
 
-    // Load existing telephone bills for selected month/year
     async function loadExistingBills(month, year) {
         try {
             const url = `/api/utility-bills?utility_type=telephone&month=${month}&year=${year}`;
@@ -627,109 +624,89 @@
         }
     }
 
-    // Extract telephone accounts from a school or department object
     function extractTelephoneAccounts(entity) {
         let accounts = [];
         try {
-            if (entity.telephone_accounts) {
-                accounts = typeof entity.telephone_accounts === 'string' ? JSON.parse(entity.telephone_accounts) : entity.telephone_accounts;
+            if (entity.telephone_accounts && typeof entity.telephone_accounts === 'string') {
+                const parsed = JSON.parse(entity.telephone_accounts);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    accounts = parsed;
+                }
+            } else if (entity.telephone_accounts && Array.isArray(entity.telephone_accounts)) {
+                accounts = entity.telephone_accounts;
             } else if (entity.telephone_account) {
-                accounts = [{ accountNumber: entity.telephone_account, numbers: entity.telephone_number ? [{ phoneNumber: entity.telephone_number }] : [] }];
+                const numbers = [];
+                if (entity.telephone_number) {
+                    numbers.push({ phoneNumber: entity.telephone_number, location: '', notes: '' });
+                }
+                accounts = [{ accountNumber: entity.telephone_account, numbers: numbers }];
             }
         } catch(e) {
-            accounts = [];
-        }
-        
-        if (accounts.length === 0) {
-            return [];
+            console.error("Error parsing telephone accounts:", e);
         }
         return accounts;
     }
 
-    // Build grouped rows - entity > account > phone numbers
-    function buildGroupedRows() {
+    function buildEntityList() {
         const entities = [];
         
-        // Process Schools
+        // Add ALL schools
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractTelephoneAccounts(school);
-            if (accounts.length === 0) continue;
             
-            const displayName = school.name || `School #${school.id}`;
+            let accountGroups = accounts;
+            let hasAccounts = accounts.length > 0;
             
-            const accountGroups = [];
-            for (const acc of accounts) {
-                const numbers = (acc.numbers && acc.numbers.length) ? acc.numbers : [];
-                if (numbers.length === 0) continue;
-                
-                const phoneNumbers = [];
-                for (const num of numbers) {
-                    phoneNumbers.push({
-                        phoneNumber: num.phoneNumber || '—',
-                        location: num.location || '',
-                        notes: num.notes || ''
-                    });
-                }
-                
-                accountGroups.push({
-                    accountNumber: acc.accountNumber || '—',
-                    phoneNumbers: phoneNumbers
-                });
+            if (!hasAccounts) {
+                accountGroups = [{
+                    accountNumber: '—',
+                    numbers: [{ phoneNumber: '—', location: '', notes: '' }],
+                    isPlaceholder: true
+                }];
             }
             
-            if (accountGroups.length > 0) {
-                entities.push({
-                    id: school.id,
-                    name: displayName,
-                    type: 'school',
-                    typeLabel: '🏫 School',
-                    clusterNumber: school.cluster_number || null,
-                    seqNumber: idx + 1,
-                    accountGroups: accountGroups
-                });
-            }
+            entities.push({
+                id: school.id,
+                name: school.name || `School #${school.id}`,
+                type: 'school',
+                typeLabel: '🏫 School',
+                clusterNumber: school.cluster_number || null,
+                departmentName: null,
+                displayOrder: idx,
+                accountGroups: accountGroups,
+                hasAccounts: hasAccounts
+            });
         }
         
-        // Process Departments
+        // Add ALL departments
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractTelephoneAccounts(dept);
-            if (accounts.length === 0) continue;
+            
+            let accountGroups = accounts;
+            let hasAccounts = accounts.length > 0;
+            
+            if (!hasAccounts) {
+                accountGroups = [{
+                    accountNumber: '—',
+                    numbers: [{ phoneNumber: '—', location: '', notes: '' }],
+                    isPlaceholder: true
+                }];
+            }
             
             const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-            
-            const accountGroups = [];
-            for (const acc of accounts) {
-                const numbers = (acc.numbers && acc.numbers.length) ? acc.numbers : [];
-                if (numbers.length === 0) continue;
-                
-                const phoneNumbers = [];
-                for (const num of numbers) {
-                    phoneNumbers.push({
-                        phoneNumber: num.phoneNumber || '—',
-                        location: num.location || '',
-                        notes: num.notes || ''
-                    });
-                }
-                
-                accountGroups.push({
-                    accountNumber: acc.accountNumber || '—',
-                    phoneNumbers: phoneNumbers
-                });
-            }
-            
-            if (accountGroups.length > 0) {
-                entities.push({
-                    id: dept.id,
-                    name: displayName,
-                    type: 'department',
-                    typeLabel: '🏛️ Department',
-                    clusterNumber: null,
-                    seqNumber: idx + 1,
-                    accountGroups: accountGroups
-                });
-            }
+            entities.push({
+                id: dept.id,
+                name: displayName,
+                type: 'department',
+                typeLabel: '🏛️ Department',
+                clusterNumber: null,
+                departmentName: dept.department_name || 'Other',
+                displayOrder: allSchools.length + idx,
+                accountGroups: accountGroups,
+                hasAccounts: hasAccounts
+            });
         }
         
         return entities;
@@ -759,8 +736,13 @@
         
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
+        const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
         
-        // Get all phone rows under this entity (next siblings until next entity row)
+        if (!hasAccounts) {
+            showToast('❌ Cannot save: No telephone account configured for this entity. Please add telephone account information in the Schools/Departments tab first.', true);
+            return;
+        }
+        
         let phoneRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
@@ -867,10 +849,6 @@
         const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
         if (!confirm(`Delete ALL telephone bills for ${entityName} for ${month}/${year}? This action cannot be undone.`)) return;
         
-        const entityType = entityRow.getAttribute('data-entity-type');
-        const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
-        
-        // Get all phone rows under this entity
         let phoneRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
@@ -928,46 +906,37 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="11" class="no-data">Loading data...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
         
-        let groupedEntities = buildGroupedRows();
+        let allEntities = buildEntityList();
         
         const entityFilter = document.getElementById('entityTypeFilter').value;
         const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
         
-        // Apply filters
-        let filteredEntities = groupedEntities.filter(entity => {
+        let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
-            if (searchTerm) {
-                const matchesEntity = entity.name.toLowerCase().includes(searchTerm);
-                const matchesAccount = entity.accountGroups.some(acc => 
-                    acc.accountNumber.toLowerCase().includes(searchTerm) ||
-                    acc.phoneNumbers.some(p => p.phoneNumber.toLowerCase().includes(searchTerm))
-                );
-                return matchesEntity || matchesAccount;
-            }
+            if (searchTerm && !entity.name.toLowerCase().includes(searchTerm)) return false;
             return true;
         });
         
-        // Separate schools and departments
-        const schoolsList = filteredEntities.filter(e => e.type === 'school');
-        const departmentsList = filteredEntities.filter(e => e.type === 'department');
-        
         if (filteredEntities.length === 0) {
-            tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No schools/departments with telephone accounts found.</td></tr>';
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="10" class="no-data">No matching entities found.<\/td><\/tr>';
             isLoading = false;
-            document.querySelector('.table-wrapper')?.classList.remove('loading');
             return;
         }
         
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        // Group schools by cluster
+        // Separate schools and departments
+        const schoolsList = filteredEntities.filter(e => e.type === 'school');
+        const departmentsList = filteredEntities.filter(e => e.type === 'department');
+        
+        // ==================== SCHOOLS SECTION (grouped by cluster) ====================
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -986,11 +955,11 @@
             return String(a).localeCompare(String(b));
         });
         
-        // Render Schools grouped by cluster
+        // Render Schools
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
+            clusterSchools.sort((a, b) => a.displayOrder - b.displayOrder);
             
-            // Check if any school in this cluster has visible phone numbers after status filter
             let hasVisibleInCluster = false;
             const visibleClusterEntities = [];
             
@@ -999,9 +968,11 @@
                 let hasAnyVisible = false;
                 
                 for (const account of entity.accountGroups) {
-                    const visiblePhones = [];
-                    for (const phone of account.phoneNumbers) {
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phone.phoneNumber, month, year);
+                    const numbers = account.numbers || [];
+                    const visibleNumbers = [];
+                    for (const num of numbers) {
+                        const phoneNum = num.phoneNumber || '—';
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phoneNum, month, year);
                         const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
                         const amountPaid = existing?.amount_paid || 0;
                         let statusText = 'Pending';
@@ -1011,12 +982,25 @@
                         if (statusFilter === 'all' || 
                             (statusFilter === 'paid' && statusText === 'Paid') ||
                             (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
-                            visiblePhones.push({...phone, existing, billId: existing?.id, totalDue, amountPaid, statusText});
+                            visibleNumbers.push({
+                                phoneNumber: phoneNum,
+                                location: num.location || '',
+                                notes: num.notes || '',
+                                existing: existing,
+                                billId: existing?.id,
+                                totalDue: totalDue,
+                                amountPaid: amountPaid,
+                                isPlaceholder: account.isPlaceholder
+                            });
                         }
                     }
-                    if (visiblePhones.length > 0) {
+                    if (visibleNumbers.length > 0) {
                         hasAnyVisible = true;
-                        visibleAccounts.push({...account, phoneNumbers: visiblePhones});
+                        visibleAccounts.push({
+                            accountNumber: account.accountNumber,
+                            numbers: visibleNumbers,
+                            isPlaceholder: account.isPlaceholder
+                        });
                     }
                 }
                 if (hasAnyVisible) {
@@ -1026,18 +1010,18 @@
             }
             
             if (hasVisibleInCluster && visibleClusterEntities.length > 0) {
-                const totalPhones = visibleClusterEntities.reduce((sum, e) => 
-                    sum + e.accountGroups.reduce((s, a) => s + a.phoneNumbers.length, 0), 0);
+                const totalNumbers = visibleClusterEntities.reduce((sum, e) => 
+                    sum + e.accountGroups.reduce((s, a) => s + a.numbers.length, 0), 0);
                 
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
-                    <td colspan="11">
+                    <td colspan="10">
                         <div class="cluster-info">
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
-                            <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalPhones} phone number${totalPhones > 1 ? 's' : ''}</span>
+                            <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
                         </div>
-                    </td>
+                     </div>
                 `;
                 tbody.appendChild(separatorRow);
                 
@@ -1047,19 +1031,42 @@
             }
         }
         
-        // Render Departments
-        if (departmentsList.length > 0) {
-            let hasVisibleDepts = false;
-            const visibleDeptEntities = [];
+        // ==================== DEPARTMENTS SECTION (grouped by DEPARTMENT NAME) ====================
+        // Group departments by department_name
+        const deptByDepartmentName = new Map();
+        for (const dept of departmentsList) {
+            const deptName = dept.departmentName || 'Other';
+            if (!deptByDepartmentName.has(deptName)) {
+                deptByDepartmentName.set(deptName, []);
+            }
+            deptByDepartmentName.get(deptName).push(dept);
+        }
+        
+        // Get the order of first occurrence based on original department order (by ID)
+        const deptGroupOrder = [];
+        for (const dept of departmentsList) {
+            const deptName = dept.departmentName || 'Other';
+            if (!deptGroupOrder.includes(deptName)) {
+                deptGroupOrder.push(deptName);
+            }
+        }
+        
+        // Render Departments grouped by Department Name
+        for (const deptName of deptGroupOrder) {
+            const deptsInGroup = deptByDepartmentName.get(deptName) || [];
             
-            for (const entity of departmentsList) {
+            // Filter each department for status visibility
+            const visibleDeptEntities = [];
+            for (const entity of deptsInGroup) {
                 const visibleAccounts = [];
                 let hasAnyVisible = false;
                 
                 for (const account of entity.accountGroups) {
-                    const visiblePhones = [];
-                    for (const phone of account.phoneNumbers) {
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phone.phoneNumber, month, year);
+                    const numbers = account.numbers || [];
+                    const visibleNumbers = [];
+                    for (const num of numbers) {
+                        const phoneNum = num.phoneNumber || '—';
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phoneNum, month, year);
                         const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
                         const amountPaid = existing?.amount_paid || 0;
                         let statusText = 'Pending';
@@ -1069,35 +1076,50 @@
                         if (statusFilter === 'all' || 
                             (statusFilter === 'paid' && statusText === 'Paid') ||
                             (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
-                            visiblePhones.push({...phone, existing, billId: existing?.id, totalDue, amountPaid, statusText});
+                            visibleNumbers.push({
+                                phoneNumber: phoneNum,
+                                location: num.location || '',
+                                notes: num.notes || '',
+                                existing: existing,
+                                billId: existing?.id,
+                                totalDue: totalDue,
+                                amountPaid: amountPaid,
+                                isPlaceholder: account.isPlaceholder
+                            });
                         }
                     }
-                    if (visiblePhones.length > 0) {
+                    if (visibleNumbers.length > 0) {
                         hasAnyVisible = true;
-                        visibleAccounts.push({...account, phoneNumbers: visiblePhones});
+                        visibleAccounts.push({
+                            accountNumber: account.accountNumber,
+                            numbers: visibleNumbers,
+                            isPlaceholder: account.isPlaceholder
+                        });
                     }
                 }
                 if (hasAnyVisible) {
-                    hasVisibleDepts = true;
                     visibleDeptEntities.push({...entity, accountGroups: visibleAccounts});
                 }
             }
             
-            if (hasVisibleDepts && visibleDeptEntities.length > 0) {
-                const totalPhones = visibleDeptEntities.reduce((sum, e) => 
-                    sum + e.accountGroups.reduce((s, a) => s + a.phoneNumbers.length, 0), 0);
+            if (visibleDeptEntities.length > 0) {
+                const totalNumbers = visibleDeptEntities.reduce((sum, e) => 
+                    sum + e.accountGroups.reduce((s, a) => s + a.numbers.length, 0), 0);
                 
                 const deptSeparator = document.createElement('tr');
-                deptSeparator.className = 'cluster-separator';
+                deptSeparator.className = 'department-group-separator';
                 deptSeparator.innerHTML = `
-                    <td colspan="11">
-                        <div class="cluster-info">
-                            <span>🏛️ DEPARTMENTS</span>
-                            <span class="cluster-count">${visibleDeptEntities.length} entit${visibleDeptEntities.length > 1 ? 'ies' : 'y'}, ${totalPhones} phone number${totalPhones > 1 ? 's' : ''}</span>
+                    <td colspan="10">
+                        <div class="dept-group-info">
+                            <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
+                            <span class="dept-group-count">${visibleDeptEntities.length} unit${visibleDeptEntities.length > 1 ? 's' : ''}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
                         </div>
-                    </td>
+                     </div>
                 `;
                 tbody.appendChild(deptSeparator);
+                
+                // Sort units within department group by ID (original order)
+                visibleDeptEntities.sort((a, b) => a.displayOrder - b.displayOrder);
                 
                 for (const entity of visibleDeptEntities) {
                     globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
@@ -1112,43 +1134,52 @@
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         
-        // Calculate overall entity status
         let phoneRowsData = [];
         let entityTotalDue = 0;
         let entityTotalPaid = 0;
         let hasAnyBill = false;
+        let isPlaceholder = false;
         
-        // Build phone rows data first to calculate totals
         for (const account of entity.accountGroups) {
             let isFirstPhoneForAccount = true;
+            if (account.isPlaceholder) isPlaceholder = true;
             
-            for (const phone of account.phoneNumbers) {
-                const existing = phone.existing;
-                const currentCharges = existing ? (existing.current_charges || 0) : 0;
-                const lateCharges = existing ? (existing.late_charges || 0) : 0;
-                const unsettled = existing ? (existing.unsettled_charges || 0) : 0;
-                const amountPaid = existing ? (existing.amount_paid || 0) : 0;
-                const notes = existing ? (existing.notes || phone.notes || '') : (phone.notes || '');
+            for (const num of account.numbers) {
+                const existing = num.existing;
+                let currentCharges = existing ? (existing.current_charges || 0) : 0;
+                let lateCharges = existing ? (existing.late_charges || 0) : 0;
+                let unsettled = existing ? (existing.unsettled_charges || 0) : 0;
+                let amountPaid = existing ? (existing.amount_paid || 0) : 0;
+                const notes = existing ? (existing.notes || num.notes || '') : (num.notes || '');
+                
+                const isPlaceholderAccount = account.isPlaceholder || num.isPlaceholder;
+                const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
+                const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
                 
                 const totalDue = currentCharges + lateCharges + unsettled;
-                entityTotalDue += totalDue;
-                entityTotalPaid += amountPaid;
-                if (existing) hasAnyBill = true;
+                if (!isPlaceholderAccount) {
+                    entityTotalDue += totalDue;
+                    entityTotalPaid += amountPaid;
+                    if (existing) hasAnyBill = true;
+                }
                 
-                const locationDisplay = phone.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(phone.location)}</div>` : '';
+                const locationDisplay = num.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(num.location)}</div>` : '';
                 
                 phoneRowsData.push({
                     serial: serial,
                     accountNumber: account.accountNumber,
-                    phoneNumber: phone.phoneNumber,
+                    phoneNumber: num.phoneNumber,
                     locationDisplay: locationDisplay,
                     currentCharges: currentCharges,
                     lateCharges: lateCharges,
                     unsettled: unsettled,
                     amountPaid: amountPaid,
                     notes: notes,
-                    billId: phone.billId,
-                    isFirstPhoneForAccount: isFirstPhoneForAccount
+                    billId: num.billId,
+                    isFirstPhoneForAccount: isFirstPhoneForAccount,
+                    isPlaceholder: isPlaceholderAccount,
+                    disabledAttr: disabledAttr,
+                    placeholderClass: placeholderClass
                 });
                 
                 isFirstPhoneForAccount = false;
@@ -1156,48 +1187,49 @@
             }
         }
         
-        // Determine entity status
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
-        if (entityTotalDue > 0 && entityTotalPaid >= entityTotalDue) {
-            entityStatusClass = 'status-paid';
-            entityStatusText = 'Paid';
-        } else if (hasAnyBill && entityTotalPaid > 0 && entityTotalPaid < entityTotalDue) {
-            entityStatusClass = 'status-partial';
-            entityStatusText = 'Partial';
-        } else if (!hasAnyBill) {
-            entityStatusText = 'Not entered';
+        if (!isPlaceholder) {
+            if (entityTotalDue > 0 && entityTotalPaid >= entityTotalDue) {
+                entityStatusClass = 'status-paid';
+                entityStatusText = 'Paid';
+            } else if (hasAnyBill && entityTotalPaid > 0 && entityTotalPaid < entityTotalDue) {
+                entityStatusClass = 'status-partial';
+                entityStatusText = 'Partial';
+            } else if (!hasAnyBill) {
+                entityStatusText = 'Not entered';
+            }
+        } else {
+            entityStatusText = 'No account';
         }
         
-        // Create entity row with Save and Delete buttons
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
         entityRow.setAttribute('data-entity-id', entity.id);
         entityRow.setAttribute('data-entity-name', entity.name);
+        entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
             <td class="seq-number">${startSerial}</td>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                <span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>
+                ${!isPlaceholder ? `<span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No telephone account configured)</span>'}
             </td>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></td>
-            <td colspan="2"></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
+            <td colspan="1"></td>
+            <td></div>
+            <td></div>
+            <td></div>
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></td>
             <td class="entity-actions">
-                <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
-                ${hasAnyBill ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
-            </td>
+                <button class="btn btn-success btn-sm save-entity-btn" ${isPlaceholder ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>💾 Save All</button>
+                ${hasAnyBill && !isPlaceholder ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
+            </div>
         `;
         
         tbody.appendChild(entityRow);
         
-        // Add phone rows
         for (const phoneData of phoneRowsData) {
             const phoneRow = document.createElement('tr');
             phoneRow.className = 'phone-row';
@@ -1207,19 +1239,18 @@
             
             phoneRow.innerHTML = `
                 <td class="seq-number">${phoneData.serial}</td>
-                <td></td>
-                <td></td>
-                <td>${phoneData.isFirstPhoneForAccount ? `<span class="account-number">📋 ${escapeHtml(phoneData.accountNumber)}</span>` : ''}</td>
-                <td>
-                    <div>📞 ${escapeHtml(phoneData.phoneNumber)}</div>
+                <td></div>
+                <td></div>
+                <td>${phoneData.isFirstPhoneForAccount ? `<span class="account-number">📋 ${escapeHtml(phoneData.accountNumber)}</span>` : ''}
+                    <div class="phone-number">📞 ${escapeHtml(phoneData.phoneNumber)}</div>
                     ${phoneData.locationDisplay}
-                </td>
-                <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${phoneData.currentCharges.toFixed(2)}" placeholder="$"></td>
-                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input" value="${phoneData.lateCharges.toFixed(2)}" placeholder="Late"><input type="number" step="0.01" class="inline-input small-input unsettled-input" value="${phoneData.unsettled.toFixed(2)}" placeholder="Unsettled"></div></td>
-                <td><input type="number" step="0.01" class="inline-input paid-input" value="${phoneData.amountPaid.toFixed(2)}" placeholder="$"></td>
-                <td><input type="text" class="inline-input notes-input" value="${escapeHtml(phoneData.notes)}" placeholder="Notes..."></td>
-                <td></td>
-                <td></td>
+                </div>
+                <td><input type="number" step="0.01" class="inline-input current-charge-input ${phoneData.placeholderClass}" value="${phoneData.currentCharges.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
+                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input ${phoneData.placeholderClass}" value="${phoneData.lateCharges.toFixed(2)}" placeholder="Late" ${phoneData.disabledAttr}><input type="number" step="0.01" class="inline-input small-input unsettled-input ${phoneData.placeholderClass}" value="${phoneData.unsettled.toFixed(2)}" placeholder="Unsettled" ${phoneData.disabledAttr}></div></div>
+                <td><input type="number" step="0.01" class="inline-input paid-input ${phoneData.placeholderClass}" value="${phoneData.amountPaid.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
+                <td><input type="text" class="inline-input notes-input ${phoneData.placeholderClass}" value="${escapeHtml(phoneData.notes)}" placeholder="Notes..." ${phoneData.disabledAttr}></div>
+                <td></div>
+                <td></div>
             `;
             tbody.appendChild(phoneRow);
         }
@@ -1237,11 +1268,10 @@
         });
     }
     
-    // Attach event listeners using event delegation
     function attachGlobalEventListeners() {
         document.getElementById('billsTableBody').addEventListener('click', async (e) => {
             const saveBtn = e.target.closest('.save-entity-btn');
-            if (saveBtn) {
+            if (saveBtn && !saveBtn.disabled) {
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
                     await saveEntityBills(entityRow, currentMonth, currentYear);
@@ -1258,7 +1288,6 @@
         });
     }
     
-    // Initialize page
     document.addEventListener('DOMContentLoaded', async () => {
         populateYears();
         
