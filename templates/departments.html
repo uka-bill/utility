@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Departments Management - Expanded Utility View</title>
+    <title>Departments Management - Grouped View</title>
     <style>
         :root {
             --primary: #4361ee;
@@ -257,6 +257,36 @@
             flex-wrap: wrap;
         }
         
+        /* Department Separator Styles */
+        .department-separator {
+            background-color: #f0f7ff;
+            border-top: 2px solid var(--primary);
+            border-bottom: 2px solid var(--primary);
+        }
+        
+        .department-separator td {
+            padding: 10px 16px;
+            font-weight: bold;
+            background-color: #f0f6ff;
+            color: #1e3a8a;
+            font-size: 0.9rem;
+        }
+        
+        .dept-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .dept-count {
+            background: var(--primary);
+            color: white;
+            padding: 2px 10px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-weight: normal;
+        }
+        
         .add-new-row {
             background: #fef9e3;
             border-top: 2px dashed var(--warning);
@@ -411,14 +441,6 @@
             margin: 8px;
         }
         
-        .section-label {
-            font-size: 0.7rem;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 6px;
-            padding-left: 4px;
-        }
-        
         .view-mode-text {
             font-size: 0.7rem;
             line-height: 1.4;
@@ -526,14 +548,14 @@
         <div class="filter-group"><label>📌 Department</label><select id="departmentFilter" class="filter-select"></select></div>
         <div class="filter-group"><label>🏷️ Division</label><select id="divisionFilter" class="filter-select"></select></div>
         <div class="filter-group"><label>🔄 Sort By</label><select id="sortFilter" class="filter-select">
-            <option value="id">Database ID (Original Order)</option>
+            <option value="id">Original Order (by ID)</option>
             <option value="unitName">Unit Name (A-Z)</option>
             <option value="divisionName">Division Name</option>
             <option value="departmentName">Department Name</option>
         </select></div>
         <button id="refreshBtn" class="btn btn-primary" style="background:#6c757d;">⟳ Refresh</button>
     </div>
-    <div class="scroll-hint">↔️ Scroll horizontally | 📋 Each utility column has vertical scroll for many accounts/meters | ✏️ Click Edit to modify</div>
+    <div class="scroll-hint">↔️ Scroll horizontally | 📋 Each utility column has vertical scroll | ✏️ Click Edit to modify | 📁 Departments are grouped by Department Name</div>
 
     <div class="table-wrapper">
         <table class="data-table">
@@ -886,68 +908,103 @@
     }
     
     function renderDepartments() {
-        const filtered = getFilteredDepartments();
+        let filtered = getFilteredDepartments();
         const tbody = document.getElementById('deptsTbody');
         tbody.innerHTML = '';
+        
         if(filtered.length === 0) { 
             tbody.innerHTML = '<tr><td colspan="11" style="text-align:center">No departments found</td></tr>'; 
             return; 
         }
         
-        let seq = 1;
+        // Group departments by department_name while preserving order within each group
+        // First, get the order of first occurrence of each department_name based on filtered order
+        const groupedMap = new Map();
+        const groupOrder = [];
         
         for(let dept of filtered) {
-            const isEditing = (currentEditingId === dept.id);
-            const row = document.createElement('tr');
-            if(isEditing) {
-                row.innerHTML = `
-                    <td class="seq-cell">
-                        <div class="sequence-info">
-                            <span class="sequence-number">${seq}</span>
-                            <span class="db-id-label">ID: ${dept.id}</span>
-                        </div>
-                    </td>
-                    <td><input type="text" id="edit-unit-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.unit_name || '')}"></td>
-                    <td><input type="text" id="edit-division-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.division_name || '')}"></td>
-                    <td><input type="text" id="edit-department-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.department_name || '')}"></td>
-                    <td>${renderExpandedUtilityEditor('water', dept.water_accounts || [], dept.id)}</td>
-                    <td>${renderExpandedUtilityEditor('electricity', dept.electricity_accounts || [], dept.id)}</td>
-                    <td>${renderExpandedUtilityEditor('telephone', dept.telephone_accounts || [], dept.id)}</td>
-                    <td><input type="text" id="edit-hotline-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.hotline_numbers || '')}"></td>
-                    <td><input type="text" id="edit-address-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.address || '')}"></td>
-                    <td><input type="text" id="edit-notes-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.notes || '')}"></td>
-                    <td class="actions-cell">
-                        <button class="inline-save-btn" data-id="${dept.id}">💾 Save</button>
-                        <button class="inline-cancel-btn" data-id="${dept.id}">✖ Cancel</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-                setTimeout(() => attachEditorEvents(dept.id), 10);
-            } else {
-                row.innerHTML = `
-                    <td class="seq-cell">
-                        <div class="sequence-info">
-                            <span class="sequence-number">${seq}</span>
-                            <span class="db-id-label">ID: ${dept.id}</span>
-                        </div>
-                    </td>
-                    <td><strong>${escapeHtml(dept.unit_name || '-')}</strong></td>
-                    <td><span class="badge badge-division">${escapeHtml(dept.division_name || '-')}</span></td>
-                    <td><span class="badge badge-department">${escapeHtml(dept.department_name || '-')}</span></td>
-                    <td>${renderViewModeUtility(dept.water_accounts, 'water')}</td>
-                    <td>${renderViewModeUtility(dept.electricity_accounts, 'electricity')}</td>
-                    <td>${renderViewModeUtility(dept.telephone_accounts, 'telephone')}</td>
-                    <td>${escapeHtml(dept.hotline_numbers || '-')}</td>
-                    <td>${escapeHtml(dept.address || '-')}</td>
-                    <td>${escapeHtml(dept.notes || '-')}</td>
-                    <td class="actions-cell">
-                        <button class="btn btn-warning btn-sm edit-dept-btn" data-id="${dept.id}">✏️ Edit</button>
-                        <button class="btn btn-danger btn-sm delete-dept-btn" data-id="${dept.id}">🗑️ Delete</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
+            const deptName = dept.department_name || 'Other';
+            if(!groupedMap.has(deptName)) {
+                groupedMap.set(deptName, []);
+                groupOrder.push(deptName);
             }
-            seq++;
+            groupedMap.get(deptName).push(dept);
+        }
+        
+        let globalSeq = 1;
+        
+        // Render each department group with separator
+        for(let deptName of groupOrder) {
+            const departments = groupedMap.get(deptName);
+            
+            // Add department separator row
+            const sepRow = document.createElement('tr');
+            sepRow.className = 'department-separator';
+            sepRow.innerHTML = `
+                <td colspan="11">
+                    <div class="dept-info">
+                        <span>🏢 ${escapeHtml(deptName)}</span>
+                        <span class="dept-count">${departments.length} unit${departments.length > 1 ? 's' : ''}</span>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(sepRow);
+            
+            // Render each department in this group (preserving their order, which is already sorted by ID)
+            for(let dept of departments) {
+                const isEditing = (currentEditingId === dept.id);
+                const row = document.createElement('tr');
+                
+                if(isEditing) {
+                    row.innerHTML = `
+                        <td class="seq-cell">
+                            <div class="sequence-info">
+                                <span class="sequence-number">${globalSeq}</span>
+                                <span class="db-id-label">ID: ${dept.id}</span>
+                            </div>
+                        </td>
+                        <td><input type="text" id="edit-unit-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.unit_name || '')}"></td>
+                        <td><input type="text" id="edit-division-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.division_name || '')}"></td>
+                        <td><input type="text" id="edit-department-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.department_name || '')}"></td>
+                        <td>${renderExpandedUtilityEditor('water', dept.water_accounts || [], dept.id)}</td>
+                        <td>${renderExpandedUtilityEditor('electricity', dept.electricity_accounts || [], dept.id)}</td>
+                        <td>${renderExpandedUtilityEditor('telephone', dept.telephone_accounts || [], dept.id)}</td>
+                        <td><input type="text" id="edit-hotline-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.hotline_numbers || '')}"></td>
+                        <td><input type="text" id="edit-address-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.address || '')}"></td>
+                        <td><input type="text" id="edit-notes-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.notes || '')}"></td>
+                        <td class="actions-cell">
+                            <button class="inline-save-btn" data-id="${dept.id}">💾 Save</button>
+                            <button class="inline-cancel-btn" data-id="${dept.id}">✖ Cancel</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                    setTimeout(() => attachEditorEvents(dept.id), 10);
+                } else {
+                    row.innerHTML = `
+                        <td class="seq-cell">
+                            <div class="sequence-info">
+                                <span class="sequence-number">${globalSeq}</span>
+                                <span class="db-id-label">ID: ${dept.id}</span>
+                            </div>
+                        </td>
+                        <td><strong>${escapeHtml(dept.unit_name || '-')}</strong></td>
+                        <td><span class="badge badge-division">${escapeHtml(dept.division_name || '-')}</span></td>
+                        <td><span class="badge badge-department">${escapeHtml(dept.department_name || '-')}</span></td>
+                        <td>${renderViewModeUtility(dept.water_accounts, 'water')}</td>
+                        <td>${renderViewModeUtility(dept.electricity_accounts, 'electricity')}</td>
+                        <td>${renderViewModeUtility(dept.telephone_accounts, 'telephone')}</td>
+                        <td>${escapeHtml(dept.hotline_numbers || '-')}</td>
+                        <td>${escapeHtml(dept.address || '-')}</td>
+                        <td>${escapeHtml(dept.notes || '-')}</td>
+                        <td class="actions-cell">
+                            <button class="btn btn-warning btn-sm edit-dept-btn" data-id="${dept.id}">✏️ Edit</button>
+                            <button class="btn btn-danger btn-sm delete-dept-btn" data-id="${dept.id}">🗑️ Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                }
+                globalSeq++;
+            }
         }
         
         // Attach event listeners
