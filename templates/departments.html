@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Departments Management - Grouped by Name</title>
+    <title>Departments Management - Grouped by Parent Department</title>
     <style>
         :root {
             --primary: #4361ee;
@@ -268,7 +268,7 @@
         .inline-save-btn { background: var(--success); color: white; }
         .inline-cancel-btn { background: var(--gray); color: white; }
         
-        /* Expanded Utility Styles - Vertical scroll per cell */
+        /* Expanded Utility Styles */
         .utility-cell {
             max-height: 280px;
             overflow-y: auto;
@@ -454,7 +454,7 @@
             max-width: 320px;
         }
         
-        /* Group separator styles - similar to water.html cluster separator but for name groups */
+        /* Group separator - for parent department grouping */
         .group-separator {
             background-color: #f0f4ff;
             border-top: 2px solid var(--primary);
@@ -482,25 +482,6 @@
             font-size: 0.7rem;
         }
         
-        .letter-badge {
-            background: var(--secondary);
-            color: white;
-            width: 32px;
-            height: 32px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-        
-        .db-id-hint {
-            font-size: 0.65rem;
-            color: #6c757d;
-            margin-left: 8px;
-        }
-        
         .entity-header {
             font-weight: 600;
         }
@@ -518,6 +499,26 @@
             margin-bottom: 20px;
             border-radius: 8px;
             font-size: 0.85rem;
+        }
+        
+        .child-dept-row {
+            border-left: 3px solid var(--info);
+            background-color: #fefefe;
+        }
+        
+        .child-dept-row td:first-child {
+            padding-left: 35px;
+        }
+        
+        .parent-name {
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .db-id-hint {
+            font-size: 0.65rem;
+            color: #6c757d;
+            margin-left: 8px;
         }
     </style>
 </head>
@@ -545,21 +546,21 @@
     </div>
 
     <div class="info-note">
-        ✅ <strong>Departments are arranged by ID ascending</strong> and grouped by the first letter of the department name.<br>
-        💡 <strong>Click Edit</strong> to modify department details and manage water, electricity, and telephone accounts/meters.<br>
-        🔢 Each department shows its Database ID for reference.
+        ✅ <strong>Departments are grouped by parent department name</strong> (e.g., "Jabatan Pentadbiran dan Perkhidmatan" with all its units).<br>
+        💡 Each group shows the parent department, followed by its child departments/units.<br>
+        🔢 All departments are ordered by their sequence number (ID) within each group.
     </div>
 
     <div class="filters-bar">
-        <div class="filter-group"><label>🔍 Search</label><input type="text" id="searchFilter" class="filter-input" placeholder="Name, unit, contact..."></div>
+        <div class="filter-group"><label>🔍 Search</label><input type="text" id="searchFilter" class="filter-input" placeholder="Search by name, unit, parent..."></div>
         <button id="refreshBtn" class="btn btn-primary" style="background:#6c757d;">⟳ Refresh</button>
     </div>
-    <div class="scroll-hint">↔️ Scroll horizontally | 📋 Departments ordered by ID ascending, grouped by first letter of name | ✏️ Edit mode shows full utility details</div>
+    <div class="scroll-hint">↔️ Scroll horizontally | 📋 Departments grouped by parent department | ✏️ Edit mode shows full utility details</div>
 
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
-                <tr><th width="50">No.</th><th width="220">Department Name <span class="db-id-hint">(ID)</span></th><th width="130">Unit Name</th><th width="150">Head/Contact Person</th>
+                <tr><th width="50">No.</th><th width="220">Department / Unit Name</th><th width="130">Parent Department</th><th width="150">Head/Contact Person</th>
                     <th width="300" class="fixed-width-col">💧 WATER Accounts & Meters</th>
                     <th width="300" class="fixed-width-col">⚡ ELECTRICITY Accounts & Meters</th>
                     <th width="300" class="fixed-width-col">📞 TELEPHONE Accounts & Numbers</th>
@@ -605,7 +606,7 @@
                 electricity_accounts: parseJsonField(d.electricity_accounts),
                 telephone_accounts: parseJsonField(d.telephone_accounts)
             }));
-            // Sort by ID ascending - similar to water.html
+            // Sort by ID ascending
             allDepartmentsRaw.sort((a, b) => a.id - b.id);
             renderDepartments();
         } catch(err) { 
@@ -613,6 +614,139 @@
             console.error(err);
             document.getElementById('departmentsTbody').innerHTML = '<tr><td colspan="10" style="text-align:center">Failed to load data. Try refresh.</td></tr>';
         }
+    }
+
+    // Group departments by parent department name
+    // A department can be a parent (if it has children) or a child (if it has a parent_dept_id)
+    // For simplicity, we use the department's own name as the group key if it's a parent,
+    // or we group children under their parent's name.
+    function groupDepartmentsByParent(departments) {
+        // First, identify which departments are parents (they have children)
+        // For now, we'll group by the 'unit_name' field as the parent identifier
+        // Or we can use a 'parent_id' field. Since the API may not have parent_id,
+        // we'll use the convention: department name is the parent, and unit_name is the child unit.
+        // Alternatively, we can group by the 'name' field and treat units with same 'unit_name' as children.
+        
+        // Better approach: Group by the 'unit_name' field (parent department), 
+        // and any department without a unit_name or with unit_name equal to name is considered a standalone.
+        const groups = new Map();
+        
+        // First pass: collect all potential parent names
+        departments.forEach(dept => {
+            const parentName = dept.unit_name && dept.unit_name.trim() !== '' ? dept.unit_name.trim() : null;
+            if (parentName && parentName !== dept.name) {
+                // This department has a parent (unit_name is the parent department)
+                if (!groups.has(parentName)) {
+                    groups.set(parentName, { parent: null, children: [] });
+                }
+                groups.get(parentName).children.push(dept);
+            } else {
+                // This is a standalone department or a potential parent
+                const deptName = dept.name || 'Unnamed';
+                if (!groups.has(deptName)) {
+                    groups.set(deptName, { parent: dept, children: [] });
+                } else if (groups.get(deptName).parent === null) {
+                    groups.get(deptName).parent = dept;
+                }
+            }
+        });
+        
+        // Also collect any departments that are parents but not yet added as parent objects
+        departments.forEach(dept => {
+            const deptName = dept.name || 'Unnamed';
+            if (groups.has(deptName) && groups.get(deptName).parent === null) {
+                groups.get(deptName).parent = dept;
+            } else if (!groups.has(deptName)) {
+                groups.set(deptName, { parent: dept, children: [] });
+            }
+        });
+        
+        // Filter out groups that have no parent (should not happen)
+        const validGroups = [];
+        for (let [groupName, groupData] of groups) {
+            if (groupData.parent) {
+                validGroups.push({ groupName, ...groupData });
+            }
+        }
+        
+        // Sort groups by the parent department's ID
+        validGroups.sort((a, b) => (a.parent.id || 0) - (b.parent.id || 0));
+        
+        // Sort children within each group by ID
+        validGroups.forEach(group => {
+            group.children.sort((a, b) => a.id - b.id);
+        });
+        
+        return validGroups;
+    }
+
+    // Alternative: Simple grouping by parent department name from unit_name field
+    function groupByParentName(departments) {
+        const groups = new Map();
+        
+        // First, find all unique parent department names (from unit_name field)
+        departments.forEach(dept => {
+            const parentName = dept.unit_name && dept.unit_name.trim() !== '' ? dept.unit_name.trim() : null;
+            if (parentName) {
+                if (!groups.has(parentName)) {
+                    groups.set(parentName, { parentDept: null, children: [] });
+                }
+                groups.get(parentName).children.push(dept);
+            }
+        });
+        
+        // Now find the parent department objects that match these parent names
+        for (let [parentName, groupData] of groups) {
+            const parentDept = departments.find(d => d.name === parentName);
+            if (parentDept) {
+                groupData.parentDept = parentDept;
+            } else {
+                // Create a virtual parent entry if no matching department exists
+                groupData.parentDept = {
+                    id: 0,
+                    name: parentName,
+                    unit_name: '',
+                    head_name: '',
+                    contact_phone: '',
+                    email: '',
+                    water_accounts: [],
+                    electricity_accounts: [],
+                    telephone_accounts: []
+                };
+            }
+        }
+        
+        // Also include standalone departments (those not listed as children and not parents with children)
+        const departmentsWithParent = new Set();
+        for (let group of groups.values()) {
+            group.children.forEach(child => departmentsWithParent.add(child.id));
+        }
+        
+        const standaloneDepts = departments.filter(d => !departmentsWithParent.has(d.id));
+        
+        // Add standalone departments as groups with no children
+        standaloneDepts.forEach(dept => {
+            const groupName = dept.name;
+            if (!groups.has(groupName)) {
+                groups.set(groupName, { parentDept: dept, children: [] });
+            }
+        });
+        
+        // Convert to array and sort by parent department ID
+        const result = Array.from(groups.entries()).map(([groupName, data]) => ({
+            groupName,
+            parentDept: data.parentDept,
+            children: data.children.sort((a, b) => a.id - b.id)
+        }));
+        
+        // Sort groups by parent department ID (with virtual parents at the end)
+        result.sort((a, b) => {
+            const idA = a.parentDept?.id || 999999;
+            const idB = b.parentDept?.id || 999999;
+            return idA - idB;
+        });
+        
+        return result;
     }
 
     function getFilteredAndGroupedDepartments() {
@@ -627,27 +761,11 @@
             );
         }
         
-        // Group by department name's first letter (like water.html groups by cluster)
-        const groups = new Map();
-        filtered.forEach(dept => {
-            const name = dept.name || 'Unnamed';
-            const firstLetter = name.trim().charAt(0).toUpperCase();
-            const groupKey = /[A-Z]/.test(firstLetter) ? firstLetter : '#';
-            if (!groups.has(groupKey)) groups.set(groupKey, []);
-            groups.get(groupKey).push(dept);
-        });
-        
-        // Sort groups alphabetically, with '#' at the end (like water.html sorts clusters)
-        const sortedGroups = Array.from(groups.keys()).sort((a, b) => {
-            if (a === '#') return 1;
-            if (b === '#') return -1;
-            return a.localeCompare(b);
-        });
-        
-        return { groups, sortedGroups };
+        // Group by parent department name (unit_name field)
+        return groupByParentName(filtered);
     }
 
-    // RENDER EXPANDED EDITOR UI (vertical scrollable)
+    // RENDER EXPANDED EDITOR UI
     function renderExpandedUtilityEditor(utilityType, accounts, deptId) {
         const containerId = `${utilityType}-editor-${deptId}`;
         let html = `<div class="utility-cell" id="${containerId}">`;
@@ -690,7 +808,6 @@
         return html;
     }
     
-    // Collect data from expanded editors
     function collectUtilityData(deptId) {
         const waterAccounts = [];
         document.querySelectorAll(`#water-editor-${deptId} .account-block`).forEach(block => {
@@ -795,7 +912,6 @@
         }
     }
     
-    // VIEW MODE: expanded readable format with vertical scroll
     function renderViewModeUtility(accounts, type) {
         if (!accounts || accounts.length === 0) return '<div style="color:#aaa; padding:10px; text-align:center;">— No data —</div>';
         let html = `<div class="view-mode-text utility-cell">`;
@@ -820,7 +936,6 @@
     }
     
     function attachEditorEvents(deptId) {
-        // Add Account
         document.querySelectorAll(`.add-account-util`).forEach(btn => {
             btn.onclick = (e) => {
                 const util = btn.getAttribute('data-util');
@@ -876,89 +991,109 @@
     }
     
     function renderDepartments() {
-        const { groups, sortedGroups } = getFilteredAndGroupedDepartments();
+        const groupedDepartments = getFilteredAndGroupedDepartments();
         const tbody = document.getElementById('departmentsTbody');
         tbody.innerHTML = '';
         
-        if (sortedGroups.length === 0) { 
+        if (groupedDepartments.length === 0) { 
             tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px;">No departments found. Click "Add New Department"</div></tr>'; 
             return; 
         }
         
         let globalSeq = 1;
         
-        // Similar to water.html: for each group, create a separator row then list departments
-        for (let groupKey of sortedGroups) {
-            const deptsInGroup = groups.get(groupKey);
-            // Departments within group are already sorted by ID ascending (from loadDepartments)
+        for (let group of groupedDepartments) {
+            const parentDept = group.parentDept;
+            const children = group.children;
             
-            // Group separator row (similar to cluster separator in water.html)
-            const separatorRow = document.createElement('tr');
-            separatorRow.className = 'group-separator';
-            const displayLetter = groupKey === '#' ? '#' : groupKey;
-            separatorRow.innerHTML = `
-                <td colspan="10">
-                    <div class="group-info">
-                        <span class="letter-badge">${escapeHtml(displayLetter)}</span>
-                        <span>DEPARTMENTS STARTING WITH "${escapeHtml(displayLetter)}"</span>
-                        <span class="group-count">${deptsInGroup.length} department${deptsInGroup.length > 1 ? 's' : ''}</span>
-                    </div>
-                  </div>
-            `;
-            tbody.appendChild(separatorRow);
+            // Parent Department Row (Group Header)
+            const isParentEditing = (currentEditingId === parentDept?.id);
+            const parentRow = document.createElement('tr');
+            parentRow.className = 'group-separator';
             
-            // Render each department in this group
-            for (let dept of deptsInGroup) {
-                const isEditing = (currentEditingId === dept.id);
-                const row = document.createElement('tr');
+            if (isParentEditing && parentDept && parentDept.id) {
+                parentRow.innerHTML = `
+                    <td class="seq-number">${globalSeq}</div>
+                    <td class="entity-header"><input type="text" id="edit-name-${parentDept.id}" class="inline-edit-input" value="${escapeHtml(parentDept.name || '')}" placeholder="Department Name *"><span class="db-id-hint">ID: ${parentDept.id}</span></div>
+                    <td><input type="text" id="edit-unitname-${parentDept.id}" class="inline-edit-input" value="${escapeHtml(parentDept.unit_name || '')}" placeholder="Parent Dept"></div>
+                    <td><input type="text" id="edit-headname-${parentDept.id}" class="inline-edit-input" value="${escapeHtml(parentDept.head_name || '')}" placeholder="Head"></div>
+                    <td class="fixed-width-col">${renderExpandedUtilityEditor('water', parentDept.water_accounts || [], parentDept.id)}</div>
+                    <td class="fixed-width-col">${renderExpandedUtilityEditor('electricity', parentDept.electricity_accounts || [], parentDept.id)}</div>
+                    <td class="fixed-width-col">${renderExpandedUtilityEditor('telephone', parentDept.telephone_accounts || [], parentDept.id)}</div>
+                    <td><input type="text" id="edit-phone-${parentDept.id}" class="inline-edit-input" value="${escapeHtml(parentDept.contact_phone || '')}" placeholder="Phone"></div>
+                    <td><input type="text" id="edit-email-${parentDept.id}" class="inline-edit-input" value="${escapeHtml(parentDept.email || '')}" placeholder="Email"></div>
+                    <td><div class="entity-actions"><button class="inline-save-btn" data-id="${parentDept.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${parentDept.id}">✖ Cancel</button></div></div>
+                `;
+            } else {
+                parentRow.innerHTML = `
+                    <td class="seq-number">${globalSeq}</div>
+                    <td class="entity-header"><strong class="parent-name">📁 ${escapeHtml(parentDept?.name || group.groupName)}</strong><span class="db-id-hint"> (ID: ${parentDept?.id || '—'})</span></div>
+                    <td>—</div>
+                    <td>${escapeHtml(parentDept?.head_name || '-')}</div>
+                    <td class="fixed-width-col">${renderViewModeUtility(parentDept?.water_accounts || [], 'water')}</div>
+                    <td class="fixed-width-col">${renderViewModeUtility(parentDept?.electricity_accounts || [], 'electricity')}</div>
+                    <td class="fixed-width-col">${renderViewModeUtility(parentDept?.telephone_accounts || [], 'telephone')}</div>
+                    <td>${escapeHtml(parentDept?.contact_phone || '-')}</div>
+                    <td>${escapeHtml(parentDept?.email || parentDept?.address || '-')}</div>
+                    <td><div class="entity-actions"><button class="btn btn-warning btn-sm edit-dept-btn" data-id="${parentDept?.id}">✏️ Edit</button>${parentDept?.id ? `<button class="btn btn-danger btn-sm delete-dept-btn" data-id="${parentDept.id}">🗑️ Del</button>` : ''}</div></div>
+                `;
+            }
+            tbody.appendChild(parentRow);
+            globalSeq++;
+            
+            // Child Departments (Units under this parent)
+            for (let child of children) {
+                const isChildEditing = (currentEditingId === child.id);
+                const childRow = document.createElement('tr');
+                childRow.className = 'child-dept-row';
                 
-                if(isEditing) {
-                    row.innerHTML = `
+                if (isChildEditing) {
+                    childRow.innerHTML = `
                         <td class="seq-number">${globalSeq}</div>
-                        <td class="entity-header"><input type="text" id="edit-name-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.name || '')}" placeholder="Department Name *"><span class="db-id-hint">ID: ${dept.id}</span></div>
-                        <td><input type="text" id="edit-unitname-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.unit_name || '')}" placeholder="Unit Name"></div>
-                        <td><input type="text" id="edit-headname-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.head_name || '')}" placeholder="Head/Contact Person"></div>
-                        <td class="fixed-width-col">${renderExpandedUtilityEditor('water', dept.water_accounts || [], dept.id)}</div>
-                        <td class="fixed-width-col">${renderExpandedUtilityEditor('electricity', dept.electricity_accounts || [], dept.id)}</div>
-                        <td class="fixed-width-col">${renderExpandedUtilityEditor('telephone', dept.telephone_accounts || [], dept.id)}</div>
-                        <td><input type="text" id="edit-phone-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.contact_phone || '')}" placeholder="Phone"></div>
-                        <td><input type="text" id="edit-email-${dept.id}" class="inline-edit-input" value="${escapeHtml(dept.email || dept.address || '')}" placeholder="Email/Address"></div>
-                        <td><div class="entity-actions"><button class="inline-save-btn" data-id="${dept.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${dept.id}">✖ Cancel</button></div></div>
+                        <td><input type="text" id="edit-name-${child.id}" class="inline-edit-input" value="${escapeHtml(child.name || '')}" placeholder="Unit Name"><span class="db-id-hint">ID: ${child.id}</span></div>
+                        <td><input type="text" id="edit-unitname-${child.id}" class="inline-edit-input" value="${escapeHtml(child.unit_name || '')}" placeholder="Parent Dept"></div>
+                        <td><input type="text" id="edit-headname-${child.id}" class="inline-edit-input" value="${escapeHtml(child.head_name || '')}" placeholder="Head"></div>
+                        <td class="fixed-width-col">${renderExpandedUtilityEditor('water', child.water_accounts || [], child.id)}</div>
+                        <td class="fixed-width-col">${renderExpandedUtilityEditor('electricity', child.electricity_accounts || [], child.id)}</div>
+                        <td class="fixed-width-col">${renderExpandedUtilityEditor('telephone', child.telephone_accounts || [], child.id)}</div>
+                        <td><input type="text" id="edit-phone-${child.id}" class="inline-edit-input" value="${escapeHtml(child.contact_phone || '')}" placeholder="Phone"></div>
+                        <td><input type="text" id="edit-email-${child.id}" class="inline-edit-input" value="${escapeHtml(child.email || '')}" placeholder="Email"></div>
+                        <td><div class="entity-actions"><button class="inline-save-btn" data-id="${child.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${child.id}">✖ Cancel</button></div></div>
                     `;
-                    tbody.appendChild(row);
-                    setTimeout(() => attachEditorEvents(dept.id), 10);
                 } else {
-                    row.innerHTML = `
+                    childRow.innerHTML = `
                         <td class="seq-number">${globalSeq}</div>
-                        <td class="entity-header"><strong>${escapeHtml(dept.name || '')}</strong><span class="db-id-hint"> (ID: ${dept.id})</span></div>
-                        <td>${escapeHtml(dept.unit_name || '-')}</div>
-                        <td>${escapeHtml(dept.head_name || '-')}</div>
-                        <td class="fixed-width-col">${renderViewModeUtility(dept.water_accounts, 'water')}</div>
-                        <td class="fixed-width-col">${renderViewModeUtility(dept.electricity_accounts, 'electricity')}</div>
-                        <td class="fixed-width-col">${renderViewModeUtility(dept.telephone_accounts, 'telephone')}</div>
-                        <td>${escapeHtml(dept.contact_phone || '-')}</div>
-                        <td>${escapeHtml(dept.email || dept.address || '-')}</div>
-                        <td><div class="entity-actions"><button class="btn btn-warning btn-sm edit-dept-btn" data-id="${dept.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-dept-btn" data-id="${dept.id}">🗑️ Del</button></div></div>
+                        <td>└─ <strong>${escapeHtml(child.name || '')}</strong></div>
+                        <td><span class="badge badge-dept">${escapeHtml(child.unit_name || parentDept?.name || '-')}</span></div>
+                        <td>${escapeHtml(child.head_name || '-')}</div>
+                        <td class="fixed-width-col">${renderViewModeUtility(child.water_accounts || [], 'water')}</div>
+                        <td class="fixed-width-col">${renderViewModeUtility(child.electricity_accounts || [], 'electricity')}</div>
+                        <td class="fixed-width-col">${renderViewModeUtility(child.telephone_accounts || [], 'telephone')}</div>
+                        <td>${escapeHtml(child.contact_phone || '-')}</div>
+                        <td>${escapeHtml(child.email || child.address || '-')}</div>
+                        <td><div class="entity-actions"><button class="btn btn-warning btn-sm edit-dept-btn" data-id="${child.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-dept-btn" data-id="${child.id}">🗑️ Del</button></div></div>
                     `;
-                    tbody.appendChild(row);
                 }
+                tbody.appendChild(childRow);
                 globalSeq++;
             }
         }
         
-        // Attach event listeners for buttons
+        // Attach event listeners
         document.querySelectorAll('.edit-dept-btn').forEach(btn => { 
             btn.addEventListener('click', () => { 
                 const id = parseInt(btn.getAttribute('data-id')); 
-                currentEditingId = id; 
-                renderDepartments(); 
+                if (id) {
+                    currentEditingId = id; 
+                    renderDepartments(); 
+                }
             }); 
         });
         
         document.querySelectorAll('.delete-dept-btn').forEach(btn => { 
             btn.addEventListener('click', async () => { 
                 const id = parseInt(btn.getAttribute('data-id')); 
-                if(confirm('Delete this department? All associated utility records will be orphaned.')) 
+                if(id && confirm('Delete this department? All associated utility records will be orphaned.')) 
                     await deleteDepartment(id); 
             }); 
         });
@@ -966,7 +1101,7 @@
         document.querySelectorAll('.inline-save-btn').forEach(btn => { 
             btn.addEventListener('click', (e) => { 
                 const id = parseInt(btn.getAttribute('data-id')); 
-                saveFullEdit(id); 
+                if (id) saveFullEdit(id); 
             }); 
         });
         
@@ -1004,25 +1139,21 @@
         addRow.id = 'inline-add-row';
         addRow.innerHTML = `
             <td>✨</div>
-            <td><input id="new-name" class="inline-edit-input" placeholder="Department Name *"></div>
-            <td><input id="new-unitname" class="inline-edit-input" placeholder="Unit Name"></div>
+            <td><input id="new-name" class="inline-edit-input" placeholder="Department/Unit Name *"></div>
+            <td><input id="new-unitname" class="inline-edit-input" placeholder="Parent Department Name"></div>
             <td><input id="new-headname" class="inline-edit-input" placeholder="Head/Contact Person"></div>
             <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Add utilities after creation)</span></div>
             <td><input id="new-phone" class="inline-edit-input" placeholder="Phone"></div>
             <td><input id="new-email" class="inline-edit-input" placeholder="Email/Address"></div>
             <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button></div>
         `;
-        // Insert at the top, before any group separator
         const firstRow = tbody.firstChild;
-        if (firstRow) {
-            tbody.insertBefore(addRow, firstRow);
-        } else {
-            tbody.appendChild(addRow);
-        }
+        if (firstRow) tbody.insertBefore(addRow, firstRow);
+        else tbody.appendChild(addRow);
         
         document.getElementById('confirmAddBtn')?.addEventListener('click', async () => {
             const name = document.getElementById('new-name')?.value.trim();
-            if(!name) { showMessage("Department Name is required", true); return; }
+            if(!name) { showMessage("Department/Unit Name is required", true); return; }
             const payload = { 
                 name: name,
                 unit_name: document.getElementById('new-unitname')?.value.trim() || '',
@@ -1063,7 +1194,6 @@
         });
     }
     
-    // Event listeners
     document.getElementById('addNewDeptBtn').addEventListener('click', () => { 
         if(currentEditingId) showMessage('Finish current edit first', true); 
         else inlineAddDepartment(); 
