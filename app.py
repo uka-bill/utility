@@ -158,6 +158,155 @@ def backup_page():
 def sut_office():
     return render_template('sut_office.html')
 
+# ============ ENTITIES API FOR REPORTS ============
+
+@app.route('/api/entities', methods=['GET'])
+def get_entities():
+    """Get schools or departments for report selection"""
+    try:
+        print("🔍 GET /api/entities called")
+        entity_type = request.args.get('type', 'school')
+        
+        if not supabase:
+            return jsonify([]), 500
+        
+        if entity_type == 'school':
+            response = supabase.table("schools").select("id, name, cluster_number").order("name").execute()
+            entities = []
+            for school in (response.data or []):
+                entities.append({
+                    'id': school['id'],
+                    'name': school['name'],
+                    'cluster': school.get('cluster_number', '')
+                })
+            return jsonify(entities)
+        elif entity_type == 'department':
+            response = supabase.table("departments").select("id, name, department_name, unit_name").order("name").execute()
+            entities = []
+            for dept in (response.data or []):
+                display_name = dept.get('unit_name') or dept.get('name') or f"Department #{dept['id']}"
+                entities.append({
+                    'id': dept['id'],
+                    'name': display_name,
+                    'department_name': dept.get('department_name', '')
+                })
+            return jsonify(entities)
+        else:
+            return jsonify([])
+            
+    except Exception as e:
+        print(f"❌ Entities GET error: {e}")
+        return jsonify([]), 500
+
+# ============ GENERATE REPORT API ============
+
+@app.route('/api/generate-report', methods=['POST'])
+def generate_report():
+    """Generate report based on filters"""
+    try:
+        print("📊 POST /api/generate-report called")
+        
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        data = request.get_json()
+        print(f"📊 Report request data: {data}")
+        
+        selection_type = data.get('selection_type', 'entityType')
+        utility_type = data.get('utility_type', 'all')
+        month = data.get('month', 'all')
+        year = data.get('year')
+        
+        # Build query
+        query = supabase.table("utility_bills").select("*")
+        
+        # Filter by utility type
+        if utility_type != 'all':
+            query = query.eq("utility_type", utility_type)
+        
+        # Filter by month
+        if month != 'all' and month:
+            query = query.eq("month", int(month))
+        
+        # Filter by year
+        if year and year != 'all':
+            query = query.eq("year", int(year))
+        
+        # Filter by entity selection
+        if selection_type == 'entityType':
+            entity_type_filter = data.get('entity_type', 'all')
+            if entity_type_filter != 'all':
+                query = query.eq("entity_type", entity_type_filter)
+        else:
+            # Specific entities selected
+            school_ids = data.get('school_ids', [])
+            department_ids = data.get('department_ids', [])
+            
+            # Build OR condition for entity filtering
+            if school_ids or department_ids:
+                # We'll filter after fetching since Supabase OR can be complex
+                pass
+        
+        response = query.execute()
+        bills = response.data if response.data else []
+        
+        # Apply specific entity filtering if needed
+        if selection_type == 'specificEntities':
+            school_ids = [int(sid) for sid in data.get('school_ids', [])]
+            department_ids = [int(did) for did in data.get('department_ids', [])]
+            
+            filtered_bills = []
+            for bill in bills:
+                if bill['entity_type'] == 'school' and bill['entity_id'] in school_ids:
+                    filtered_bills.append(bill)
+                elif bill['entity_type'] == 'department' and bill['entity_id'] in department_ids:
+                    filtered_bills.append(bill)
+            bills = filtered_bills
+        
+        # Enrich bills with entity names
+        enriched_bills = []
+        for bill in bills:
+            bill_data = dict(bill)
+            
+            # Get entity name
+            if bill_data['entity_type'] == 'school':
+                school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
+                if school_response.data and len(school_response.data) > 0:
+                    bill_data['entity_name'] = school_response.data[0]['name']
+                else:
+                    bill_data['entity_name'] = 'Unknown School'
+            elif bill_data['entity_type'] == 'department':
+                dept_response = supabase.table("departments").select("name", "unit_name").eq("id", bill_data['entity_id']).execute()
+                if dept_response.data and len(dept_response.data) > 0:
+                    bill_data['entity_name'] = dept_response.data[0].get('unit_name') or dept_response.data[0]['name'] or 'Unknown Department'
+                else:
+                    bill_data['entity_name'] = 'Unknown Department'
+            else:
+                bill_data['entity_name'] = 'Unknown'
+            
+            # Add telephone number if telephone utility
+            if bill_data['utility_type'] == 'telephone' and not bill_data.get('phone_number'):
+                bill_data['phone_number'] = bill_data.get('meter_number', '')
+            
+            # Ensure numeric values are floats
+            bill_data['current_charges'] = float(bill_data.get('current_charges') or 0)
+            bill_data['late_charges'] = float(bill_data.get('late_charges') or 0)
+            bill_data['unsettled_charges'] = float(bill_data.get('unsettled_charges') or 0)
+            bill_data['amount_paid'] = float(bill_data.get('amount_paid') or 0)
+            
+            enriched_bills.append(bill_data)
+        
+        # Sort by entity name
+        enriched_bills.sort(key=lambda x: x.get('entity_name', ''))
+        
+        print(f"📊 Report generated with {len(enriched_bills)} bills")
+        return jsonify(enriched_bills)
+        
+    except Exception as e:
+        print(f"❌ Generate report error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
 # ============ FINANCIAL YEARS API ============
 
 @app.route('/api/financial-years', methods=['GET'])
@@ -1041,6 +1190,10 @@ def create_utility_bill():
             if data.get('meter_number') and data.get('meter_number') != '—':
                 bill_data["meter_number"] = data.get('meter_number')
             
+            # Update notes if provided
+            if data.get('notes') is not None:
+                bill_data["notes"] = data.get('notes')
+            
             response = supabase.table("utility_bills").update(bill_data).eq("id", bill_id).execute()
             
             if response.data:
@@ -1073,6 +1226,7 @@ def create_utility_bill():
             "bill_month": int(data.get('bill_month', current_date.month)),
             "bill_year": int(data.get('bill_year', current_date.year)),
             "bill_image": data.get('bill_image'),
+            "notes": data.get('notes', ''),
             "created_at": datetime.now().isoformat()
         }
         
@@ -1123,6 +1277,10 @@ def update_utility_bill(bill_id):
             bill_data["meter_number"] = data.get('meter_number')
         if data.get('phone_number') is not None:
             bill_data["phone_number"] = data.get('phone_number')
+        
+        # Update notes if provided
+        if data.get('notes') is not None:
+            bill_data["notes"] = data.get('notes')
         
         response = supabase.table("utility_bills").update(bill_data).eq("id", bill_id).execute()
         
