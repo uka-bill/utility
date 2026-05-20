@@ -187,13 +187,22 @@
             border-radius: 10px;
             overflow-x: auto;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            max-height: calc(100vh - 300px);
+            overflow-y: auto;
+            position: relative;
         }
 
         .data-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
-            min-width: 1400px;
+            min-width: 1600px;
+        }
+
+        .data-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 20;
         }
 
         .data-table th {
@@ -203,7 +212,8 @@
             text-align: left;
             position: sticky;
             top: 0;
-            z-index: 10;
+            z-index: 20;
+            border-bottom: 2px solid white;
         }
 
         .data-table td {
@@ -246,15 +256,6 @@
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
-        }
-
-        .calculated-field {
-            width: 100px;
-            padding: 6px 8px;
-            background: #f5f5f5;
-            border-radius: 5px;
-            text-align: right;
-            font-weight: 500;
         }
 
         .account-number {
@@ -434,26 +435,56 @@
             padding-left: 35px;
         }
         
-        .summary-row {
+        /* Bill Summary Section - Separate and Distinct */
+        .entity-summary-section {
             background-color: var(--bill-shade);
-            border-top: 2px solid var(--warning);
-            border-bottom: 2px solid var(--warning);
-            font-weight: bold;
+            border-top: 3px solid var(--warning);
+            border-bottom: 3px solid var(--warning);
         }
         
-        .summary-row td {
-            padding: 10px;
-            font-weight: 600;
+        .entity-summary-section td {
+            padding: 15px 10px;
+            font-weight: 500;
+            background-color: var(--bill-shade);
         }
         
-        .summary-label {
+        .summary-label-cell {
             text-align: right;
-            font-weight: 600;
+            font-weight: 700;
+            color: #e65100;
+            background-color: #fff3e0;
         }
         
-        .summary-value {
-            font-weight: 700;
-            color: var(--dark);
+        .summary-title {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #e65100;
+            background-color: #fff3e0;
+            padding: 8px 15px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        
+        .summary-input {
+            background-color: white;
+            border: 1px solid #ffcc80;
+        }
+        
+        .summary-input:focus {
+            border-color: var(--warning);
+            box-shadow: 0 0 0 2px rgba(248, 150, 30, 0.2);
+        }
+        
+        .summary-value-display {
+            font-weight: bold;
+            font-size: 1rem;
+            color: #e65100;
+            background: #fff3e0;
+            padding: 6px 12px;
+            border-radius: 5px;
+            display: inline-block;
+            min-width: 100px;
+            text-align: right;
         }
         
         .entity-actions {
@@ -489,6 +520,11 @@
         
         .bill-header {
             background-color: #ff9800;
+        }
+
+        .section-divider {
+            background-color: #ff9800;
+            height: 3px;
         }
     </style>
 </head>
@@ -541,9 +577,13 @@
     <div class="info-note">
         ✅ <strong>Direct Entry Mode</strong> — Each school/department has ONE Save button. All phone numbers under that entity are saved together.
         <br>
-        📋 <strong>Each phone number row shows Telephone Charges. At the bottom of each entity, a Bill Summary row shows the total summary.</strong>
+        📋 <strong>Structure:</strong> 
         <br>
-        💡 <strong>Formula: Total Bill Charges = Total Current Bill + Other Charges + Adjustment</strong>
+        &nbsp;&nbsp;📞 <strong>Telephone Charges Section</strong> (Green background) - Enter charges for each phone number
+        <br>
+        &nbsp;&nbsp;💰 <strong>Bill Summary Section</strong> (Yellow background at the bottom of each entity) - Enter summary values for the entire entity
+        <br>
+        💡 <strong>All fields are manually editable. Total Bill Charges auto-calculates as: Total Current Bill + Other Charges + Adjustment</strong>
     </div>
 
     <div class="filters-bar">
@@ -571,23 +611,26 @@
     </div>
     
     <div class="scroll-hint">
-        <i>↔️</i> Scroll horizontally to see all columns | <i>↕️</i> Scroll vertically to see all entries
+        <i>↔️</i> Scroll horizontally to see all columns | <i>↕️</i> Scroll vertically to see all entries | <i>📌</i> Table headers are frozen/sticky while scrolling
+        <br>
+        <span style="background: #e8f5e9; padding: 2px 8px; border-radius: 4px;">📞 Telephone Charges Section (per phone number)</span>
+        <span style="background: #fff8e1; padding: 2px 8px; border-radius: 4px; margin-left: 10px;">💰 Bill Summary Section (per entity - at bottom)</span>
     </div>
 
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
-                <tr>
+                <tr style="background: var(--primary);">
                     <th rowspan="2" width="40">No.</th>
                     <th rowspan="2" width="180">Entity Name</th>
                     <th rowspan="2" width="80">Type</th>
-                    <th rowspan="2" width="160">Account / Phone</th>
-                    <th colspan="3" style="background: #4caf50; text-align: center; color: white;">📞 TELEPHONE CHARGES</th>
-                    <th colspan="6" style="background: #ff9800; text-align: center; color: white;">💰 BILL SUMMARY (per entity - at bottom)</th>
+                    <th rowspan="2" width="180">Account / Phone</th>
+                    <th colspan="3" style="background: #4caf50; text-align: center; color: white;">📞 TELEPHONE CHARGES<br><span style="font-size:0.7rem;">(Per Phone Number)</span></th>
+                    <th colspan="6" style="background: #ff9800; text-align: center; color: white;">💰 BILL SUMMARY<br><span style="font-size:0.7rem;">(Per Entity - Enter at Bottom)</span></th>
                     <th rowspan="2" width="90">Status</th>
                     <th rowspan="2" width="140">Actions</th>
                 </tr>
-                <tr>
+                <tr style="background: var(--primary);">
                     <th style="background: #388e3c; color: white;">Total Current ($)</th>
                     <th style="background: #388e3c; color: white;">Total Usage</th>
                     <th style="background: #388e3c; color: white;">Total Amount ($)</th>
@@ -600,7 +643,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="15" class="no-data">Loading schools & departments...<\/td></tr>
+                <tr><td colspan="15" class="no-data">Loading schools & departments...</td></tr>
             </tbody>
         </table>
     </div>
@@ -610,6 +653,7 @@
     let allSchools = [];
     let allDepartments = [];
     let existingBills = [];
+    let existingSummaryData = {};
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
     let isLoading = false;
@@ -654,6 +698,24 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
+                // Load summary data from notes
+                for (const bill of existingBills) {
+                    if (bill.notes && bill.notes.startsWith('{')) {
+                        try {
+                            const summaryData = JSON.parse(bill.notes);
+                            const key = `${bill.entity_type}_${bill.entity_id}`;
+                            if (!existingSummaryData[key]) {
+                                existingSummaryData[key] = {};
+                            }
+                            existingSummaryData[key].previousOutstanding = summaryData.previousOutstanding || 0;
+                            existingSummaryData[key].previousPayment = summaryData.previousPayment || 0;
+                            existingSummaryData[key].totalCurrentBill = summaryData.totalCurrentBill || 0;
+                            existingSummaryData[key].otherCharges = summaryData.otherCharges || 0;
+                            existingSummaryData[key].adjustment = summaryData.adjustment || 0;
+                            existingSummaryData[key].totalBillCharges = summaryData.totalBillCharges || 0;
+                        } catch(e) {}
+                    }
+                }
             } else {
                 existingBills = [];
             }
@@ -761,17 +823,6 @@
         );
     }
 
-    function parseNotes(notesStr) {
-        try {
-            if (notesStr && notesStr.startsWith('{')) {
-                return JSON.parse(notesStr);
-            }
-            return { originalNotes: notesStr || '' };
-        } catch(e) {
-            return { originalNotes: notesStr || '' };
-        }
-    }
-
     function showToast(message, isError = false) {
         const toast = document.createElement('div');
         toast.className = isError ? 'error-toast' : 'success-toast';
@@ -780,7 +831,7 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
-    async function saveEntityBills(entityRow, month, year) {
+    async function saveEntityBills(entityRow, summaryRow, month, year) {
         if (isLoading) return;
         
         const entityType = entityRow.getAttribute('data-entity-type');
@@ -792,6 +843,7 @@
             return;
         }
         
+        // Get all phone rows
         let phoneRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
@@ -799,12 +851,7 @@
             nextRow = nextRow.nextElementSibling;
         }
         
-        // Get the summary row (skip the separator if exists)
-        let summaryRow = null;
-        if (nextRow && nextRow.classList && nextRow.classList.contains('summary-row')) {
-            summaryRow = nextRow;
-        }
-        
+        // Save telephone charges for each phone number
         const billsToSave = [];
         
         for (const row of phoneRows) {
@@ -833,12 +880,34 @@
             });
         }
         
+        // Get summary data from summary row
+        let summaryData = {};
+        if (summaryRow) {
+            const prevOutstandingInput = summaryRow.querySelector('.summary-previous-outstanding');
+            const prevPaymentInput = summaryRow.querySelector('.summary-previous-payment');
+            const totalCurrentBillInput = summaryRow.querySelector('.summary-total-current-bill');
+            const otherChargesInput = summaryRow.querySelector('.summary-other-charges');
+            const adjustmentInput = summaryRow.querySelector('.summary-adjustment');
+            
+            summaryData = {
+                previousOutstanding: parseFloat(prevOutstandingInput?.value) || 0,
+                previousPayment: parseFloat(prevPaymentInput?.value) || 0,
+                totalCurrentBill: parseFloat(totalCurrentBillInput?.value) || 0,
+                otherCharges: parseFloat(otherChargesInput?.value) || 0,
+                adjustment: parseFloat(adjustmentInput?.value) || 0,
+                totalBillCharges: (parseFloat(totalCurrentBillInput?.value) || 0) + 
+                                 (parseFloat(otherChargesInput?.value) || 0) + 
+                                 (parseFloat(adjustmentInput?.value) || 0)
+            };
+        }
+        
         isLoading = true;
         document.querySelector('.table-wrapper').classList.add('loading');
         
         let successCount = 0;
         let errorCount = 0;
         
+        // Save telephone charges for each phone number
         for (const bill of billsToSave) {
             const notesData = {
                 totalAmount: bill.totalAmount,
@@ -880,6 +949,46 @@
             } catch(err) {
                 console.error('Network error:', err);
                 errorCount++;
+            }
+        }
+        
+        // Save summary data (store in a separate bill or in first bill's notes)
+        if (Object.keys(summaryData).length > 0 && phoneRows.length > 0) {
+            const firstBillId = phoneRows[0]?.getAttribute('data-bill-id') ? parseInt(phoneRows[0].getAttribute('data-bill-id')) : null;
+            const accountNumber = phoneRows[0]?.getAttribute('data-account') || '';
+            const phoneNumber = phoneRows[0]?.getAttribute('data-phone') || '';
+            
+            const summaryBillData = {
+                utility_type: 'telephone',
+                entity_type: entityType,
+                entity_id: entityId,
+                account_number: accountNumber,
+                phone_number: phoneNumber,
+                current_charges: 0,
+                consumption_kwh: 0,
+                notes: JSON.stringify({
+                    isSummary: true,
+                    ...summaryData
+                }),
+                month: month,
+                year: year
+            };
+            
+            try {
+                let url = '/api/utility-bills';
+                let method = 'POST';
+                if (firstBillId) {
+                    url = `/api/utility-bills/${firstBillId}`;
+                    method = 'PUT';
+                }
+                // Don't await, just send
+                fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(summaryBillData)
+                }).catch(e => console.log('Summary save error:', e));
+            } catch(err) {
+                console.error('Summary save error:', err);
             }
         }
         
@@ -956,7 +1065,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="15" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="15" class="no-data">Loading data...</td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -974,7 +1083,7 @@
         });
         
         if (filteredEntities.length === 0) {
-            tbody.innerHTML = '<tr class="no-data-row"><td colspan="15" class="no-data">No matching entities found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="15" class="no-data">No matching entities found.</td></td>';
             isLoading = false;
             return;
         }
@@ -1167,10 +1276,12 @@
         
         let phoneRowsData = [];
         let entityTotalCurrent = 0;
-        let entityTotalUsage = 0;
-        let entityTotalAmount = 0;
         let entityHasBills = false;
         let isPlaceholder = false;
+        
+        // Get existing summary data
+        const summaryKey = `${entity.type}_${entity.id}`;
+        const existingSummary = existingSummaryData[summaryKey] || {};
         
         for (const account of entity.accountGroups) {
             let isFirstPhoneForAccount = true;
@@ -1178,12 +1289,18 @@
             
             for (const num of account.numbers) {
                 const existing = num.existing;
-                const parsedNotes = existing ? parseNotes(existing.notes) : {};
-                
                 let totalCurrent = existing ? (existing.current_charges || 0) : 0;
                 let totalUsage = existing ? (existing.consumption_kwh || 0) : 0;
-                let totalAmount = parsedNotes.totalAmount || 0;
-                let notes = parsedNotes.originalNotes || num.notes || '';
+                let totalAmount = 0;
+                let notes = num.notes || '';
+                
+                if (existing && existing.notes && existing.notes.startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(existing.notes);
+                        totalAmount = parsed.totalAmount || 0;
+                        notes = parsed.originalNotes || num.notes || '';
+                    } catch(e) {}
+                }
                 
                 const isPlaceholderAccount = account.isPlaceholder || num.isPlaceholder;
                 const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
@@ -1191,8 +1308,6 @@
                 
                 if (!isPlaceholderAccount) {
                     entityTotalCurrent += totalCurrent;
-                    entityTotalUsage += totalUsage;
-                    entityTotalAmount += totalAmount;
                     if (existing) entityHasBills = true;
                 }
                 
@@ -1232,6 +1347,7 @@
             entityStatusText = 'No account';
         }
         
+        // Entity Header Row
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
@@ -1243,7 +1359,7 @@
             <td class="seq-number">${startSerial}</td>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due">(Total: $${(entityTotalCurrent + entityTotalAmount).toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No telephone account configured)</span>'}
+                ${!isPlaceholder ? `<span class="total-due">(Total Current: $${entityTotalCurrent.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No telephone account configured)</span>'}
             </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
             <td colspan="9"></div>
@@ -1255,6 +1371,7 @@
         `;
         tbody.appendChild(entityRow);
         
+        // Telephone Charges Rows (per phone number)
         for (const phoneData of phoneRowsData) {
             const phoneRow = document.createElement('tr');
             phoneRow.className = 'phone-row';
@@ -1273,7 +1390,7 @@
                 <td class="telephone-section"><input type="number" step="0.01" class="inline-input total-current-input ${phoneData.placeholderClass}" value="${phoneData.totalCurrent.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
                 <td class="telephone-section"><input type="number" step="0.01" class="inline-input total-usage-input ${phoneData.placeholderClass}" value="${phoneData.totalUsage.toFixed(2)}" placeholder="min" ${phoneData.disabledAttr}></div>
                 <td class="telephone-section"><input type="number" step="0.01" class="inline-input total-amount-input ${phoneData.placeholderClass}" value="${phoneData.totalAmount.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
-                <td colspan="6" class="bill-section"></div>
+                <td colspan="6" class="bill-section-placeholder"></div>
                 <td><input type="text" class="inline-input notes-input ${phoneData.placeholderClass}" value="${escapeHtml(phoneData.notes)}" placeholder="Notes..." ${phoneData.disabledAttr}></div>
                 <td></div>
                 <td></div>
@@ -1281,40 +1398,58 @@
             tbody.appendChild(phoneRow);
         }
         
-        // Add Bill Summary Row at the bottom of the entity
+        // BILL SUMMARY SECTION - Separate section at the bottom of each entity
         const summaryRow = document.createElement('tr');
-        summaryRow.className = 'summary-row';
+        summaryRow.className = 'entity-summary-section';
+        summaryRow.setAttribute('data-entity-id', entity.id);
+        summaryRow.setAttribute('data-entity-type', entity.type);
+        
+        const summaryTotalBill = (existingSummary.totalCurrentBill || 0) + (existingSummary.otherCharges || 0) + (existingSummary.adjustment || 0);
+        
         summaryRow.innerHTML = `
-            <td colspan="4" class="summary-label" style="text-align: right;">💰 BILL SUMMARY FOR ${escapeHtml(entity.name)}:</div>
-            <td class="summary-value"><input type="number" step="0.01" id="summary-previous-outstanding-${entity.id}" class="inline-input summary-input" placeholder="0.00" value="0"></div>
-            <td class="summary-value"><input type="number" step="0.01" id="summary-previous-payment-${entity.id}" class="inline-input summary-input" placeholder="0.00" value="0"></div>
-            <td class="summary-value"><input type="number" step="0.01" id="summary-total-current-bill-${entity.id}" class="inline-input summary-input" placeholder="0.00" value="0"></div>
-            <td class="summary-value"><input type="number" step="0.01" id="summary-other-charges-${entity.id}" class="inline-input summary-input" placeholder="0.00" value="0"></div>
-            <td class="summary-value"><input type="number" step="0.01" id="summary-adjustment-${entity.id}" class="inline-input summary-input" placeholder="0.00" value="0"></div>
-            <td class="summary-value"><span id="summary-total-bill-${entity.id}" class="calculated-field">0.00</span></div>
+            <td colspan="4" class="summary-label-cell">
+                <span class="summary-title">💰 BILL SUMMARY - ${escapeHtml(entity.name)}</span>
+            </div>
+            <td class="bill-section"><input type="number" step="0.01" class="inline-input summary-input summary-previous-outstanding" value="${(existingSummary.previousOutstanding || 0).toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}></div>
+            <td class="bill-section"><input type="number" step="0.01" class="inline-input summary-input summary-previous-payment" value="${(existingSummary.previousPayment || 0).toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}></div>
+            <td class="bill-section"><input type="number" step="0.01" class="inline-input summary-input summary-total-current-bill" value="${(existingSummary.totalCurrentBill || 0).toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}></div>
+            <td class="bill-section"><input type="number" step="0.01" class="inline-input summary-input summary-other-charges" value="${(existingSummary.otherCharges || 0).toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}></div>
+            <td class="bill-section"><input type="number" step="0.01" class="inline-input summary-input summary-adjustment" value="${(existingSummary.adjustment || 0).toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}></div>
+            <td class="bill-section"><span class="summary-value-display summary-total-bill-display">${summaryTotalBill.toFixed(2)}</span></div>
             <td colspan="2"></div>
         `;
         tbody.appendChild(summaryRow);
         
         // Add calculation listener for summary row
-        const prevOutstanding = summaryRow.querySelector(`#summary-previous-outstanding-${entity.id}`);
-        const prevPayment = summaryRow.querySelector(`#summary-previous-payment-${entity.id}`);
-        const totalCurrentBill = summaryRow.querySelector(`#summary-total-current-bill-${entity.id}`);
-        const otherCharges = summaryRow.querySelector(`#summary-other-charges-${entity.id}`);
-        const adjustment = summaryRow.querySelector(`#summary-adjustment-${entity.id}`);
-        const totalBillSpan = summaryRow.querySelector(`#summary-total-bill-${entity.id}`);
+        const totalCurrentBillInput = summaryRow.querySelector('.summary-total-current-bill');
+        const otherChargesInput = summaryRow.querySelector('.summary-other-charges');
+        const adjustmentInput = summaryRow.querySelector('.summary-adjustment');
+        const totalBillDisplay = summaryRow.querySelector('.summary-total-bill-display');
         
         const updateSummaryTotal = () => {
-            const tcb = parseFloat(totalCurrentBill?.value) || 0;
-            const oc = parseFloat(otherCharges?.value) || 0;
-            const adj = parseFloat(adjustment?.value) || 0;
+            const tcb = parseFloat(totalCurrentBillInput?.value) || 0;
+            const oc = parseFloat(otherChargesInput?.value) || 0;
+            const adj = parseFloat(adjustmentInput?.value) || 0;
             const total = tcb + oc + adj;
-            if (totalBillSpan) totalBillSpan.innerText = total.toFixed(2);
+            if (totalBillDisplay) totalBillDisplay.innerText = total.toFixed(2);
         };
         
-        if (totalCurrentBill) totalCurrentBill.addEventListener('input', updateSummaryTotal);
-        if (otherCharges) otherCharges.addEventListener('input', updateSummaryTotal);
-        if (adjustment) adjustment.addEventListener('input', updateSummaryTotal);
+        if (totalCurrentBillInput) totalCurrentBillInput.addEventListener('input', updateSummaryTotal);
+        if (otherChargesInput) otherChargesInput.addEventListener('input', updateSummaryTotal);
+        if (adjustmentInput) adjustmentInput.addEventListener('input', updateSummaryTotal);
+        
+        // Store summary row reference for save
+        entityRow.setAttribute('data-summary-row', 'true');
+        
+        // Attach save handler that includes summary data
+        const saveBtn = entityRow.querySelector('.save-entity-btn');
+        if (saveBtn) {
+            const originalSaveHandler = async () => {
+                await saveEntityBills(entityRow, summaryRow, month, year);
+            };
+            saveBtn.removeEventListener('click', originalSaveHandler);
+            saveBtn.addEventListener('click', originalSaveHandler);
+        }
         
         return serial;
     }
@@ -1335,7 +1470,12 @@
             if (saveBtn && !saveBtn.disabled) {
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
-                    await saveEntityBills(entityRow, currentMonth, currentYear);
+                    // Find the summary row for this entity
+                    let summaryRow = entityRow.nextElementSibling;
+                    while (summaryRow && !summaryRow.classList.contains('entity-summary-section')) {
+                        summaryRow = summaryRow.nextElementSibling;
+                    }
+                    await saveEntityBills(entityRow, summaryRow, currentMonth, currentYear);
                 }
             }
             
