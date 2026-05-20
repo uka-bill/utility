@@ -15,6 +15,9 @@
             --light: #f8f9fa;
             --dark: #212529;
             --gray: #6c757d;
+            --telephone-shade: #f0fff4;
+            --bill-shade: #fef9e6;
+            --separator-color: #ddd;
         }
 
         * {
@@ -191,7 +194,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
-            min-width: 1500px;
+            min-width: 1600px;
         }
 
         .data-table th {
@@ -459,6 +462,43 @@
             font-size: 0.85rem;
             font-weight: 600;
         }
+
+        /* Section shading */
+        .telephone-section td {
+            background-color: var(--telephone-shade);
+        }
+
+        .bill-section td {
+            background-color: var(--bill-shade);
+        }
+
+        .section-divider {
+            background-color: var(--separator-color);
+            height: 2px;
+            padding: 0;
+        }
+
+        .section-divider td {
+            padding: 0;
+            height: 2px;
+            background-color: var(--separator-color);
+        }
+
+        .section-label {
+            font-size: 0.7rem;
+            font-weight: normal;
+            text-align: center;
+            background-color: #e9ecef;
+            padding: 4px;
+        }
+
+        .vertical-divider {
+            border-left: 1px solid #ddd;
+        }
+
+        .section-header-group {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
     </style>
 </head>
 <body>
@@ -509,9 +549,13 @@
 
     <div class="info-note">
         ✅ <strong>Direct Entry Mode</strong> — Each school/department has ONE Save button. All phone numbers under that entity are saved together.
-        Select month/year, enter charges for each phone number, add notes, then click the entity's <strong>Save</strong> button.
+        Select month/year, enter telephone charges, then click the entity's <strong>Save</strong> button.
         <br>
-        💡 <strong>Schools are grouped by Cluster | Departments are grouped by Department Name (same as Departments page)</strong>
+        💡 <strong>Columns are divided into two sections (shaded differently):</strong>
+        <br>
+        📞 <strong>Telephone Charges (Green shade):</strong> Total Current Charges, Total Usage, Total Amount
+        <br>
+        💰 <strong>Bill Summary (Yellow shade):</strong> Previous Outstanding, Previous Payment Received, Total Current Bill, Other Charges, Adjustment, Total Bill Charges
     </div>
 
     <div class="filters-bar">
@@ -540,26 +584,38 @@
     
     <div class="scroll-hint">
         <i>↔️</i> Scroll horizontally to see all columns | <i>↕️</i> Scroll vertically to see all entries
+        <br>
+        <span style="background: #f0fff4; padding: 2px 8px; border-radius: 4px;">📞 Telephone Charges Section</span>
+        <span style="background: #fef9e6; padding: 2px 8px; border-radius: 4px; margin-left: 10px;">💰 Bill Summary Section</span>
     </div>
 
     <div class="table-wrapper">
         <table class="data-table">
             <thead>
+                <tr class="section-header-group">
+                    <th rowspan="2" width="50">No.</th>
+                    <th rowspan="2" width="180">Entity Name</th>
+                    <th rowspan="2" width="80">Type</th>
+                    <th rowspan="2" width="160">Account / Phone</th>
+                    <th colspan="3" style="background: #4cc9f0; text-align: center;">📞 TELEPHONE CHARGES</th>
+                    <th colspan="6" style="background: #f8961e; text-align: center;">💰 BILL SUMMARY</th>
+                    <th rowspan="2" width="90">Status</th>
+                    <th rowspan="2" width="140">Actions</th>
+                </tr>
                 <tr>
-                    <th width="50">No.</th>
-                    <th width="220">Entity Name</th>
-                    <th width="90">Type</th>
-                    <th width="160">Account / Phone</th>
-                    <th width="110">Current Charges ($)</th>
-                    <th width="160">Late / Unsettled</th>
-                    <th width="100">Amount Paid ($)</th>
-                    <th width="200">Notes</th>
-                    <th width="90">Status</th>
-                    <th width="140">Actions</th>
+                    <th style="background: #3aa8c4;">Total Current Charges ($)</th>
+                    <th style="background: #3aa8c4;">Total Usage</th>
+                    <th style="background: #3aa8c4;">Total Amount ($)</th>
+                    <th style="background: #e07a1a;">Previous Outstanding ($)</th>
+                    <th style="background: #e07a1a;">Previous Payment Received ($)</th>
+                    <th style="background: #e07a1a;">Total Current Bill ($)</th>
+                    <th style="background: #e07a1a;">Other Charges ($)</th>
+                    <th style="background: #e07a1a;">Adjustment ($)</th>
+                    <th style="background: #e07a1a;">Total Bill Charges ($)</th>
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="10" class="no-data">Loading schools & departments...<\/td></tr>
+                <tr><td colspan="14" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -650,7 +706,6 @@
     function buildEntityList() {
         const entities = [];
         
-        // Add ALL schools
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractTelephoneAccounts(school);
@@ -679,7 +734,6 @@
             });
         }
         
-        // Add ALL departments
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractTelephoneAccounts(dept);
@@ -757,26 +811,46 @@
             const phoneNumber = row.getAttribute('data-phone');
             const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
             
-            const currentInput = row.querySelector('.current-charge-input');
-            const lateInput = row.querySelector('.late-input');
-            const unsettledInput = row.querySelector('.unsettled-input');
-            const paidInput = row.querySelector('.paid-input');
-            const notesInput = row.querySelector('.notes-input');
+            // Telephone Charges section inputs
+            const totalCurrentChargesInput = row.querySelector('.total-current-charges-input');
+            const totalUsageInput = row.querySelector('.total-usage-input');
+            const totalAmountInput = row.querySelector('.total-amount-input');
             
-            const currentCharges = parseFloat(currentInput?.value) || 0;
-            const lateCharges = parseFloat(lateInput?.value) || 0;
-            const unsettledCharges = parseFloat(unsettledInput?.value) || 0;
-            const amountPaid = parseFloat(paidInput?.value) || 0;
-            const notes = notesInput?.value || '';
+            // Bill Summary section inputs
+            const previousOutstandingInput = row.querySelector('.previous-outstanding-input');
+            const previousPaymentReceivedInput = row.querySelector('.previous-payment-received-input');
+            const totalCurrentBillInput = row.querySelector('.total-current-bill-input');
+            const otherChargesInput = row.querySelector('.other-charges-input');
+            const adjustmentInput = row.querySelector('.adjustment-input');
+            const totalBillChargesSpan = row.querySelector('.total-bill-charges-value');
+            
+            const totalCurrentCharges = parseFloat(totalCurrentChargesInput?.value) || 0;
+            const totalUsage = parseFloat(totalUsageInput?.value) || 0;
+            const totalAmount = parseFloat(totalAmountInput?.value) || 0;
+            const previousOutstanding = parseFloat(previousOutstandingInput?.value) || 0;
+            const previousPaymentReceived = parseFloat(previousPaymentReceivedInput?.value) || 0;
+            const totalCurrentBill = parseFloat(totalCurrentBillInput?.value) || 0;
+            const otherCharges = parseFloat(otherChargesInput?.value) || 0;
+            const adjustment = parseFloat(adjustmentInput?.value) || 0;
+            
+            const notes = row.querySelector('.notes-input')?.value || '';
+            
+            // Calculate total bill charges = totalCurrentBill + otherCharges + adjustment
+            const totalBillCharges = totalCurrentBill + otherCharges + adjustment;
             
             billsToSave.push({
                 id: existingBillId,
                 accountNumber: accountNumber === '—' ? '' : accountNumber,
                 phoneNumber: phoneNumber === '—' ? '' : phoneNumber,
-                currentCharges: currentCharges,
-                lateCharges: lateCharges,
-                unsettledCharges: unsettledCharges,
-                amountPaid: amountPaid,
+                totalCurrentCharges: totalCurrentCharges,
+                totalUsage: totalUsage,
+                totalAmount: totalAmount,
+                previousOutstanding: previousOutstanding,
+                previousPaymentReceived: previousPaymentReceived,
+                totalCurrentBill: totalCurrentBill,
+                otherCharges: otherCharges,
+                adjustment: adjustment,
+                totalBillCharges: totalBillCharges,
                 notes: notes
             });
         }
@@ -794,16 +868,24 @@
                 entity_id: entityId,
                 account_number: bill.accountNumber,
                 phone_number: bill.phoneNumber,
-                current_charges: bill.currentCharges,
-                late_charges: bill.lateCharges,
-                unsettled_charges: bill.unsettledCharges,
-                amount_paid: bill.amountPaid,
+                current_charges: bill.totalCurrentCharges,
+                consumption_kwh: bill.totalUsage,
+                amount_paid: bill.previousPaymentReceived,
+                unsettled_charges: bill.previousOutstanding,
+                late_charges: bill.otherCharges,
+                // Store additional fields in notes or create new columns
+                notes: JSON.stringify({
+                    totalAmount: bill.totalAmount,
+                    totalCurrentBill: bill.totalCurrentBill,
+                    adjustment: bill.adjustment,
+                    totalBillCharges: bill.totalBillCharges,
+                    originalNotes: bill.notes
+                }),
                 month: month,
                 year: year,
                 bill_month: month,
                 bill_year: year,
-                bill_image: null,
-                notes: bill.notes
+                bill_image: null
             };
             
             try {
@@ -899,6 +981,17 @@
         }
     }
 
+    function parseNotesField(notes) {
+        try {
+            if (notes && notes.startsWith('{')) {
+                return JSON.parse(notes);
+            }
+            return { originalNotes: notes || '' };
+        } catch(e) {
+            return { originalNotes: notes || '' };
+        }
+    }
+
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -906,7 +999,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="14" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -924,7 +1017,7 @@
         });
         
         if (filteredEntities.length === 0) {
-            tbody.innerHTML = '<tr class="no-data-row"><td colspan="10" class="no-data">No matching entities found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="14" class="no-data">No matching entities found.<\/td><\/tr>';
             isLoading = false;
             return;
         }
@@ -932,11 +1025,9 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        // Separate schools and departments
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // ==================== SCHOOLS SECTION (grouped by cluster) ====================
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -955,7 +1046,6 @@
             return String(a).localeCompare(String(b));
         });
         
-        // Render Schools
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
             clusterSchools.sort((a, b) => a.displayOrder - b.displayOrder);
@@ -1016,7 +1106,7 @@
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
-                    <td colspan="10">
+                    <td colspan="14">
                         <div class="cluster-info">
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
                             <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
@@ -1031,8 +1121,6 @@
             }
         }
         
-        // ==================== DEPARTMENTS SECTION (grouped by DEPARTMENT NAME) ====================
-        // Group departments by department_name
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1042,7 +1130,6 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        // Get the order of first occurrence based on original department order (by ID)
         const deptGroupOrder = [];
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1051,11 +1138,9 @@
             }
         }
         
-        // Render Departments grouped by Department Name
         for (const deptName of deptGroupOrder) {
             const deptsInGroup = deptByDepartmentName.get(deptName) || [];
             
-            // Filter each department for status visibility
             const visibleDeptEntities = [];
             for (const entity of deptsInGroup) {
                 const visibleAccounts = [];
@@ -1109,7 +1194,7 @@
                 const deptSeparator = document.createElement('tr');
                 deptSeparator.className = 'department-group-separator';
                 deptSeparator.innerHTML = `
-                    <td colspan="10">
+                    <td colspan="14">
                         <div class="dept-group-info">
                             <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
                             <span class="dept-group-count">${visibleDeptEntities.length} unit${visibleDeptEntities.length > 1 ? 's' : ''}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
@@ -1118,7 +1203,6 @@
                 `;
                 tbody.appendChild(deptSeparator);
                 
-                // Sort units within department group by ID (original order)
                 visibleDeptEntities.sort((a, b) => a.displayOrder - b.displayOrder);
                 
                 for (const entity of visibleDeptEntities) {
@@ -1146,19 +1230,30 @@
             
             for (const num of account.numbers) {
                 const existing = num.existing;
-                let currentCharges = existing ? (existing.current_charges || 0) : 0;
-                let lateCharges = existing ? (existing.late_charges || 0) : 0;
-                let unsettled = existing ? (existing.unsettled_charges || 0) : 0;
-                let amountPaid = existing ? (existing.amount_paid || 0) : 0;
-                const notes = existing ? (existing.notes || num.notes || '') : (num.notes || '');
+                const parsedNotes = existing ? parseNotesField(existing.notes) : {};
+                
+                // Telephone Charges - from existing or defaults
+                let totalCurrentCharges = existing ? (existing.current_charges || 0) : 0;
+                let totalUsage = existing ? (existing.consumption_kwh || 0) : 0;
+                let totalAmount = parsedNotes.totalAmount || 0;
+                
+                // Bill Summary
+                let previousOutstanding = existing ? (existing.unsettled_charges || 0) : 0;
+                let previousPaymentReceived = existing ? (existing.amount_paid || 0) : 0;
+                let totalCurrentBill = parsedNotes.totalCurrentBill || 0;
+                let otherCharges = existing ? (existing.late_charges || 0) : 0;
+                let adjustment = parsedNotes.adjustment || 0;
+                let totalBillCharges = parsedNotes.totalBillCharges || (totalCurrentBill + otherCharges + adjustment);
+                
+                let amountPaid = previousPaymentReceived;
+                const notes = parsedNotes.originalNotes || num.notes || '';
                 
                 const isPlaceholderAccount = account.isPlaceholder || num.isPlaceholder;
                 const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
                 const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
                 
-                const totalDue = currentCharges + lateCharges + unsettled;
                 if (!isPlaceholderAccount) {
-                    entityTotalDue += totalDue;
+                    entityTotalDue += totalBillCharges;
                     entityTotalPaid += amountPaid;
                     if (existing) hasAnyBill = true;
                 }
@@ -1170,10 +1265,15 @@
                     accountNumber: account.accountNumber,
                     phoneNumber: num.phoneNumber,
                     locationDisplay: locationDisplay,
-                    currentCharges: currentCharges,
-                    lateCharges: lateCharges,
-                    unsettled: unsettled,
-                    amountPaid: amountPaid,
+                    totalCurrentCharges: totalCurrentCharges,
+                    totalUsage: totalUsage,
+                    totalAmount: totalAmount,
+                    previousOutstanding: previousOutstanding,
+                    previousPaymentReceived: previousPaymentReceived,
+                    totalCurrentBill: totalCurrentBill,
+                    otherCharges: otherCharges,
+                    adjustment: adjustment,
+                    totalBillCharges: totalBillCharges,
                     notes: notes,
                     billId: num.billId,
                     isFirstPhoneForAccount: isFirstPhoneForAccount,
@@ -1214,14 +1314,11 @@
             <td class="seq-number">${startSerial}</td>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No telephone account configured)</span>'}
+                ${!isPlaceholder ? `<span class="total-due">(Total Bill: $${entityTotalDue.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No telephone account configured)</span>'}
             </td>
-            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></td>
-            <td colspan="1"></td>
-            <td></div>
-            <td></div>
-            <td></div>
-            <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></td>
+            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
+            <td colspan="9"></div>
+            <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn" ${isPlaceholder ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>💾 Save All</button>
                 ${hasAnyBill && !isPlaceholder ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
@@ -1245,13 +1342,40 @@
                     <div class="phone-number">📞 ${escapeHtml(phoneData.phoneNumber)}</div>
                     ${phoneData.locationDisplay}
                 </div>
-                <td><input type="number" step="0.01" class="inline-input current-charge-input ${phoneData.placeholderClass}" value="${phoneData.currentCharges.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
-                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input ${phoneData.placeholderClass}" value="${phoneData.lateCharges.toFixed(2)}" placeholder="Late" ${phoneData.disabledAttr}><input type="number" step="0.01" class="inline-input small-input unsettled-input ${phoneData.placeholderClass}" value="${phoneData.unsettled.toFixed(2)}" placeholder="Unsettled" ${phoneData.disabledAttr}></div></div>
-                <td><input type="number" step="0.01" class="inline-input paid-input ${phoneData.placeholderClass}" value="${phoneData.amountPaid.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
-                <td><input type="text" class="inline-input notes-input ${phoneData.placeholderClass}" value="${escapeHtml(phoneData.notes)}" placeholder="Notes..." ${phoneData.disabledAttr}></div>
+                <!-- Telephone Charges Section (Green shade) -->
+                <td class="telephone-section"><input type="number" step="0.01" class="inline-input total-current-charges-input ${phoneData.placeholderClass}" value="${phoneData.totalCurrentCharges.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
+                <td class="telephone-section"><input type="number" step="0.01" class="inline-input total-usage-input ${phoneData.placeholderClass}" value="${phoneData.totalUsage.toFixed(2)}" placeholder="min" ${phoneData.disabledAttr}></div>
+                <td class="telephone-section"><input type="number" step="0.01" class="inline-input total-amount-input ${phoneData.placeholderClass}" value="${phoneData.totalAmount.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
+                <!-- Bill Summary Section (Yellow shade) -->
+                <td class="bill-section"><input type="number" step="0.01" class="inline-input previous-outstanding-input ${phoneData.placeholderClass}" value="${phoneData.previousOutstanding.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
+                <td class="bill-section"><input type="number" step="0.01" class="inline-input previous-payment-received-input ${phoneData.placeholderClass}" value="${phoneData.previousPaymentReceived.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
+                <td class="bill-section"><input type="number" step="0.01" class="inline-input total-current-bill-input ${phoneData.placeholderClass}" value="${phoneData.totalCurrentBill.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
+                <td class="bill-section"><input type="number" step="0.01" class="inline-input other-charges-input ${phoneData.placeholderClass}" value="${phoneData.otherCharges.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
+                <td class="bill-section"><input type="number" step="0.01" class="inline-input adjustment-input ${phoneData.placeholderClass}" value="${phoneData.adjustment.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
+                <td class="bill-section"><span class="total-bill-charges-value ${phoneData.placeholderClass}">${phoneData.totalBillCharges.toFixed(2)}</span></div>
+                <td class="notes-cell"><input type="text" class="inline-input notes-input ${phoneData.placeholderClass}" value="${escapeHtml(phoneData.notes)}" placeholder="Notes..." ${phoneData.disabledAttr}></div>
                 <td></div>
                 <td></div>
             `;
+            
+            // Add real-time calculation listeners for total bill charges
+            const totalCurrentBillInput = phoneRow.querySelector('.total-current-bill-input');
+            const otherChargesInput = phoneRow.querySelector('.other-charges-input');
+            const adjustmentInput = phoneRow.querySelector('.adjustment-input');
+            const totalBillChargesSpan = phoneRow.querySelector('.total-bill-charges-value');
+            
+            const updateTotalBill = () => {
+                const totalCurrentBill = parseFloat(totalCurrentBillInput?.value) || 0;
+                const otherCharges = parseFloat(otherChargesInput?.value) || 0;
+                const adjustment = parseFloat(adjustmentInput?.value) || 0;
+                const totalBill = totalCurrentBill + otherCharges + adjustment;
+                if (totalBillChargesSpan) totalBillChargesSpan.innerText = totalBill.toFixed(2);
+            };
+            
+            if (totalCurrentBillInput) totalCurrentBillInput.addEventListener('input', updateTotalBill);
+            if (otherChargesInput) otherChargesInput.addEventListener('input', updateTotalBill);
+            if (adjustmentInput) adjustmentInput.addEventListener('input', updateTotalBill);
+            
             tbody.appendChild(phoneRow);
         }
         
