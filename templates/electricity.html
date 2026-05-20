@@ -185,6 +185,9 @@
             border-radius: 10px;
             overflow-x: auto;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            max-height: calc(100vh - 300px);
+            overflow-y: auto;
+            position: relative;
         }
 
         .data-table {
@@ -194,6 +197,12 @@
             min-width: 1300px;
         }
 
+        .data-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
         .data-table th {
             background: var(--primary);
             color: white;
@@ -201,7 +210,8 @@
             text-align: left;
             position: sticky;
             top: 0;
-            z-index: 10;
+            z-index: 20;
+            border-bottom: 2px solid white;
         }
 
         .data-table td {
@@ -245,17 +255,6 @@
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
-        }
-
-        .calculated-field {
-            width: 100px;
-            padding: 8px 10px;
-            background: #f0f0f0;
-            border-radius: 5px;
-            font-size: 0.85rem;
-            text-align: right;
-            color: #333;
-            font-weight: 500;
         }
 
         .account-number {
@@ -520,7 +519,7 @@
         <br>
         📋 <strong>Order: No. → Entity Name → Type → Account/Meter → Consumption (kWh) → Current Charges → Outstanding Charges → Previous Payment Received → Total Bill Charges</strong>
         <br>
-        💡 <strong>Outstanding Charges is auto-calculated from existing unsettled and late charges. Total Bill Charges = Current Charges + Outstanding Charges - Previous Payment Received</strong>
+        💡 <strong>All fields are manually editable. Enter values directly into each cell.</strong>
     </div>
 
     <div class="filters-bar">
@@ -548,7 +547,7 @@
     </div>
     
     <div class="scroll-hint">
-        <i>↔️</i> Scroll horizontally to see all columns | <i>↕️</i> Scroll vertically to see all entries
+        <i>↔️</i> Scroll horizontally to see all columns | <i>↕️</i> Scroll vertically to see all entries | <i>📌</i> Table headers are frozen/sticky while scrolling
     </div>
 
     <div class="table-wrapper">
@@ -738,23 +737,6 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
-    function updateCalculations(row) {
-        const currentInput = row.querySelector('.current-charge-input');
-        const previousPaidInput = row.querySelector('.previous-paid-input');
-        const unsettledSpan = row.querySelector('.unsettled-value');
-        const lateSpan = row.querySelector('.late-value');
-        const totalBillSpan = row.querySelector('.total-bill-value');
-        
-        const current = parseFloat(currentInput?.value) || 0;
-        const previousPaid = parseFloat(previousPaidInput?.value) || 0;
-        const unsettled = parseFloat(unsettledSpan?.innerText) || 0;
-        const late = parseFloat(lateSpan?.innerText) || 0;
-        
-        const totalBill = current + unsettled + late - previousPaid;
-        
-        if (totalBillSpan) totalBillSpan.innerText = totalBill.toFixed(2);
-    }
-
     async function saveEntityBills(entityRow, month, year) {
         if (isLoading) return;
         
@@ -783,16 +765,16 @@
             
             const consumptionInput = row.querySelector('.consumption-input');
             const currentInput = row.querySelector('.current-charge-input');
+            const outstandingInput = row.querySelector('.outstanding-input');
             const previousPaidInput = row.querySelector('.previous-paid-input');
-            const unsettledSpan = row.querySelector('.unsettled-value');
-            const lateSpan = row.querySelector('.late-value');
+            const totalBillInput = row.querySelector('.total-bill-input');
             const notesInput = row.querySelector('.notes-input');
             
             const consumption = parseFloat(consumptionInput?.value) || 0;
             const currentCharges = parseFloat(currentInput?.value) || 0;
+            const outstandingCharges = parseFloat(outstandingInput?.value) || 0;
             const previousPaymentReceived = parseFloat(previousPaidInput?.value) || 0;
-            const unsettledCharges = parseFloat(unsettledSpan?.innerText) || 0;
-            const lateCharges = parseFloat(lateSpan?.innerText) || 0;
+            const totalBillCharges = parseFloat(totalBillInput?.value) || 0;
             const notes = notesInput?.value || '';
             
             billsToSave.push({
@@ -801,9 +783,9 @@
                 meterNumber: meterNumber === '—' ? '' : meterNumber,
                 consumption: consumption,
                 currentCharges: currentCharges,
-                unsettledCharges: unsettledCharges,
-                lateCharges: lateCharges,
+                outstandingCharges: outstandingCharges,
                 previousPaymentReceived: previousPaymentReceived,
+                totalBillCharges: totalBillCharges,
                 notes: notes
             });
         }
@@ -823,10 +805,9 @@
                 meter_number: bill.meterNumber,
                 consumption_kwh: bill.consumption,
                 current_charges: bill.currentCharges,
-                unsettled_charges: bill.unsettledCharges,
-                late_charges: bill.lateCharges,
+                unsettled_charges: bill.outstandingCharges,
                 amount_paid: bill.previousPaymentReceived,
-                notes: bill.notes,
+                notes: JSON.stringify({ totalBillCharges: bill.totalBillCharges, originalNotes: bill.notes }),
                 month: month,
                 year: year
             };
@@ -922,6 +903,17 @@
         }
     }
 
+    function parseNotes(notesStr) {
+        try {
+            if (notesStr && notesStr.startsWith('{')) {
+                return JSON.parse(notesStr);
+            }
+            return { totalBillCharges: 0, originalNotes: notesStr || '' };
+        } catch(e) {
+            return { totalBillCharges: 0, originalNotes: notesStr || '' };
+        }
+    }
+
     async function renderElectricityTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -993,23 +985,18 @@
                     for (const meter of meters) {
                         const meterNum = meter.meterNumber || '—';
                         const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
-                        const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
-                        const amountPaid = existing?.amount_paid || 0;
                         let statusText = 'Pending';
-                        if (totalDue > 0 && amountPaid >= totalDue) statusText = 'Paid';
-                        else if (totalDue === 0 && !existing) statusText = 'Not entered';
+                        if (existing) statusText = 'Entered';
                         
                         if (statusFilter === 'all' || 
                             (statusFilter === 'paid' && statusText === 'Paid') ||
-                            (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
+                            (statusFilter === 'pending' && statusText !== 'Paid')) {
                             visibleMeters.push({
                                 meterNumber: meterNum,
                                 location: meter.location || '',
                                 notes: meter.notes || '',
                                 existing: existing,
                                 billId: existing?.id,
-                                totalDue: totalDue,
-                                amountPaid: amountPaid,
                                 isPlaceholder: account.isPlaceholder
                             });
                         }
@@ -1082,23 +1069,18 @@
                     for (const meter of meters) {
                         const meterNum = meter.meterNumber || '—';
                         const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
-                        const totalDue = (existing?.current_charges || 0) + (existing?.late_charges || 0) + (existing?.unsettled_charges || 0);
-                        const amountPaid = existing?.amount_paid || 0;
                         let statusText = 'Pending';
-                        if (totalDue > 0 && amountPaid >= totalDue) statusText = 'Paid';
-                        else if (totalDue === 0 && !existing) statusText = 'Not entered';
+                        if (existing) statusText = 'Entered';
                         
                         if (statusFilter === 'all' || 
                             (statusFilter === 'paid' && statusText === 'Paid') ||
-                            (statusFilter === 'pending' && statusText !== 'Paid' && statusText !== 'Not entered')) {
+                            (statusFilter === 'pending' && statusText !== 'Paid')) {
                             visibleMeters.push({
                                 meterNumber: meterNum,
                                 location: meter.location || '',
                                 notes: meter.notes || '',
                                 existing: existing,
                                 billId: existing?.id,
-                                totalDue: totalDue,
-                                amountPaid: amountPaid,
                                 isPlaceholder: account.isPlaceholder
                             });
                         }
@@ -1149,9 +1131,8 @@
         let serial = startSerial;
         
         let meterRowsData = [];
-        let entityTotalDue = 0;
-        let entityTotalPaid = 0;
-        let hasAnyBill = false;
+        let entityTotalCurrent = 0;
+        let entityHasBills = false;
         let isPlaceholder = false;
         
         for (const account of entity.accountGroups) {
@@ -1160,23 +1141,22 @@
             
             for (const meter of account.meters) {
                 const existing = meter.existing;
-                const consumption = existing ? (existing.consumption_kwh || 0) : 0;
+                const parsedNotes = existing ? parseNotes(existing.notes) : {};
+                
+                let consumption = existing ? (existing.consumption_kwh || 0) : 0;
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
-                let unsettledCharges = existing ? (existing.unsettled_charges || 0) : 0;
-                let lateCharges = existing ? (existing.late_charges || 0) : 0;
-                let amountPaid = existing ? (existing.amount_paid || 0) : 0;
-                const notes = existing ? (existing.notes || meter.notes || '') : (meter.notes || '');
+                let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
+                let previousPaymentReceived = existing ? (existing.amount_paid || 0) : 0;
+                let totalBillCharges = parsedNotes.totalBillCharges || 0;
+                let notes = parsedNotes.originalNotes || meter.notes || '';
                 
                 const isPlaceholderAccount = account.isPlaceholder || meter.isPlaceholder;
                 const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
                 const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
                 
-                const totalBill = currentCharges + unsettledCharges + lateCharges - amountPaid;
-                
                 if (!isPlaceholderAccount) {
-                    entityTotalDue += totalBill;
-                    entityTotalPaid += amountPaid;
-                    if (existing) hasAnyBill = true;
+                    entityTotalCurrent += currentCharges;
+                    if (existing) entityHasBills = true;
                 }
                 
                 const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
@@ -1188,10 +1168,9 @@
                     locationDisplay: locationDisplay,
                     consumption: consumption,
                     currentCharges: currentCharges,
-                    unsettledCharges: unsettledCharges,
-                    lateCharges: lateCharges,
-                    amountPaid: amountPaid,
-                    totalBill: totalBill,
+                    outstandingCharges: outstandingCharges,
+                    previousPaymentReceived: previousPaymentReceived,
+                    totalBillCharges: totalBillCharges,
                     notes: notes,
                     billId: meter.billId,
                     isFirstMeterForAccount: isFirstMeterForAccount,
@@ -1208,13 +1187,10 @@
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
         if (!isPlaceholder) {
-            if (entityTotalDue > 0 && entityTotalPaid >= entityTotalDue) {
-                entityStatusClass = 'status-paid';
-                entityStatusText = 'Paid';
-            } else if (hasAnyBill && entityTotalPaid > 0 && entityTotalPaid < entityTotalDue) {
+            if (entityHasBills) {
+                entityStatusText = 'Entered';
                 entityStatusClass = 'status-partial';
-                entityStatusText = 'Partial';
-            } else if (!hasAnyBill) {
+            } else {
                 entityStatusText = 'Not entered';
             }
         } else {
@@ -1232,17 +1208,16 @@
             <td class="seq-number">${startSerial}</td>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due">(Total Bill: $${entityTotalDue.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No electricity account configured)</span>'}
+                ${!isPlaceholder ? `<span class="total-due">(Total Current: $${entityTotalCurrent.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No electricity account configured)</span>'}
             </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
-            <td colspan="5"></div>
+            <td colspan="6"></div>
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn" ${isPlaceholder ? 'disabled style="opacity:0.5;"' : ''}>💾 Save All</button>
-                ${hasAnyBill && !isPlaceholder ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
+                ${entityHasBills && !isPlaceholder ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
             </div>
         `;
-        
         tbody.appendChild(entityRow);
         
         for (const meterData of meterRowsData) {
@@ -1262,23 +1237,13 @@
                 </div>
                 <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="kWh" ${meterData.disabledAttr}><span class="consumption-unit">kWh</span></div>
                 <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
-                <td><span class="unsettled-value" style="display:none;">${meterData.unsettledCharges}</span>
-                    <span class="late-value" style="display:none;">${meterData.lateCharges}</span>
-                    <span class="calculated-field outstanding-value">${(meterData.unsettledCharges + meterData.lateCharges).toFixed(2)}</span></div>
-                <td><input type="number" step="0.01" class="inline-input previous-paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
-                <td><span class="calculated-field total-bill-value">${meterData.totalBill.toFixed(2)}</span></div>
+                <td><input type="number" step="0.01" class="inline-input outstanding-input ${meterData.placeholderClass}" value="${meterData.outstandingCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="number" step="0.01" class="inline-input previous-paid-input ${meterData.placeholderClass}" value="${meterData.previousPaymentReceived.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="number" step="0.01" class="inline-input total-bill-input ${meterData.placeholderClass}" value="${meterData.totalBillCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
                 <td></div>
                 <td></div>
                 <td class="notes-cell"><input type="text" class="inline-input notes-input ${meterData.placeholderClass}" value="${escapeHtml(meterData.notes)}" placeholder="Notes..." ${meterData.disabledAttr}></div>
             `;
-            
-            const currentInput = meterRow.querySelector('.current-charge-input');
-            const previousPaidInput = meterRow.querySelector('.previous-paid-input');
-            
-            const updateHandler = () => updateCalculations(meterRow);
-            if (currentInput) currentInput.addEventListener('input', updateHandler);
-            if (previousPaidInput) previousPaidInput.addEventListener('input', updateHandler);
-            
             tbody.appendChild(meterRow);
         }
         
