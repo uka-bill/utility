@@ -15,6 +15,8 @@
             --light: #f8f9fa;
             --dark: #212529;
             --gray: #6c757d;
+            --water-shade: #e8f4fd;
+            --bill-shade: #fef9e6;
         }
 
         * {
@@ -191,7 +193,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
-            min-width: 1500px;
+            min-width: 1400px;
         }
 
         .data-table th {
@@ -245,15 +247,6 @@
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
-        }
-
-        .small-input {
-            width: 80px;
-        }
-
-        .notes-input {
-            width: 200px;
-            text-align: left;
         }
 
         .account-number {
@@ -386,26 +379,26 @@
             color: var(--gray);
         }
         
-        .cluster-separator, .group-separator, .department-group-separator {
+        .cluster-separator, .department-group-separator {
             background-color: #e8f4ff;
             border-top: 2px solid var(--primary);
             border-bottom: 2px solid var(--primary);
         }
         
-        .cluster-separator td, .group-separator td, .department-group-separator td {
+        .cluster-separator td, .department-group-separator td {
             padding: 8px 15px;
             font-weight: bold;
             color: #2c5282;
             font-size: 0.9rem;
         }
         
-        .cluster-info, .group-info, .dept-group-info {
+        .cluster-info, .dept-group-info {
             display: flex;
             align-items: center;
             gap: 10px;
         }
         
-        .cluster-count, .group-count, .dept-group-count {
+        .cluster-count, .dept-group-count {
             background-color: var(--primary);
             color: white;
             padding: 2px 8px;
@@ -457,19 +450,6 @@
             font-style: italic;
         }
         
-        .letter-badge {
-            background: var(--secondary);
-            color: white;
-            width: 32px;
-            height: 32px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-        
         .department-name-badge {
             background: #7b1fa2;
             color: white;
@@ -477,6 +457,21 @@
             border-radius: 20px;
             font-size: 0.85rem;
             font-weight: 600;
+        }
+
+        .section-header {
+            font-size: 0.7rem;
+            font-weight: normal;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .bill-section-header {
+            background-color: var(--bill-shade);
+        }
+
+        .water-section-header {
+            background-color: var(--water-shade);
         }
     </style>
 </head>
@@ -528,9 +523,9 @@
 
     <div class="info-note">
         ✅ <strong>Direct Entry Mode</strong> — Each school/department has ONE Save button. All water meters under that entity are saved together.
-        Select month/year, enter consumption (m³) and charges, add notes, then click the entity's <strong>Save</strong> button.
+        Select month/year, enter consumption (m³) and charges, then click the entity's <strong>Save</strong> button.
         <br>
-        💡 <strong>Schools are grouped by Cluster | Departments are grouped by Department Name (same as Departments page)</strong>
+        💡 <strong>Order: No. → Entity Name → Type → Account/Meter → Consumption (m³) → Current Charges → Outstanding Charges → Previous Payment Received → Total Bill Charges</strong>
     </div>
 
     <div class="filters-bar">
@@ -571,9 +566,9 @@
                     <th width="160">Account / Meter</th>
                     <th width="110">Consumption (m³)</th>
                     <th width="110">Current Charges ($)</th>
-                    <th width="160">Late / Unsettled</th>
-                    <th width="100">Amount Paid ($)</th>
-                    <th width="200">Notes</th>
+                    <th width="120">Outstanding Charges ($)</th>
+                    <th width="140">Previous Payment Received ($)</th>
+                    <th width="120">Total Bill Charges ($)</th>
                     <th width="90">Status</th>
                     <th width="140">Actions</th>
                 </tr>
@@ -667,11 +662,9 @@
         return accounts;
     }
 
-    // Build entity list - departments are NOT grouped by letter here, we'll group by department_name later
     function buildEntityList() {
         const entities = [];
         
-        // Add ALL schools
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractWaterAccounts(school);
@@ -700,7 +693,6 @@
             });
         }
         
-        // Add ALL departments
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept);
@@ -780,17 +772,37 @@
             
             const consumptionInput = row.querySelector('.consumption-input');
             const currentInput = row.querySelector('.current-charge-input');
-            const lateInput = row.querySelector('.late-input');
-            const unsettledInput = row.querySelector('.unsettled-input');
-            const paidInput = row.querySelector('.paid-input');
-            const notesInput = row.querySelector('.notes-input');
+            const outstandingSpan = row.querySelector('.outstanding-value');
+            const previousPaidInput = row.querySelector('.previous-paid-input');
+            const totalBillSpan = row.querySelector('.total-bill-value');
             
             const consumption = parseFloat(consumptionInput?.value) || 0;
             const currentCharges = parseFloat(currentInput?.value) || 0;
-            const lateCharges = parseFloat(lateInput?.value) || 0;
-            const unsettledCharges = parseFloat(unsettledInput?.value) || 0;
-            const amountPaid = parseFloat(paidInput?.value) || 0;
-            const notes = notesInput?.value || '';
+            const previousPaymentReceived = parseFloat(previousPaidInput?.value) || 0;
+            
+            // Get unsettled charges from existing bill or default to 0
+            let unsettledCharges = 0;
+            if (existingBillId) {
+                const existing = existingBills.find(b => b.id === existingBillId);
+                if (existing) {
+                    unsettledCharges = parseFloat(existing.unsettled_charges) || 0;
+                }
+            }
+            
+            // Calculate outstanding charges = unsettled charges + late charges
+            let lateCharges = 0;
+            if (existingBillId) {
+                const existing = existingBills.find(b => b.id === existingBillId);
+                if (existing) {
+                    lateCharges = parseFloat(existing.late_charges) || 0;
+                }
+            }
+            const outstandingCharges = unsettledCharges + lateCharges;
+            
+            // Calculate total bill charges = current charges + outstanding charges - previous payment received
+            const totalBillCharges = currentCharges + outstandingCharges - previousPaymentReceived;
+            
+            const notes = row.querySelector('.notes-input')?.value || '';
             
             billsToSave.push({
                 id: existingBillId,
@@ -798,9 +810,10 @@
                 meterNumber: meterNumber === '—' ? '' : meterNumber,
                 consumption: consumption,
                 currentCharges: currentCharges,
-                lateCharges: lateCharges,
                 unsettledCharges: unsettledCharges,
-                amountPaid: amountPaid,
+                lateCharges: lateCharges,
+                previousPaymentReceived: previousPaymentReceived,
+                totalBillCharges: totalBillCharges,
                 notes: notes
             });
         }
@@ -820,15 +833,15 @@
                 meter_number: bill.meterNumber,
                 consumption_m3: bill.consumption,
                 current_charges: bill.currentCharges,
-                late_charges: bill.lateCharges,
                 unsettled_charges: bill.unsettledCharges,
-                amount_paid: bill.amountPaid,
+                late_charges: bill.lateCharges,
+                amount_paid: bill.previousPaymentReceived,
+                notes: bill.notes,
                 month: month,
                 year: year,
                 bill_month: month,
                 bill_year: year,
-                bill_image: null,
-                notes: bill.notes
+                bill_image: null
             };
             
             try {
@@ -957,11 +970,9 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        // Separate schools and departments
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // ==================== SCHOOLS SECTION (unchanged - grouped by cluster) ====================
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -980,7 +991,6 @@
             return String(a).localeCompare(String(b));
         });
         
-        // Render Schools
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
             clusterSchools.sort((a, b) => a.displayOrder - b.displayOrder);
@@ -1056,8 +1066,6 @@
             }
         }
         
-        // ==================== DEPARTMENTS SECTION (grouped by DEPARTMENT NAME) ====================
-        // Group departments by department_name
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1067,7 +1075,6 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        // Get the order of first occurrence based on original department order (by ID)
         const deptGroupOrder = [];
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1076,11 +1083,9 @@
             }
         }
         
-        // Render Departments grouped by Department Name
         for (const deptName of deptGroupOrder) {
             const deptsInGroup = deptByDepartmentName.get(deptName) || [];
             
-            // Filter each department for status visibility
             const visibleDeptEntities = [];
             for (const entity of deptsInGroup) {
                 const visibleAccounts = [];
@@ -1143,7 +1148,6 @@
                 `;
                 tbody.appendChild(deptSeparator);
                 
-                // Sort units within department group by ID (original order)
                 visibleDeptEntities.sort((a, b) => a.displayOrder - b.displayOrder);
                 
                 for (const entity of visibleDeptEntities) {
@@ -1173,8 +1177,8 @@
                 const existing = meter.existing;
                 const consumption = existing ? (existing.consumption_m3 || 0) : 0;
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
+                let unsettledCharges = existing ? (existing.unsettled_charges || 0) : 0;
                 let lateCharges = existing ? (existing.late_charges || 0) : 0;
-                let unsettled = existing ? (existing.unsettled_charges || 0) : 0;
                 let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 const notes = existing ? (existing.notes || meter.notes || '') : (meter.notes || '');
                 
@@ -1182,9 +1186,12 @@
                 const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
                 const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
                 
-                const totalDue = currentCharges + lateCharges + unsettled;
+                // Calculate derived fields
+                const outstandingCharges = unsettledCharges + lateCharges;
+                const totalBillCharges = currentCharges + outstandingCharges - amountPaid;
+                
                 if (!isPlaceholderAccount) {
-                    entityTotalDue += totalDue;
+                    entityTotalDue += totalBillCharges;
                     entityTotalPaid += amountPaid;
                     if (existing) hasAnyBill = true;
                 }
@@ -1198,9 +1205,9 @@
                     locationDisplay: locationDisplay,
                     consumption: consumption,
                     currentCharges: currentCharges,
-                    lateCharges: lateCharges,
-                    unsettled: unsettled,
-                    amountPaid: amountPaid,
+                    outstandingCharges: outstandingCharges,
+                    previousPaymentReceived: amountPaid,
+                    totalBillCharges: totalBillCharges,
                     notes: notes,
                     billId: meter.billId,
                     isFirstMeterForAccount: isFirstMeterForAccount,
@@ -1241,19 +1248,15 @@
             <td class="seq-number">${startSerial}</td>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due">(Total: $${entityTotalDue.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
+                ${!isPlaceholder ? `<span class="total-due">(Total Bill: $${entityTotalDue.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
             </td>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></td>
-            <td colspan="2"></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></td>
+            <td colspan="5"></td>
+            <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn" ${isPlaceholder ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>💾 Save All</button>
                 ${hasAnyBill && !isPlaceholder ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
-            </td>
+            </div>
         `;
         
         tbody.appendChild(entityRow);
@@ -1267,20 +1270,39 @@
             
             meterRow.innerHTML = `
                 <td class="seq-number">${meterData.serial}</td>
-                <td></td>
-                <td></td>
+                <td></div>
+                <td></div>
                 <td>${meterData.isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span>` : ''}
                     <div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>
                     ${meterData.locationDisplay}
-                </td>
-                <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="m³" ${meterData.disabledAttr}><span class="consumption-unit">m³</span></td>
-                <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></td>
-                <td><div style="display:flex; gap:5px;"><input type="number" step="0.01" class="inline-input small-input late-input ${meterData.placeholderClass}" value="${meterData.lateCharges.toFixed(2)}" placeholder="Late" ${meterData.disabledAttr}><input type="number" step="0.01" class="inline-input small-input unsettled-input ${meterData.placeholderClass}" value="${meterData.unsettled.toFixed(2)}" placeholder="Unsettled" ${meterData.disabledAttr}></div></td>
-                <td><input type="number" step="0.01" class="inline-input paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></td>
-                <td><input type="text" class="inline-input notes-input ${meterData.placeholderClass}" value="${escapeHtml(meterData.notes)}" placeholder="Notes..." ${meterData.disabledAttr}></td>
-                <td></td>
-                <td></td>
+                </div>
+                <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="m³" ${meterData.disabledAttr}><span class="consumption-unit">m³</span></div>
+                <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><span class="outstanding-value ${meterData.placeholderClass}">${meterData.outstandingCharges.toFixed(2)}</span></div>
+                <td><input type="number" step="0.01" class="inline-input previous-paid-input ${meterData.placeholderClass}" value="${meterData.previousPaymentReceived.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><span class="total-bill-value ${meterData.placeholderClass}">${meterData.totalBillCharges.toFixed(2)}</span></div>
+                <td></div>
+                <td></div>
             `;
+            
+            // Add real-time calculation listeners
+            const consumptionInput = meterRow.querySelector('.consumption-input');
+            const currentInput = meterRow.querySelector('.current-charge-input');
+            const previousPaidInput = meterRow.querySelector('.previous-paid-input');
+            const outstandingSpan = meterRow.querySelector('.outstanding-value');
+            const totalBillSpan = meterRow.querySelector('.total-bill-value');
+            
+            const updateCalculations = () => {
+                const current = parseFloat(currentInput?.value) || 0;
+                const previousPaid = parseFloat(previousPaidInput?.value) || 0;
+                const outstanding = parseFloat(outstandingSpan?.innerText) || 0;
+                const totalBill = current + outstanding - previousPaid;
+                if (totalBillSpan) totalBillSpan.innerText = totalBill.toFixed(2);
+            };
+            
+            if (currentInput) currentInput.addEventListener('input', updateCalculations);
+            if (previousPaidInput) previousPaidInput.addEventListener('input', updateCalculations);
+            
             tbody.appendChild(meterRow);
         }
         
