@@ -384,67 +384,14 @@
             margin-bottom: 10px;
             padding: 5px 10px;
             font-size: 0.8rem;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
         }
 
-        @media print {
-            @page {
-                size: portrait;
-                margin: 0.5in;
-            }
-            
-            .navbar, .report-controls, .action-buttons, .summary-cards, .period-column,
-            .telephone-payment-section, .no-print {
-                display: none !important;
-            }
-            
-            .container {
-                margin-top: 0;
-                padding: 0;
-            }
-            
-            .print-only {
-                display: block;
-            }
-            
-            .report-results {
-                box-shadow: none;
-                padding: 0;
-            }
-            
-            .data-table {
-                min-width: auto;
-                width: 100%;
-            }
-            
-            .data-table th, .data-table td {
-                padding: 8px 10px;
-            }
-            
-            body {
-                background: white;
-                font-size: 12px;
-            }
-            
-            .payment-print-table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-            
-            .payment-print-table th, .payment-print-table td {
-                border: 1px solid #000;
-                padding: 8px;
-                text-align: left;
-            }
-            
-            .page-break {
-                page-break-before: always;
-            }
-            
-            .page-number {
-                text-align: center;
-                margin-top: 20px;
-                font-size: 10px;
-            }
+        .select-all-btn:hover {
+            background: #ccc;
         }
 
         .summary-cards {
@@ -500,32 +447,6 @@
             font-size: 0.8rem;
             color: var(--gray);
         }
-
-        .payment-print-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-
-        .payment-print-table th {
-            background: #4caf50;
-            color: white;
-            padding: 12px;
-            text-align: left;
-            border: 1px solid #ddd;
-        }
-
-        .payment-print-table td {
-            padding: 10px;
-            border: 1px solid #ddd;
-        }
-
-        .attachment-header {
-            text-align: center;
-            font-size: 14px;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
@@ -556,16 +477,20 @@
             <div class="selection-grid">
                 <div>
                     <label class="form-label">🏫 Schools</label>
-                    <button type="button" class="btn btn-sm select-all-btn" onclick="selectAllSchools()">Select All</button>
-                    <button type="button" class="btn btn-sm select-all-btn" onclick="deselectAllSchools()">Deselect All</button>
+                    <div style="margin-bottom: 10px;">
+                        <button type="button" class="select-all-btn" onclick="selectAllSchools()">Select All</button>
+                        <button type="button" class="select-all-btn" onclick="deselectAllSchools()">Deselect All</button>
+                    </div>
                     <div class="checkbox-list" id="schoolsCheckboxList">
                         <div>Loading schools...</div>
                     </div>
                 </div>
                 <div>
                     <label class="form-label">🏛️ Departments</label>
-                    <button type="button" class="btn btn-sm select-all-btn" onclick="selectAllDepartments()">Select All</button>
-                    <button type="button" class="btn btn-sm select-all-btn" onclick="deselectAllDepartments()">Deselect All</button>
+                    <div style="margin-bottom: 10px;">
+                        <button type="button" class="select-all-btn" onclick="selectAllDepartments()">Select All</button>
+                        <button type="button" class="select-all-btn" onclick="deselectAllDepartments()">Deselect All</button>
+                    </div>
                     <div class="checkbox-list" id="departmentsCheckboxList">
                         <div>Loading departments...</div>
                     </div>
@@ -743,9 +668,6 @@
         </div>
     </div>
 
-    <!-- Hidden Print Container for Telephone Payment -->
-    <div id="telephonePrintContainer" style="display: none;"></div>
-
     <script>
         // Set current year as default (extended to 2035)
         const currentYear = new Date().getFullYear();
@@ -865,6 +787,14 @@
             return ids;
         }
         
+        // Generate bill number per account
+        function generateBillNumber(accountNumber, month, year) {
+            if (!accountNumber || accountNumber === '—') return '—';
+            const monthStr = String(month).padStart(2, '0');
+            const shortAccount = String(accountNumber).slice(-6);
+            return `BILL-${year}${monthStr}-${shortAccount}`;
+        }
+        
         // Print Telephone Payment
         document.getElementById('printTelephonePaymentBtn').addEventListener('click', async function() {
             const schoolIds = getSelectedSchoolIds();
@@ -883,6 +813,7 @@
             try {
                 // Fetch telephone bills for selected entities
                 const allBills = [];
+                const entityMap = new Map();
                 
                 // Fetch for schools
                 for (const schoolId of schoolIds) {
@@ -891,6 +822,13 @@
                     if (resp.ok) {
                         const bills = await resp.json();
                         allBills.push(...bills);
+                        
+                        if (!entityMap.has(`school_${schoolId}`)) {
+                            const school = allSchoolsData.find(s => s.id === schoolId);
+                            if (school) {
+                                entityMap.set(`school_${schoolId}`, school.name);
+                            }
+                        }
                     }
                 }
                 
@@ -901,32 +839,43 @@
                     if (resp.ok) {
                         const bills = await resp.json();
                         allBills.push(...bills);
+                        
+                        if (!entityMap.has(`department_${deptId}`)) {
+                            const dept = allDepartmentsData.find(d => d.id === deptId);
+                            if (dept) {
+                                const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
+                                entityMap.set(`department_${deptId}`, displayName);
+                            }
+                        }
                     }
                 }
                 
-                // Filter out summary bills and deduplicate by account
+                // Filter out summary bills and deduplicate by account number
                 const phoneBills = allBills.filter(bill => !bill.notes?.includes('isSummary'));
                 
-                // Group by account number to get bill number per account
+                // Group by account number
                 const accountsMap = new Map();
                 for (const bill of phoneBills) {
                     const accountKey = bill.account_number;
-                    if (!accountsMap.has(accountKey)) {
+                    if (!accountsMap.has(accountKey) && accountKey && accountKey !== '—') {
+                        const entityKey = `${bill.entity_type}_${bill.entity_id}`;
+                        const entityName = entityMap.get(entityKey) || bill.entity_name || 'Unknown';
+                        
                         accountsMap.set(accountKey, {
                             accountNumber: bill.account_number,
-                            entityName: bill.entity_name,
-                            entityType: bill.entity_type,
+                            entityName: entityName,
                             bills: []
                         });
                     }
-                    accountsMap.get(accountKey).bills.push(bill);
+                    if (accountsMap.has(accountKey)) {
+                        accountsMap.get(accountKey).bills.push(bill);
+                    }
                 }
                 
                 // Prepare data for printing
                 const printData = [];
                 let serial = 1;
                 for (const [accountKey, accountData] of accountsMap) {
-                    // Calculate total bill charges from summary or from individual bills
                     let totalBillCharges = 0;
                     for (const bill of accountData.bills) {
                         if (bill.notes && bill.notes.startsWith('{')) {
@@ -944,13 +893,18 @@
                     printData.push({
                         no: serial++,
                         accountNumber: accountData.accountNumber || '—',
-                        billNumber: generateBillNumber(accountData.entityName, accountData.accountNumber),
+                        billNumber: generateBillNumber(accountData.accountNumber, month, year),
                         totalBillCharges: totalBillCharges,
                         entityName: accountData.entityName
                     });
                 }
                 
-                // Generate print HTML with pagination (10 per page)
+                if (printData.length === 0) {
+                    alert('⚠️ No telephone bills found for the selected entities and period.');
+                    loadingIndicator.style.display = 'none';
+                    return;
+                }
+                
                 generateTelephonePaymentPrint(printData, month, year);
                 
             } catch (error) {
@@ -961,14 +915,6 @@
             }
         });
         
-        function generateBillNumber(entityName, accountNumber) {
-            // Generate a simple bill number format: BILL-YYYYMM-XXX
-            const date = new Date();
-            const yearMonth = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
-            const shortAccount = String(accountNumber).slice(-6);
-            return `BILL-${yearMonth}-${shortAccount}`;
-        }
-        
         function generateTelephonePaymentPrint(data, month, year) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = monthNames[month - 1];
@@ -977,7 +923,123 @@
             const totalPages = Math.ceil(data.length / itemsPerPage);
             
             let printHtml = `
-                <div class="telephone-payment-print" style="padding: 20px; font-family: Arial, sans-serif;">
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Telephone Bill Payment - ${monthName} ${year}</title>
+                    <meta charset="UTF-8">
+                    <style>
+                        * {
+                            margin: 0;
+                            padding: 0;
+                            box-sizing: border-box;
+                        }
+                        body {
+                            font-family: Arial, Helvetica, sans-serif;
+                            padding: 20px;
+                            background: white;
+                        }
+                        .print-page {
+                            page-break-after: always;
+                            margin-bottom: 30px;
+                            min-height: 100vh;
+                            background: white;
+                        }
+                        .print-page:last-child {
+                            page-break-after: auto;
+                        }
+                        .attachment-header {
+                            text-align: right;
+                            font-size: 12px;
+                            margin-bottom: 20px;
+                            font-weight: bold;
+                        }
+                        .print-header {
+                            text-align: center;
+                            margin-bottom: 30px;
+                        }
+                        .print-header h2 {
+                            margin: 5px 0;
+                            color: #2e7d32;
+                        }
+                        .print-header h3 {
+                            margin: 5px 0;
+                            font-weight: normal;
+                            color: #333;
+                        }
+                        .print-header h4 {
+                            margin: 5px 0;
+                            color: #555;
+                            font-weight: normal;
+                        }
+                        .print-header p {
+                            margin: 5px 0;
+                            color: #666;
+                        }
+                        .payment-print-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-top: 20px;
+                            font-size: 12px;
+                            background: white;
+                        }
+                        .payment-print-table th {
+                            background: #4caf50;
+                            color: white;
+                            padding: 10px;
+                            text-align: left;
+                            border: 1px solid #ddd;
+                        }
+                        .payment-print-table td {
+                            padding: 8px 10px;
+                            border: 1px solid #ddd;
+                            vertical-align: top;
+                            background: white;
+                        }
+                        .payment-print-table td:first-child,
+                        .payment-print-table th:first-child {
+                            text-align: center;
+                            width: 50px;
+                        }
+                        .payment-print-table td:last-child,
+                        .payment-print-table th:last-child {
+                            text-align: right;
+                            width: 120px;
+                        }
+                        .page-number {
+                            text-align: center;
+                            margin-top: 30px;
+                            font-size: 10px;
+                            color: #666;
+                        }
+                        .footer-note {
+                            text-align: center;
+                            margin-top: 20px;
+                            font-size: 9px;
+                            color: #999;
+                            border-top: 1px solid #ddd;
+                            padding-top: 10px;
+                        }
+                        @media print {
+                            body {
+                                padding: 0;
+                                margin: 0.5in;
+                                background: white;
+                            }
+                            .print-page {
+                                page-break-after: always;
+                                background: white;
+                            }
+                            .no-print {
+                                display: none;
+                            }
+                            .payment-print-table td {
+                                background: white;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
             `;
             
             for (let page = 1; page <= totalPages; page++) {
@@ -986,22 +1048,22 @@
                 const pageData = data.slice(startIdx, endIdx);
                 
                 printHtml += `
-                    <div class="print-page" style="page-break-after: ${page < totalPages ? 'always' : 'auto'}; margin-bottom: 30px;">
-                        <div class="attachment-header" style="text-align: center; font-size: 14px; margin-bottom: 20px; font-weight: bold;">
-                            Attachment ${page}*
+                    <div class="print-page">
+                        <div class="attachment-header">
+                            Attachment ${page}
                         </div>
-                        <div style="text-align: center; margin-bottom: 20px;">
-                            <h3>🏛️ MINISTRY OF EDUCATION BRUNEI</h3>
-                            <h4>Telephone Bill Payment List</h4>
-                            <p>${monthName} ${year}</p>
+                        <div class="print-header">
+                            <h2>🏛️ MINISTRY OF EDUCATION BRUNEI</h2>
+                            <h3>Telephone Bill Payment List</h3>
+                            <h4>${monthName} ${year}</h4>
                         </div>
-                        <table class="payment-print-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                        <table class="payment-print-table">
                             <thead>
-                                <tr style="background-color: #4caf50; color: white;">
-                                    <th style="padding: 12px; border: 1px solid #ddd; text-align: center;">NO.</th>
-                                    <th style="padding: 12px; border: 1px solid #ddd;">Account Number</th>
-                                    <th style="padding: 12px; border: 1px solid #ddd;">Bill Number</th>
-                                    <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total Bill Charges (BND)</th>
+                                <tr>
+                                    <th>NO.</th>
+                                    <th>Account Number</th>
+                                    <th>Bill Number</th>
+                                    <th>Total Bill Charges (BND)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1010,23 +1072,23 @@
                 for (const item of pageData) {
                     printHtml += `
                         <tr>
-                            <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${item.no}</td>
-                            <td style="padding: 10px; border: 1px solid #ddd;">${escapeHtml(item.accountNumber)}</td>
-                            <td style="padding: 10px; border: 1px solid #ddd;">${escapeHtml(item.billNumber)}</td>
-                            <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">${item.totalBillCharges.toFixed(2)}</td>
+                            <td>${item.no}</td>
+                            <td>${escapeHtml(item.accountNumber)}</td>
+                            <td>${escapeHtml(item.billNumber)}</td>
+                            <td style="text-align: right;">${item.totalBillCharges.toFixed(2)}</td>
                         </tr>
                     `;
                 }
                 
-                // Fill empty rows if needed
+                // Fill empty rows to maintain 10 rows per page
                 const emptyRows = itemsPerPage - pageData.length;
                 for (let i = 0; i < emptyRows; i++) {
                     printHtml += `
                         <tr>
-                            <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">&nbsp;</td>
-                            <td style="padding: 10px; border: 1px solid #ddd;"></td>
-                            <td style="padding: 10px; border: 1px solid #ddd;"></td>
-                            <td style="padding: 10px; border: 1px solid #ddd; text-align: right;"></td>
+                            <td>&nbsp;</td>
+                            <td>&nbsp;</td>
+                            <td>&nbsp;</td>
+                            <td>&nbsp;</td>
                         </tr>
                     `;
                 }
@@ -1034,80 +1096,43 @@
                 printHtml += `
                             </tbody>
                         </table>
-                        <div class="page-number" style="text-align: center; margin-top: 20px; font-size: 10px;">
+                        <div class="page-number">
                             Page ${page} of ${totalPages}
+                        </div>
+                        <div class="footer-note">
+                            This is a computer-generated document. No signature required.
                         </div>
                     </div>
                 `;
             }
             
-            printHtml += `</div>`;
-            
-            // Open print window
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Telephone Bill Payment - ${monthName} ${year}</title>
-                    <style>
-                        body {
-                            font-family: Arial, sans-serif;
-                            margin: 0;
-                            padding: 20px;
-                        }
-                        .payment-print-table {
-                            width: 100%;
-                            border-collapse: collapse;
-                        }
-                        .payment-print-table th, .payment-print-table td {
-                            border: 1px solid #ddd;
-                            padding: 8px;
-                        }
-                        .payment-print-table th {
-                            background-color: #4caf50;
-                            color: white;
-                        }
-                        .attachment-header {
-                            text-align: center;
-                            font-size: 14px;
-                            margin-bottom: 10px;
-                            font-weight: bold;
-                        }
-                        .page-number {
-                            text-align: center;
-                            margin-top: 20px;
-                            font-size: 10px;
-                        }
-                        @media print {
-                            body {
-                                margin: 0;
-                                padding: 0;
-                            }
-                            .print-page {
-                                page-break-after: always;
-                            }
-                        }
-                    </style>
-                </head>
-                <body>
-                    ${printHtml}
+            printHtml += `
                     <script>
                         window.onload = function() {
-                            window.print();
-                            setTimeout(function() { window.close(); }, 1000);
+                            setTimeout(function() {
+                                window.print();
+                                setTimeout(function() {
+                                    window.close();
+                                }, 5000);
+                            }, 500);
                         };
                     <\/script>
                 </body>
                 </html>
-            `);
-            printWindow.document.close();
+            `;
+            
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {
+                printWindow.document.write(printHtml);
+                printWindow.document.close();
+            } else {
+                alert('Please allow pop-ups for this site to print.');
+            }
         }
         
         // Load entities for selection
         async function loadEntitiesForSelection() {
             try {
-                // Load schools
                 const schoolsRes = await fetch('/api/entities?type=school');
                 if (schoolsRes.ok) {
                     const schools = await schoolsRes.json();
@@ -1125,7 +1150,6 @@
                     }
                 }
                 
-                // Load departments
                 const deptsRes = await fetch('/api/entities?type=department');
                 if (deptsRes.ok) {
                     const departments = await deptsRes.json();
@@ -1162,14 +1186,12 @@
             });
         });
         
-        // Get month name helper
         function getMonthName(month) {
             const months = ['January', 'February', 'March', 'April', 'May', 'June', 
                            'July', 'August', 'September', 'October', 'November', 'December'];
             return months[month - 1] || 'Unknown';
         }
         
-        // Generate Report Function
         document.getElementById('generateReport').addEventListener('click', async function() {
             const selectionType = document.querySelector('input[name="selectionType"]:checked').value;
             const entityType = document.getElementById('entityType').value;
@@ -1177,7 +1199,6 @@
             const month = document.getElementById('month').value;
             const year = document.getElementById('year').value;
             
-            // Get selected schools and departments if specific entities is selected
             let schoolIds = [];
             let departmentIds = [];
             
@@ -1203,14 +1224,12 @@
                 }
             }
             
-            // Show loading state
             const generateBtn = document.getElementById('generateReport');
             const loadingIndicator = document.getElementById('loadingIndicator');
             generateBtn.textContent = '⏳ Generating...';
             generateBtn.disabled = true;
             loadingIndicator.style.display = 'block';
             
-            // Prepare request data
             const requestData = {
                 selection_type: selectionType,
                 utility_type: utilityType,
@@ -1250,7 +1269,6 @@
             }
         });
         
-        // Display Report Results
         function displayReportResults(data, selectionType, entityType, utilityType, month, year, schoolIds, departmentIds) {
             const resultsDiv = document.getElementById('reportResults');
             const reportTitle = document.getElementById('reportTitle');
@@ -1261,7 +1279,6 @@
             const exportExcelBtn = document.getElementById('exportExcel');
             const reportDateSpan = document.getElementById('reportDate');
             
-            // Set report title
             let title = '📊 Utility Bills Report - ';
             
             if (selectionType === 'entityType') {
@@ -1291,14 +1308,12 @@
             reportTitle.textContent = title;
             reportDateSpan.textContent = 'Generated on: ' + new Date().toLocaleString();
             
-            // Calculate summary statistics
             const totalBills = data.length;
             const totalCurrent = data.reduce((sum, bill) => sum + (bill.current_charges || 0), 0);
             const totalLate = data.reduce((sum, bill) => sum + (bill.late_charges || 0), 0);
             const totalUnsettled = data.reduce((sum, bill) => sum + (bill.unsettled_charges || 0), 0);
             const totalPaid = data.reduce((sum, bill) => sum + (bill.amount_paid || 0), 0);
             
-            // Display summary cards
             summaryCards.innerHTML = `
                 <div class="summary-card">
                     <div class="summary-value">${totalBills}</div>
@@ -1322,7 +1337,6 @@
                 </div>
             `;
             
-            // Display report data
             if (data.length === 0) {
                 reportData.innerHTML = '<tr><td colspan="10" class="no-results">📭 No data found for the selected criteria</td></tr>';
             } else {
@@ -1330,17 +1344,13 @@
                 data.forEach(bill => {
                     const row = document.createElement('tr');
                     
-                    // Determine consumption value
                     let consumption = '—';
                     if (bill.utility_type === 'water' && bill.consumption_m3) {
                         consumption = bill.consumption_m3.toFixed(2) + ' m³';
                     } else if (bill.utility_type === 'electricity' && bill.consumption_kwh) {
                         consumption = bill.consumption_kwh.toFixed(2) + ' kWh';
-                    } else if (bill.utility_type === 'telephone') {
-                        consumption = '—';
                     }
                     
-                    // Determine meter/telephone number
                     let meterTelNo = '—';
                     if (bill.utility_type === 'telephone') {
                         meterTelNo = bill.phone_number || bill.meter_number || '—';
@@ -1364,24 +1374,14 @@
                 });
             }
             
-            // Store data for exports
             window.reportData = data;
             window.reportTitleText = title;
-            window.reportSelectionType = selectionType;
-            window.reportSchoolIds = schoolIds;
-            window.reportDepartmentIds = departmentIds;
-            window.reportEntityType = entityType;
-            window.reportUtilityType = utilityType;
-            window.reportMonth = month;
-            window.reportYear = year;
             
-            // Show results and action buttons
             resultsDiv.style.display = 'block';
             printBtn.style.display = 'inline-block';
             exportPDFBtn.style.display = 'inline-block';
             exportExcelBtn.style.display = 'inline-block';
             
-            // Scroll to results
             resultsDiv.scrollIntoView({ behavior: 'smooth' });
         }
         
@@ -1395,12 +1395,10 @@
             });
         }
         
-        // Print Report Function
         document.getElementById('printReport').addEventListener('click', function() {
             window.print();
         });
         
-        // Export as PDF Function
         document.getElementById('exportPDF').addEventListener('click', function() {
             if (!window.reportData || window.reportData.length === 0) {
                 alert('No data to export. Please generate a report first.');
@@ -1416,7 +1414,6 @@
             }, 100);
         });
         
-        // Export as Excel Function
         document.getElementById('exportExcel').addEventListener('click', function() {
             if (!window.reportData || window.reportData.length === 0) {
                 alert('No data to export. Please generate a report first.');
@@ -1426,7 +1423,6 @@
             exportToExcel(window.reportData);
         });
         
-        // Export to PDF
         function exportToPDF(data, title) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({
@@ -1435,17 +1431,14 @@
                 format: 'a4'
             });
             
-            // Add title
             doc.setFontSize(16);
             doc.setTextColor(40);
             doc.text(title.replace('📊 ', ''), 14, 15);
             
-            // Add generation date
             doc.setFontSize(10);
             doc.setTextColor(100);
             doc.text('Generated on: ' + new Date().toLocaleString(), 14, 22);
             
-            // Prepare table data
             const tableData = data.map(bill => {
                 let consumption = '';
                 if (bill.utility_type === 'water' && bill.consumption_m3) {
@@ -1494,7 +1487,6 @@
                 margin: { left: 14, right: 14 }
             });
             
-            // Add summary
             const totalCurrent = data.reduce((sum, bill) => sum + (bill.current_charges || 0), 0);
             const totalLate = data.reduce((sum, bill) => sum + (bill.late_charges || 0), 0);
             const totalUnsettled = data.reduce((sum, bill) => sum + (bill.unsettled_charges || 0), 0);
@@ -1508,7 +1500,6 @@
             doc.save(`utility_bills_report_${currentDate}.pdf`);
         }
         
-        // Export to Excel (CSV format)
         function exportToExcel(data) {
             let csvContent = "Entity,Type,Utility,Account No.,Meter/Tel No.,Consumption,Current Charges,Late Charges,Unsettled Charges,Amount Paid,Period\n";
             
