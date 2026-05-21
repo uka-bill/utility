@@ -475,7 +475,7 @@
         
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(7, 1fr);
             gap: 15px;
             align-items: end;
         }
@@ -520,6 +520,17 @@
             border: 1px solid #ffcc80;
         }
         
+        .total-current-charges {
+            font-weight: bold;
+            font-size: 1rem;
+            color: #2e7d32;
+            background: #e8f5e9;
+            padding: 8px 10px;
+            border-radius: 5px;
+            text-align: right;
+            border: 1px solid #4caf50;
+        }
+        
         .entity-actions {
             display: flex;
             gap: 8px;
@@ -557,9 +568,15 @@
             background-color: transparent;
         }
         
-        .entity-spacer {
-            height: 20px;
-            background-color: transparent;
+        .bill-number {
+            font-family: monospace;
+            background: #e8f5e9;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            display: inline-block;
+            margin-top: 4px;
+            color: #2e7d32;
         }
     </style>
 </head>
@@ -618,7 +635,11 @@
         <br>
         &nbsp;&nbsp;💰 <strong>Bill Summary Box</strong> - Orange box at the bottom of each entity (separate section)
         <br>
+        &nbsp;&nbsp;🧾 <strong>Bill Number</strong> - Automatically generated per account
+        <br>
         💡 <strong>Formula: Total Bill Charges = Total Current Bill + Other Charges + Adjustment</strong>
+        <br>
+        💡 <strong>Total Current Charges = Previous Outstanding + Total Bill Charges</strong>
     </div>
 
     <div class="filters-bar">
@@ -655,7 +676,7 @@
                 <tr>
                     <th>No.</th>
                     <th>Entity Name</th>
-                    <th>Type</th>
+                    <th>Type / Bill No.</th>
                     <th>Account / Phone</th>
                     <th>Total Current Charges ($)</th>
                     <th>Total Usage</th>
@@ -685,7 +706,7 @@
         const yearSelect = document.getElementById('globalYear');
         yearSelect.innerHTML = '';
         const start = 2020;
-        const end = 2030;
+        const end = 2035;
         for (let y = start; y <= end; y++) {
             const opt = document.createElement('option');
             opt.value = y;
@@ -854,6 +875,14 @@
         toast.textContent = message;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Generate bill number per account
+    function generateBillNumber(accountNumber, month, year) {
+        if (!accountNumber || accountNumber === '—') return '—';
+        const monthStr = String(month).padStart(2, '0');
+        const shortAccount = String(accountNumber).slice(-6);
+        return `BILL-${year}${monthStr}-${shortAccount}`;
     }
 
     async function saveEntityBills(entityElement, summaryDataValues, month, year) {
@@ -1307,6 +1336,10 @@
         const summaryKey = `${entity.type}_${entity.id}`;
         const existingSummary = existingSummaryData[summaryKey] || {};
         
+        // Generate bill number per account (use first account in the group)
+        let accountForBillNumber = entity.accountGroups.length > 0 ? entity.accountGroups[0].accountNumber : null;
+        const billNumber = generateBillNumber(accountForBillNumber, month, year);
+        
         for (const account of entity.accountGroups) {
             let isFirstPhoneForAccount = true;
             if (account.isPlaceholder) isPlaceholder = true;
@@ -1371,7 +1404,7 @@
             entityStatusText = 'No account';
         }
         
-        // Entity Header Row
+        // Entity Header Row with Bill Number
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
@@ -1385,8 +1418,11 @@
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
                 ${!isPlaceholder ? `<span class="total-due">(Total Current: $${entityTotalCurrent.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No telephone account configured)</span>'}
             </div>
-            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
-            <td colspan="5"></div>
+            <td>
+                <span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span>
+                ${!isPlaceholder && billNumber !== '—' ? `<div class="bill-number">🧾 Bill No: ${billNumber}</div>` : ''}
+            </div>
+            <td colspan="4"></div>
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn" ${isPlaceholder ? 'disabled style="opacity:0.5;"' : ''}>💾 Save All</button>
@@ -1423,6 +1459,7 @@
         
         // BILL SUMMARY - Separate Box at the bottom of the entity
         const summaryTotalBill = (existingSummary.totalCurrentBill || 0) + (existingSummary.otherCharges || 0) + (existingSummary.adjustment || 0);
+        const totalCurrentCharges = (existingSummary.previousOutstanding || 0) + summaryTotalBill;
         
         // Create a row that spans all columns for the summary box
         const summaryRow = document.createElement('tr');
@@ -1462,6 +1499,10 @@
                         <span class="summary-label">Total Bill Charges ($)</span>
                         <div class="summary-value" id="total_bill_${entity.id}">${summaryTotalBill.toFixed(2)}</div>
                     </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Current Charges ($)</span>
+                        <div class="total-current-charges" id="total_current_${entity.id}">${totalCurrentCharges.toFixed(2)}</div>
+                    </div>
                 </div>
             </div>
         `;
@@ -1476,6 +1517,7 @@
         const otherInput = summaryCell.querySelector('.summary-other-charges');
         const adjInput = summaryCell.querySelector('.summary-adjustment');
         const totalBillDisplay = summaryCell.querySelector('.summary-value');
+        const totalCurrentDisplay = summaryCell.querySelector('.total-current-charges');
         
         const updateSummaryTotal = () => {
             const totalCurr = parseFloat(totalCurrInput?.value) || 0;
@@ -1483,11 +1525,17 @@
             const adj = parseFloat(adjInput?.value) || 0;
             const total = totalCurr + other + adj;
             if (totalBillDisplay) totalBillDisplay.innerText = total.toFixed(2);
+            
+            // Update total current charges (Previous Outstanding + Total Bill Charges)
+            const prevOut = parseFloat(prevOutInput?.value) || 0;
+            const totalCurrent = prevOut + total;
+            if (totalCurrentDisplay) totalCurrentDisplay.innerText = totalCurrent.toFixed(2);
         };
         
         if (totalCurrInput) totalCurrInput.addEventListener('input', updateSummaryTotal);
         if (otherInput) otherInput.addEventListener('input', updateSummaryTotal);
         if (adjInput) adjInput.addEventListener('input', updateSummaryTotal);
+        if (prevOutInput) prevOutInput.addEventListener('input', updateSummaryTotal);
         
         // Store summary values for save
         const getSummaryValues = () => ({
@@ -1527,10 +1575,6 @@
             if (m === '>') return '&gt;';
             return m;
         });
-    }
-    
-    function attachGlobalEventListeners() {
-        // Event delegation is handled in the render function now
     }
     
     document.addEventListener('DOMContentLoaded', async () => {
