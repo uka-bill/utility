@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reports & Print - Utility Bills Management</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <style>
         :root {
             --primary: #4361ee;
@@ -18,1635 +16,500 @@
             --dark: #212529;
             --gray: #6c757d;
         }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        body {
-            background-color: #f5f7fb;
-            color: var(--dark);
-        }
-
-        .navbar {
-            background: white;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 0 20px;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            height: 70px;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            font-weight: 700;
-            font-size: 1.5rem;
-            color: var(--primary);
-        }
-
-        .logo span {
-            margin-left: 10px;
-        }
-
-        .nav-tabs {
-            display: flex;
-            list-style: none;
-            flex-wrap: wrap;
-        }
-
-        .nav-tabs li {
-            margin: 0 5px;
-        }
-
-        .nav-tabs a {
-            text-decoration: none;
-            color: var(--gray);
-            padding: 10px 20px;
-            border-radius: 5px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-        }
-
-        .nav-tabs a:hover, .nav-tabs a.active {
-            background: var(--primary);
-            color: white;
-        }
-
-        .container {
-            margin-top: 90px;
-            padding: 20px;
-        }
-
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-
-        .page-title {
-            color: var(--dark);
-            font-size: 1.8rem;
-        }
-
-        .report-controls {
-            background: white;
-            border-radius: 10px;
-            padding: 25px;
-            margin-bottom: 25px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-        }
-
-        .controls-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: var(--dark);
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 1rem;
-            background: white;
-        }
-
-        .form-control[multiple] {
-            height: 150px;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            font-size: 1rem;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: var(--secondary);
-        }
-
-        .btn-success {
-            background: var(--success);
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #3aa8c4;
-        }
-
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #e05a8a;
-        }
-
-        .btn-warning {
-            background: var(--warning);
-            color: white;
-        }
-
-        .btn-warning:hover {
-            background: #e0861b;
-        }
-
-        .btn-bill-payment {
-            background: #2196f3;
-            color: white;
-        }
-
-        .btn-bill-payment:hover {
-            background: #1976d2;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 15px;
-            justify-content: flex-end;
-            margin-top: 20px;
-        }
-
-        .report-results {
-            background: white;
-            border-radius: 10px;
-            padding: 25px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-        }
-
-        .results-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #eee;
-        }
-
-        .results-title {
-            font-size: 1.4rem;
-            color: var(--dark);
-        }
-
-        .data-table-container {
-            max-height: 600px;
-            overflow-y: auto;
-            border: 1px solid #eee;
-            border-radius: 5px;
-        }
-
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 1200px;
-            font-size: 0.85rem;
-        }
-
-        .data-table th {
-            background: var(--primary);
-            color: white;
-            padding: 15px;
-            text-align: left;
-            position: sticky;
-            top: 0;
-            font-weight: 600;
-        }
-
-        .data-table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .data-table tr:hover {
-            background: #f9f9f9;
-        }
-
-        .badge {
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            display: inline-block;
-        }
-
-        .badge-school {
-            background: #e3f2fd;
-            color: var(--info);
-        }
-
-        .badge-department {
-            background: #f3e5f5;
-            color: #7b1fa2;
-        }
-
-        .no-results {
-            text-align: center;
-            padding: 40px;
-            color: var(--gray);
-            font-style: italic;
-        }
-
-        .print-only {
-            display: none;
-        }
-
-        .selection-options {
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .selection-option {
-            display: inline-block;
-            margin-right: 20px;
-        }
-
-        .selection-option input {
-            margin-right: 5px;
-        }
-
-        .entity-selection {
-            display: none;
-            margin-top: 15px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 5px;
-            border: 1px solid #dee2e6;
-        }
-
-        .entity-selection.active {
-            display: block;
-        }
-
-        .entity-columns {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        /* Bill Payment Print Section */
-        .bill-payment-section {
-            background: #e3f2fd;
-            border-left: 4px solid #2196f3;
-            padding: 20px;
-            margin-bottom: 25px;
-            border-radius: 8px;
-        }
-
-        .bill-payment-section h3 {
-            margin-bottom: 20px;
-            color: #1565c0;
-        }
-
-        .selection-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .utility-options {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            margin-bottom: 15px;
-        }
-
-        .utility-option {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .utility-option input {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-
-        .utility-option label {
-            cursor: pointer;
-            font-weight: 500;
-        }
-
-        .checkbox-list {
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 10px;
-            background: white;
-        }
-
-        .checkbox-item {
-            display: flex;
-            align-items: center;
-            padding: 8px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .checkbox-item input {
-            margin-right: 10px;
-        }
-
-        .checkbox-item label {
-            cursor: pointer;
-            flex: 1;
-        }
-
-        .select-all-btn {
-            margin-bottom: 10px;
-            padding: 5px 10px;
-            font-size: 0.8rem;
-            background: #e0e0e0;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-
-        .select-all-btn:hover {
-            background: #ccc;
-        }
-
-        .entity-type-options {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #ddd;
-        }
-
-        .entity-type-option {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .entity-type-option input {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-
-        .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .summary-card {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            border: 1px solid #e9ecef;
-        }
-
-        .summary-value {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 5px;
-        }
-
-        .summary-label {
-            font-size: 0.85rem;
-            color: var(--gray);
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 40px;
-            color: var(--primary);
-            font-size: 1.2rem;
-        }
-
-        .info-note {
-            background: #e3f2fd;
-            border-left: 4px solid var(--primary);
-            padding: 12px 18px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-        }
-
-        .scroll-hint {
-            text-align: right;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 5px;
-            margin-bottom: 10px;
-            font-size: 0.8rem;
-            color: var(--gray);
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f5f7fb; color: var(--dark); }
+        .navbar { background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 0 20px; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; display: flex; justify-content: space-between; align-items: center; height: 70px; }
+        .logo { display: flex; align-items: center; font-weight: 700; font-size: 1.5rem; color: var(--primary); }
+        .logo span { margin-left: 10px; }
+        .nav-tabs { display: flex; list-style: none; flex-wrap: wrap; }
+        .nav-tabs li { margin: 0 5px; }
+        .nav-tabs a { text-decoration: none; color: var(--gray); padding: 10px 20px; border-radius: 5px; transition: all 0.3s ease; font-weight: 500; }
+        .nav-tabs a:hover, .nav-tabs a.active { background: var(--primary); color: white; }
+        .container { margin-top: 90px; padding: 20px; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px; }
+        .page-title { color: var(--dark); font-size: 1.8rem; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 500; transition: all 0.3s ease; font-size: 1rem; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--secondary); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-bill-payment { background: #2196f3; color: white; }
+        .btn-bill-payment:hover { background: #1976d2; }
+        .action-buttons { display: flex; gap: 15px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
+        .form-group { margin-bottom: 15px; }
+        .form-label { display: block; margin-bottom: 8px; font-weight: 500; color: var(--dark); }
+        .form-control { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 1rem; background: white; }
+        .bill-payment-section { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 20px; margin-bottom: 25px; border-radius: 8px; }
+        .bill-payment-section h3 { margin-bottom: 20px; color: #1565c0; }
+        .selection-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .utility-options, .entity-type-options, .column-options { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 15px; }
+        .utility-option, .entity-type-option, .column-option { display: flex; align-items: center; gap: 8px; }
+        .utility-option input, .entity-type-option input, .column-option input { width: 18px; height: 18px; cursor: pointer; }
+        .checkbox-list { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px; background: white; }
+        .checkbox-item { display: flex; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
+        .checkbox-item input { margin-right: 10px; }
+        .checkbox-item label { cursor: pointer; flex: 1; }
+        .select-all-btn { margin-bottom: 10px; padding: 5px 10px; font-size: 0.8rem; background: #e0e0e0; border: none; border-radius: 3px; cursor: pointer; }
+        .select-all-btn:hover { background: #ccc; }
+        .loading { display: none; text-align: center; padding: 40px; color: var(--primary); font-size: 1.2rem; }
+        .info-note { background: #e3f2fd; border-left: 4px solid var(--primary); padding: 12px 18px; margin-bottom: 20px; border-radius: 8px; font-size: 0.85rem; }
+        .report-controls { background: white; border-radius: 10px; padding: 25px; margin-bottom: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .selection-options { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        .selection-option { display: inline-block; margin-right: 20px; }
+        .entity-selection { display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 5px; border: 1px solid #dee2e6; }
+        .entity-selection.active { display: block; }
+        .entity-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .report-results { background: white; border-radius: 10px; padding: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #eee; }
+        .data-table-container { max-height: 600px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px; }
+        .data-table { width: 100%; border-collapse: collapse; min-width: 800px; font-size: 0.85rem; }
+        .data-table th { background: var(--primary); color: white; padding: 15px; text-align: left; position: sticky; top: 0; font-weight: 600; }
+        .data-table td { padding: 12px 15px; border-bottom: 1px solid #eee; }
+        .badge { padding: 5px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: 600; display: inline-block; }
+        .badge-school { background: #e3f2fd; color: var(--info); }
+        .badge-department { background: #f3e5f5; color: #7b1fa2; }
+        .badge-water { background: #e3f2fd; color: var(--info); }
+        .badge-electricity { background: #fff3e0; color: var(--warning); }
+        .badge-telephone { background: #e8f5e8; color: var(--success); }
+        .no-results { text-align: center; padding: 40px; color: var(--gray); font-style: italic; }
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .summary-card { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef; }
+        .summary-value { font-size: 1.8rem; font-weight: 700; color: var(--primary); margin-bottom: 5px; }
+        .scroll-hint { text-align: right; padding: 10px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px; font-size: 0.8rem; color: var(--gray); }
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="logo">
-            <span>Utility Bills Management</span>
-        </div>
-        <ul class="nav-tabs">
-            <li><a href="/dashboard">Dashboard</a></li>
-            <li><a href="/departments">Departments</a></li>
-            <li><a href="/schools">Schools</a></li>
-            <li><a href="/water">Water</a></li>
-            <li><a href="/electricity">Electricity</a></li>
-            <li><a href="/telephone">Telephone</a></li>
-            <li><a href="/reports" class="active">Reports & Print</a></li>
-            <li><a href="/backup">Backup & Restore</a></li>
-        </ul>
-    </nav>
+<nav class="navbar">
+    <div class="logo"><span>Utility Bills Management</span></div>
+    <ul class="nav-tabs">
+        <li><a href="/dashboard">Dashboard</a></li>
+        <li><a href="/departments">Departments</a></li>
+        <li><a href="/schools">Schools</a></li>
+        <li><a href="/water">Water</a></li>
+        <li><a href="/electricity">Electricity</a></li>
+        <li><a href="/telephone">Telephone</a></li>
+        <li><a href="/reports" class="active">Reports & Print</a></li>
+        <li><a href="/backup">Backup & Restore</a></li>
+    </ul>
+</nav>
 
-    <div class="container">
-        <div class="page-header">
-            <h1 class="page-title">📊 Reports & Print Center</h1>
-        </div>
+<div class="container">
+    <div class="page-header"><h1 class="page-title">📊 Reports & Print Center</h1></div>
 
-        <!-- Bill Payment Print Section -->
-        <div class="bill-payment-section">
-            <h3>🖨️ Print for Bill Payment</h3>
-            
-            <!-- Utility Selection -->
-            <div class="form-group">
-                <label class="form-label">⚡ Select Utilities</label>
-                <div class="utility-options">
-                    <div class="utility-option">
-                        <input type="checkbox" id="utilWater" value="water">
-                        <label for="utilWater">💧 Water</label>
-                    </div>
-                    <div class="utility-option">
-                        <input type="checkbox" id="utilElectricity" value="electricity">
-                        <label for="utilElectricity">⚡ Electricity</label>
-                    </div>
-                    <div class="utility-option">
-                        <input type="checkbox" id="utilTelephone" value="telephone">
-                        <label for="utilTelephone">📞 Telephone</label>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Entity Type Selection -->
-            <div class="form-group">
-                <label class="form-label">🏢 Select Entity Types</label>
-                <div class="entity-type-options">
-                    <div class="entity-type-option">
-                        <input type="checkbox" id="entitySchools" value="school">
-                        <label for="entitySchools">🏫 Schools</label>
-                    </div>
-                    <div class="entity-type-option">
-                        <input type="checkbox" id="entityDepartments" value="department">
-                        <label for="entityDepartments">🏛️ Departments</label>
-                    </div>
-                </div>
-            </div>
-
-            <div class="selection-grid">
-                <div id="schoolsContainer" style="display: none;">
-                    <label class="form-label">🏫 Select Schools</label>
-                    <div style="margin-bottom: 10px;">
-                        <button type="button" class="select-all-btn" onclick="selectAllSchools()">Select All Schools</button>
-                        <button type="button" class="select-all-btn" onclick="deselectAllSchools()">Deselect All Schools</button>
-                    </div>
-                    <div class="checkbox-list" id="schoolsCheckboxList">
-                        <div>Loading schools...</div>
-                    </div>
-                </div>
-
-                <div id="departmentsContainer" style="display: none;">
-                    <label class="form-label">🏛️ Select Departments</label>
-                    <div style="margin-bottom: 10px;">
-                        <button type="button" class="select-all-btn" onclick="selectAllDepartments()">Select All Departments</button>
-                        <button type="button" class="select-all-btn" onclick="deselectAllDepartments()">Deselect All Departments</button>
-                    </div>
-                    <div class="checkbox-list" id="departmentsCheckboxList">
-                        <div>Loading departments...</div>
-                    </div>
-                </div>
-
-                <div>
-                    <div class="form-group">
-                        <label class="form-label">📅 Month</label>
-                        <select class="form-control" id="paymentMonth">
-                            <option value="1">January</option>
-                            <option value="2">February</option>
-                            <option value="3">March</option>
-                            <option value="4">April</option>
-                            <option value="5">May</option>
-                            <option value="6">June</option>
-                            <option value="7">July</option>
-                            <option value="8">August</option>
-                            <option value="9">September</option>
-                            <option value="10">October</option>
-                            <option value="11">November</option>
-                            <option value="12">December</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">🗓️ Year</label>
-                        <select class="form-control" id="paymentYear">
-                            <!-- Years will be populated -->
-                        </select>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="action-buttons">
-                <button class="btn btn-bill-payment" id="printBillPaymentBtn">🖨️ Print Bill Payment</button>
+    <!-- Bill Payment Print Section -->
+    <div class="bill-payment-section">
+        <h3>🖨️ Print for Bill Payment</h3>
+        
+        <!-- Utility Selection -->
+        <div class="form-group">
+            <label class="form-label">⚡ Select Utilities</label>
+            <div class="utility-options">
+                <div class="utility-option"><input type="checkbox" id="utilWater" value="water"><label for="utilWater">💧 Water</label></div>
+                <div class="utility-option"><input type="checkbox" id="utilElectricity" value="electricity"><label for="utilElectricity">⚡ Electricity</label></div>
+                <div class="utility-option"><input type="checkbox" id="utilTelephone" value="telephone"><label for="utilTelephone">📞 Telephone</label></div>
             </div>
         </div>
 
-        <div class="info-note">
-            📄 <strong>Generate Reports</strong> — Select filters below to generate utility bills reports. 
-            You can print, export as PDF, or export as Excel/CSV for further analysis.
+        <!-- Entity Type Selection -->
+        <div class="form-group">
+            <label class="form-label">🏢 Select Entity Types</label>
+            <div class="entity-type-options">
+                <div class="entity-type-option"><input type="checkbox" id="entitySchools" value="school"><label for="entitySchools">🏫 Schools</label></div>
+                <div class="entity-type-option"><input type="checkbox" id="entityDepartments" value="department"><label for="entityDepartments">🏛️ Departments</label></div>
+            </div>
         </div>
 
-        <div class="report-controls">
-            <div class="selection-options">
-                <div class="selection-option">
-                    <input type="radio" id="entityTypeSelection" name="selectionType" value="entityType" checked>
-                    <label for="entityTypeSelection">📋 By Entity Type</label>
-                </div>
-                <div class="selection-option">
-                    <input type="radio" id="specificEntitiesSelection" name="selectionType" value="specificEntities">
-                    <label for="specificEntitiesSelection">🎯 By Specific Entities</label>
-                </div>
+        <!-- Column Selection for Print -->
+        <div class="form-group">
+            <label class="form-label">📋 Select Columns to Print</label>
+            <div class="column-options">
+                <div class="column-option"><input type="checkbox" id="colNo" checked><label for="colNo">No.</label></div>
+                <div class="column-option"><input type="checkbox" id="colName" checked><label for="colName">Entity Name</label></div>
+                <div class="column-option"><input type="checkbox" id="colAccount" checked><label for="colAccount">Account Number</label></div>
+                <div class="column-option"><input type="checkbox" id="colCurrentCharges" checked><label for="colCurrentCharges">Current Charges</label></div>
+                <div class="column-option"><input type="checkbox" id="colOutstanding" checked><label for="colOutstanding">Outstanding Charges</label></div>
+                <div class="column-option"><input type="checkbox" id="colTotalBill" checked><label for="colTotalBill">Total Bill Charges</label></div>
+                <div class="column-option"><input type="checkbox" id="colBillNumber"><label for="colBillNumber">Bill Number</label></div>
             </div>
-            
-            <div class="controls-grid">
-                <div class="form-group">
-                    <label class="form-label">🏷️ Entity Type</label>
-                    <select class="form-control" id="entityType">
-                        <option value="all">All Entities</option>
-                        <option value="school">🏫 Schools Only</option>
-                        <option value="department">🏛️ Departments Only</option>
+        </div>
+
+        <div class="selection-grid">
+            <div id="schoolsContainer" style="display: none;">
+                <label class="form-label">🏫 Select Schools</label>
+                <div><button type="button" class="select-all-btn" onclick="selectAllSchools()">Select All Schools</button>
+                <button type="button" class="select-all-btn" onclick="deselectAllSchools()">Deselect All Schools</button></div>
+                <div class="checkbox-list" id="schoolsCheckboxList"><div>Loading schools...</div></div>
+            </div>
+            <div id="departmentsContainer" style="display: none;">
+                <label class="form-label">🏛️ Select Departments</label>
+                <div><button type="button" class="select-all-btn" onclick="selectAllDepartments()">Select All Departments</button>
+                <button type="button" class="select-all-btn" onclick="deselectAllDepartments()">Deselect All Departments</button></div>
+                <div class="checkbox-list" id="departmentsCheckboxList"><div>Loading departments...</div></div>
+            </div>
+            <div>
+                <div class="form-group"><label class="form-label">📅 Month</label>
+                    <select class="form-control" id="paymentMonth">
+                        <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+                        <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+                        <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+                        <option value="10">October</option><option value="11">November</option><option value="12">December</option>
                     </select>
                 </div>
-                
-                <div class="form-group">
-                    <label class="form-label">⚡ Utility Type</label>
-                    <select class="form-control" id="utilityType">
-                        <option value="all">All Utilities</option>
-                        <option value="water">💧 Water Only</option>
-                        <option value="electricity">🔌 Electricity Only</option>
-                        <option value="telephone">📞 Telephone Only</option>
-                    </select>
+                <div class="form-group"><label class="form-label">🗓️ Year</label>
+                    <select class="form-control" id="paymentYear"></select>
                 </div>
-                
-                <div class="form-group">
-                    <label class="form-label">📅 Month</label>
-                    <select class="form-control" id="month">
-                        <option value="all">All Months</option>
-                        <option value="1">January</option>
-                        <option value="2">February</option>
-                        <option value="3">March</option>
-                        <option value="4">April</option>
-                        <option value="5">May</option>
-                        <option value="6">June</option>
-                        <option value="7">July</option>
-                        <option value="8">August</option>
-                        <option value="9">September</option>
-                        <option value="10">October</option>
-                        <option value="11">November</option>
-                        <option value="12">December</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">🗓️ Year</label>
-                    <input type="number" class="form-control" id="year" min="2020" max="2035" placeholder="Enter year">
-                </div>
-            </div>
-            
-            <div class="entity-selection" id="specificEntitiesSection">
-                <h4 style="margin-bottom: 15px; color: var(--dark);">🎯 Select Specific Entities</h4>
-                <div class="entity-columns">
-                    <div class="form-group">
-                        <label class="form-label">🏫 Schools (Ctrl+Click for multiple)</label>
-                        <select class="form-control" id="schoolsSelect" multiple size="6">
-                            <option value="">Loading schools...</option>
-                        </select>
-                        <div style="margin-top: 5px; font-size: 0.7rem; color: var(--gray);">
-                            Hold Ctrl/Cmd to select multiple schools
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">🏛️ Departments (Ctrl+Click for multiple)</label>
-                        <select class="form-control" id="departmentsSelect" multiple size="6">
-                            <option value="">Loading departments...</option>
-                        </select>
-                        <div style="margin-top: 5px; font-size: 0.7rem; color: var(--gray);">
-                            Hold Ctrl/Cmd to select multiple departments
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="action-buttons">
-                <button class="btn btn-primary" id="generateReport">🔍 Generate Report</button>
-                <button class="btn btn-success" id="printReport" style="display: none;">🖨️ Print Report</button>
-                <button class="btn btn-danger" id="exportPDF" style="display: none;">📄 Export as PDF</button>
-                <button class="btn btn-warning" id="exportExcel" style="display: none;">📊 Export as Excel</button>
             </div>
         </div>
         
-        <div class="loading" id="loadingIndicator">
-            <div>⏳ Generating report, please wait...</div>
-        </div>
-        
-        <div class="report-results" id="reportResults" style="display: none;">
-            <div class="results-header">
-                <h3 class="results-title" id="reportTitle">Report Results</h3>
-                <div class="print-only">
-                    <h3>🏛️ Ministry of Education Brunei</h3>
-                    <h4>Utility Bills Report</h4>
-                    <p id="reportDate">Generated on: </p>
-                    <hr>
-                </div>
-            </div>
-            
-            <div class="summary-cards" id="summaryCards">
-                <!-- Summary cards will be populated by JavaScript -->
-            </div>
-            
-            <div class="scroll-hint">
-                <i>↔️</i> Scroll horizontally to see all columns | <i>↕️</i> Scroll vertically to see all entries | <i>📌</i> Table headers are frozen/sticky while scrolling
-            </div>
-            
-            <div class="data-table-container">
-                <table class="data-table" id="reportTable">
-                    <thead>
-                        <tr>
-                            <th>Entity Name</th>
-                            <th>Type</th>
-                            <th>Utility</th>
-                            <th>Account No.</th>
-                            <th>Meter/Tel No.</th>
-                            <th>Consumption</th>
-                            <th>Current Charges</th>
-                            <th>Late Charges</th>
-                            <th>Unsettled Charges</th>
-                            <th class="period-column">Period</th>
-                        </tr>
-                    </thead>
-                    <tbody id="reportData">
-                        <tr><td colspan="10" class="no-results">Click "Generate Report" to view data</td></tr>
-                    </tbody>
-                </table>
-            </div>
+        <div class="action-buttons">
+            <button class="btn btn-bill-payment" id="printBillPaymentBtn">🖨️ Print Bill Payment</button>
         </div>
     </div>
 
-    <script>
-        // Set current year as default (extended to 2035)
-        const currentYear = new Date().getFullYear();
-        document.getElementById('year').value = currentYear;
-        document.getElementById('year').max = 2035;
-        document.getElementById('month').value = new Date().getMonth() + 1;
-        
-        let allSchoolsData = [];
-        let allDepartmentsData = [];
-        
-        // Populate payment years (2020-2035)
-        function populatePaymentYears() {
-            const yearSelect = document.getElementById('paymentYear');
-            yearSelect.innerHTML = '';
-            for (let y = 2020; y <= 2035; y++) {
-                const opt = document.createElement('option');
-                opt.value = y;
-                opt.textContent = y;
-                if (y === currentYear) opt.selected = true;
-                yearSelect.appendChild(opt);
+    <div class="info-note">📄 <strong>Generate Reports</strong> — Select filters below to generate utility bills reports.</div>
+
+    <div class="report-controls">
+        <div class="selection-options">
+            <div class="selection-option"><input type="radio" id="entityTypeSelection" name="selectionType" value="entityType" checked><label for="entityTypeSelection">📋 By Entity Type</label></div>
+            <div class="selection-option"><input type="radio" id="specificEntitiesSelection" name="selectionType" value="specificEntities"><label for="specificEntitiesSelection">🎯 By Specific Entities</label></div>
+        </div>
+        <div class="controls-grid">
+            <div class="form-group"><label class="form-label">🏷️ Entity Type</label><select class="form-control" id="entityType"><option value="all">All Entities</option><option value="school">🏫 Schools Only</option><option value="department">🏛️ Departments Only</option></select></div>
+            <div class="form-group"><label class="form-label">⚡ Utility Type</label><select class="form-control" id="utilityType"><option value="all">All Utilities</option><option value="water">💧 Water Only</option><option value="electricity">🔌 Electricity Only</option><option value="telephone">📞 Telephone Only</option></select></div>
+            <div class="form-group"><label class="form-label">📅 Month</label><select class="form-control" id="month"><option value="all">All Months</option><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select></div>
+            <div class="form-group"><label class="form-label">🗓️ Year</label><input type="number" class="form-control" id="year" min="2020" max="2035" placeholder="Enter year"></div>
+        </div>
+        <div class="entity-selection" id="specificEntitiesSection">
+            <h4>🎯 Select Specific Entities</h4>
+            <div class="entity-columns">
+                <div class="form-group"><label class="form-label">🏫 Schools</label><select class="form-control" id="schoolsSelect" multiple size="6"><option value="">Loading schools...</option></select></div>
+                <div class="form-group"><label class="form-label">🏛️ Departments</label><select class="form-control" id="departmentsSelect" multiple size="6"><option value="">Loading departments...</option></select></div>
+            </div>
+        </div>
+        <div class="action-buttons"><button class="btn btn-primary" id="generateReport">🔍 Generate Report</button></div>
+    </div>
+    
+    <div class="loading" id="loadingIndicator"><div>⏳ Generating report, please wait...</div></div>
+    
+    <div class="report-results" id="reportResults" style="display: none;">
+        <div class="results-header"><h3 class="results-title" id="reportTitle">Report Results</h3></div>
+        <div class="summary-cards" id="summaryCards"></div>
+        <div class="scroll-hint"><i>↔️</i> Scroll horizontally to see all columns</div>
+        <div class="data-table-container"><table class="data-table" id="reportTable"><thead><tr><th>Entity Name</th><th>Type</th><th>Utility</th><th>Account No.</th><th>Current Charges</th><th>Outstanding Charges</th><th>Period</th></tr></thead><tbody id="reportData"><tr><td colspan="7" class="no-results">Click "Generate Report" to view data</td></tr></tbody></table></div>
+    </div>
+</div>
+
+<script>
+    const currentYear = new Date().getFullYear();
+    document.getElementById('year').value = currentYear;
+    document.getElementById('year').max = 2035;
+    
+    let allSchoolsData = [], allDepartmentsData = [];
+    
+    function populatePaymentYears() {
+        const yearSelect = document.getElementById('paymentYear');
+        yearSelect.innerHTML = '';
+        for (let y = 2020; y <= 2035; y++) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            if (y === currentYear) opt.selected = true;
+            yearSelect.appendChild(opt);
+        }
+    }
+    
+    async function loadCheckboxLists() {
+        try {
+            const schoolsRes = await fetch('/api/schools');
+            if (schoolsRes.ok) {
+                allSchoolsData = await schoolsRes.json();
+                allSchoolsData.sort((a,b)=>a.id-b.id);
+                renderSchoolsCheckboxList();
             }
-        }
-        
-        // Load schools and departments for checkbox lists
-        async function loadCheckboxLists() {
-            try {
-                const schoolsRes = await fetch('/api/schools');
-                if (schoolsRes.ok) {
-                    allSchoolsData = await schoolsRes.json();
-                    allSchoolsData.sort((a, b) => a.id - b.id);
-                    renderSchoolsCheckboxList();
-                }
-                
-                const deptsRes = await fetch('/api/departments');
-                if (deptsRes.ok) {
-                    allDepartmentsData = await deptsRes.json();
-                    allDepartmentsData.sort((a, b) => a.id - b.id);
-                    renderDepartmentsCheckboxList();
-                }
-            } catch (error) {
-                console.error('Error loading entities:', error);
+            const deptsRes = await fetch('/api/departments');
+            if (deptsRes.ok) {
+                allDepartmentsData = await deptsRes.json();
+                allDepartmentsData.sort((a,b)=>a.id-b.id);
+                renderDepartmentsCheckboxList();
             }
-        }
-        
-        function renderSchoolsCheckboxList() {
-            const container = document.getElementById('schoolsCheckboxList');
-            if (!allSchoolsData.length) {
-                container.innerHTML = '<div>No schools found</div>';
-                return;
-            }
-            
-            container.innerHTML = '';
-            allSchoolsData.forEach(school => {
-                const div = document.createElement('div');
-                div.className = 'checkbox-item';
-                div.innerHTML = `
-                    <input type="checkbox" class="school-checkbox" value="${school.id}" id="school_${school.id}">
-                    <label for="school_${school.id}">${escapeHtml(school.name)} ${school.cluster_number ? `(Cluster ${school.cluster_number})` : ''}</label>
-                `;
-                container.appendChild(div);
-            });
-        }
-        
-        function renderDepartmentsCheckboxList() {
-            const container = document.getElementById('departmentsCheckboxList');
-            if (!allDepartmentsData.length) {
-                container.innerHTML = '<div>No departments found</div>';
-                return;
-            }
-            
-            container.innerHTML = '';
-            allDepartmentsData.forEach(dept => {
-                const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-                const div = document.createElement('div');
-                div.className = 'checkbox-item';
-                div.innerHTML = `
-                    <input type="checkbox" class="department-checkbox" value="${dept.id}" id="dept_${dept.id}">
-                    <label for="dept_${dept.id}">${escapeHtml(displayName)} ${dept.department_name ? `(${dept.department_name})` : ''}</label>
-                `;
-                container.appendChild(div);
-            });
-        }
-        
-        // Show/hide entity containers based on selection
-        function toggleEntityContainers() {
-            const showSchools = document.getElementById('entitySchools').checked;
-            const showDepartments = document.getElementById('entityDepartments').checked;
-            
-            document.getElementById('schoolsContainer').style.display = showSchools ? 'block' : 'none';
-            document.getElementById('departmentsContainer').style.display = showDepartments ? 'block' : 'none';
-        }
-        
-        // Entity type checkbox listeners
-        document.getElementById('entitySchools').addEventListener('change', toggleEntityContainers);
-        document.getElementById('entityDepartments').addEventListener('change', toggleEntityContainers);
-        
-        function selectAllSchools() {
-            document.querySelectorAll('.school-checkbox').forEach(cb => cb.checked = true);
-        }
-        
-        function deselectAllSchools() {
-            document.querySelectorAll('.school-checkbox').forEach(cb => cb.checked = false);
-        }
-        
-        function selectAllDepartments() {
-            document.querySelectorAll('.department-checkbox').forEach(cb => cb.checked = true);
-        }
-        
-        function deselectAllDepartments() {
-            document.querySelectorAll('.department-checkbox').forEach(cb => cb.checked = false);
-        }
-        
-        // Get selected school IDs
-        function getSelectedSchoolIds() {
-            const ids = [];
-            document.querySelectorAll('.school-checkbox:checked').forEach(cb => {
-                ids.push(parseInt(cb.value));
-            });
-            return ids;
-        }
-        
-        // Get selected department IDs
-        function getSelectedDepartmentIds() {
-            const ids = [];
-            document.querySelectorAll('.department-checkbox:checked').forEach(cb => {
-                ids.push(parseInt(cb.value));
-            });
-            return ids;
-        }
-        
-        // Get selected utilities
-        function getSelectedUtilities() {
-            const utilities = [];
-            if (document.getElementById('utilWater').checked) utilities.push('water');
-            if (document.getElementById('utilElectricity').checked) utilities.push('electricity');
-            if (document.getElementById('utilTelephone').checked) utilities.push('telephone');
-            return utilities;
-        }
-        
-        // Generate bill number per account
-        function generateBillNumber(accountNumber, month, year, utilityType) {
-            if (!accountNumber || accountNumber === '—') return '—';
-            const monthStr = String(month).padStart(2, '0');
-            const shortAccount = String(accountNumber).slice(-6);
-            const prefix = utilityType === 'water' ? 'WTR' : (utilityType === 'electricity' ? 'ELC' : 'TEL');
-            return `${prefix}-${year}${monthStr}-${shortAccount}`;
-        }
-        
-        // Print Bill Payment
-        document.getElementById('printBillPaymentBtn').addEventListener('click', async function() {
-            const selectedUtilities = getSelectedUtilities();
-            const showSchools = document.getElementById('entitySchools').checked;
-            const showDepartments = document.getElementById('entityDepartments').checked;
-            const schoolIds = showSchools ? getSelectedSchoolIds() : [];
-            const departmentIds = showDepartments ? getSelectedDepartmentIds() : [];
-            const month = parseInt(document.getElementById('paymentMonth').value);
-            const year = parseInt(document.getElementById('paymentYear').value);
-            
-            if (selectedUtilities.length === 0) {
-                alert('⚠️ Please select at least one utility (Water, Electricity, or Telephone).');
-                return;
-            }
-            
-            if (!showSchools && !showDepartments) {
-                alert('⚠️ Please select at least Schools or Departments.');
-                return;
-            }
-            
-            if (showSchools && schoolIds.length === 0 && showDepartments && departmentIds.length === 0) {
-                alert('⚠️ Please select at least one school or department.');
-                return;
-            }
-            
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            loadingIndicator.style.display = 'block';
-            
-            try {
-                const allBills = [];
-                const utilityNames = {
-                    water: 'Water',
-                    electricity: 'Electricity',
-                    telephone: 'Telephone'
-                };
-                
-                // Fetch bills for each selected utility
-                for (const utility of selectedUtilities) {
-                    // Fetch for schools
-                    for (const schoolId of schoolIds) {
-                        const url = `/api/utility-bills?utility_type=${utility}&entity_type=school&entity_id=${schoolId}&month=${month}&year=${year}`;
-                        const resp = await fetch(url);
-                        if (resp.ok) {
-                            const bills = await resp.json();
-                            // Filter out summary bills for telephone
-                            const filteredBills = bills.filter(bill => !bill.notes?.includes('isSummary'));
-                            for (const bill of filteredBills) {
-                                allBills.push({
-                                    ...bill,
-                                    utilityDisplayName: utilityNames[utility],
-                                    utilityType: utility
-                                });
-                            }
-                        }
-                    }
-                    
-                    // Fetch for departments
-                    for (const deptId of departmentIds) {
-                        const url = `/api/utility-bills?utility_type=${utility}&entity_type=department&entity_id=${deptId}&month=${month}&year=${year}`;
-                        const resp = await fetch(url);
-                        if (resp.ok) {
-                            const bills = await resp.json();
-                            const filteredBills = bills.filter(bill => !bill.notes?.includes('isSummary'));
-                            for (const bill of filteredBills) {
-                                allBills.push({
-                                    ...bill,
-                                    utilityDisplayName: utilityNames[utility],
-                                    utilityType: utility
-                                });
-                            }
-                        }
-                    }
-                }
-                
-                if (allBills.length === 0) {
-                    alert('⚠️ No bills found for the selected criteria.');
-                    loadingIndicator.style.display = 'none';
-                    return;
-                }
-                
-                // Prepare data for printing - Group by entity and account for better display
-                const printData = [];
-                let serial = 1;
-                
-                for (const bill of allBills) {
-                    let totalBillCharges = bill.current_charges || 0;
-                    
-                    // For telephone, try to get total amount from notes
-                    if (bill.utilityType === 'telephone' && bill.notes && bill.notes.startsWith('{')) {
-                        try {
-                            const parsed = JSON.parse(bill.notes);
-                            totalBillCharges = parsed.totalAmount || bill.current_charges || 0;
-                        } catch(e) {}
-                    }
-                    
-                    printData.push({
-                        no: serial++,
-                        name: bill.entity_name || 'Unknown',
-                        accountNumber: bill.account_number || '—',
-                        totalBillCharges: totalBillCharges,
-                        utilityType: bill.utilityDisplayName,
-                        billNumber: generateBillNumber(bill.account_number, month, year, bill.utilityType)
-                    });
-                }
-                
-                generateBillPaymentPrint(printData, month, year, selectedUtilities, showSchools, showDepartments);
-                
-            } catch (error) {
-                console.error('Error:', error);
-                alert('❌ Error generating bill payment report: ' + error.message);
-            } finally {
-                loadingIndicator.style.display = 'none';
-            }
+        } catch(error) { console.error(error); }
+    }
+    
+    function renderSchoolsCheckboxList() {
+        const container = document.getElementById('schoolsCheckboxList');
+        if (!allSchoolsData.length) { container.innerHTML = '<div>No schools found</div>'; return; }
+        container.innerHTML = '';
+        allSchoolsData.forEach(school => {
+            const div = document.createElement('div');
+            div.className = 'checkbox-item';
+            div.innerHTML = `<input type="checkbox" class="school-checkbox" value="${school.id}" id="school_${school.id}"><label for="school_${school.id}">${escapeHtml(school.name)} ${school.cluster_number ? `(Cluster ${school.cluster_number})` : ''}</label>`;
+            container.appendChild(div);
         });
-        
-        function generateBillPaymentPrint(data, month, year, selectedUtilities, showSchools, showDepartments) {
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-            const monthName = monthNames[month - 1];
-            
-            const utilityNames = [];
-            if (selectedUtilities.includes('water')) utilityNames.push('Water');
-            if (selectedUtilities.includes('electricity')) utilityNames.push('Electricity');
-            if (selectedUtilities.includes('telephone')) utilityNames.push('Telephone');
-            const utilityText = utilityNames.join(', ');
-            
-            const entityText = [];
-            if (showSchools) entityText.push('Schools');
-            if (showDepartments) entityText.push('Departments');
-            const entityTypeText = entityText.join(' and ');
-            
-            const itemsPerPage = 10;
-            const totalPages = Math.ceil(data.length / itemsPerPage);
-            
-            let printHtml = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Bill Payment - ${monthName} ${year}</title>
-                    <meta charset="UTF-8">
-                    <style>
-                        * {
-                            margin: 0;
-                            padding: 0;
-                            box-sizing: border-box;
-                        }
-                        body {
-                            font-family: Arial, Helvetica, sans-serif;
-                            padding: 20px;
-                            background: white;
-                        }
-                        .print-page {
-                            page-break-after: always;
-                            margin-bottom: 30px;
-                            min-height: 100vh;
-                            background: white;
-                        }
-                        .print-page:last-child {
-                            page-break-after: auto;
-                        }
-                        .attachment-header {
-                            text-align: right;
-                            font-size: 12px;
-                            margin-bottom: 20px;
-                            font-weight: bold;
-                        }
-                        .print-header {
-                            text-align: center;
-                            margin-bottom: 30px;
-                        }
-                        .print-header h2 {
-                            margin: 5px 0;
-                            color: #2e7d32;
-                        }
-                        .print-header h3 {
-                            margin: 5px 0;
-                            font-weight: normal;
-                            color: #333;
-                        }
-                        .print-header h4 {
-                            margin: 5px 0;
-                            color: #555;
-                            font-weight: normal;
-                        }
-                        .print-header p {
-                            margin: 5px 0;
-                            color: #666;
-                        }
-                        .payment-print-table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            margin-top: 20px;
-                            font-size: 12px;
-                            background: white;
-                        }
-                        .payment-print-table th {
-                            background: #2196f3;
-                            color: white;
-                            padding: 10px;
-                            text-align: left;
-                            border: 1px solid #ddd;
-                        }
-                        .payment-print-table td {
-                            padding: 8px 10px;
-                            border: 1px solid #ddd;
-                            vertical-align: top;
-                            background: white;
-                        }
-                        .payment-print-table td:first-child,
-                        .payment-print-table th:first-child {
-                            text-align: center;
-                            width: 50px;
-                        }
-                        .payment-print-table td:nth-child(2),
-                        .payment-print-table th:nth-child(2) {
-                            width: 30%;
-                        }
-                        .payment-print-table td:last-child,
-                        .payment-print-table th:last-child {
-                            text-align: right;
-                            width: 120px;
-                        }
-                        .page-number {
-                            text-align: center;
-                            margin-top: 30px;
-                            font-size: 10px;
-                            color: #666;
-                        }
-                        .footer-note {
-                            text-align: center;
-                            margin-top: 20px;
-                            font-size: 9px;
-                            color: #999;
-                            border-top: 1px solid #ddd;
-                            padding-top: 10px;
-                        }
-                        @media print {
-                            body {
-                                padding: 0;
-                                margin: 0.5in;
-                                background: white;
-                            }
-                            .print-page {
-                                page-break-after: always;
-                                background: white;
-                            }
-                            .no-print {
-                                display: none;
-                            }
-                            .payment-print-table td {
-                                background: white;
-                            }
-                        }
-                    </style>
-                </head>
-                <body>
-            `;
-            
-            for (let page = 1; page <= totalPages; page++) {
-                const startIdx = (page - 1) * itemsPerPage;
-                const endIdx = Math.min(startIdx + itemsPerPage, data.length);
-                const pageData = data.slice(startIdx, endIdx);
-                
-                printHtml += `
-                    <div class="print-page">
-                        <div class="attachment-header">
-                            Attachment ${page}
-                        </div>
-                        <div class="print-header">
-                            <h2>🏛️ MINISTRY OF EDUCATION BRUNEI</h2>
-                            <h3>Bill Payment List</h3>
-                            <h4>${utilityText} Bills - ${entityTypeText}</h4>
-                            <p>${monthName} ${year}</p>
-                        </div>
-                        <table class="payment-print-table">
-                            <thead>
-                                <tr>
-                                    <th>NO.</th>
-                                    <th>Name</th>
-                                    <th>Account Number</th>
-                                    <th>Total Bill Charges (BND)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-                
-                for (const item of pageData) {
-                    printHtml += `
-                        <tr>
-                            <td>${item.no}</td>
-                            <td>${escapeHtml(item.name)}</div>
-                            <td>${escapeHtml(item.accountNumber)}</div>
-                            <td style="text-align: right;">${item.totalBillCharges.toFixed(2)}</div>
-                        </tr>
-                    `;
-                }
-                
-                // Fill empty rows to maintain 10 rows per page
-                const emptyRows = itemsPerPage - pageData.length;
-                for (let i = 0; i < emptyRows; i++) {
-                    printHtml += `
-                        <tr>
-                            <td>&nbsp;</div>
-                            <td>&nbsp;</div>
-                            <td>&nbsp;</div>
-                            <td>&nbsp;</div>
-                        </tr>
-                    `;
-                }
-                
-                printHtml += `
-                            </tbody>
-                        </table>
-                        <div class="page-number">
-                            Page ${page} of ${totalPages}
-                        </div>
-                        <div class="footer-note">
-                            This is a computer-generated document. No signature required.
-                        </div>
-                    </div>
-                `;
-            }
-            
-            printHtml += `
-                    <script>
-                        window.onload = function() {
-                            setTimeout(function() {
-                                window.print();
-                                setTimeout(function() {
-                                    window.close();
-                                }, 5000);
-                            }, 500);
-                        };
-                    <\/script>
-                </body>
-                </html>
-            `;
-            
-            const printWindow = window.open('', '_blank');
-            if (printWindow) {
-                printWindow.document.write(printHtml);
-                printWindow.document.close();
-            } else {
-                alert('Please allow pop-ups for this site to print.');
-            }
-        }
-        
-        // Load entities for selection
-        async function loadEntitiesForSelection() {
-            try {
-                const schoolsRes = await fetch('/api/entities?type=school');
-                if (schoolsRes.ok) {
-                    const schools = await schoolsRes.json();
-                    const schoolsSelect = document.getElementById('schoolsSelect');
-                    schoolsSelect.innerHTML = '';
-                    if (schools.length === 0) {
-                        schoolsSelect.innerHTML = '<option value="">No schools found</option>';
-                    } else {
-                        schools.forEach(school => {
-                            const option = document.createElement('option');
-                            option.value = school.id;
-                            option.textContent = school.name + (school.cluster ? ` (Cluster ${school.cluster})` : '');
-                            schoolsSelect.appendChild(option);
-                        });
-                    }
-                }
-                
-                const deptsRes = await fetch('/api/entities?type=department');
-                if (deptsRes.ok) {
-                    const departments = await deptsRes.json();
-                    const departmentsSelect = document.getElementById('departmentsSelect');
-                    departmentsSelect.innerHTML = '';
-                    if (departments.length === 0) {
-                        departmentsSelect.innerHTML = '<option value="">No departments found</option>';
-                    } else {
-                        departments.forEach(dept => {
-                            const option = document.createElement('option');
-                            option.value = dept.id;
-                            option.textContent = dept.name;
-                            departmentsSelect.appendChild(option);
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading entities:', error);
-            }
-        }
-        
-        // Handle selection type change
-        document.querySelectorAll('input[name="selectionType"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const specificEntitiesSection = document.getElementById('specificEntitiesSection');
-                if (this.value === 'specificEntities') {
-                    specificEntitiesSection.classList.add('active');
-                    if (document.getElementById('schoolsSelect').children.length <= 1) {
-                        loadEntitiesForSelection();
-                    }
-                } else {
-                    specificEntitiesSection.classList.remove('active');
-                }
-            });
+    }
+    
+    function renderDepartmentsCheckboxList() {
+        const container = document.getElementById('departmentsCheckboxList');
+        if (!allDepartmentsData.length) { container.innerHTML = '<div>No departments found</div>'; return; }
+        container.innerHTML = '';
+        allDepartmentsData.forEach(dept => {
+            const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
+            const div = document.createElement('div');
+            div.className = 'checkbox-item';
+            div.innerHTML = `<input type="checkbox" class="department-checkbox" value="${dept.id}" id="dept_${dept.id}"><label for="dept_${dept.id}">${escapeHtml(displayName)} ${dept.department_name ? `(${dept.department_name})` : ''}</label>`;
+            container.appendChild(div);
         });
+    }
+    
+    function toggleEntityContainers() {
+        document.getElementById('schoolsContainer').style.display = document.getElementById('entitySchools').checked ? 'block' : 'none';
+        document.getElementById('departmentsContainer').style.display = document.getElementById('entityDepartments').checked ? 'block' : 'none';
+    }
+    
+    document.getElementById('entitySchools').addEventListener('change', toggleEntityContainers);
+    document.getElementById('entityDepartments').addEventListener('change', toggleEntityContainers);
+    
+    function selectAllSchools() { document.querySelectorAll('.school-checkbox').forEach(cb => cb.checked = true); }
+    function deselectAllSchools() { document.querySelectorAll('.school-checkbox').forEach(cb => cb.checked = false); }
+    function selectAllDepartments() { document.querySelectorAll('.department-checkbox').forEach(cb => cb.checked = true); }
+    function deselectAllDepartments() { document.querySelectorAll('.department-checkbox').forEach(cb => cb.checked = false); }
+    
+    function getSelectedSchoolIds() { const ids = []; document.querySelectorAll('.school-checkbox:checked').forEach(cb => ids.push(parseInt(cb.value))); return ids; }
+    function getSelectedDepartmentIds() { const ids = []; document.querySelectorAll('.department-checkbox:checked').forEach(cb => ids.push(parseInt(cb.value))); return ids; }
+    function getSelectedUtilities() { const u=[]; if(document.getElementById('utilWater').checked) u.push('water'); if(document.getElementById('utilElectricity').checked) u.push('electricity'); if(document.getElementById('utilTelephone').checked) u.push('telephone'); return u; }
+    function getSelectedColumns() { const cols=[]; if(document.getElementById('colNo').checked) cols.push('no'); if(document.getElementById('colName').checked) cols.push('name'); if(document.getElementById('colAccount').checked) cols.push('account'); if(document.getElementById('colCurrentCharges').checked) cols.push('currentCharges'); if(document.getElementById('colOutstanding').checked) cols.push('outstanding'); if(document.getElementById('colTotalBill').checked) cols.push('totalBill'); if(document.getElementById('colBillNumber').checked) cols.push('billNumber'); return cols; }
+    
+    document.getElementById('printBillPaymentBtn').addEventListener('click', async function() {
+        const selectedUtilities = getSelectedUtilities();
+        const showSchools = document.getElementById('entitySchools').checked;
+        const showDepartments = document.getElementById('entityDepartments').checked;
+        const schoolIds = showSchools ? getSelectedSchoolIds() : [];
+        const departmentIds = showDepartments ? getSelectedDepartmentIds() : [];
+        const month = parseInt(document.getElementById('paymentMonth').value);
+        const year = parseInt(document.getElementById('paymentYear').value);
+        const selectedColumns = getSelectedColumns();
         
-        function getMonthName(month) {
-            const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                           'July', 'August', 'September', 'October', 'November', 'December'];
-            return months[month - 1] || 'Unknown';
+        if (selectedUtilities.length === 0) { alert('⚠️ Please select at least one utility.'); return; }
+        if (!showSchools && !showDepartments) { alert('⚠️ Please select at least Schools or Departments.'); return; }
+        if (showSchools && schoolIds.length===0 && showDepartments && departmentIds.length===0) { alert('⚠️ Please select at least one school or department.'); return; }
+        if (selectedColumns.length === 0) { alert('⚠️ Please select at least one column to print.'); return; }
+        
+        document.getElementById('loadingIndicator').style.display = 'block';
+        
+        try {
+            const allBills = [];
+            const utilityNames = { water:'Water', electricity:'Electricity', telephone:'Telephone' };
+            
+            for (const utility of selectedUtilities) {
+                for (const schoolId of schoolIds) {
+                    const resp = await fetch(`/api/utility-bills?utility_type=${utility}&entity_type=school&entity_id=${schoolId}&month=${month}&year=${year}`);
+                    if (resp.ok) { const bills = await resp.json(); allBills.push(...bills.filter(b=>!b.notes?.includes('isSummary'))); }
+                }
+                for (const deptId of departmentIds) {
+                    const resp = await fetch(`/api/utility-bills?utility_type=${utility}&entity_type=department&entity_id=${deptId}&month=${month}&year=${year}`);
+                    if (resp.ok) { const bills = await resp.json(); allBills.push(...bills.filter(b=>!b.notes?.includes('isSummary'))); }
+                }
+            }
+            
+            if (allBills.length === 0) { alert('⚠️ No bills found for the selected criteria.'); document.getElementById('loadingIndicator').style.display='none'; return; }
+            
+            const printData = [];
+            let serial = 1;
+            for (const bill of allBills) {
+                let totalBillCharges = bill.current_charges || 0;
+                let billNumber = bill.meter_number || '';
+                if (bill.utility_type === 'telephone' && bill.notes && bill.notes.startsWith('{')) {
+                    try { const parsed = JSON.parse(bill.notes); totalBillCharges = parsed.totalAmount || bill.current_charges || 0; billNumber = parsed.billNumber || bill.meter_number || ''; } catch(e) {}
+                }
+                printData.push({
+                    no: serial++,
+                    name: bill.entity_name || 'Unknown',
+                    accountNumber: bill.account_number || '—',
+                    currentCharges: bill.current_charges || 0,
+                    outstandingCharges: bill.unsettled_charges || 0,
+                    totalBillCharges: totalBillCharges,
+                    billNumber: billNumber,
+                    utilityType: bill.utility_type
+                });
+            }
+            
+            generateBillPaymentPrint(printData, month, year, selectedUtilities, showSchools, showDepartments, selectedColumns);
+        } catch(error) { console.error(error); alert('❌ Error: ' + error.message); }
+        finally { document.getElementById('loadingIndicator').style.display = 'none'; }
+    });
+    
+    function generateBillPaymentPrint(data, month, year, selectedUtilities, showSchools, showDepartments, selectedColumns) {
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const monthName = monthNames[month-1];
+        const utilityText = selectedUtilities.map(u=>u==='water'?'Water':u==='electricity'?'Electricity':'Telephone').join(', ');
+        const entityText = [showSchools?'Schools':'', showDepartments?'Departments':''].filter(Boolean).join(' and ');
+        
+        const columnHeaders = [];
+        if (selectedColumns.includes('no')) columnHeaders.push('NO.');
+        if (selectedColumns.includes('name')) columnHeaders.push('Entity Name');
+        if (selectedColumns.includes('account')) columnHeaders.push('Account Number');
+        if (selectedColumns.includes('currentCharges')) columnHeaders.push('Current Charges (BND)');
+        if (selectedColumns.includes('outstanding')) columnHeaders.push('Outstanding (BND)');
+        if (selectedColumns.includes('totalBill')) columnHeaders.push('Total Bill (BND)');
+        if (selectedColumns.includes('billNumber')) columnHeaders.push('Bill Number');
+        
+        const itemsPerPage = 10;
+        const totalPages = Math.ceil(data.length / itemsPerPage);
+        
+        let printHtml = `<!DOCTYPE html><html><head><title>Bill Payment - ${monthName} ${year}</title><meta charset="UTF-8"><style>
+            *{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:20px;background:white}
+            .print-page{page-break-after:always;margin-bottom:30px;background:white}.print-page:last-child{page-break-after:auto}
+            .attachment-header{text-align:right;font-size:12px;margin-bottom:20px;font-weight:bold}
+            .print-header{text-align:center;margin-bottom:30px}
+            .print-header h2{color:#2e7d32;margin:5px 0}
+            .print-header h3,.print-header h4{font-weight:normal;margin:5px 0;color:#555}
+            .payment-table{width:100%;border-collapse:collapse;margin-top:20px;font-size:12px}
+            .payment-table th{background:#2196f3;color:white;padding:10px;border:1px solid #ddd;text-align:left}
+            .payment-table td{padding:8px 10px;border:1px solid #ddd;background:white}
+            .payment-table td:first-child,.payment-table th:first-child{text-align:center;width:50px}
+            .page-number{text-align:center;margin-top:30px;font-size:10px;color:#666}
+            .footer-note{text-align:center;margin-top:20px;font-size:9px;color:#999;border-top:1px solid #ddd;padding-top:10px}
+            @media print{body{padding:0;margin:0.5in}.print-page{page-break-after:always}}
+        </style></head><body>`;
+        
+        for (let page = 1; page <= totalPages; page++) {
+            const startIdx = (page-1)*itemsPerPage;
+            const pageData = data.slice(startIdx, startIdx+itemsPerPage);
+            
+            printHtml += `<div class="print-page"><div class="attachment-header">Attachment ${page}</div>
+                <div class="print-header"><h2>🏛️ MINISTRY OF EDUCATION BRUNEI</h2>
+                <h3>Bill Payment List</h3><h4>${utilityText} Bills - ${entityText}</h4><p>${monthName} ${year}</p></div>
+                <table class="payment-table"><thead><tr>`;
+            
+            for (const header of columnHeaders) printHtml += `<th>${header}</th>`;
+            printHtml += `</tr></thead><tbody>`;
+            
+            for (const item of pageData) {
+                printHtml += `<tr>`;
+                if (selectedColumns.includes('no')) printHtml += `<td>${item.no}</td>`;
+                if (selectedColumns.includes('name')) printHtml += `<td>${escapeHtml(item.name)}</td>`;
+                if (selectedColumns.includes('account')) printHtml += `<td>${escapeHtml(item.accountNumber)}</td>`;
+                if (selectedColumns.includes('currentCharges')) printHtml += `<td style="text-align:right">${item.currentCharges.toFixed(2)}</td>`;
+                if (selectedColumns.includes('outstanding')) printHtml += `<td style="text-align:right">${item.outstandingCharges.toFixed(2)}</td>`;
+                if (selectedColumns.includes('totalBill')) printHtml += `<td style="text-align:right">${item.totalBillCharges.toFixed(2)}</td>`;
+                if (selectedColumns.includes('billNumber')) printHtml += `<td>${escapeHtml(item.billNumber)}</td>`;
+                printHtml += `</tr>`;
+            }
+            
+            const emptyRows = itemsPerPage - pageData.length;
+            for (let i = 0; i < emptyRows; i++) {
+                printHtml += `<tr>`;
+                for (let j = 0; j < columnHeaders.length; j++) printHtml += `<td>&nbsp;</td>`;
+                printHtml += `</tr>`;
+            }
+            
+            printHtml += `</tbody></table><div class="page-number">Page ${page} of ${totalPages}</div>
+                <div class="footer-note">This is a computer-generated document. No signature required.</div></div>`;
         }
         
-        document.getElementById('generateReport').addEventListener('click', async function() {
-            const selectionType = document.querySelector('input[name="selectionType"]:checked').value;
-            const entityType = document.getElementById('entityType').value;
-            const utilityType = document.getElementById('utilityType').value;
-            const month = document.getElementById('month').value;
-            const year = document.getElementById('year').value;
-            
-            let schoolIds = [];
-            let departmentIds = [];
-            
-            if (selectionType === 'specificEntities') {
+        printHtml += `<script>window.onload=function(){setTimeout(function(){window.print();setTimeout(function(){window.close();},5000);},500);};<\/script></body></html>`;
+        
+        const printWindow = window.open('', '_blank');
+        if (printWindow) { printWindow.document.write(printHtml); printWindow.document.close(); }
+        else alert('Please allow pop-ups for this site to print.');
+    }
+    
+    async function loadEntitiesForSelection() {
+        try {
+            const schoolsRes = await fetch('/api/entities?type=school');
+            if (schoolsRes.ok) {
+                const schools = await schoolsRes.json();
                 const schoolsSelect = document.getElementById('schoolsSelect');
+                schoolsSelect.innerHTML = '';
+                if (schools.length===0) schoolsSelect.innerHTML='<option value="">No schools found</option>';
+                else schools.forEach(school=>{const opt=document.createElement('option');opt.value=school.id;opt.textContent=school.name+(school.cluster?` (Cluster ${school.cluster})`:'');schoolsSelect.appendChild(opt);});
+            }
+            const deptsRes = await fetch('/api/entities?type=department');
+            if (deptsRes.ok) {
+                const departments = await deptsRes.json();
                 const departmentsSelect = document.getElementById('departmentsSelect');
-                
-                for (let i = 0; i < schoolsSelect.options.length; i++) {
-                    if (schoolsSelect.options[i].selected && schoolsSelect.options[i].value) {
-                        schoolIds.push(schoolsSelect.options[i].value);
-                    }
-                }
-                
-                for (let i = 0; i < departmentsSelect.options.length; i++) {
-                    if (departmentsSelect.options[i].selected && departmentsSelect.options[i].value) {
-                        departmentIds.push(departmentsSelect.options[i].value);
-                    }
-                }
-                
-                if (schoolIds.length === 0 && departmentIds.length === 0) {
-                    alert('⚠️ Please select at least one school or department.');
-                    return;
-                }
+                departmentsSelect.innerHTML = '';
+                if (departments.length===0) departmentsSelect.innerHTML='<option value="">No departments found</option>';
+                else departments.forEach(dept=>{const opt=document.createElement('option');opt.value=dept.id;opt.textContent=dept.name;departmentsSelect.appendChild(opt);});
             }
-            
-            const generateBtn = document.getElementById('generateReport');
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            generateBtn.textContent = '⏳ Generating...';
-            generateBtn.disabled = true;
-            loadingIndicator.style.display = 'block';
-            
-            const requestData = {
-                selection_type: selectionType,
-                utility_type: utilityType,
-                month: month,
-                year: year ? parseInt(year) : null
-            };
-            
-            if (selectionType === 'entityType') {
-                requestData.entity_type = entityType;
-            } else {
-                requestData.school_ids = schoolIds;
-                requestData.department_ids = departmentIds;
-            }
-            
-            try {
-                const response = await fetch('/api/generate-report', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                displayReportResults(data, selectionType, entityType, utilityType, month, year, schoolIds, departmentIds);
-            } catch (error) {
-                console.error('Error:', error);
-                alert('❌ Error generating report: ' + error.message + '\nPlease try again.');
-            } finally {
-                generateBtn.textContent = '🔍 Generate Report';
-                generateBtn.disabled = false;
-                loadingIndicator.style.display = 'none';
-            }
+        } catch(error) { console.error(error); }
+    }
+    
+    document.querySelectorAll('input[name="selectionType"]').forEach(radio=>{
+        radio.addEventListener('change',function(){
+            const section=document.getElementById('specificEntitiesSection');
+            if(this.value==='specificEntities'){section.classList.add('active');if(document.getElementById('schoolsSelect').children.length<=1)loadEntitiesForSelection();}
+            else section.classList.remove('active');
         });
-        
-        function displayReportResults(data, selectionType, entityType, utilityType, month, year, schoolIds, departmentIds) {
-            const resultsDiv = document.getElementById('reportResults');
-            const reportTitle = document.getElementById('reportTitle');
-            const reportData = document.getElementById('reportData');
-            const summaryCards = document.getElementById('summaryCards');
-            const printBtn = document.getElementById('printReport');
-            const exportPDFBtn = document.getElementById('exportPDF');
-            const exportExcelBtn = document.getElementById('exportExcel');
-            const reportDateSpan = document.getElementById('reportDate');
-            
-            let title = '📊 Utility Bills Report - ';
-            
-            if (selectionType === 'entityType') {
-                if (entityType !== 'all') {
-                    title += entityType === 'school' ? 'Schools ' : 'Departments ';
-                }
-                if (utilityType !== 'all') {
-                    title += '(' + utilityType.charAt(0).toUpperCase() + utilityType.slice(1) + ') ';
-                }
-            } else {
-                title += 'Selected Entities ';
-                if (utilityType !== 'all') {
-                    title += '(' + utilityType.charAt(0).toUpperCase() + utilityType.slice(1) + ') ';
-                }
-            }
-            
-            if (month !== 'all') {
-                title += getMonthName(parseInt(month)) + ' ';
-            }
-            if (year && year !== 'all') {
-                title += year;
-            }
-            if (title.endsWith(' - ') || title.endsWith(' ')) {
-                title = '📊 All Utility Bills Report';
-            }
-            
-            reportTitle.textContent = title;
-            reportDateSpan.textContent = 'Generated on: ' + new Date().toLocaleString();
-            
-            const totalBills = data.length;
-            const totalCurrent = data.reduce((sum, bill) => sum + (bill.current_charges || 0), 0);
-            const totalLate = data.reduce((sum, bill) => sum + (bill.late_charges || 0), 0);
-            const totalUnsettled = data.reduce((sum, bill) => sum + (bill.unsettled_charges || 0), 0);
-            const totalPaid = data.reduce((sum, bill) => sum + (bill.amount_paid || 0), 0);
-            
-            summaryCards.innerHTML = `
-                <div class="summary-card">
-                    <div class="summary-value">${totalBills}</div>
-                    <div class="summary-label">Total Bills</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-value">$${totalCurrent.toFixed(2)}</div>
-                    <div class="summary-label">Total Current Charges</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-value">$${totalLate.toFixed(2)}</div>
-                    <div class="summary-label">Total Late Charges</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-value">$${totalUnsettled.toFixed(2)}</div>
-                    <div class="summary-label">Total Unsettled</div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-value">$${totalPaid.toFixed(2)}</div>
-                    <div class="summary-label">Total Paid</div>
-                </div>
-            `;
-            
-            if (data.length === 0) {
-                reportData.innerHTML = '<tr><td colspan="10" class="no-results">📭 No data found for the selected criteria</td></tr>';
-            } else {
-                reportData.innerHTML = '';
-                data.forEach(bill => {
-                    const row = document.createElement('tr');
-                    
-                    let consumption = '—';
-                    if (bill.utility_type === 'water' && bill.consumption_m3) {
-                        consumption = bill.consumption_m3.toFixed(2) + ' m³';
-                    } else if (bill.utility_type === 'electricity' && bill.consumption_kwh) {
-                        consumption = bill.consumption_kwh.toFixed(2) + ' kWh';
-                    }
-                    
-                    let meterTelNo = '—';
-                    if (bill.utility_type === 'telephone') {
-                        meterTelNo = bill.phone_number || bill.meter_number || '—';
-                    } else {
-                        meterTelNo = bill.meter_number || '—';
-                    }
-                    
-                    row.innerHTML = `
-                        <td><strong>${escapeHtml(bill.entity_name || 'Unknown')}</strong></div>
-                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type === 'school' ? '🏫 School' : '🏛️ Department'}</span></div>
-                        <td><span class="badge badge-${bill.utility_type}">${bill.utility_type === 'water' ? '💧 Water' : bill.utility_type === 'electricity' ? '⚡ Electricity' : '📞 Telephone'}</span></div>
-                        <td>${escapeHtml(bill.account_number || '—')}</div>
-                        <td>${escapeHtml(meterTelNo)}</div>
-                        <td>${consumption}</div>
-                        <td>$${(bill.current_charges || 0).toFixed(2)}</div>
-                        <td>$${(bill.late_charges || 0).toFixed(2)}</div>
-                        <td>$${(bill.unsettled_charges || 0).toFixed(2)}</div>
-                        <td class="period-column">${getMonthName(bill.month)} ${bill.year}</div>
-                    `;
-                    reportData.appendChild(row);
-                });
-            }
-            
-            window.reportData = data;
-            window.reportTitleText = title;
-            
-            resultsDiv.style.display = 'block';
-            printBtn.style.display = 'inline-block';
-            exportPDFBtn.style.display = 'inline-block';
-            exportExcelBtn.style.display = 'inline-block';
-            
-            resultsDiv.scrollIntoView({ behavior: 'smooth' });
+    });
+    
+    function getMonthName(month){const m=['January','February','March','April','May','June','July','August','September','October','November','December'];return m[month-1]||'Unknown';}
+    function escapeHtml(str){if(!str)return '';return String(str).replace(/[&<>]/g,function(m){if(m==='&')return'&amp;';if(m==='<')return'&lt;';if(m==='>')return'&gt;';return m;});}
+    
+    document.getElementById('generateReport').addEventListener('click',async function(){
+        const selectionType=document.querySelector('input[name="selectionType"]:checked').value;
+        const entityType=document.getElementById('entityType').value;
+        const utilityType=document.getElementById('utilityType').value;
+        const month=document.getElementById('month').value;
+        const year=document.getElementById('year').value;
+        let schoolIds=[], departmentIds=[];
+        if(selectionType==='specificEntities'){
+            const schoolsSelect=document.getElementById('schoolsSelect');
+            const departmentsSelect=document.getElementById('departmentsSelect');
+            for(let i=0;i<schoolsSelect.options.length;i++)if(schoolsSelect.options[i].selected&&schoolsSelect.options[i].value)schoolIds.push(schoolsSelect.options[i].value);
+            for(let i=0;i<departmentsSelect.options.length;i++)if(departmentsSelect.options[i].selected&&departmentsSelect.options[i].value)departmentIds.push(departmentsSelect.options[i].value);
+            if(schoolIds.length===0&&departmentIds.length===0){alert('⚠️ Please select at least one school or department.');return;}
         }
+        const generateBtn=document.getElementById('generateReport');
+        const loadingIndicator=document.getElementById('loadingIndicator');
+        generateBtn.textContent='⏳ Generating...';generateBtn.disabled=true;loadingIndicator.style.display='block';
+        const requestData={selection_type:selectionType,utility_type:utilityType,month:month,year:year?parseInt(year):null};
+        if(selectionType==='entityType')requestData.entity_type=entityType;
+        else{requestData.school_ids=schoolIds;requestData.department_ids=departmentIds;}
+        try{
+            const response=await fetch('/api/generate-report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestData)});
+            if(!response.ok)throw new Error(`HTTP ${response.status}`);
+            const data=await response.json();
+            displayReportResults(data);
+        }catch(error){console.error(error);alert('❌ Error generating report: '+error.message);}
+        finally{generateBtn.textContent='🔍 Generate Report';generateBtn.disabled=false;loadingIndicator.style.display='none';}
+    });
+    
+    function displayReportResults(data){
+        const resultsDiv=document.getElementById('reportResults');
+        const reportTitle=document.getElementById('reportTitle');
+        const reportData=document.getElementById('reportData');
+        const summaryCards=document.getElementById('summaryCards');
         
-        function escapeHtml(str) {
-            if (!str) return '';
-            return String(str).replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
+        reportTitle.textContent=`📊 Utility Bills Report - ${data.length} records`;
+        const totalCurrent=data.reduce((s,b)=>s+(b.current_charges||0),0);
+        const totalUnsettled=data.reduce((s,b)=>s+(b.unsettled_charges||0),0);
+        summaryCards.innerHTML=`<div class="summary-card"><div class="summary-value">${data.length}</div><div class="summary-label">Total Bills</div></div>
+            <div class="summary-card"><div class="summary-value">$${totalCurrent.toFixed(2)}</div><div class="summary-label">Total Current Charges</div></div>
+            <div class="summary-card"><div class="summary-value">$${totalUnsettled.toFixed(2)}</div><div class="summary-label">Total Unsettled</div></div>`;
+        
+        if(data.length===0)reportData.innerHTML='<tr><td colspan="7" class="no-results">📭 No data found</td></tr>';
+        else{
+            reportData.innerHTML='';
+            data.forEach(bill=>{
+                const row=document.createElement('tr');
+                row.innerHTML=`<td><strong>${escapeHtml(bill.entity_name||'Unknown')}</strong></td>
+                    <td><span class="badge ${bill.entity_type==='school'?'badge-school':'badge-department'}">${bill.entity_type==='school'?'🏫 School':'🏛️ Department'}</span></td>
+                    <td><span class="badge badge-${bill.utility_type}">${bill.utility_type==='water'?'💧 Water':bill.utility_type==='electricity'?'⚡ Electricity':'📞 Telephone'}</span></td>
+                    <td>${escapeHtml(bill.account_number||'—')}</td>
+                    <td>$${(bill.current_charges||0).toFixed(2)}</td>
+                    <td>$${(bill.unsettled_charges||0).toFixed(2)}</td>
+                    <td>${getMonthName(bill.month)} ${bill.year}</td>`;
+                reportData.appendChild(row);
             });
         }
-        
-        document.getElementById('printReport').addEventListener('click', function() {
-            window.print();
-        });
-        
-        document.getElementById('exportPDF').addEventListener('click', function() {
-            if (!window.reportData || window.reportData.length === 0) {
-                alert('No data to export. Please generate a report first.');
-                return;
-            }
-            
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            loadingIndicator.style.display = 'block';
-            
-            setTimeout(() => {
-                exportToPDF(window.reportData, window.reportTitleText);
-                loadingIndicator.style.display = 'none';
-            }, 100);
-        });
-        
-        document.getElementById('exportExcel').addEventListener('click', function() {
-            if (!window.reportData || window.reportData.length === 0) {
-                alert('No data to export. Please generate a report first.');
-                return;
-            }
-            
-            exportToExcel(window.reportData);
-        });
-        
-        function exportToPDF(data, title) {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({
-                orientation: 'landscape',
-                unit: 'mm',
-                format: 'a4'
-            });
-            
-            doc.setFontSize(16);
-            doc.setTextColor(40);
-            doc.text(title.replace('📊 ', ''), 14, 15);
-            
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text('Generated on: ' + new Date().toLocaleString(), 14, 22);
-            
-            const tableData = data.map(bill => {
-                let consumption = '';
-                if (bill.utility_type === 'water' && bill.consumption_m3) {
-                    consumption = bill.consumption_m3.toFixed(2) + ' m³';
-                } else if (bill.utility_type === 'electricity' && bill.consumption_kwh) {
-                    consumption = bill.consumption_kwh.toFixed(2) + ' kWh';
-                } else if (bill.utility_type === 'telephone') {
-                    consumption = '—';
-                }
-                
-                let meterTelNo = '';
-                if (bill.utility_type === 'telephone') {
-                    meterTelNo = bill.phone_number || bill.meter_number || '—';
-                } else {
-                    meterTelNo = bill.meter_number || '—';
-                }
-                
-                return [
-                    bill.entity_name || 'Unknown',
-                    bill.entity_type === 'school' ? 'School' : 'Department',
-                    bill.utility_type === 'water' ? 'Water' : (bill.utility_type === 'electricity' ? 'Electricity' : 'Telephone'),
-                    bill.account_number || '—',
-                    meterTelNo,
-                    consumption,
-                    '$' + (bill.current_charges || 0).toFixed(2),
-                    '$' + (bill.late_charges || 0).toFixed(2),
-                    '$' + (bill.unsettled_charges || 0).toFixed(2),
-                    getMonthName(bill.month) + ' ' + bill.year
-                ];
-            });
-            
-            doc.autoTable({
-                startY: 30,
-                head: [['Entity', 'Type', 'Utility', 'Account No.', 'Meter/Tel No.', 'Consumption', 'Current Charges', 'Late Charges', 'Unsettled Charges', 'Period']],
-                body: tableData,
-                theme: 'grid',
-                headStyles: {
-                    fillColor: [67, 97, 238],
-                    textColor: 255,
-                    fontStyle: 'bold'
-                },
-                styles: {
-                    fontSize: 8,
-                    cellPadding: 3
-                },
-                margin: { left: 14, right: 14 }
-            });
-            
-            const totalCurrent = data.reduce((sum, bill) => sum + (bill.current_charges || 0), 0);
-            const totalLate = data.reduce((sum, bill) => sum + (bill.late_charges || 0), 0);
-            const totalUnsettled = data.reduce((sum, bill) => sum + (bill.unsettled_charges || 0), 0);
-            
-            const finalY = doc.lastAutoTable.finalY + 10;
-            doc.setFontSize(10);
-            doc.setTextColor(40);
-            doc.text(`Summary: ${data.length} bills | Total Current: $${totalCurrent.toFixed(2)} | Total Late: $${totalLate.toFixed(2)} | Total Unsettled: $${totalUnsettled.toFixed(2)}`, 14, finalY);
-            
-            const currentDate = new Date().toISOString().slice(0, 10);
-            doc.save(`utility_bills_report_${currentDate}.pdf`);
-        }
-        
-        function exportToExcel(data) {
-            let csvContent = "Entity,Type,Utility,Account No.,Meter/Tel No.,Consumption,Current Charges,Late Charges,Unsettled Charges,Amount Paid,Period\n";
-            
-            data.forEach(bill => {
-                let consumption = '';
-                if (bill.utility_type === 'water' && bill.consumption_m3) {
-                    consumption = bill.consumption_m3.toFixed(2) + ' m³';
-                } else if (bill.utility_type === 'electricity' && bill.consumption_kwh) {
-                    consumption = bill.consumption_kwh.toFixed(2) + ' kWh';
-                } else if (bill.utility_type === 'telephone') {
-                    consumption = '—';
-                }
-                
-                let meterTelNo = '';
-                if (bill.utility_type === 'telephone') {
-                    meterTelNo = bill.phone_number || bill.meter_number || '—';
-                } else {
-                    meterTelNo = bill.meter_number || '—';
-                }
-                
-                csvContent += `"${escapeCsv(bill.entity_name || 'Unknown')}","${bill.entity_type === 'school' ? 'School' : 'Department'}","${bill.utility_type === 'water' ? 'Water' : (bill.utility_type === 'electricity' ? 'Electricity' : 'Telephone')}","${escapeCsv(bill.account_number || '—')}","${escapeCsv(meterTelNo)}","${consumption}","${(bill.current_charges || 0).toFixed(2)}","${(bill.late_charges || 0).toFixed(2)}","${(bill.unsettled_charges || 0).toFixed(2)}","${(bill.amount_paid || 0).toFixed(2)}","${getMonthName(bill.month)} ${bill.year}"\n`;
-            });
-            
-            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            const currentDate = new Date().toISOString().slice(0, 10);
-            
-            link.setAttribute("href", url);
-            link.setAttribute("download", `utility_bills_report_${currentDate}.csv`);
-            link.style.visibility = 'hidden';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }
-        
-        function escapeCsv(str) {
-            if (!str) return '';
-            return str.replace(/"/g, '""');
-        }
-        
-        // Initial load
-        populatePaymentYears();
-        loadEntitiesForSelection();
-        loadCheckboxLists();
-        toggleEntityContainers();
-    </script>
+        resultsDiv.style.display='block';
+        resultsDiv.scrollIntoView({behavior:'smooth'});
+    }
+    
+    populatePaymentYears();
+    loadEntitiesForSelection();
+    loadCheckboxLists();
+    toggleEntityContainers();
+</script>
 </body>
 </html>
