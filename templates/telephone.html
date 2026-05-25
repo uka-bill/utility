@@ -279,6 +279,7 @@
             border-radius: 4px;
             font-size: 0.8rem;
             display: inline-block;
+            font-weight: bold;
         }
 
         .phone-number {
@@ -421,13 +422,23 @@
             border-top: 2px solid var(--primary);
         }
         
+        .account-header-row {
+            background-color: #e8f4ff;
+            border-top: 1px solid #cce5ff;
+        }
+        
+        .account-header-row td {
+            padding: 8px 12px;
+            font-weight: 500;
+        }
+        
         .phone-row {
             border-left: 3px solid var(--success);
             background-color: #ffffff;
         }
         
         .phone-row td:first-child {
-            padding-left: 35px;
+            padding-left: 50px;
         }
         
         .summary-container {
@@ -549,20 +560,14 @@
             box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
         }
         
-        /* Account header row for Bill Number */
-        .account-header-row {
-            background-color: #f0f7ff;
-            border-top: 1px solid #cce5ff;
-        }
-        
-        .account-header-row td {
-            padding: 8px 12px;
-            font-weight: 500;
-            background-color: #e8f4ff;
-        }
-        
         .bill-number-cell {
             background-color: #fff8e1;
+        }
+        
+        .account-total {
+            font-size: 0.7rem;
+            color: #2e7d32;
+            margin-left: 10px;
         }
     </style>
 </head>
@@ -834,34 +839,34 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
-    async function saveEntityBills(entityElement, summaryDataValues, month, year) {
+    async function saveAccountBills(accountElement, month, year) {
         if (isLoading) return;
         
-        const entityType = entityElement.getAttribute('data-entity-type');
-        const entityId = parseInt(entityElement.getAttribute('data-entity-id'));
-        const hasAccounts = entityElement.getAttribute('data-has-accounts') === 'true';
+        const entityType = accountElement.getAttribute('data-entity-type');
+        const entityId = parseInt(accountElement.getAttribute('data-entity-id'));
+        const accountNumber = accountElement.getAttribute('data-account-number');
         
-        if (!hasAccounts) {
-            showToast('❌ Cannot save: No telephone account configured for this entity.', true);
-            return;
-        }
-        
-        // Get the Bill Number input from the account header row
-        const billNumberInput = entityElement.querySelector('.account-bill-number-input');
+        // Get the Bill Number input for this account
+        const billNumberInput = accountElement.querySelector('.account-bill-number-input');
         const accountBillNumber = billNumberInput?.value || '';
         
-        // Get all phone rows
+        // Get all phone rows for this account
         let phoneRows = [];
-        let nextRow = entityElement.nextElementSibling;
-        while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
+        let nextRow = accountElement.nextElementSibling;
+        while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row') && 
+               nextRow.getAttribute('data-account-number') === accountNumber) {
             phoneRows.push(nextRow);
             nextRow = nextRow.nextElementSibling;
+        }
+        
+        if (phoneRows.length === 0) {
+            showToast('No phone numbers found for this account', true);
+            return;
         }
         
         const billsToSave = [];
         
         for (const row of phoneRows) {
-            const accountNumber = row.getAttribute('data-account');
             const phoneNumber = row.getAttribute('data-phone');
             const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
             
@@ -934,74 +939,27 @@
             }
         }
         
-        if (summaryDataValues) {
-            const firstPhoneRow = phoneRows[0];
-            const accountNumber = firstPhoneRow?.getAttribute('data-account') || '';
-            const phoneNumber = firstPhoneRow?.getAttribute('data-phone') || '';
-            
-            const summaryBillData = {
-                utility_type: 'telephone',
-                entity_type: entityType,
-                entity_id: entityId,
-                account_number: accountNumber,
-                phone_number: phoneNumber,
-                current_charges: 0,
-                notes: JSON.stringify({
-                    isSummary: true,
-                    previousOutstanding: summaryDataValues.previousOutstanding,
-                    previousPayment: summaryDataValues.previousPayment,
-                    totalCurrentBill: summaryDataValues.totalCurrentBill,
-                    otherCharges: summaryDataValues.otherCharges,
-                    adjustment: summaryDataValues.adjustment,
-                    totalBillCharges: summaryDataValues.totalBillCharges
-                }),
-                month: month,
-                year: year
-            };
-            
-            try {
-                let url = '/api/utility-bills';
-                let method = 'POST';
-                const existingSummary = existingBills.find(b => 
-                    b.entity_type === entityType && 
-                    b.entity_id === entityId && 
-                    b.notes?.includes('isSummary')
-                );
-                if (existingSummary && existingSummary.id) {
-                    url = `/api/utility-bills/${existingSummary.id}`;
-                    method = 'PUT';
-                }
-                
-                await fetch(url, {
-                    method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(summaryBillData)
-                });
-            } catch(err) {
-                console.error('Summary save error:', err);
-            }
-        }
-        
         isLoading = false;
         document.querySelector('.table-wrapper').classList.remove('loading');
         
         if (errorCount === 0) {
-            showToast(`✅ Saved ${successCount} phone record${successCount > 1 ? 's' : ''} successfully`);
+            showToast(`✅ Saved ${successCount} phone record${successCount > 1 ? 's' : ''} for account ${accountNumber} successfully`);
             await renderTelephoneTable();
         } else {
             showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed`, true);
         }
     }
     
-    async function deleteEntityBills(entityElement, month, year) {
+    async function deleteAccountBills(accountElement, month, year) {
         if (isLoading) return;
         
-        const entityName = entityElement.querySelector('.entity-name')?.innerText || 'this entity';
-        if (!confirm(`Delete ALL telephone bills for ${entityName} for ${month}/${year}?`)) return;
+        const accountNumber = accountElement.getAttribute('data-account-number');
+        if (!confirm(`Delete ALL telephone bills for account ${accountNumber} for ${month}/${year}?`)) return;
         
         let phoneRows = [];
-        let nextRow = entityElement.nextElementSibling;
-        while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
+        let nextRow = accountElement.nextElementSibling;
+        while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row') && 
+               nextRow.getAttribute('data-account-number') === accountNumber) {
             phoneRows.push(nextRow);
             nextRow = nextRow.nextElementSibling;
         }
@@ -1012,15 +970,6 @@
             if (billId) {
                 billIdsToDelete.push(parseInt(billId));
             }
-        }
-        
-        const existingSummary = existingBills.find(b => 
-            b.entity_type === entityElement.getAttribute('data-entity-type') && 
-            b.entity_id === parseInt(entityElement.getAttribute('data-entity-id')) && 
-            b.notes?.includes('isSummary')
-        );
-        if (existingSummary && existingSummary.id) {
-            billIdsToDelete.push(existingSummary.id);
         }
         
         if (billIdsToDelete.length === 0) {
@@ -1049,7 +998,7 @@
         }
         
         if (errorCount === 0) {
-            showToast(`🗑️ Deleted ${successCount} bill${successCount > 1 ? 's' : ''} successfully`);
+            showToast(`🗑️ Deleted ${successCount} bill${successCount > 1 ? 's' : ''} for account ${accountNumber} successfully`);
             await renderTelephoneTable();
         } else {
             showToast(`⚠️ Deleted ${successCount} records, ${errorCount} failed`, true);
@@ -1065,7 +1014,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<td><td colspan="10" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1129,12 +1078,10 @@
                     for (const num of numbers) {
                         const phoneNum = num.phoneNumber || '—';
                         const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phoneNum, month, year);
-                        let statusText = 'Pending';
-                        if (existing) statusText = 'Entered';
                         
                         if (statusFilter === 'all' || 
-                            (statusFilter === 'paid' && statusText === 'Paid') ||
-                            (statusFilter === 'pending' && statusText !== 'Paid')) {
+                            (statusFilter === 'paid') ||
+                            (statusFilter === 'pending')) {
                             visibleNumbers.push({
                                 phoneNumber: phoneNum,
                                 location: num.location || '',
@@ -1162,6 +1109,7 @@
             }
             
             if (hasVisibleInCluster && visibleClusterEntities.length > 0) {
+                const totalAccounts = visibleClusterEntities.reduce((sum, e) => sum + e.accountGroups.length, 0);
                 const totalNumbers = visibleClusterEntities.reduce((sum, e) => 
                     sum + e.accountGroups.reduce((s, a) => s + a.numbers.length, 0), 0);
                 
@@ -1171,7 +1119,7 @@
                     <td colspan="10">
                         <div class="cluster-info">
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
-                            <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
+                            <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalAccounts} account${totalAccounts > 1 ? 's' : ''}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
                         </div>
                      </div>
                 `;
@@ -1214,12 +1162,10 @@
                     for (const num of numbers) {
                         const phoneNum = num.phoneNumber || '—';
                         const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phoneNum, month, year);
-                        let statusText = 'Pending';
-                        if (existing) statusText = 'Entered';
                         
                         if (statusFilter === 'all' || 
-                            (statusFilter === 'paid' && statusText === 'Paid') ||
-                            (statusFilter === 'pending' && statusText !== 'Paid')) {
+                            (statusFilter === 'paid') ||
+                            (statusFilter === 'pending')) {
                             visibleNumbers.push({
                                 phoneNumber: phoneNum,
                                 location: num.location || '',
@@ -1246,6 +1192,7 @@
             }
             
             if (visibleDeptEntities.length > 0) {
+                const totalAccounts = visibleDeptEntities.reduce((sum, e) => sum + e.accountGroups.length, 0);
                 const totalNumbers = visibleDeptEntities.reduce((sum, e) => 
                     sum + e.accountGroups.reduce((s, a) => s + a.numbers.length, 0), 0);
                 
@@ -1255,7 +1202,7 @@
                     <td colspan="10">
                         <div class="dept-group-info">
                             <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
-                            <span class="dept-group-count">${visibleDeptEntities.length} unit${visibleDeptEntities.length > 1 ? 's' : ''}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
+                            <span class="dept-group-count">${visibleDeptEntities.length} unit${visibleDeptEntities.length > 1 ? 's' : ''}, ${totalAccounts} account${totalAccounts > 1 ? 's' : ''}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
                         </div>
                      </div>
                 `;
@@ -1275,33 +1222,77 @@
     
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
-        
-        let phoneRowsData = [];
         let entityTotalCurrent = 0;
         let entityHasBills = false;
-        let isPlaceholder = false;
-        let accountBillNumber = '';
         
         const summaryKey = `${entity.type}_${entity.id}`;
         const existingSummary = existingSummaryData[summaryKey] || {};
         
-        // Get existing bill number from first bill (per account)
-        if (entity.accountGroups.length > 0 && entity.accountGroups[0].numbers.length > 0) {
-            const firstNum = entity.accountGroups[0].numbers[0];
-            const existing = firstNum.existing;
-            if (existing && existing.meter_number) {
-                accountBillNumber = existing.meter_number;
-            } else if (existing && existing.notes) {
-                try {
-                    const parsed = JSON.parse(existing.notes);
-                    accountBillNumber = parsed.billNumber || '';
-                } catch(e) {}
-            }
-        }
+        // Entity Header Row
+        const entityRow = document.createElement('tr');
+        entityRow.className = 'entity-row';
+        entityRow.setAttribute('data-entity-type', entity.type);
+        entityRow.setAttribute('data-entity-id', entity.id);
+        entityRow.setAttribute('data-entity-name', entity.name);
         
+        entityRow.innerHTML = `
+            <td class="seq-number">${startSerial}</div>
+            <td class="entity-header">
+                <span class="entity-name">${escapeHtml(entity.name)}</span>
+                <span class="total-due" id="entity-total-${entity.id}">(Total Current: $0.00)</span>
+            </div>
+            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
+            <td colspan="5"></div>
+            <td><span class="status-badge status-pending" id="entity-status-${entity.id}">Pending</span></div>
+            <td class="entity-actions"></div>
+        `;
+        tbody.appendChild(entityRow);
+        
+        // Process each account - THIS IS THE KEY FIX - Iterate through ALL accounts
         for (const account of entity.accountGroups) {
-            if (account.isPlaceholder) isPlaceholder = true;
+            if (account.isPlaceholder) continue;
             
+            let accountTotalCurrent = 0;
+            let accountHasBills = false;
+            let accountBillNumber = '';
+            
+            // Get existing bill number for this account
+            if (account.numbers.length > 0) {
+                const firstNum = account.numbers[0];
+                const existing = firstNum.existing;
+                if (existing && existing.meter_number) {
+                    accountBillNumber = existing.meter_number;
+                } else if (existing && existing.notes) {
+                    try {
+                        const parsed = JSON.parse(existing.notes);
+                        accountBillNumber = parsed.billNumber || '';
+                    } catch(e) {}
+                }
+            }
+            
+            // Account Header Row with Bill Number
+            const accountRow = document.createElement('tr');
+            accountRow.className = 'account-header-row';
+            accountRow.setAttribute('data-entity-type', entity.type);
+            accountRow.setAttribute('data-entity-id', entity.id);
+            accountRow.setAttribute('data-account-number', account.accountNumber);
+            
+            accountRow.innerHTML = `
+                <td></div>
+                <td colspan="2">
+                    <span class="account-number">📁 ${escapeHtml(account.accountNumber)}</span>
+                    <span class="account-total" id="account-total-${entity.id}-${account.accountNumber}">Total: $0.00</span>
+                </div>
+                <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No."></div>
+                <td colspan="4"></div>
+                <td class="entity-actions">
+                    <button class="btn btn-success btn-sm save-account-btn">💾 Save Account</button>
+                    <button class="btn btn-danger btn-sm delete-account-btn" style="display: ${accountHasBills ? 'inline-block' : 'none'}">🗑️ Delete Account</button>
+                </div>
+            `;
+            tbody.appendChild(accountRow);
+            
+            // Phone number rows for this account
             for (const num of account.numbers) {
                 const existing = num.existing;
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
@@ -1316,113 +1307,86 @@
                     } catch(e) {}
                 }
                 
-                const isPlaceholderAccount = account.isPlaceholder || num.isPlaceholder;
-                const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
-                const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
-                
-                if (!isPlaceholderAccount) {
+                if (!account.isPlaceholder) {
+                    accountTotalCurrent += currentCharges;
                     entityTotalCurrent += currentCharges;
-                    if (existing) entityHasBills = true;
+                    if (existing) {
+                        accountHasBills = true;
+                        entityHasBills = true;
+                    }
                 }
                 
                 const locationDisplay = num.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(num.location)}</div>` : '';
                 
-                phoneRowsData.push({
-                    serial: serial,
-                    accountNumber: account.accountNumber,
-                    phoneNumber: num.phoneNumber,
-                    locationDisplay: locationDisplay,
-                    currentCharges: currentCharges,
-                    totalAmount: totalAmount,
-                    notes: notes,
-                    billId: num.billId,
-                    isPlaceholder: isPlaceholderAccount,
-                    disabledAttr: disabledAttr,
-                    placeholderClass: placeholderClass
-                });
+                const phoneRow = document.createElement('tr');
+                phoneRow.className = 'phone-row';
+                phoneRow.setAttribute('data-account-number', account.accountNumber);
+                phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
+                if (num.billId) phoneRow.setAttribute('data-bill-id', num.billId);
                 
+                phoneRow.innerHTML = `
+                    <td class="seq-number">${serial}</div>
+                    <td></div>
+                    <td></div>
+                    <td></div>
+                    <td><div class="phone-number">📞 ${escapeHtml(num.phoneNumber)}</div>${locationDisplay}</div>
+                    <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${currentCharges.toFixed(2)}" placeholder="$"></div>
+                    <td><input type="number" step="0.01" class="inline-input total-amount-input" value="${totalAmount.toFixed(2)}" placeholder="$"></div>
+                    <td><input type="text" class="inline-input notes-input" value="${escapeHtml(notes)}" placeholder="Notes..."></div>
+                    <td></div>
+                    <td></div>
+                `;
+                tbody.appendChild(phoneRow);
                 serial++;
             }
-        }
-        
-        let entityStatusClass = 'status-pending';
-        let entityStatusText = 'Pending';
-        if (!isPlaceholder) {
-            if (entityHasBills) {
-                entityStatusText = 'Entered';
-                entityStatusClass = 'status-partial';
-            } else {
-                entityStatusText = 'Not entered';
-            }
-        } else {
-            entityStatusText = 'No account';
-        }
-        
-        // Entity Header Row
-        const entityRow = document.createElement('tr');
-        entityRow.className = 'entity-row';
-        entityRow.setAttribute('data-entity-type', entity.type);
-        entityRow.setAttribute('data-entity-id', entity.id);
-        entityRow.setAttribute('data-entity-name', entity.name);
-        entityRow.setAttribute('data-has-accounts', !isPlaceholder);
-        
-        entityRow.innerHTML = `
-            <td class="seq-number">${startSerial}</div>
-            <td class="entity-header">
-                <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due">(Total Current: $${entityTotalCurrent.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No telephone account configured)</span>'}
-            </div>
-            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
-            <td colspan="1"></div>
-            <td colspan="3"></div>
-            <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
-            <td class="entity-actions">
-                <button class="btn btn-success btn-sm save-entity-btn" ${isPlaceholder ? 'disabled style="opacity:0.5;"' : ''}>💾 Save All</button>
-                ${entityHasBills && !isPlaceholder ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
-            </div>
-        `;
-        tbody.appendChild(entityRow);
-        
-        // Account Header Row with Bill Number (one per account)
-        const accountHeaderRow = document.createElement('tr');
-        accountHeaderRow.className = 'account-header-row';
-        accountHeaderRow.setAttribute('data-account-entity-id', entity.id);
-        accountHeaderRow.innerHTML = `
-            <td></div>
-            <td colspan="2"><strong>Account: ${escapeHtml(entity.accountGroups[0]?.accountNumber || '—')}</strong></div>
-            <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No." ${isPlaceholder ? 'disabled' : ''}></div>
-            <td colspan="6"></div>
-        `;
-        tbody.appendChild(accountHeaderRow);
-        
-        // Phone number rows
-        for (const phoneData of phoneRowsData) {
-            const phoneRow = document.createElement('tr');
-            phoneRow.className = 'phone-row';
-            phoneRow.setAttribute('data-account', escapeHtml(phoneData.accountNumber));
-            phoneRow.setAttribute('data-phone', escapeHtml(phoneData.phoneNumber));
-            if (phoneData.billId) phoneRow.setAttribute('data-bill-id', phoneData.billId);
             
-            phoneRow.innerHTML = `
-                <td class="seq-number">${phoneData.serial}</div>
-                <td></div>
-                <td></div>
-                <td></div>
-                <td><div class="phone-number">📞 ${escapeHtml(phoneData.phoneNumber)}</div>${phoneData.locationDisplay}</div>
-                <td><input type="number" step="0.01" class="inline-input current-charge-input ${phoneData.placeholderClass}" value="${phoneData.currentCharges.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
-                <td><input type="number" step="0.01" class="inline-input total-amount-input ${phoneData.placeholderClass}" value="${phoneData.totalAmount.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
-                <td><input type="text" class="inline-input notes-input ${phoneData.placeholderClass}" value="${escapeHtml(phoneData.notes)}" placeholder="Notes..." ${phoneData.disabledAttr}></div>
-                <td></div>
-                <td></div>
-            `;
-            tbody.appendChild(phoneRow);
+            // Update account row with total and status after phone rows are added
+            const accountTotalSpan = accountRow.querySelector('.account-total');
+            if (accountTotalSpan) {
+                accountTotalSpan.innerHTML = `Total: $${accountTotalCurrent.toFixed(2)}`;
+            }
+            
+            // Show/hide delete button based on whether there are bills
+            const deleteBtn = accountRow.querySelector('.delete-account-btn');
+            if (deleteBtn) {
+                deleteBtn.style.display = accountHasBills ? 'inline-block' : 'none';
+            }
+            
+            // Attach save button handler for this account
+            const saveAccountBtn = accountRow.querySelector('.save-account-btn');
+            if (saveAccountBtn) {
+                saveAccountBtn.onclick = async () => {
+                    await saveAccountBills(accountRow, month, year);
+                };
+            }
+            
+            // Attach delete button handler for this account
+            if (deleteBtn) {
+                deleteBtn.onclick = async () => {
+                    await deleteAccountBills(accountRow, month, year);
+                };
+            }
         }
         
+        // Update entity row with total and status
+        const entityTotalSpan = document.getElementById(`entity-total-${entity.id}`);
+        if (entityTotalSpan) {
+            entityTotalSpan.innerHTML = `(Total Current: $${entityTotalCurrent.toFixed(2)})`;
+        }
+        
+        const entityStatusSpan = document.getElementById(`entity-status-${entity.id}`);
+        if (entityStatusSpan) {
+            const entityStatusText = entityHasBills ? 'Entered' : 'Pending';
+            const entityStatusClass = entityHasBills ? 'status-partial' : 'status-pending';
+            entityStatusSpan.innerHTML = entityStatusText;
+            entityStatusSpan.className = `status-badge ${entityStatusClass}`;
+        }
+        
+        // BILL SUMMARY for the entire entity
         const summaryTotalBill = (existingSummary.totalCurrentBill || 0) + (existingSummary.otherCharges || 0) + (existingSummary.adjustment || 0);
         
         const summaryRow = document.createElement('tr');
         summaryRow.className = 'summary-row';
-        summaryRow.setAttribute('data-summary-entity-id', entity.id);
         
         const summaryCell = document.createElement('td');
         summaryCell.colSpan = 10;
@@ -1435,23 +1399,23 @@
                 <div class="summary-grid">
                     <div class="summary-item">
                         <span class="summary-label">Previous Outstanding ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-previous-outstanding" id="prev_out_${entity.id}" value="${(existingSummary.previousOutstanding || 0).toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}>
+                        <input type="number" step="0.01" class="summary-input summary-previous-outstanding" id="prev_out_${entity.id}" value="${(existingSummary.previousOutstanding || 0).toFixed(2)}" placeholder="0.00">
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Previous Payment Received ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-previous-payment" id="prev_pay_${entity.id}" value="${(existingSummary.previousPayment || 0).toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}>
+                        <input type="number" step="0.01" class="summary-input summary-previous-payment" id="prev_pay_${entity.id}" value="${(existingSummary.previousPayment || 0).toFixed(2)}" placeholder="0.00">
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Total Current Bill ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-total-current-bill" id="total_curr_${entity.id}" value="${(existingSummary.totalCurrentBill || 0).toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}>
+                        <input type="number" step="0.01" class="summary-input summary-total-current-bill" id="total_curr_${entity.id}" value="${(existingSummary.totalCurrentBill || 0).toFixed(2)}" placeholder="0.00">
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Other Charges ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-other-charges" id="other_${entity.id}" value="${(existingSummary.otherCharges || 0).toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}>
+                        <input type="number" step="0.01" class="summary-input summary-other-charges" id="other_${entity.id}" value="${(existingSummary.otherCharges || 0).toFixed(2)}" placeholder="0.00">
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Adjustment ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-adjustment" id="adj_${entity.id}" value="${(existingSummary.adjustment || 0).toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}>
+                        <input type="number" step="0.01" class="summary-input summary-adjustment" id="adj_${entity.id}" value="${(existingSummary.adjustment || 0).toFixed(2)}" placeholder="0.00">
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Total Bill Charges ($)</span>
@@ -1464,8 +1428,8 @@
         summaryRow.appendChild(summaryCell);
         tbody.appendChild(summaryRow);
         
+        // Add event listeners for summary inputs
         const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
-        const prevPayInput = summaryCell.querySelector('.summary-previous-payment');
         const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
         const otherInput = summaryCell.querySelector('.summary-other-charges');
         const adjInput = summaryCell.querySelector('.summary-adjustment');
@@ -1482,29 +1446,6 @@
         if (totalCurrInput) totalCurrInput.addEventListener('input', updateSummaryTotal);
         if (otherInput) otherInput.addEventListener('input', updateSummaryTotal);
         if (adjInput) adjInput.addEventListener('input', updateSummaryTotal);
-        
-        const getSummaryValues = () => ({
-            previousOutstanding: parseFloat(prevOutInput?.value) || 0,
-            previousPayment: parseFloat(prevPayInput?.value) || 0,
-            totalCurrentBill: parseFloat(totalCurrInput?.value) || 0,
-            otherCharges: parseFloat(otherInput?.value) || 0,
-            adjustment: parseFloat(adjInput?.value) || 0,
-            totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0
-        });
-        
-        const saveBtn = entityRow.querySelector('.save-entity-btn');
-        if (saveBtn && !isPlaceholder) {
-            saveBtn.onclick = async () => {
-                await saveEntityBills(entityRow, getSummaryValues(), month, year);
-            };
-        }
-        
-        const deleteBtn = entityRow.querySelector('.delete-entity-btn');
-        if (deleteBtn) {
-            deleteBtn.onclick = async () => {
-                await deleteEntityBills(entityRow, month, year);
-            };
-        }
         
         return serial;
     }
