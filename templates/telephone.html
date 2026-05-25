@@ -548,6 +548,22 @@
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
         }
+        
+        /* Account header row for Bill Number */
+        .account-header-row {
+            background-color: #f0f7ff;
+            border-top: 1px solid #cce5ff;
+        }
+        
+        .account-header-row td {
+            padding: 8px 12px;
+            font-weight: 500;
+            background-color: #e8f4ff;
+        }
+        
+        .bill-number-cell {
+            background-color: #fff8e1;
+        }
     </style>
 </head>
 <body>
@@ -830,6 +846,11 @@
             return;
         }
         
+        // Get the Bill Number input from the account header row
+        const billNumberInput = entityElement.querySelector('.account-bill-number-input');
+        const accountBillNumber = billNumberInput?.value || '';
+        
+        // Get all phone rows
         let phoneRows = [];
         let nextRow = entityElement.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
@@ -842,7 +863,6 @@
         for (const row of phoneRows) {
             const accountNumber = row.getAttribute('data-account');
             const phoneNumber = row.getAttribute('data-phone');
-            const billNumber = row.getAttribute('data-bill-number');
             const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
             
             const currentInput = row.querySelector('.current-charge-input');
@@ -859,7 +879,7 @@
                 phoneNumber: phoneNumber === '—' ? '' : phoneNumber,
                 currentCharges: currentCharges,
                 totalAmount: totalAmount,
-                billNumber: billNumber,
+                billNumber: accountBillNumber,
                 notes: notes
             });
         }
@@ -1045,7 +1065,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<td><td colspan="10" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1260,19 +1280,32 @@
         let entityTotalCurrent = 0;
         let entityHasBills = false;
         let isPlaceholder = false;
+        let accountBillNumber = '';
         
         const summaryKey = `${entity.type}_${entity.id}`;
         const existingSummary = existingSummaryData[summaryKey] || {};
         
+        // Get existing bill number from first bill (per account)
+        if (entity.accountGroups.length > 0 && entity.accountGroups[0].numbers.length > 0) {
+            const firstNum = entity.accountGroups[0].numbers[0];
+            const existing = firstNum.existing;
+            if (existing && existing.meter_number) {
+                accountBillNumber = existing.meter_number;
+            } else if (existing && existing.notes) {
+                try {
+                    const parsed = JSON.parse(existing.notes);
+                    accountBillNumber = parsed.billNumber || '';
+                } catch(e) {}
+            }
+        }
+        
         for (const account of entity.accountGroups) {
-            let isFirstPhoneForAccount = true;
             if (account.isPlaceholder) isPlaceholder = true;
             
             for (const num of account.numbers) {
                 const existing = num.existing;
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
                 let totalAmount = 0;
-                let billNumber = num.billNumber || '';
                 let notes = num.notes || '';
                 
                 if (existing && existing.notes && existing.notes.startsWith('{')) {
@@ -1301,16 +1334,13 @@
                     locationDisplay: locationDisplay,
                     currentCharges: currentCharges,
                     totalAmount: totalAmount,
-                    billNumber: billNumber,
                     notes: notes,
                     billId: num.billId,
-                    isFirstPhoneForAccount: isFirstPhoneForAccount,
                     isPlaceholder: isPlaceholderAccount,
                     disabledAttr: disabledAttr,
                     placeholderClass: placeholderClass
                 });
                 
-                isFirstPhoneForAccount = false;
                 serial++;
             }
         }
@@ -1328,7 +1358,7 @@
             entityStatusText = 'No account';
         }
         
-        // Entity Header Row with Bill Number in its own column (after Type)
+        // Entity Header Row
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
@@ -1337,7 +1367,7 @@
         entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
-            <td class="seq-number">${startSerial}</td>
+            <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
                 ${!isPlaceholder ? `<span class="total-due">(Total Current: $${entityTotalCurrent.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No telephone account configured)</span>'}
@@ -1353,23 +1383,32 @@
         `;
         tbody.appendChild(entityRow);
         
+        // Account Header Row with Bill Number (one per account)
+        const accountHeaderRow = document.createElement('tr');
+        accountHeaderRow.className = 'account-header-row';
+        accountHeaderRow.setAttribute('data-account-entity-id', entity.id);
+        accountHeaderRow.innerHTML = `
+            <td></div>
+            <td colspan="2"><strong>Account: ${escapeHtml(entity.accountGroups[0]?.accountNumber || '—')}</strong></div>
+            <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No." ${isPlaceholder ? 'disabled' : ''}></div>
+            <td colspan="6"></div>
+        `;
+        tbody.appendChild(accountHeaderRow);
+        
+        // Phone number rows
         for (const phoneData of phoneRowsData) {
             const phoneRow = document.createElement('tr');
             phoneRow.className = 'phone-row';
             phoneRow.setAttribute('data-account', escapeHtml(phoneData.accountNumber));
             phoneRow.setAttribute('data-phone', escapeHtml(phoneData.phoneNumber));
-            phoneRow.setAttribute('data-bill-number', escapeHtml(phoneData.billNumber));
             if (phoneData.billId) phoneRow.setAttribute('data-bill-id', phoneData.billId);
             
             phoneRow.innerHTML = `
                 <td class="seq-number">${phoneData.serial}</div>
                 <td></div>
                 <td></div>
-                <td><input type="text" class="bill-number-input ${phoneData.placeholderClass}" value="${escapeHtml(phoneData.billNumber)}" placeholder="Bill No." ${phoneData.disabledAttr}></div>
-                <td>${phoneData.isFirstPhoneForAccount ? `<span class="account-number">📋 ${escapeHtml(phoneData.accountNumber)}</span>` : ''}
-                    <div class="phone-number">📞 ${escapeHtml(phoneData.phoneNumber)}</div>
-                    ${phoneData.locationDisplay}
-                </div>
+                <td></div>
+                <td><div class="phone-number">📞 ${escapeHtml(phoneData.phoneNumber)}</div>${phoneData.locationDisplay}</div>
                 <td><input type="number" step="0.01" class="inline-input current-charge-input ${phoneData.placeholderClass}" value="${phoneData.currentCharges.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
                 <td><input type="number" step="0.01" class="inline-input total-amount-input ${phoneData.placeholderClass}" value="${phoneData.totalAmount.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
                 <td><input type="text" class="inline-input notes-input ${phoneData.placeholderClass}" value="${escapeHtml(phoneData.notes)}" placeholder="Notes..." ${phoneData.disabledAttr}></div>
