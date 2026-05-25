@@ -127,36 +127,42 @@
         <div id="waterColumns" class="column-options" style="display: none;">
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="no" checked><label>No.</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="name" checked><label>Entity Name</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="type" checked><label>Type</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="account" checked><label>Account Number</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="meter" checked><label>Meter Number</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="consumption" checked><label>Consumption (m³)</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="currentCharges" checked><label>Current Charges</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="outstanding" checked><label>Outstanding Charges</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="previousPayment" checked><label>Previous Payment</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="status" checked><label>Status</label></div>
         </div>
 
         <!-- Electricity Columns -->
         <div id="electricityColumns" class="column-options" style="display: none;">
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="no" checked><label>No.</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="name" checked><label>Entity Name</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="type" checked><label>Type</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="account" checked><label>Account Number</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="meter" checked><label>Meter Number</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="consumption" checked><label>Consumption (kWh)</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="currentCharges" checked><label>Current Charges</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="outstanding" checked><label>Outstanding Charges</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="previousPayment" checked><label>Previous Payment</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="status" checked><label>Status</label></div>
         </div>
 
-        <!-- Telephone Columns -->
+        <!-- Telephone Columns - Complete list matching the telephone table -->
         <div id="telephoneColumns" class="column-options" style="display: none;">
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="no" checked><label>No.</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="name" checked><label>Entity Name</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="type" checked><label>Type</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="billNumber" checked><label>Bill No.</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="account" checked><label>Account Number</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="phone" checked><label>Phone Number</label></div>
-            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="billNumber" checked><label>Bill Number</label></div>
-            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="currentCharges" checked><label>Current Charges</label></div>
-            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="totalAmount" checked><label>Total Amount</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="currentCharges" checked><label>Current Charges ($)</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="totalAmount" checked><label>Total Amount ($)</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="notes" checked><label>Notes</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="status" checked><label>Status</label></div>
         </div>
 
         <div class="selection-grid">
@@ -403,6 +409,7 @@
                     printData.push({
                         no: serial++,
                         name: entityDisplayName,
+                        type: bill.entity_type === 'school' ? 'School' : 'Department',
                         accountNumber: bill.account_number || '—',
                         meterNumber: bill.meter_number || '—',
                         phoneNumber: bill.phone_number || '—',
@@ -412,7 +419,8 @@
                         previousPayment: bill.amount_paid || 0,
                         totalAmount: totalAmount,
                         billNumber: billNumber,
-                        notes: bill.notes || ''
+                        notes: bill.notes || '',
+                        status: bill.current_charges > 0 ? 'Pending' : 'Paid'
                     });
                 }
                 
@@ -445,16 +453,18 @@
         
         if (selectedColumns.includes('no')) { columnHeaders.push('NO.'); columnKeys.push('no'); }
         if (selectedColumns.includes('name')) { columnHeaders.push('Entity Name'); columnKeys.push('name'); }
+        if (selectedColumns.includes('type')) { columnHeaders.push('Type'); columnKeys.push('type'); }
         if (selectedColumns.includes('account')) { columnHeaders.push('Account Number'); columnKeys.push('account'); }
         if (selectedColumns.includes('meter')) { columnHeaders.push('Meter Number'); columnKeys.push('meter'); }
         if (selectedColumns.includes('phone')) { columnHeaders.push('Phone Number'); columnKeys.push('phone'); }
+        if (selectedColumns.includes('billNumber')) { columnHeaders.push('Bill No.'); columnKeys.push('billNumber'); }
         if (selectedColumns.includes('consumption')) { columnHeaders.push(utility === 'water' ? 'Consumption (m³)' : 'Consumption (kWh)'); columnKeys.push('consumption'); }
         if (selectedColumns.includes('currentCharges')) { columnHeaders.push('Current Charges (BND)'); columnKeys.push('current'); }
         if (selectedColumns.includes('outstanding')) { columnHeaders.push('Outstanding (BND)'); columnKeys.push('outstanding'); }
         if (selectedColumns.includes('previousPayment')) { columnHeaders.push('Previous Payment (BND)'); columnKeys.push('previous'); }
         if (selectedColumns.includes('totalAmount')) { columnHeaders.push('Total Amount (BND)'); columnKeys.push('totalAmount'); }
-        if (selectedColumns.includes('billNumber')) { columnHeaders.push('Bill Number'); columnKeys.push('billNumber'); }
         if (selectedColumns.includes('notes')) { columnHeaders.push('Notes'); columnKeys.push('notes'); }
+        if (selectedColumns.includes('status')) { columnHeaders.push('Status'); columnKeys.push('status'); }
         
         const itemsPerPage = 10;
         const totalPages = Math.ceil(data.length / itemsPerPage);
@@ -482,16 +492,18 @@
                 for (const key of columnKeys) {
                     if (key === 'no') html += `<td style="text-align:center">${item.no}</div>`;
                     else if (key === 'name') html += `<td>${escapeHtml(item.name)}</div>`;
+                    else if (key === 'type') html += `<td>${escapeHtml(item.type)}</div>`;
                     else if (key === 'account') html += `<td>${escapeHtml(item.accountNumber)}</div>`;
                     else if (key === 'meter') html += `<td>${escapeHtml(item.meterNumber)}</div>`;
                     else if (key === 'phone') html += `<td>${escapeHtml(item.phoneNumber)}</div>`;
+                    else if (key === 'billNumber') html += `<td>${escapeHtml(item.billNumber)}</div>`;
                     else if (key === 'consumption') html += `<td style="text-align:right">${item.consumption.toFixed(2)}</div>`;
                     else if (key === 'current') html += `<td style="text-align:right">${item.currentCharges.toFixed(2)}</div>`;
                     else if (key === 'outstanding') html += `<td style="text-align:right">${item.outstandingCharges.toFixed(2)}</div>`;
                     else if (key === 'previous') html += `<td style="text-align:right">${item.previousPayment.toFixed(2)}</div>`;
                     else if (key === 'totalAmount') html += `<td style="text-align:right">${item.totalAmount.toFixed(2)}</div>`;
-                    else if (key === 'billNumber') html += `<td>${escapeHtml(item.billNumber)}</div>`;
                     else if (key === 'notes') html += `<td>${escapeHtml(item.notes)}</div>`;
+                    else if (key === 'status') html += `<td>${escapeHtml(item.status)}</div>`;
                 }
                 html += `</tr>`;
             }
