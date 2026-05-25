@@ -517,8 +517,9 @@
         
         .total-due {
             font-size: 0.7rem;
-            color: #666;
+            color: #2e7d32;
             margin-left: 10px;
+            font-weight: normal;
         }
         
         .placeholder-text {
@@ -562,12 +563,6 @@
         
         .bill-number-cell {
             background-color: #fff8e1;
-        }
-        
-        .account-total {
-            font-size: 0.7rem;
-            color: #2e7d32;
-            margin-left: 10px;
         }
     </style>
 </head>
@@ -1014,7 +1009,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td><tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1248,11 +1243,10 @@
         `;
         tbody.appendChild(entityRow);
         
-        // Process each account - THIS IS THE KEY FIX - Iterate through ALL accounts
+        // Process each account - iterate through ALL accounts
         for (const account of entity.accountGroups) {
             if (account.isPlaceholder) continue;
             
-            let accountTotalCurrent = 0;
             let accountHasBills = false;
             let accountBillNumber = '';
             
@@ -1270,7 +1264,7 @@
                 }
             }
             
-            // Account Header Row with Bill Number
+            // Account Header Row with Bill Number (no total displayed)
             const accountRow = document.createElement('tr');
             accountRow.className = 'account-header-row';
             accountRow.setAttribute('data-entity-type', entity.type);
@@ -1281,7 +1275,6 @@
                 <td></div>
                 <td colspan="2">
                     <span class="account-number">📁 ${escapeHtml(account.accountNumber)}</span>
-                    <span class="account-total" id="account-total-${entity.id}-${account.accountNumber}">Total: $0.00</span>
                 </div>
                 <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No."></div>
                 <td colspan="4"></div>
@@ -1308,7 +1301,6 @@
                 }
                 
                 if (!account.isPlaceholder) {
-                    accountTotalCurrent += currentCharges;
                     entityTotalCurrent += currentCharges;
                     if (existing) {
                         accountHasBills = true;
@@ -1338,12 +1330,6 @@
                 `;
                 tbody.appendChild(phoneRow);
                 serial++;
-            }
-            
-            // Update account row with total and status after phone rows are added
-            const accountTotalSpan = accountRow.querySelector('.account-total');
-            if (accountTotalSpan) {
-                accountTotalSpan.innerHTML = `Total: $${accountTotalCurrent.toFixed(2)}`;
             }
             
             // Show/hide delete button based on whether there are bills
