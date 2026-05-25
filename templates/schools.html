@@ -488,6 +488,147 @@
             min-width: 280px;
             max-width: 320px;
         }
+        
+        /* Print Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .print-modal {
+            background: white;
+            border-radius: 24px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+        
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h3 {
+            font-size: 1.3rem;
+            color: var(--dark);
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray);
+        }
+        
+        .modal-body {
+            padding: 20px 24px;
+        }
+        
+        .column-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .column-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+        
+        .column-option input {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .column-option label {
+            flex: 1;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .select-all-row {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        
+        .btn-print {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-cancel {
+            background: var(--gray);
+            color: white;
+        }
+        
+        /* Print Styles */
+        @media print {
+            .navbar, .filters-bar, .page-header .btn, .entity-actions, .modal-overlay, .print-modal, .btn-print, .scroll-hint {
+                display: none !important;
+            }
+            
+            .container {
+                margin-top: 0;
+                padding: 0;
+            }
+            
+            .table-wrapper {
+                box-shadow: none;
+                overflow: visible;
+                max-height: none;
+            }
+            
+            .data-table {
+                min-width: auto;
+                width: 100%;
+            }
+            
+            .data-table th, .data-table td {
+                border: 1px solid #ddd;
+            }
+            
+            .cluster-separator td {
+                background: #e0e0e0 !important;
+                print-color-adjust: exact;
+            }
+        }
     </style>
 </head>
 <body>
@@ -510,7 +651,10 @@
 <div class="container">
     <div class="page-header">
         <h1 class="page-title">🏫 Schools · Expanded Utility View</h1>
-        <button class="btn btn-primary" id="addNewSchoolBtn">➕ Add New School</button>
+        <div style="display: flex; gap: 12px;">
+            <button class="btn btn-primary" id="printBtn">🖨️ Print</button>
+            <button class="btn btn-primary" id="addNewSchoolBtn">➕ Add New School</button>
+        </div>
     </div>
 
     <div class="filters-bar">
@@ -522,13 +666,20 @@
     <div class="scroll-hint">↔️ Scroll horizontally | 📋 Each utility column has vertical scroll for many accounts/meters | ✏️ Edit mode shows full details</div>
 
     <div class="table-wrapper">
-        <table class="data-table">
-            <thead>
-                <tr><th width="45">#</th><th width="180">School Name</th><th width="80">Cluster</th><th width="100">School No.</th>
+        <table class="data-table" id="schoolsTable">
+            <thead id="tableHeader">
+                <tr>
+                    <th width="45">#</th>
+                    <th width="180">School Name</th>
+                    <th width="80">Cluster</th>
+                    <th width="100">School No.</th>
                     <th width="300" class="fixed-width-col">💧 WATER Accounts & Meters</th>
                     <th width="300" class="fixed-width-col">⚡ ELECTRICITY Accounts & Meters</th>
                     <th width="300" class="fixed-width-col">📞 TELEPHONE Accounts & Numbers</th>
-                    <th width="130">BMO Name</th><th width="130">BMO Phone</th><th width="180">Address</th><th width="110">Actions</th>
+                    <th width="130">BMO Name</th>
+                    <th width="130">BMO Phone</th>
+                    <th width="180">Address</th>
+                    <th width="110">Actions</th>
                 </tr>
             </thead>
             <tbody id="schoolsTbody"></tbody>
@@ -536,9 +687,42 @@
     </div>
 </div>
 
+<!-- Print Column Selection Modal -->
+<div id="printModal" class="modal-overlay">
+    <div class="print-modal">
+        <div class="modal-header">
+            <h3>📄 Select Columns to Print</h3>
+            <button class="close-modal" onclick="closePrintModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="column-selector" id="columnSelector">
+                <!-- Column checkboxes will be populated by JavaScript -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel" onclick="closePrintModal()">Cancel</button>
+            <button class="btn btn-print" id="confirmPrintBtn">🖨️ Print</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let allSchoolsRaw = [];
     let currentEditingId = null;
+    
+    // Column configuration for schools
+    const columns = [
+        { key: 'seq', label: 'No.', default: true },
+        { key: 'schoolName', label: 'School Name', default: true },
+        { key: 'cluster', label: 'Cluster', default: true },
+        { key: 'schoolNo', label: 'School No.', default: true },
+        { key: 'waterAccounts', label: 'Water Accounts & Meters', default: false },
+        { key: 'electricityAccounts', label: 'Electricity Accounts & Meters', default: false },
+        { key: 'telephoneAccounts', label: 'Telephone Accounts & Numbers', default: false },
+        { key: 'bmoName', label: 'BMO Name', default: false },
+        { key: 'bmoPhone', label: 'BMO Phone', default: false },
+        { key: 'address', label: 'Address', default: false }
+    ];
 
     function showMessage(msg, isError = false) {
         const toast = document.createElement('div');
@@ -596,7 +780,6 @@
         return filtered;
     }
 
-    // RENDER EXPANDED EDITOR UI (vertical scrollable)
     function renderExpandedUtilityEditor(utilityType, accounts, schoolId) {
         const containerId = `${utilityType}-editor-${schoolId}`;
         let html = `<div class="utility-cell" id="${containerId}">`;
@@ -639,7 +822,6 @@
         return html;
     }
     
-    // Collect data from expanded editors
     function collectUtilityData(schoolId) {
         const waterAccounts = [];
         document.querySelectorAll(`#water-editor-${schoolId} .account-block`).forEach(block => {
@@ -711,7 +893,6 @@
         } catch(err) { showMessage('Network error', true); }
     }
     
-    // VIEW MODE: expanded readable format with vertical scroll
     function renderViewModeUtility(accounts, type) {
         if (!accounts || accounts.length === 0) return '<div style="color:#aaa; padding:10px; text-align:center;">— No data —</div>';
         let html = `<div class="view-mode-text utility-cell">`;
@@ -736,7 +917,6 @@
     }
     
     function attachEditorEvents(schoolId) {
-        // Add Account
         document.querySelectorAll(`.add-account-util`).forEach(btn => {
             btn.onclick = (e) => {
                 const util = btn.getAttribute('data-util');
@@ -866,7 +1046,7 @@
         addingMode = true;
         const tbody = document.getElementById('schoolsTbody');
         const addRow = document.createElement('tr'); addRow.className='add-new-row'; addRow.id='inline-add-row';
-        addRow.innerHTML = `<td>✨</td><td><input id="new-name" class="inline-edit-input" placeholder="Name *"></td><td><input id="new-cluster" class="inline-edit-input" placeholder="Cluster *"></td><td><input id="new-schno" class="inline-edit-input" placeholder="School No *"></td>
+        addRow.innerHTML = `<td>✨<\/td><td><input id="new-name" class="inline-edit-input" placeholder="Name *"></td><td><input id="new-cluster" class="inline-edit-input" placeholder="Cluster *"></td><td><input id="new-schno" class="inline-edit-input" placeholder="School No *"></td>
         <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Add utilities after creation)</span></td>
         <td><input id="new-bmoname" class="inline-edit-input" placeholder="BMO"></td><td><input id="new-bmophone" class="inline-edit-input" placeholder="Phone"></td><td><input id="new-address" class="inline-edit-input" placeholder="Address"></td>
         <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button></td>`;
@@ -884,12 +1064,317 @@
         document.getElementById('cancelAddBtn')?.addEventListener('click', () => { addingMode=false; renderSchools(); });
     }
     
+    // ============ PRINT FUNCTIONALITY ============
+    
+    function openPrintModal() {
+        const modal = document.getElementById('printModal');
+        populateColumnSelector();
+        modal.classList.add('active');
+    }
+    
+    function closePrintModal() {
+        const modal = document.getElementById('printModal');
+        modal.classList.remove('active');
+    }
+    
+    function populateColumnSelector() {
+        const container = document.getElementById('columnSelector');
+        let html = `
+            <div class="select-all-row column-option">
+                <input type="checkbox" id="selectAllColumns" onchange="toggleAllColumns()">
+                <label for="selectAllColumns"><strong>✓ Select All Columns</strong></label>
+            </div>
+        `;
+        
+        columns.forEach(col => {
+            const savedState = localStorage.getItem(`school_print_col_${col.key}`);
+            const isChecked = savedState !== null ? savedState === 'true' : col.default;
+            html += `
+                <div class="column-option">
+                    <input type="checkbox" class="col-checkbox" id="col_${col.key}" data-col="${col.key}" ${isChecked ? 'checked' : ''}>
+                    <label for="col_${col.key}">${col.label}</label>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+        
+        document.querySelectorAll('.col-checkbox').forEach(cb => {
+            cb.addEventListener('change', () => {
+                updateSelectAllState();
+                saveColumnSelections();
+            });
+        });
+        
+        updateSelectAllState();
+    }
+    
+    function updateSelectAllState() {
+        const checkboxes = document.querySelectorAll('.col-checkbox');
+        const selectAll = document.getElementById('selectAllColumns');
+        if (selectAll) {
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            selectAll.checked = allChecked;
+        }
+    }
+    
+    function toggleAllColumns() {
+        const selectAll = document.getElementById('selectAllColumns');
+        const checkboxes = document.querySelectorAll('.col-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = selectAll.checked;
+        });
+        saveColumnSelections();
+    }
+    
+    function saveColumnSelections() {
+        columns.forEach(col => {
+            const cb = document.getElementById(`col_${col.key}`);
+            if (cb) {
+                localStorage.setItem(`school_print_col_${col.key}`, cb.checked);
+            }
+        });
+    }
+    
+    function getSelectedColumns() {
+        return columns.filter(col => {
+            const savedState = localStorage.getItem(`school_print_col_${col.key}`);
+            return savedState !== null ? savedState === 'true' : col.default;
+        });
+    }
+    
+    function getSimpleUtilityTextForPrint(accounts, type) {
+        if (!accounts || accounts.length === 0) return '—';
+        let text = '';
+        accounts.forEach(acc => {
+            const accNum = acc.accountNumber || acc.account_number || '?';
+            text += `📁 ${accNum}\n`;
+            if (type === 'telephone') {
+                const numbers = acc.numbers || [];
+                numbers.forEach(num => {
+                    text += `  📞 ${num.phoneNumber || ''}`;
+                    if (num.location) text += ` 📍${num.location}`;
+                    if (num.notes) text += ` (${num.notes})`;
+                    text += `\n`;
+                });
+            } else {
+                const meters = acc.meters || [];
+                meters.forEach(m => {
+                    text += `  🔢 ${m.meterNumber || ''}`;
+                    if (m.location) text += ` 📍${m.location}`;
+                    if (m.notes) text += ` (${m.notes})`;
+                    text += `\n`;
+                });
+            }
+        });
+        return text.trim();
+    }
+    
+    function performPrint() {
+        const selectedColumns = getSelectedColumns();
+        const filteredSchools = getFilteredSchools();
+        
+        if (filteredSchools.length === 0) {
+            showMessage('No data to print', true);
+            closePrintModal();
+            return;
+        }
+        
+        // Group by cluster
+        const clusterMap = new Map();
+        filteredSchools.forEach(school => {
+            const cluster = school.cluster_number || 'Unassigned';
+            if (!clusterMap.has(cluster)) clusterMap.set(cluster, []);
+            clusterMap.get(cluster).push(school);
+        });
+        
+        const sortedClusters = Array.from(clusterMap.keys()).sort((a,b) => a==='Unassigned'?1:b==='Unassigned'?-1:(parseInt(a)||0)-(parseInt(b)||0));
+        
+        let printHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Schools Report - ${new Date().toLocaleString()}</title>
+                <style>
+                    * {
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                    }
+                    body {
+                        padding: 20px;
+                        margin: 0;
+                    }
+                    .print-header {
+                        text-align: center;
+                        margin-bottom: 30px;
+                        border-bottom: 2px solid #333;
+                        padding-bottom: 10px;
+                    }
+                    .print-header h1 {
+                        margin: 0;
+                        color: #4361ee;
+                    }
+                    .print-header p {
+                        margin: 5px 0 0;
+                        color: #666;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 20px;
+                        font-size: 11px;
+                    }
+                    th, td {
+                        border: 1px solid #ddd;
+                        padding: 8px 6px;
+                        text-align: left;
+                        vertical-align: top;
+                    }
+                    th {
+                        background-color: #f2f2f2;
+                        font-weight: bold;
+                    }
+                    .cluster-group {
+                        background-color: #e8f0fe;
+                        font-weight: bold;
+                    }
+                    .cluster-group td {
+                        background-color: #e8f0fe;
+                        font-size: 13px;
+                    }
+                    .group-count {
+                        font-weight: normal;
+                        font-size: 11px;
+                        margin-left: 10px;
+                    }
+                    .utility-text {
+                        white-space: pre-line;
+                        font-size: 9px;
+                        line-height: 1.3;
+                    }
+                    .footer {
+                        margin-top: 30px;
+                        text-align: center;
+                        font-size: 10px;
+                        color: #666;
+                        border-top: 1px solid #ddd;
+                        padding-top: 10px;
+                    }
+                    @media print {
+                        body {
+                            padding: 0;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="print-header">
+                    <h1>🏫 Schools Management Report</h1>
+                    <p>Generated on: ${new Date().toLocaleString()}</p>
+                    <p>Total Schools: ${filteredSchools.length}</p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+        `;
+        
+        // Add column headers based on selection
+        selectedColumns.forEach(col => {
+            if (col.key === 'seq') {
+                printHtml += `<th>No.</th>`;
+            } else if (col.key === 'schoolName') {
+                printHtml += `<th>School Name</th>`;
+            } else if (col.key === 'cluster') {
+                printHtml += `<th>Cluster</th>`;
+            } else if (col.key === 'schoolNo') {
+                printHtml += `<th>School No.</th>`;
+            } else if (col.key === 'waterAccounts') {
+                printHtml += `<th>💧 Water Accounts & Meters</th>`;
+            } else if (col.key === 'electricityAccounts') {
+                printHtml += `<th>⚡ Electricity Accounts & Meters</th>`;
+            } else if (col.key === 'telephoneAccounts') {
+                printHtml += `<th>📞 Telephone Accounts & Numbers</th>`;
+            } else if (col.key === 'bmoName') {
+                printHtml += `<th>BMO Name</th>`;
+            } else if (col.key === 'bmoPhone') {
+                printHtml += `<th>BMO Phone</th>`;
+            } else if (col.key === 'address') {
+                printHtml += `<th>Address</th>`;
+            }
+        });
+        
+        printHtml += `</tr></thead><tbody>`;
+        
+        let globalSeq = 1;
+        for (let cluster of sortedClusters) {
+            const schools = clusterMap.get(cluster);
+            
+            // Cluster group header
+            printHtml += `<tr class="cluster-group"><td colspan="${selectedColumns.length}"><strong>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</strong> <span class="group-count">(${schools.length} school${schools.length > 1 ? 's' : ''})</span></td></tr>`;
+            
+            for (let school of schools) {
+                printHtml += `<tr>`;
+                for (let col of selectedColumns) {
+                    if (col.key === 'seq') {
+                        printHtml += `<td style="text-align:center">${globalSeq}</td>`;
+                    } else if (col.key === 'schoolName') {
+                        printHtml += `<td>${escapeHtml(school.name || '-')}</td>`;
+                    } else if (col.key === 'cluster') {
+                        printHtml += `<td>${escapeHtml(school.cluster_number || '-')}</td>`;
+                    } else if (col.key === 'schoolNo') {
+                        printHtml += `<td>${escapeHtml(school.school_number || '-')}</td>`;
+                    } else if (col.key === 'waterAccounts') {
+                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.water_accounts, 'water'))}</td>`;
+                    } else if (col.key === 'electricityAccounts') {
+                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.electricity_accounts, 'electricity'))}</td>`;
+                    } else if (col.key === 'telephoneAccounts') {
+                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.telephone_accounts, 'telephone'))}</td>`;
+                    } else if (col.key === 'bmoName') {
+                        printHtml += `<td>${escapeHtml(school.bmo_name || '-')}</td>`;
+                    } else if (col.key === 'bmoPhone') {
+                        printHtml += `<td>${escapeHtml(school.bmo_phone || '-')}</td>`;
+                    } else if (col.key === 'address') {
+                        printHtml += `<td>${escapeHtml(school.address || '-')}</td>`;
+                    }
+                }
+                printHtml += `</tr>`;
+                globalSeq++;
+            }
+        }
+        
+        printHtml += `
+                    </tbody>
+                </table>
+                <div class="footer">
+                    <p>UKA Bill Utility System - School Listing</p>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        closePrintModal();
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(printHtml);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+    }
+    
+    function escapeHtml(str) { 
+        if(!str) return ''; 
+        return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); 
+    }
+    
+    // Event Listeners
     document.getElementById('addNewSchoolBtn').addEventListener('click', () => { if(currentEditingId) showMessage('Finish current edit first', true); else inlineAddSchool(); });
     document.getElementById('refreshBtn').addEventListener('click', () => loadSchools());
     document.getElementById('searchFilter').addEventListener('input', () => renderSchools());
     document.getElementById('clusterFilter').addEventListener('change', () => renderSchools());
     document.getElementById('sortFilter').addEventListener('change', () => renderSchools());
-    function escapeHtml(str) { if(!str) return ''; return String(str).replace(/[&<>]/g, m => m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); }
+    document.getElementById('printBtn').addEventListener('click', openPrintModal);
+    document.getElementById('confirmPrintBtn').addEventListener('click', performPrint);
+    
     loadSchools();
 </script>
 </body>
