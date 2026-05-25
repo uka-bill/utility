@@ -41,9 +41,13 @@
         .bill-payment-section { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 20px; margin-bottom: 25px; border-radius: 8px; }
         .bill-payment-section h3 { margin-bottom: 20px; color: #1565c0; }
         .selection-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 20px; }
-        .utility-options, .entity-type-options, .column-options { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 15px; }
-        .utility-option, .entity-type-option, .column-option { display: flex; align-items: center; gap: 8px; }
-        .utility-option input, .entity-type-option input, .column-option input { width: 18px; height: 18px; cursor: pointer; }
+        .utility-options, .entity-type-options { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 15px; }
+        .utility-option, .entity-type-option { display: flex; align-items: center; gap: 8px; }
+        .utility-option input, .entity-type-option input { width: 18px; height: 18px; cursor: pointer; }
+        .column-options { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 8px; }
+        .column-option { display: flex; align-items: center; gap: 6px; }
+        .column-option input { width: 16px; height: 16px; cursor: pointer; }
+        .column-option label { font-size: 0.85rem; cursor: pointer; }
         .checkbox-list { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px; background: white; }
         .checkbox-item { display: flex; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
         .checkbox-item input { margin-right: 10px; }
@@ -119,17 +123,37 @@
             </div>
         </div>
 
-        <!-- Column Selection for Print -->
+        <!-- Dynamic Column Selection based on Utility -->
         <div class="form-group">
             <label class="form-label">📋 Select Columns to Print</label>
-            <div class="column-options">
-                <div class="column-option"><input type="checkbox" id="colNo" checked><label for="colNo">No.</label></div>
-                <div class="column-option"><input type="checkbox" id="colName" checked><label for="colName">Entity Name</label></div>
-                <div class="column-option"><input type="checkbox" id="colAccount" checked><label for="colAccount">Account Number</label></div>
-                <div class="column-option"><input type="checkbox" id="colCurrentCharges" checked><label for="colCurrentCharges">Current Charges</label></div>
-                <div class="column-option"><input type="checkbox" id="colOutstanding" checked><label for="colOutstanding">Outstanding Charges</label></div>
-                <div class="column-option"><input type="checkbox" id="colTotalBill" checked><label for="colTotalBill">Total Bill Charges</label></div>
-                <div class="column-option"><input type="checkbox" id="colBillNumber"><label for="colBillNumber">Bill Number</label></div>
+            <div id="waterColumns" class="column-options" style="display: none;">
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="no" checked><label>No.</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="name" checked><label>Entity Name</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="account" checked><label>Account Number</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="meter" checked><label>Meter Number</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="consumption" checked><label>Consumption (m³)</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="currentCharges" checked><label>Current Charges</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="outstanding" checked><label>Outstanding Charges</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="totalBill" checked><label>Total Bill Charges</label></div>
+            </div>
+            <div id="electricityColumns" class="column-options" style="display: none;">
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="no" checked><label>No.</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="name" checked><label>Entity Name</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="account" checked><label>Account Number</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="meter" checked><label>Meter Number</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="consumption" checked><label>Consumption (kWh)</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="currentCharges" checked><label>Current Charges</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="outstanding" checked><label>Outstanding Charges</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="totalBill" checked><label>Total Bill Charges</label></div>
+            </div>
+            <div id="telephoneColumns" class="column-options" style="display: none;">
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="no" checked><label>No.</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="name" checked><label>Entity Name</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="account" checked><label>Account Number</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="phone" checked><label>Phone Number</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="currentCharges" checked><label>Current Charges</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="totalAmount" checked><label>Total Amount</label></div>
+                <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="billNumber" checked><label>Bill Number</label></div>
             </div>
         </div>
 
@@ -218,6 +242,33 @@
         }
     }
     
+    // Show/hide column options based on selected utilities
+    function updateColumnVisibility() {
+        const waterChecked = document.getElementById('utilWater').checked;
+        const electricityChecked = document.getElementById('utilElectricity').checked;
+        const telephoneChecked = document.getElementById('utilTelephone').checked;
+        
+        document.getElementById('waterColumns').style.display = waterChecked ? 'flex' : 'none';
+        document.getElementById('electricityColumns').style.display = electricityChecked ? 'flex' : 'none';
+        document.getElementById('telephoneColumns').style.display = telephoneChecked ? 'flex' : 'none';
+    }
+    
+    document.getElementById('utilWater').addEventListener('change', updateColumnVisibility);
+    document.getElementById('utilElectricity').addEventListener('change', updateColumnVisibility);
+    document.getElementById('utilTelephone').addEventListener('change', updateColumnVisibility);
+    
+    // Get selected columns for each utility
+    function getSelectedColumns(utilityType) {
+        const cols = [];
+        const container = document.getElementById(`${utilityType}Columns`);
+        if (container && container.style.display !== 'none') {
+            container.querySelectorAll('.col-checkbox:checked').forEach(cb => {
+                cols.push(cb.getAttribute('data-col'));
+            });
+        }
+        return cols;
+    }
+    
     async function loadCheckboxLists() {
         try {
             const schoolsRes = await fetch('/api/schools');
@@ -276,7 +327,6 @@
     function getSelectedSchoolIds() { const ids = []; document.querySelectorAll('.school-checkbox:checked').forEach(cb => ids.push(parseInt(cb.value))); return ids; }
     function getSelectedDepartmentIds() { const ids = []; document.querySelectorAll('.department-checkbox:checked').forEach(cb => ids.push(parseInt(cb.value))); return ids; }
     function getSelectedUtilities() { const u=[]; if(document.getElementById('utilWater').checked) u.push('water'); if(document.getElementById('utilElectricity').checked) u.push('electricity'); if(document.getElementById('utilTelephone').checked) u.push('telephone'); return u; }
-    function getSelectedColumns() { const cols=[]; if(document.getElementById('colNo').checked) cols.push('no'); if(document.getElementById('colName').checked) cols.push('name'); if(document.getElementById('colAccount').checked) cols.push('account'); if(document.getElementById('colCurrentCharges').checked) cols.push('currentCharges'); if(document.getElementById('colOutstanding').checked) cols.push('outstanding'); if(document.getElementById('colTotalBill').checked) cols.push('totalBill'); if(document.getElementById('colBillNumber').checked) cols.push('billNumber'); return cols; }
     
     document.getElementById('printBillPaymentBtn').addEventListener('click', async function() {
         const selectedUtilities = getSelectedUtilities();
@@ -286,18 +336,15 @@
         const departmentIds = showDepartments ? getSelectedDepartmentIds() : [];
         const month = parseInt(document.getElementById('paymentMonth').value);
         const year = parseInt(document.getElementById('paymentYear').value);
-        const selectedColumns = getSelectedColumns();
         
         if (selectedUtilities.length === 0) { alert('⚠️ Please select at least one utility.'); return; }
         if (!showSchools && !showDepartments) { alert('⚠️ Please select at least Schools or Departments.'); return; }
         if (showSchools && schoolIds.length===0 && showDepartments && departmentIds.length===0) { alert('⚠️ Please select at least one school or department.'); return; }
-        if (selectedColumns.length === 0) { alert('⚠️ Please select at least one column to print.'); return; }
         
         document.getElementById('loadingIndicator').style.display = 'block';
         
         try {
             const allBills = [];
-            const utilityNames = { water:'Water', electricity:'Electricity', telephone:'Telephone' };
             
             for (const utility of selectedUtilities) {
                 for (const schoolId of schoolIds) {
@@ -312,105 +359,155 @@
             
             if (allBills.length === 0) { alert('⚠️ No bills found for the selected criteria.'); document.getElementById('loadingIndicator').style.display='none'; return; }
             
-            const printData = [];
-            let serial = 1;
-            for (const bill of allBills) {
-                let totalBillCharges = bill.current_charges || 0;
-                let billNumber = bill.meter_number || '';
-                if (bill.utility_type === 'telephone' && bill.notes && bill.notes.startsWith('{')) {
-                    try { const parsed = JSON.parse(bill.notes); totalBillCharges = parsed.totalAmount || bill.current_charges || 0; billNumber = parsed.billNumber || bill.meter_number || ''; } catch(e) {}
-                }
-                printData.push({
-                    no: serial++,
-                    name: bill.entity_name || 'Unknown',
-                    accountNumber: bill.account_number || '—',
-                    currentCharges: bill.current_charges || 0,
-                    outstandingCharges: bill.unsettled_charges || 0,
-                    totalBillCharges: totalBillCharges,
-                    billNumber: billNumber,
-                    utilityType: bill.utility_type
-                });
+            // Group bills by utility type for printing
+            const billsByUtility = {};
+            for (const utility of selectedUtilities) {
+                billsByUtility[utility] = allBills.filter(b => b.utility_type === utility);
             }
             
-            generateBillPaymentPrint(printData, month, year, selectedUtilities, showSchools, showDepartments, selectedColumns);
+            // Generate print for each utility separately
+            let allPrintHtml = '';
+            let globalPageCounter = 1;
+            
+            for (const utility of selectedUtilities) {
+                const utilityBills = billsByUtility[utility];
+                if (utilityBills.length === 0) continue;
+                
+                const printData = [];
+                let serial = 1;
+                for (const bill of utilityBills) {
+                    let totalBillCharges = bill.current_charges || 0;
+                    let billNumber = bill.meter_number || '';
+                    let totalAmount = bill.current_charges || 0;
+                    
+                    if (utility === 'telephone' && bill.notes && bill.notes.startsWith('{')) {
+                        try { const parsed = JSON.parse(bill.notes); totalAmount = parsed.totalAmount || bill.current_charges || 0; billNumber = parsed.billNumber || bill.meter_number || ''; } catch(e) {}
+                    }
+                    
+                    printData.push({
+                        no: serial++,
+                        name: bill.entity_name || 'Unknown',
+                        accountNumber: bill.account_number || '—',
+                        meterNumber: bill.meter_number || '—',
+                        phoneNumber: bill.phone_number || '—',
+                        consumption: utility === 'water' ? (bill.consumption_m3 || 0) : (utility === 'electricity' ? (bill.consumption_kwh || 0) : 0),
+                        currentCharges: bill.current_charges || 0,
+                        outstandingCharges: bill.unsettled_charges || 0,
+                        totalBillCharges: totalBillCharges,
+                        totalAmount: totalAmount,
+                        billNumber: billNumber
+                    });
+                }
+                
+                const selectedColumns = getSelectedColumns(utility);
+                if (selectedColumns.length === 0) continue;
+                
+                allPrintHtml += generateUtilityPrintPage(printData, month, year, utility, selectedColumns, globalPageCounter);
+                globalPageCounter += Math.ceil(printData.length / 10);
+            }
+            
+            if (allPrintHtml) {
+                const printWindow = window.open('', '_blank');
+                if (printWindow) {
+                    printWindow.document.write(generateFullPrintHtml(allPrintHtml));
+                    printWindow.document.close();
+                } else alert('Please allow pop-ups for this site to print.');
+            }
+            
         } catch(error) { console.error(error); alert('❌ Error: ' + error.message); }
         finally { document.getElementById('loadingIndicator').style.display = 'none'; }
     });
     
-    function generateBillPaymentPrint(data, month, year, selectedUtilities, showSchools, showDepartments, selectedColumns) {
+    function generateUtilityPrintPage(data, month, year, utility, selectedColumns, startPage) {
         const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
         const monthName = monthNames[month-1];
-        const utilityText = selectedUtilities.map(u=>u==='water'?'Water':u==='electricity'?'Electricity':'Telephone').join(', ');
-        const entityText = [showSchools?'Schools':'', showDepartments?'Departments':''].filter(Boolean).join(' and ');
+        const utilityNames = { water:'Water', electricity:'Electricity', telephone:'Telephone' };
         
         const columnHeaders = [];
-        if (selectedColumns.includes('no')) columnHeaders.push('NO.');
-        if (selectedColumns.includes('name')) columnHeaders.push('Entity Name');
-        if (selectedColumns.includes('account')) columnHeaders.push('Account Number');
-        if (selectedColumns.includes('currentCharges')) columnHeaders.push('Current Charges (BND)');
-        if (selectedColumns.includes('outstanding')) columnHeaders.push('Outstanding (BND)');
-        if (selectedColumns.includes('totalBill')) columnHeaders.push('Total Bill (BND)');
-        if (selectedColumns.includes('billNumber')) columnHeaders.push('Bill Number');
+        const columnKeys = [];
+        
+        if (selectedColumns.includes('no')) { columnHeaders.push('NO.'); columnKeys.push('no'); }
+        if (selectedColumns.includes('name')) { columnHeaders.push('Entity Name'); columnKeys.push('name'); }
+        if (selectedColumns.includes('account')) { columnHeaders.push('Account Number'); columnKeys.push('account'); }
+        if (selectedColumns.includes('meter')) { columnHeaders.push('Meter Number'); columnKeys.push('meter'); }
+        if (selectedColumns.includes('phone')) { columnHeaders.push('Phone Number'); columnKeys.push('phone'); }
+        if (selectedColumns.includes('consumption')) { columnHeaders.push(utility === 'water' ? 'Consumption (m³)' : 'Consumption (kWh)'); columnKeys.push('consumption'); }
+        if (selectedColumns.includes('currentCharges')) { columnHeaders.push('Current Charges (BND)'); columnKeys.push('current'); }
+        if (selectedColumns.includes('outstanding')) { columnHeaders.push('Outstanding (BND)'); columnKeys.push('outstanding'); }
+        if (selectedColumns.includes('totalBill')) { columnHeaders.push('Total Bill (BND)'); columnKeys.push('total'); }
+        if (selectedColumns.includes('totalAmount')) { columnHeaders.push('Total Amount (BND)'); columnKeys.push('totalAmount'); }
+        if (selectedColumns.includes('billNumber')) { columnHeaders.push('Bill Number'); columnKeys.push('billNumber'); }
         
         const itemsPerPage = 10;
         const totalPages = Math.ceil(data.length / itemsPerPage);
+        let html = '';
         
-        let printHtml = `<!DOCTYPE html><html><head><title>Bill Payment - ${monthName} ${year}</title><meta charset="UTF-8"><style>
+        for (let page = 1; page <= totalPages; page++) {
+            const startIdx = (page-1)*itemsPerPage;
+            const pageData = data.slice(startIdx, startIdx+itemsPerPage);
+            const currentPageNumber = startPage + page - 1;
+            
+            html += `<div class="print-page">
+                <div class="attachment-header">Attachment ${currentPageNumber}</div>
+                <div class="print-header">
+                    <h2>🏛️ MINISTRY OF EDUCATION BRUNEI</h2>
+                    <h3>${utilityNames[utility]} Bill Payment List</h3>
+                    <p>${monthName} ${year}</p>
+                </div>
+                <table class="payment-table"><thead><tr>`;
+            
+            for (const header of columnHeaders) html += `<th>${header}</th>`;
+            html += `</tr></thead><tbody>`;
+            
+            for (const item of pageData) {
+                html += `<tr>`;
+                for (const key of columnKeys) {
+                    if (key === 'no') html += `<td style="text-align:center">${item.no}</td>`;
+                    else if (key === 'name') html += `<td>${escapeHtml(item.name)}</td>`;
+                    else if (key === 'account') html += `<td>${escapeHtml(item.accountNumber)}</td>`;
+                    else if (key === 'meter') html += `<td>${escapeHtml(item.meterNumber)}</td>`;
+                    else if (key === 'phone') html += `<td>${escapeHtml(item.phoneNumber)}</td>`;
+                    else if (key === 'consumption') html += `<td style="text-align:right">${item.consumption.toFixed(2)}</td>`;
+                    else if (key === 'current') html += `<td style="text-align:right">${item.currentCharges.toFixed(2)}</td>`;
+                    else if (key === 'outstanding') html += `<td style="text-align:right">${item.outstandingCharges.toFixed(2)}</td>`;
+                    else if (key === 'total') html += `<td style="text-align:right">${item.totalBillCharges.toFixed(2)}</td>`;
+                    else if (key === 'totalAmount') html += `<td style="text-align:right">${item.totalAmount.toFixed(2)}</td>`;
+                    else if (key === 'billNumber') html += `<td>${escapeHtml(item.billNumber)}</td>`;
+                }
+                html += `</tr>`;
+            }
+            
+            const emptyRows = itemsPerPage - pageData.length;
+            for (let i = 0; i < emptyRows; i++) {
+                html += `<tr>`;
+                for (let j = 0; j < columnHeaders.length; j++) html += `<td>&nbsp;</td>`;
+                html += `</tr>`;
+            }
+            
+            html += `</tbody></table>
+                <div class="page-number">Page ${page} of ${totalPages}</div>
+                <div class="footer-note">This is a computer-generated document. No signature required.</div>
+            </div>`;
+        }
+        
+        return html;
+    }
+    
+    function generateFullPrintHtml(content) {
+        return `<!DOCTYPE html><html><head><title>Bill Payment Report</title><meta charset="UTF-8"><style>
             *{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:20px;background:white}
             .print-page{page-break-after:always;margin-bottom:30px;background:white}.print-page:last-child{page-break-after:auto}
             .attachment-header{text-align:right;font-size:12px;margin-bottom:20px;font-weight:bold}
             .print-header{text-align:center;margin-bottom:30px}
             .print-header h2{color:#2e7d32;margin:5px 0}
-            .print-header h3,.print-header h4{font-weight:normal;margin:5px 0;color:#555}
+            .print-header h3,.print-header p{font-weight:normal;margin:5px 0;color:#555}
             .payment-table{width:100%;border-collapse:collapse;margin-top:20px;font-size:12px}
             .payment-table th{background:#2196f3;color:white;padding:10px;border:1px solid #ddd;text-align:left}
             .payment-table td{padding:8px 10px;border:1px solid #ddd;background:white}
-            .payment-table td:first-child,.payment-table th:first-child{text-align:center;width:50px}
             .page-number{text-align:center;margin-top:30px;font-size:10px;color:#666}
             .footer-note{text-align:center;margin-top:20px;font-size:9px;color:#999;border-top:1px solid #ddd;padding-top:10px}
             @media print{body{padding:0;margin:0.5in}.print-page{page-break-after:always}}
-        </style></head><body>`;
-        
-        for (let page = 1; page <= totalPages; page++) {
-            const startIdx = (page-1)*itemsPerPage;
-            const pageData = data.slice(startIdx, startIdx+itemsPerPage);
-            
-            printHtml += `<div class="print-page"><div class="attachment-header">Attachment ${page}</div>
-                <div class="print-header"><h2>🏛️ MINISTRY OF EDUCATION BRUNEI</h2>
-                <h3>Bill Payment List</h3><h4>${utilityText} Bills - ${entityText}</h4><p>${monthName} ${year}</p></div>
-                <table class="payment-table"><thead><tr>`;
-            
-            for (const header of columnHeaders) printHtml += `<th>${header}</th>`;
-            printHtml += `</tr></thead><tbody>`;
-            
-            for (const item of pageData) {
-                printHtml += `<tr>`;
-                if (selectedColumns.includes('no')) printHtml += `<td>${item.no}</td>`;
-                if (selectedColumns.includes('name')) printHtml += `<td>${escapeHtml(item.name)}</td>`;
-                if (selectedColumns.includes('account')) printHtml += `<td>${escapeHtml(item.accountNumber)}</td>`;
-                if (selectedColumns.includes('currentCharges')) printHtml += `<td style="text-align:right">${item.currentCharges.toFixed(2)}</td>`;
-                if (selectedColumns.includes('outstanding')) printHtml += `<td style="text-align:right">${item.outstandingCharges.toFixed(2)}</td>`;
-                if (selectedColumns.includes('totalBill')) printHtml += `<td style="text-align:right">${item.totalBillCharges.toFixed(2)}</td>`;
-                if (selectedColumns.includes('billNumber')) printHtml += `<td>${escapeHtml(item.billNumber)}</td>`;
-                printHtml += `</tr>`;
-            }
-            
-            const emptyRows = itemsPerPage - pageData.length;
-            for (let i = 0; i < emptyRows; i++) {
-                printHtml += `<tr>`;
-                for (let j = 0; j < columnHeaders.length; j++) printHtml += `<td>&nbsp;</td>`;
-                printHtml += `</tr>`;
-            }
-            
-            printHtml += `</tbody></table><div class="page-number">Page ${page} of ${totalPages}</div>
-                <div class="footer-note">This is a computer-generated document. No signature required.</div></div>`;
-        }
-        
-        printHtml += `<script>window.onload=function(){setTimeout(function(){window.print();setTimeout(function(){window.close();},5000);},500);};<\/script></body></html>`;
-        
-        const printWindow = window.open('', '_blank');
-        if (printWindow) { printWindow.document.write(printHtml); printWindow.document.close(); }
-        else alert('Please allow pop-ups for this site to print.');
+        </style></head><body>${content}</body></html>`;
     }
     
     async function loadEntitiesForSelection() {
@@ -510,6 +607,7 @@
     loadEntitiesForSelection();
     loadCheckboxLists();
     toggleEntityContainers();
+    updateColumnVisibility();
 </script>
 </body>
 </html>
