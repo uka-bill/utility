@@ -220,11 +220,12 @@
         .data-table th:nth-child(1) { width: 5%; }
         .data-table th:nth-child(2) { width: 18%; }
         .data-table th:nth-child(3) { width: 10%; }
-        .data-table th:nth-child(4) { width: 20%; }
-        .data-table th:nth-child(5) { width: 10%; }
+        .data-table th:nth-child(4) { width: 10%; }
+        .data-table th:nth-child(5) { width: 15%; }
         .data-table th:nth-child(6) { width: 10%; }
-        .data-table th:nth-child(7) { width: 12%; }
-        .data-table th:nth-child(8) { width: 15%; }
+        .data-table th:nth-child(7) { width: 10%; }
+        .data-table th:nth-child(8) { width: 12%; }
+        .data-table th:nth-child(9) { width: 10%; }
 
         .data-table td {
             padding: 10px;
@@ -547,13 +548,6 @@
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
         }
-        
-        .account-bill-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
     </style>
 </head>
 <body>
@@ -625,15 +619,17 @@
                     <th>No.</th>
                     <th>Entity Name</th>
                     <th>Type</th>
-                    <th>Account / Phone / Bill No.</th>
+                    <th>Bill No.</th>
+                    <th>Account / Phone</th>
                     <th>Current Charges ($)</th>
                     <th>Total Amount ($)</th>
                     <th>Notes</th>
+                    <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="8" class="no-data">Loading schools & departments...<\/td></tr>
+                <tr><td colspan="10" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -1049,7 +1045,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="8" class="no-data">Loading data...<\/td></td>';
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1067,7 +1063,7 @@
         });
         
         if (filteredEntities.length === 0) {
-            tbody.innerHTML = '<tr class="no-data-row"><td colspan="8" class="no-data">No matching entities found.</td></td>';
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="10" class="no-data">No matching entities found.<\/td><\/tr>';
             isLoading = false;
             return;
         }
@@ -1152,7 +1148,7 @@
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
-                    <td colspan="8">
+                    <td colspan="10">
                         <div class="cluster-info">
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
                             <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
@@ -1236,7 +1232,7 @@
                 const deptSeparator = document.createElement('tr');
                 deptSeparator.className = 'department-group-separator';
                 deptSeparator.innerHTML = `
-                    <td colspan="8">
+                    <td colspan="10">
                         <div class="dept-group-info">
                             <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
                             <span class="dept-group-count">${visibleDeptEntities.length} unit${visibleDeptEntities.length > 1 ? 's' : ''}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
@@ -1332,6 +1328,7 @@
             entityStatusText = 'No account';
         }
         
+        // Entity Header Row with Bill Number in its own column (after Type)
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
@@ -1340,13 +1337,14 @@
         entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
-            <td class="seq-number">${startSerial} </div>
+            <td class="seq-number">${startSerial}</td>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
                 ${!isPlaceholder ? `<span class="total-due">(Total Current: $${entityTotalCurrent.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No telephone account configured)</span>'}
             </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
-            <td colspan="2"></div>
+            <td colspan="1"></div>
+            <td colspan="3"></div>
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn" ${isPlaceholder ? 'disabled style="opacity:0.5;"' : ''}>💾 Save All</button>
@@ -1364,20 +1362,18 @@
             if (phoneData.billId) phoneRow.setAttribute('data-bill-id', phoneData.billId);
             
             phoneRow.innerHTML = `
-                <td class="seq-number">${phoneData.serial} </div>
+                <td class="seq-number">${phoneData.serial}</div>
                 <td></div>
                 <td></div>
-                <td>
-                    <div class="account-bill-row">
-                        ${phoneData.isFirstPhoneForAccount ? `<span class="account-number">📋 ${escapeHtml(phoneData.accountNumber)}</span>` : ''}
-                        <div class="phone-number">📞 ${escapeHtml(phoneData.phoneNumber)}</div>
-                        ${phoneData.isFirstPhoneForAccount ? `<input type="text" class="bill-number-input" value="${escapeHtml(phoneData.billNumber)}" placeholder="Bill No." ${phoneData.disabledAttr}>` : ''}
-                        ${phoneData.locationDisplay}
-                    </div>
+                <td><input type="text" class="bill-number-input ${phoneData.placeholderClass}" value="${escapeHtml(phoneData.billNumber)}" placeholder="Bill No." ${phoneData.disabledAttr}></div>
+                <td>${phoneData.isFirstPhoneForAccount ? `<span class="account-number">📋 ${escapeHtml(phoneData.accountNumber)}</span>` : ''}
+                    <div class="phone-number">📞 ${escapeHtml(phoneData.phoneNumber)}</div>
+                    ${phoneData.locationDisplay}
                 </div>
                 <td><input type="number" step="0.01" class="inline-input current-charge-input ${phoneData.placeholderClass}" value="${phoneData.currentCharges.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
                 <td><input type="number" step="0.01" class="inline-input total-amount-input ${phoneData.placeholderClass}" value="${phoneData.totalAmount.toFixed(2)}" placeholder="$" ${phoneData.disabledAttr}></div>
                 <td><input type="text" class="inline-input notes-input ${phoneData.placeholderClass}" value="${escapeHtml(phoneData.notes)}" placeholder="Notes..." ${phoneData.disabledAttr}></div>
+                <td></div>
                 <td></div>
             `;
             tbody.appendChild(phoneRow);
@@ -1390,7 +1386,7 @@
         summaryRow.setAttribute('data-summary-entity-id', entity.id);
         
         const summaryCell = document.createElement('td');
-        summaryCell.colSpan = 8;
+        summaryCell.colSpan = 10;
         summaryCell.style.padding = '15px 20px';
         summaryCell.style.backgroundColor = 'transparent';
         
