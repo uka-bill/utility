@@ -15,6 +15,7 @@ import base64
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'uka-bill-utility-secret-2026')
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
 
 # Configure upload folder
 UPLOAD_FOLDER = 'uploads'
@@ -582,6 +583,7 @@ def export_csv():
             return jsonify({'error': 'Database not connected'}), 500
         
         export_type = request.args.get('type', 'all')
+        print(f"📊 Export type: {export_type}")
         
         if export_type == 'schools':
             return export_schools_csv()
@@ -596,165 +598,179 @@ def export_csv():
         
     except Exception as e:
         print(f"❌ CSV export error: {e}")
+        print(traceback.format_exc())
         return jsonify({'error': f'Export failed: {str(e)}'}), 500
 
 def export_schools_csv():
     """Export schools as CSV"""
-    output = io.StringIO()
-    writer = csv.writer(output)
-    
-    # Write headers
-    writer.writerow(['ID', 'Name', 'Cluster Number', 'School Number', 'BMO Name', 'BMO Phone', 'Address', 
-                     'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
-                     'Telephone Account', 'Telephone Number', 'Notes'])
-    
-    # Get schools ordered by cluster, then name
-    response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
-    schools = response.data if response.data else []
-    
-    for school in schools:
-        writer.writerow([
-            school.get('id', ''),
-            school.get('name', ''),
-            school.get('cluster_number', ''),
-            school.get('school_number', ''),
-            school.get('bmo_name', ''),
-            school.get('bmo_phone', ''),
-            school.get('address', ''),
-            school.get('water_account', ''),
-            school.get('water_meter', ''),
-            school.get('electricity_account', ''),
-            school.get('electricity_meter', ''),
-            school.get('telephone_account', ''),
-            school.get('telephone_number', ''),
-            school.get('notes', '')
-        ])
-    
-    output.seek(0)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"schools_export_{timestamp}.csv"
-    
-    response = make_response(output.getvalue())
-    response.headers['Content-Type'] = 'text/csv'
-    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-    
-    return response
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        writer.writerow(['ID', 'Name', 'Cluster Number', 'School Number', 'BMO Name', 'BMO Phone', 'Address', 
+                         'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
+                         'Telephone Account', 'Telephone Number', 'Notes'])
+        
+        # Get schools ordered by cluster, then name
+        response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
+        schools = response.data if response.data else []
+        
+        for school in schools:
+            writer.writerow([
+                school.get('id', ''),
+                school.get('name', ''),
+                school.get('cluster_number', ''),
+                school.get('school_number', ''),
+                school.get('bmo_name', ''),
+                school.get('bmo_phone', ''),
+                school.get('address', ''),
+                school.get('water_account', ''),
+                school.get('water_meter', ''),
+                school.get('electricity_account', ''),
+                school.get('electricity_meter', ''),
+                school.get('telephone_account', ''),
+                school.get('telephone_number', ''),
+                school.get('notes', '')
+            ])
+        
+        output.seek(0)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"schools_export_{timestamp}.csv"
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        
+        return response
+    except Exception as e:
+        print(f"❌ Export schools CSV error: {e}")
+        raise
 
 def export_departments_csv():
     """Export departments as CSV"""
-    output = io.StringIO()
-    writer = csv.writer(output)
-    
-    # Write headers
-    writer.writerow(['ID', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address', 
-                     'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
-                     'Telephone Account', 'Telephone Number', 'Notes'])
-    
-    # Get departments ordered by department, division, unit
-    response = supabase.table("departments").select("*").order("department_name").order("division_name").order("unit_name").execute()
-    departments = response.data if response.data else []
-    
-    for dept in departments:
-        writer.writerow([
-            dept.get('id', ''),
-            dept.get('unit_name', ''),
-            dept.get('division_name', ''),
-            dept.get('department_name', ''),
-            dept.get('hotline_numbers', ''),
-            dept.get('address', ''),
-            dept.get('water_account', ''),
-            dept.get('water_meter', ''),
-            dept.get('electricity_account', ''),
-            dept.get('electricity_meter', ''),
-            dept.get('telephone_account', ''),
-            dept.get('telephone_number', ''),
-            dept.get('notes', '')
-        ])
-    
-    output.seek(0)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"departments_export_{timestamp}.csv"
-    
-    response = make_response(output.getvalue())
-    response.headers['Content-Type'] = 'text/csv'
-    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-    
-    return response
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        writer.writerow(['ID', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address', 
+                         'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
+                         'Telephone Account', 'Telephone Number', 'Notes'])
+        
+        # Get departments ordered by department, division, unit
+        response = supabase.table("departments").select("*").order("department_name").order("division_name").order("unit_name").execute()
+        departments = response.data if response.data else []
+        
+        for dept in departments:
+            writer.writerow([
+                dept.get('id', ''),
+                dept.get('unit_name', ''),
+                dept.get('division_name', ''),
+                dept.get('department_name', ''),
+                dept.get('hotline_numbers', ''),
+                dept.get('address', ''),
+                dept.get('water_account', ''),
+                dept.get('water_meter', ''),
+                dept.get('electricity_account', ''),
+                dept.get('electricity_meter', ''),
+                dept.get('telephone_account', ''),
+                dept.get('telephone_number', ''),
+                dept.get('notes', '')
+            ])
+        
+        output.seek(0)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"departments_export_{timestamp}.csv"
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        
+        return response
+    except Exception as e:
+        print(f"❌ Export departments CSV error: {e}")
+        raise
 
 def export_utility_bills_csv():
     """Export utility bills as CSV"""
-    output = io.StringIO()
-    writer = csv.writer(output)
-    
-    # Write headers
-    writer.writerow(['ID', 'Utility Type', 'Entity Type', 'Entity ID', 'Entity Name', 'Account Number', 
-                     'Meter Number', 'Phone Number', 'Current Charges', 'Late Charges', 'Unsettled Charges',
-                     'Amount Paid', 'Consumption (m³)', 'Consumption (kWh)', 'Month', 'Year', 'Notes'])
-    
-    # Get bills ordered by year, month, entity
-    response = supabase.table("utility_bills").select("*").order("year", desc=True).order("month", desc=True).execute()
-    bills = response.data if response.data else []
-    
-    for bill in bills:
-        writer.writerow([
-            bill.get('id', ''),
-            bill.get('utility_type', ''),
-            bill.get('entity_type', ''),
-            bill.get('entity_id', ''),
-            bill.get('entity_name', ''),
-            bill.get('account_number', ''),
-            bill.get('meter_number', ''),
-            bill.get('phone_number', ''),
-            bill.get('current_charges', 0),
-            bill.get('late_charges', 0),
-            bill.get('unsettled_charges', 0),
-            bill.get('amount_paid', 0),
-            bill.get('consumption_m3', ''),
-            bill.get('consumption_kwh', ''),
-            bill.get('month', ''),
-            bill.get('year', ''),
-            bill.get('notes', '')
-        ])
-    
-    output.seek(0)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"utility_bills_export_{timestamp}.csv"
-    
-    response = make_response(output.getvalue())
-    response.headers['Content-Type'] = 'text/csv'
-    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-    
-    return response
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        writer.writerow(['ID', 'Utility Type', 'Entity Type', 'Entity ID', 'Entity Name', 'Account Number', 
+                         'Meter Number', 'Phone Number', 'Current Charges', 'Late Charges', 'Unsettled Charges',
+                         'Amount Paid', 'Consumption (m³)', 'Consumption (kWh)', 'Month', 'Year', 'Notes'])
+        
+        # Get bills ordered by year, month, entity
+        response = supabase.table("utility_bills").select("*").order("year", desc=True).order("month", desc=True).execute()
+        bills = response.data if response.data else []
+        
+        for bill in bills:
+            writer.writerow([
+                bill.get('id', ''),
+                bill.get('utility_type', ''),
+                bill.get('entity_type', ''),
+                bill.get('entity_id', ''),
+                bill.get('entity_name', ''),
+                bill.get('account_number', ''),
+                bill.get('meter_number', ''),
+                bill.get('phone_number', ''),
+                bill.get('current_charges', 0),
+                bill.get('late_charges', 0),
+                bill.get('unsettled_charges', 0),
+                bill.get('amount_paid', 0),
+                bill.get('consumption_m3', ''),
+                bill.get('consumption_kwh', ''),
+                bill.get('month', ''),
+                bill.get('year', ''),
+                bill.get('notes', '')
+            ])
+        
+        output.seek(0)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"utility_bills_export_{timestamp}.csv"
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        
+        return response
+    except Exception as e:
+        print(f"❌ Export utility bills CSV error: {e}")
+        raise
 
 def export_all_as_zip():
     """Export all data as a ZIP file containing multiple CSV files"""
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    zip_filename = f"uka_bill_full_export_{timestamp}.zip"
-    
-    # Create ZIP file in memory
-    zip_buffer = io.BytesIO()
-    
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        # Export schools
-        schools_csv = export_schools_csv_to_string()
-        zip_file.writestr(f"schools_{timestamp}.csv", schools_csv)
+    try:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        zip_filename = f"uka_bill_full_export_{timestamp}.zip"
         
-        # Export departments
-        depts_csv = export_departments_csv_to_string()
-        zip_file.writestr(f"departments_{timestamp}.csv", depts_csv)
+        # Create ZIP file in memory
+        zip_buffer = io.BytesIO()
         
-        # Export utility bills
-        bills_csv = export_utility_bills_csv_to_string()
-        zip_file.writestr(f"utility_bills_{timestamp}.csv", bills_csv)
-        
-        # Export financial years
-        years_csv = export_financial_years_csv_to_string()
-        zip_file.writestr(f"financial_years_{timestamp}.csv", years_csv)
-        
-        # Add README
-        readme_content = """UKA BILL System Export
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Export schools
+            schools_csv = export_schools_csv_to_string()
+            zip_file.writestr(f"schools_{timestamp}.csv", schools_csv)
+            
+            # Export departments
+            depts_csv = export_departments_csv_to_string()
+            zip_file.writestr(f"departments_{timestamp}.csv", depts_csv)
+            
+            # Export utility bills
+            bills_csv = export_utility_bills_csv_to_string()
+            zip_file.writestr(f"utility_bills_{timestamp}.csv", bills_csv)
+            
+            # Export financial years
+            years_csv = export_financial_years_csv_to_string()
+            zip_file.writestr(f"financial_years_{timestamp}.csv", years_csv)
+            
+            # Add README
+            readme_content = f"""UKA BILL System Export
 ========================
-Exported on: {timestamp}
+Exported on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 Files included:
 - schools_{timestamp}.csv - List of all schools
@@ -768,17 +784,21 @@ Order Preserved:
 - Utility Bills: Ordered by year (descending), month (descending)
 
 For support, contact: aka.sazali@gmail.com
-""".format(timestamp=timestamp)
+"""
+            
+            zip_file.writestr("README.txt", readme_content)
         
-        zip_file.writestr("README.txt", readme_content)
-    
-    zip_buffer.seek(0)
-    
-    response = make_response(zip_buffer.getvalue())
-    response.headers['Content-Type'] = 'application/zip'
-    response.headers['Content-Disposition'] = f'attachment; filename={zip_filename}'
-    
-    return response
+        zip_buffer.seek(0)
+        
+        response = make_response(zip_buffer.getvalue())
+        response.headers['Content-Type'] = 'application/zip'
+        response.headers['Content-Disposition'] = f'attachment; filename={zip_filename}'
+        
+        return response
+    except Exception as e:
+        print(f"❌ Export all as ZIP error: {e}")
+        print(traceback.format_exc())
+        raise
 
 def export_schools_csv_to_string():
     """Export schools to CSV string"""
@@ -910,7 +930,7 @@ def format_file_size(size):
         size /= 1024.0
     return f"{size:.1f} TB"
 
-# ============ REMAINING ROUTES (your existing routes) ============
+# ============ REMAINING ROUTES ============
 
 @app.route('/')
 def splash():
