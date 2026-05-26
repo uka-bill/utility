@@ -75,10 +75,25 @@ except Exception as e:
     supabase = None
 
 def create_directories():
-    directories = ['uploads', 'backups']
+    """Create required directories if they don't exist"""
+    directories = [UPLOAD_FOLDER, BACKUP_FOLDER]
     for directory in directories:
-        os.makedirs(directory, exist_ok=True)
-        print(f"📁 Created directory: {directory}")
+        try:
+            if not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
+                print(f"📁 Created directory: {directory}")
+            else:
+                print(f"📁 Directory already exists: {directory}")
+        except Exception as e:
+            print(f"❌ Error creating directory {directory}: {e}")
+            # Try with absolute path
+            try:
+                abs_path = os.path.join(os.getcwd(), directory)
+                if not os.path.exists(abs_path):
+                    os.makedirs(abs_path, exist_ok=True)
+                    print(f"📁 Created directory (absolute path): {abs_path}")
+            except Exception as e2:
+                print(f"❌ Failed to create directory {directory}: {e2}")
 
 def test_supabase_connection():
     if supabase:
@@ -317,6 +332,12 @@ def backup_all_data():
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
+        # Ensure backups directory exists
+        backup_path = app.config['BACKUP_FOLDER']
+        if not os.path.exists(backup_path):
+            os.makedirs(backup_path, exist_ok=True)
+            print(f"📁 Created backups directory: {backup_path}")
+        
         # Fetch all data with preserved order
         data = get_all_data_with_order()
         
@@ -344,11 +365,11 @@ def backup_all_data():
         filename = f"uka_bill_backup_{timestamp}.json"
         
         # Save to backups folder
-        backup_path = os.path.join(app.config['BACKUP_FOLDER'], filename)
-        with open(backup_path, 'w', encoding='utf-8') as f:
+        backup_filepath = os.path.join(backup_path, filename)
+        with open(backup_filepath, 'w', encoding='utf-8') as f:
             f.write(backup_json)
         
-        print(f"✅ Backup created: {filename}")
+        print(f"✅ Backup created and saved to: {backup_filepath}")
         
         return jsonify({
             'success': True,
@@ -411,6 +432,11 @@ def list_backups():
         
         backup_folder = app.config['BACKUP_FOLDER']
         backups = []
+        
+        # Ensure backup folder exists
+        if not os.path.exists(backup_folder):
+            os.makedirs(backup_folder, exist_ok=True)
+            print(f"📁 Created backups directory: {backup_folder}")
         
         if os.path.exists(backup_folder):
             for filename in os.listdir(backup_folder):
