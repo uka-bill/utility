@@ -31,7 +31,6 @@
         .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 500; transition: all 0.3s ease; font-size: 1rem; }
         .btn-primary { background: var(--primary); color: white; }
         .btn-primary:hover { background: var(--secondary); }
-        .btn-success { background: var(--success); color: white; }
         .btn-bill-payment { background: #2196f3; color: white; }
         .btn-bill-payment:hover { background: #1976d2; }
         .action-buttons { display: flex; gap: 15px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
@@ -151,7 +150,7 @@
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="status" checked><label>Status</label></div>
         </div>
 
-        <!-- Telephone Columns - Complete list matching the telephone table -->
+        <!-- Telephone Columns - Separate Phone Charges and Bill Summary -->
         <div id="telephoneColumns" class="column-options" style="display: none;">
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="no" checked><label>No.</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="name" checked><label>Entity Name</label></div>
@@ -163,6 +162,12 @@
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="totalAmount" checked><label>Total Amount ($)</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="notes" checked><label>Notes</label></div>
             <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="status" checked><label>Status</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="previousOutstanding" checked><label>Previous Outstanding ($)</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="previousPayment" checked><label>Previous Payment ($)</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="totalCurrentBill" checked><label>Total Current Bill ($)</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="otherCharges" checked><label>Other Charges ($)</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="adjustment" checked><label>Adjustment ($)</label></div>
+            <div class="column-option"><input type="checkbox" class="col-checkbox" data-col="totalBillCharges" checked><label>Total Bill Charges ($)</label></div>
         </div>
 
         <div class="selection-grid">
@@ -227,7 +232,7 @@
         <div class="results-header"><h3 class="results-title" id="reportTitle">Report Results</h3></div>
         <div class="summary-cards" id="summaryCards"></div>
         <div class="scroll-hint"><i>↔️</i> Scroll horizontally to see all columns</div>
-        <div class="data-table-container"><table class="data-table" id="reportTable"><thead><tr><th>Entity Name</th><th>Type</th><th>Utility</th><th>Account No.</th><th>Current Charges</th><th>Outstanding Charges</th><th>Period</th></tr></thead><tbody id="reportData"><tr><td colspan="7" class="no-results">Click "Generate Report" to view data</td></tr></tbody></table></div>
+        <div class="data-table-container"><table class="data-table" id="reportTable"><thead><tr><th>Entity Name</th><th>Type</th><th>Utility</th><th>Account No.</th><th>Current Charges</th><th>Outstanding Charges</th><th>Period</th></tr></thead><tbody id="reportData"><tr><td colspan="7" class="no-results">Click "Generate Report" to view data</div></tr></tbody></table></div>
     </div>
 </div>
 
@@ -237,6 +242,7 @@
     document.getElementById('year').max = 2035;
     
     let allSchoolsData = [], allDepartmentsData = [];
+    let existingSummaryData = {};
     
     function populatePaymentYears() {
         const yearSelect = document.getElementById('paymentYear');
@@ -334,6 +340,37 @@
     function getSelectedDepartmentIds() { const ids = []; document.querySelectorAll('.department-checkbox:checked').forEach(cb => ids.push(parseInt(cb.value))); return ids; }
     function getSelectedUtilities() { const u=[]; if(document.getElementById('utilWater').checked) u.push('water'); if(document.getElementById('utilElectricity').checked) u.push('electricity'); if(document.getElementById('utilTelephone').checked) u.push('telephone'); return u; }
     
+    // Load summary data for telephone bills
+    async function loadTelephoneSummaryData(month, year, entityType, entityId) {
+        try {
+            const url = `/api/utility-bills?utility_type=telephone&entity_type=${entityType}&entity_id=${entityId}&month=${month}&year=${year}`;
+            const resp = await fetch(url);
+            if (resp.ok) {
+                const bills = await resp.json();
+                for (const bill of bills) {
+                    if (bill.notes && bill.notes.startsWith('{')) {
+                        try {
+                            const summaryData = JSON.parse(bill.notes);
+                            if (summaryData.isSummary) {
+                                return {
+                                    previousOutstanding: summaryData.previousOutstanding || 0,
+                                    previousPayment: summaryData.previousPayment || 0,
+                                    totalCurrentBill: summaryData.totalCurrentBill || 0,
+                                    otherCharges: summaryData.otherCharges || 0,
+                                    adjustment: summaryData.adjustment || 0,
+                                    totalBillCharges: summaryData.totalBillCharges || 0
+                                };
+                            }
+                        } catch(e) {}
+                    }
+                }
+            }
+        } catch(e) {
+            console.error('Error loading summary data:', e);
+        }
+        return null;
+    }
+    
     document.getElementById('printBillPaymentBtn').addEventListener('click', async function() {
         const selectedUtilities = getSelectedUtilities();
         const showSchools = document.getElementById('entitySchools').checked;
@@ -350,93 +387,181 @@
         document.getElementById('loadingIndicator').style.display = 'block';
         
         try {
-            const allBills = [];
-            const entityNames = new Map();
-            
-            // Fetch entity names for display
-            for (const schoolId of schoolIds) {
-                const school = allSchoolsData.find(s => s.id === schoolId);
-                if (school) entityNames.set(`school_${schoolId}`, school.name);
-            }
-            for (const deptId of departmentIds) {
-                const dept = allDepartmentsData.find(d => d.id === deptId);
-                if (dept) {
-                    const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-                    entityNames.set(`department_${deptId}`, displayName);
-                }
-            }
-            
-            for (const utility of selectedUtilities) {
-                for (const schoolId of schoolIds) {
-                    const resp = await fetch(`/api/utility-bills?utility_type=${utility}&entity_type=school&entity_id=${schoolId}&month=${month}&year=${year}`);
-                    if (resp.ok) { const bills = await resp.json(); allBills.push(...bills.filter(b=>!b.notes?.includes('isSummary'))); }
-                }
-                for (const deptId of departmentIds) {
-                    const resp = await fetch(`/api/utility-bills?utility_type=${utility}&entity_type=department&entity_id=${deptId}&month=${month}&year=${year}`);
-                    if (resp.ok) { const bills = await resp.json(); allBills.push(...bills.filter(b=>!b.notes?.includes('isSummary'))); }
-                }
-            }
-            
-            if (allBills.length === 0) { alert('⚠️ No bills found for the selected criteria.'); document.getElementById('loadingIndicator').style.display='none'; return; }
-            
-            // Group bills by utility type
-            const billsByUtility = {};
-            for (const utility of selectedUtilities) {
-                billsByUtility[utility] = allBills.filter(b => b.utility_type === utility);
-            }
-            
-            let allPrintHtml = '';
+            const allPrintHtmls = [];
             let globalPageCounter = 1;
             
             for (const utility of selectedUtilities) {
-                const utilityBills = billsByUtility[utility];
-                if (utilityBills.length === 0) continue;
+                const allBills = [];
+                const entityNames = new Map();
+                const summaryDataMap = new Map();
+                
+                // Fetch entity names
+                for (const schoolId of schoolIds) {
+                    const school = allSchoolsData.find(s => s.id === schoolId);
+                    if (school) entityNames.set(`school_${schoolId}`, school.name);
+                }
+                for (const deptId of departmentIds) {
+                    const dept = allDepartmentsData.find(d => d.id === deptId);
+                    if (dept) {
+                        const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
+                        entityNames.set(`department_${deptId}`, displayName);
+                    }
+                }
+                
+                // Fetch bills
+                for (const schoolId of schoolIds) {
+                    const url = `/api/utility-bills?utility_type=${utility}&entity_type=school&entity_id=${schoolId}&month=${month}&year=${year}`;
+                    const resp = await fetch(url);
+                    if (resp.ok) { 
+                        const bills = await resp.json(); 
+                        allBills.push(...bills.filter(b=>!b.notes?.includes('isSummary')));
+                        
+                        // For telephone, also fetch summary data
+                        if (utility === 'telephone') {
+                            const summaryUrl = `/api/utility-bills?utility_type=telephone&entity_type=school&entity_id=${schoolId}&month=${month}&year=${year}`;
+                            const summaryResp = await fetch(summaryUrl);
+                            if (summaryResp.ok) {
+                                const summaryBills = await summaryResp.json();
+                                for (const bill of summaryBills) {
+                                    if (bill.notes && bill.notes.startsWith('{')) {
+                                        try {
+                                            const parsed = JSON.parse(bill.notes);
+                                            if (parsed.isSummary) {
+                                                summaryDataMap.set(`school_${schoolId}`, parsed);
+                                            }
+                                        } catch(e) {}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                for (const deptId of departmentIds) {
+                    const url = `/api/utility-bills?utility_type=${utility}&entity_type=department&entity_id=${deptId}&month=${month}&year=${year}`;
+                    const resp = await fetch(url);
+                    if (resp.ok) { 
+                        const bills = await resp.json(); 
+                        allBills.push(...bills.filter(b=>!b.notes?.includes('isSummary')));
+                        
+                        // For telephone, also fetch summary data
+                        if (utility === 'telephone') {
+                            const summaryUrl = `/api/utility-bills?utility_type=telephone&entity_type=department&entity_id=${deptId}&month=${month}&year=${year}`;
+                            const summaryResp = await fetch(summaryUrl);
+                            if (summaryResp.ok) {
+                                const summaryBills = await summaryResp.json();
+                                for (const bill of summaryBills) {
+                                    if (bill.notes && bill.notes.startsWith('{')) {
+                                        try {
+                                            const parsed = JSON.parse(bill.notes);
+                                            if (parsed.isSummary) {
+                                                summaryDataMap.set(`department_${deptId}`, parsed);
+                                            }
+                                        } catch(e) {}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (allBills.length === 0 && utility !== 'telephone') continue;
                 
                 const printData = [];
                 let serial = 1;
-                for (const bill of utilityBills) {
-                    let totalAmount = bill.current_charges || 0;
-                    let billNumber = bill.meter_number || '';
-                    
-                    if (utility === 'telephone' && bill.notes && bill.notes.startsWith('{')) {
-                        try { const parsed = JSON.parse(bill.notes); totalAmount = parsed.totalAmount || bill.current_charges || 0; billNumber = parsed.billNumber || bill.meter_number || ''; } catch(e) {}
+                
+                // Group bills by entity for telephone to combine with summary data
+                if (utility === 'telephone') {
+                    const billsByEntity = new Map();
+                    for (const bill of allBills) {
+                        const entityKey = `${bill.entity_type}_${bill.entity_id}`;
+                        if (!billsByEntity.has(entityKey)) {
+                            billsByEntity.set(entityKey, []);
+                        }
+                        billsByEntity.get(entityKey).push(bill);
                     }
                     
-                    // Get entity name from map or from bill
-                    const entityKey = `${bill.entity_type}_${bill.entity_id}`;
-                    const entityDisplayName = entityNames.get(entityKey) || bill.entity_name || 'Unknown';
-                    
-                    printData.push({
-                        no: serial++,
-                        name: entityDisplayName,
-                        type: bill.entity_type === 'school' ? 'School' : 'Department',
-                        accountNumber: bill.account_number || '—',
-                        meterNumber: bill.meter_number || '—',
-                        phoneNumber: bill.phone_number || '—',
-                        consumption: utility === 'water' ? (bill.consumption_m3 || 0) : (utility === 'electricity' ? (bill.consumption_kwh || 0) : 0),
-                        currentCharges: bill.current_charges || 0,
-                        outstandingCharges: bill.unsettled_charges || 0,
-                        previousPayment: bill.amount_paid || 0,
-                        totalAmount: totalAmount,
-                        billNumber: billNumber,
-                        notes: bill.notes || '',
-                        status: bill.current_charges > 0 ? 'Pending' : 'Paid'
-                    });
+                    for (const [entityKey, bills] of billsByEntity) {
+                        const summary = summaryDataMap.get(entityKey) || {};
+                        const entityDisplayName = entityNames.get(entityKey) || bills[0]?.entity_name || 'Unknown';
+                        
+                        // Add phone charge rows
+                        for (const bill of bills) {
+                            let totalAmount = bill.current_charges || 0;
+                            let billNumber = bill.meter_number || '';
+                            
+                            if (bill.notes && bill.notes.startsWith('{')) {
+                                try { 
+                                    const parsed = JSON.parse(bill.notes); 
+                                    totalAmount = parsed.totalAmount || bill.current_charges || 0; 
+                                    billNumber = parsed.billNumber || bill.meter_number || ''; 
+                                } catch(e) {}
+                            }
+                            
+                            printData.push({
+                                type: 'phone',
+                                no: serial++,
+                                name: entityDisplayName,
+                                entityType: bill.entity_type === 'school' ? 'School' : 'Department',
+                                billNumber: billNumber,
+                                accountNumber: bill.account_number || '—',
+                                phoneNumber: bill.phone_number || '—',
+                                currentCharges: bill.current_charges || 0,
+                                totalAmount: totalAmount,
+                                notes: bill.notes || '',
+                                status: bill.current_charges > 0 ? 'Pending' : 'Paid'
+                            });
+                        }
+                        
+                        // Add summary row for this entity
+                        printData.push({
+                            type: 'summary',
+                            no: '',
+                            name: entityDisplayName,
+                            previousOutstanding: summary.previousOutstanding || 0,
+                            previousPayment: summary.previousPayment || 0,
+                            totalCurrentBill: summary.totalCurrentBill || 0,
+                            otherCharges: summary.otherCharges || 0,
+                            adjustment: summary.adjustment || 0,
+                            totalBillCharges: summary.totalBillCharges || 0
+                        });
+                    }
+                } else {
+                    // Water and Electricity - no summary data
+                    for (const bill of allBills) {
+                        const entityKey = `${bill.entity_type}_${bill.entity_id}`;
+                        const entityDisplayName = entityNames.get(entityKey) || bill.entity_name || 'Unknown';
+                        
+                        printData.push({
+                            type: 'charge',
+                            no: serial++,
+                            name: entityDisplayName,
+                            entityType: bill.entity_type === 'school' ? 'School' : 'Department',
+                            accountNumber: bill.account_number || '—',
+                            meterNumber: bill.meter_number || '—',
+                            consumption: utility === 'water' ? (bill.consumption_m3 || 0) : (bill.consumption_kwh || 0),
+                            currentCharges: bill.current_charges || 0,
+                            outstandingCharges: bill.unsettled_charges || 0,
+                            previousPayment: bill.amount_paid || 0,
+                            status: bill.current_charges > 0 ? 'Pending' : 'Paid'
+                        });
+                    }
                 }
                 
                 const selectedColumns = getSelectedColumns(utility);
                 if (selectedColumns.length === 0) continue;
                 
-                allPrintHtml += generateUtilityPrintPage(printData, month, year, utility, selectedColumns, globalPageCounter);
+                allPrintHtmls.push(generateUtilityPrintPage(printData, month, year, utility, selectedColumns, globalPageCounter));
                 globalPageCounter += Math.ceil(printData.length / 10);
             }
             
-            if (allPrintHtml) {
+            if (allPrintHtmls.length > 0) {
                 const printWindow = window.open('', '_blank');
                 if (printWindow) {
-                    printWindow.document.write(generateFullPrintHtml(allPrintHtml));
+                    printWindow.document.write(generateFullPrintHtml(allPrintHtmls.join('')));
                     printWindow.document.close();
                 } else alert('Please allow pop-ups for this site to print.');
+            } else {
+                alert('No data found for the selected criteria.');
             }
             
         } catch(error) { console.error(error); alert('❌ Error: ' + error.message); }
@@ -465,6 +590,12 @@
         if (selectedColumns.includes('totalAmount')) { columnHeaders.push('Total Amount (BND)'); columnKeys.push('totalAmount'); }
         if (selectedColumns.includes('notes')) { columnHeaders.push('Notes'); columnKeys.push('notes'); }
         if (selectedColumns.includes('status')) { columnHeaders.push('Status'); columnKeys.push('status'); }
+        // Telephone summary columns
+        if (selectedColumns.includes('previousOutstanding')) { columnHeaders.push('Previous Outstanding (BND)'); columnKeys.push('prevOut'); }
+        if (selectedColumns.includes('totalCurrentBill')) { columnHeaders.push('Total Current Bill (BND)'); columnKeys.push('totalCurr'); }
+        if (selectedColumns.includes('otherCharges')) { columnHeaders.push('Other Charges (BND)'); columnKeys.push('other'); }
+        if (selectedColumns.includes('adjustment')) { columnHeaders.push('Adjustment (BND)'); columnKeys.push('adj'); }
+        if (selectedColumns.includes('totalBillCharges')) { columnHeaders.push('Total Bill Charges (BND)'); columnKeys.push('totalBill'); }
         
         const itemsPerPage = 10;
         const totalPages = Math.ceil(data.length / itemsPerPage);
@@ -490,20 +621,25 @@
             for (const item of pageData) {
                 html += `<tr>`;
                 for (const key of columnKeys) {
-                    if (key === 'no') html += `<td style="text-align:center">${item.no}</div>`;
-                    else if (key === 'name') html += `<td>${escapeHtml(item.name)}</div>`;
-                    else if (key === 'type') html += `<td>${escapeHtml(item.type)}</div>`;
-                    else if (key === 'account') html += `<td>${escapeHtml(item.accountNumber)}</div>`;
-                    else if (key === 'meter') html += `<td>${escapeHtml(item.meterNumber)}</div>`;
-                    else if (key === 'phone') html += `<td>${escapeHtml(item.phoneNumber)}</div>`;
-                    else if (key === 'billNumber') html += `<td>${escapeHtml(item.billNumber)}</div>`;
-                    else if (key === 'consumption') html += `<td style="text-align:right">${item.consumption.toFixed(2)}</div>`;
-                    else if (key === 'current') html += `<td style="text-align:right">${item.currentCharges.toFixed(2)}</div>`;
-                    else if (key === 'outstanding') html += `<td style="text-align:right">${item.outstandingCharges.toFixed(2)}</div>`;
-                    else if (key === 'previous') html += `<td style="text-align:right">${item.previousPayment.toFixed(2)}</div>`;
-                    else if (key === 'totalAmount') html += `<td style="text-align:right">${item.totalAmount.toFixed(2)}</div>`;
-                    else if (key === 'notes') html += `<td>${escapeHtml(item.notes)}</div>`;
-                    else if (key === 'status') html += `<td>${escapeHtml(item.status)}</div>`;
+                    if (key === 'no') html += `<td style="text-align:center">${item.no || ''}</div>`;
+                    else if (key === 'name') html += `<td>${escapeHtml(item.name || '')}</div>`;
+                    else if (key === 'type') html += `<td>${escapeHtml(item.entityType || '')}</div>`;
+                    else if (key === 'account') html += `<td>${escapeHtml(item.accountNumber || '—')}</div>`;
+                    else if (key === 'meter') html += `<td>${escapeHtml(item.meterNumber || '—')}</div>`;
+                    else if (key === 'phone') html += `<td>${escapeHtml(item.phoneNumber || '—')}</div>`;
+                    else if (key === 'billNumber') html += `<td>${escapeHtml(item.billNumber || '—')}</div>`;
+                    else if (key === 'consumption') html += `<td style="text-align:right">${(item.consumption || 0).toFixed(2)}</div>`;
+                    else if (key === 'current') html += `<td style="text-align:right">${(item.currentCharges || 0).toFixed(2)}</div>`;
+                    else if (key === 'outstanding') html += `<td style="text-align:right">${(item.outstandingCharges || 0).toFixed(2)}</div>`;
+                    else if (key === 'previous') html += `<td style="text-align:right">${(item.previousPayment || 0).toFixed(2)}</div>`;
+                    else if (key === 'totalAmount') html += `<td style="text-align:right">${(item.totalAmount || 0).toFixed(2)}</div>`;
+                    else if (key === 'notes') html += `<td>${escapeHtml(item.notes || '')}</div>`;
+                    else if (key === 'status') html += `<td>${escapeHtml(item.status || 'Pending')}</div>`;
+                    else if (key === 'prevOut') html += `<td style="text-align:right">${(item.previousOutstanding || 0).toFixed(2)}</div>`;
+                    else if (key === 'totalCurr') html += `<td style="text-align:right">${(item.totalCurrentBill || 0).toFixed(2)}</div>`;
+                    else if (key === 'other') html += `<td style="text-align:right">${(item.otherCharges || 0).toFixed(2)}</div>`;
+                    else if (key === 'adj') html += `<td style="text-align:right">${(item.adjustment || 0).toFixed(2)}</div>`;
+                    else if (key === 'totalBill') html += `<td style="text-align:right">${(item.totalBillCharges || 0).toFixed(2)}</div>`;
                 }
                 html += `</tr>`;
             }
