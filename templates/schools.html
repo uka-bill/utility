@@ -189,7 +189,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.8rem;
-            min-width: 2200px;
+            min-width: 2400px;
         }
         
         .data-table th {
@@ -679,6 +679,7 @@
                     <th width="130">BMO Name</th>
                     <th width="130">BMO Phone</th>
                     <th width="180">Address</th>
+                    <th width="180">Notes</th>
                     <th width="110">Actions</th>
                 </tr>
             </thead>
@@ -721,7 +722,8 @@
         { key: 'telephoneAccounts', label: 'Telephone Accounts & Numbers', default: false },
         { key: 'bmoName', label: 'BMO Name', default: false },
         { key: 'bmoPhone', label: 'BMO Phone', default: false },
-        { key: 'address', label: 'Address', default: false }
+        { key: 'address', label: 'Address', default: false },
+        { key: 'notes', label: 'Notes', default: false }
     ];
 
     function showMessage(msg, isError = false) {
@@ -871,13 +873,14 @@
         const bmoName = document.getElementById(`edit-bmoname-${schoolId}`)?.value.trim() || '';
         const bmoPhone = document.getElementById(`edit-bmophone-${schoolId}`)?.value.trim() || '';
         const address = document.getElementById(`edit-address-${schoolId}`)?.value.trim() || '';
+        const notes = document.getElementById(`edit-notes-${schoolId}`)?.value.trim() || '';
         
         if (!nameInput || !clusterInput || !schoolNoInput) { showMessage("Missing required fields", true); return; }
         const updatedBasic = {
             name: nameInput.value.trim(),
             clusterNumber: clusterInput.value.trim(),
             schoolNumber: schoolNoInput.value.trim(),
-            bmoName, bmoPhone, address, notes: ''
+            bmoName, bmoPhone, address, notes: notes
         };
         if (!updatedBasic.name || !updatedBasic.clusterNumber || !updatedBasic.schoolNumber) {
             showMessage("School Name, Cluster and School Number required", true); return;
@@ -974,7 +977,7 @@
         const filtered = getFilteredSchools();
         const tbody = document.getElementById('schoolsTbody');
         tbody.innerHTML = '';
-        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="11" style="text-align:center">No schools</td></tr>'; return; }
+        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="12" style="text-align:center">No schools</div></tr>'; return; }
         
         const clusterMap = new Map();
         filtered.forEach(s => { let c = s.cluster_number || 'Unassigned'; if(!clusterMap.has(c)) clusterMap.set(c, []); clusterMap.get(c).push(s); });
@@ -984,7 +987,7 @@
         for(let cluster of sortedClusters) {
             const schools = clusterMap.get(cluster);
             const sepRow = document.createElement('tr'); sepRow.className='cluster-separator';
-            sepRow.innerHTML = `<td colspan="11"><div class="cluster-info"><span>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</span><span class="cluster-count">${schools.length} schools</span></div></td>`;
+            sepRow.innerHTML = `<td colspan="12"><div class="cluster-info"><span>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</span><span class="cluster-count">${schools.length} schools</span></div></div>`;
             tbody.appendChild(sepRow);
             
             for(let school of schools) {
@@ -992,33 +995,35 @@
                 const row = document.createElement('tr');
                 if(isEditing) {
                     row.innerHTML = `
-                        <td>${seq}</td>
-                        <td><input type="text" id="edit-name-${school.id}" class="inline-edit-input" value="${escapeHtml(school.name||'')}"></td>
-                        <td><input type="text" id="edit-cluster-${school.id}" class="inline-edit-input" value="${escapeHtml(school.cluster_number||'')}"></td>
-                        <td><input type="text" id="edit-schno-${school.id}" class="inline-edit-input" value="${escapeHtml(school.school_number||'')}"></td>
-                        <td>${renderExpandedUtilityEditor('water', school.water_accounts || [], school.id)}</td>
-                        <td>${renderExpandedUtilityEditor('electricity', school.electricity_accounts || [], school.id)}</td>
-                        <td>${renderExpandedUtilityEditor('telephone', school.telephone_accounts || [], school.id)}</td>
-                        <td><input type="text" id="edit-bmoname-${school.id}" class="inline-edit-input" value="${escapeHtml(school.bmo_name||'')}"></td>
-                        <td><input type="text" id="edit-bmophone-${school.id}" class="inline-edit-input" value="${escapeHtml(school.bmo_phone||'')}"></td>
-                        <td><input type="text" id="edit-address-${school.id}" class="inline-edit-input" value="${escapeHtml(school.address||'')}"></td>
-                        <td><div class="entity-actions"><button class="inline-save-btn" data-id="${school.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${school.id}">✖ Cancel</button></div></td>
+                        <td>${seq}</div>
+                        <td><input type="text" id="edit-name-${school.id}" class="inline-edit-input" value="${escapeHtml(school.name||'')}"></div>
+                        <td><input type="text" id="edit-cluster-${school.id}" class="inline-edit-input" value="${escapeHtml(school.cluster_number||'')}"></div>
+                        <td><input type="text" id="edit-schno-${school.id}" class="inline-edit-input" value="${escapeHtml(school.school_number||'')}"></div>
+                        <td>${renderExpandedUtilityEditor('water', school.water_accounts || [], school.id)}</div>
+                        <td>${renderExpandedUtilityEditor('electricity', school.electricity_accounts || [], school.id)}</div>
+                        <td>${renderExpandedUtilityEditor('telephone', school.telephone_accounts || [], school.id)}</div>
+                        <td><input type="text" id="edit-bmoname-${school.id}" class="inline-edit-input" value="${escapeHtml(school.bmo_name||'')}"></div>
+                        <td><input type="text" id="edit-bmophone-${school.id}" class="inline-edit-input" value="${escapeHtml(school.bmo_phone||'')}"></div>
+                        <td><input type="text" id="edit-address-${school.id}" class="inline-edit-input" value="${escapeHtml(school.address||'')}"></div>
+                        <td><input type="text" id="edit-notes-${school.id}" class="inline-edit-input" value="${escapeHtml(school.notes||'')}"></div>
+                        <td><div class="entity-actions"><button class="inline-save-btn" data-id="${school.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${school.id}">✖ Cancel</button></div></div>
                     `;
                     tbody.appendChild(row);
                     setTimeout(() => attachEditorEvents(school.id), 10);
                 } else {
                     row.innerHTML = `
-                        <td>${seq}</td>
-                        <td><strong>${escapeHtml(school.name||'')}</strong></td>
-                        <td><span class="badge badge-cluster">${escapeHtml(school.cluster_number||'-')}</span></td>
-                        <td>${escapeHtml(school.school_number||'-')}</td>
-                        <td>${renderViewModeUtility(school.water_accounts, 'water')}</td>
-                        <td>${renderViewModeUtility(school.electricity_accounts, 'electricity')}</td>
-                        <td>${renderViewModeUtility(school.telephone_accounts, 'telephone')}</td>
-                        <td>${escapeHtml(school.bmo_name||'-')}</td>
-                        <td>${escapeHtml(school.bmo_phone||'-')}</td>
-                        <td>${escapeHtml(school.address||'-')}</td>
-                        <td><div class="entity-actions"><button class="btn btn-warning btn-sm edit-school-btn" data-id="${school.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-school-btn" data-id="${school.id}">🗑️ Del</button></div></td>
+                        <td>${seq}</div>
+                        <td><strong>${escapeHtml(school.name||'')}</strong></div>
+                        <td><span class="badge badge-cluster">${escapeHtml(school.cluster_number||'-')}</span></div>
+                        <td>${escapeHtml(school.school_number||'-')}</div>
+                        <td>${renderViewModeUtility(school.water_accounts, 'water')}</div>
+                        <td>${renderViewModeUtility(school.electricity_accounts, 'electricity')}</div>
+                        <td>${renderViewModeUtility(school.telephone_accounts, 'telephone')}</div>
+                        <td>${escapeHtml(school.bmo_name||'-')}</div>
+                        <td>${escapeHtml(school.bmo_phone||'-')}</div>
+                        <td>${escapeHtml(school.address||'-')}</div>
+                        <td>${escapeHtml(school.notes||'-')}</div>
+                        <td><div class="entity-actions"><button class="btn btn-warning btn-sm edit-school-btn" data-id="${school.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-school-btn" data-id="${school.id}">🗑️ Del</button></div></div>
                     `;
                     tbody.appendChild(row);
                 }
@@ -1046,19 +1051,38 @@
         addingMode = true;
         const tbody = document.getElementById('schoolsTbody');
         const addRow = document.createElement('tr'); addRow.className='add-new-row'; addRow.id='inline-add-row';
-        addRow.innerHTML = `<td>✨<\/td><td><input id="new-name" class="inline-edit-input" placeholder="Name *"></td><td><input id="new-cluster" class="inline-edit-input" placeholder="Cluster *"></td><td><input id="new-schno" class="inline-edit-input" placeholder="School No *"></td>
-        <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Add utilities after creation)</span></td>
-        <td><input id="new-bmoname" class="inline-edit-input" placeholder="BMO"></td><td><input id="new-bmophone" class="inline-edit-input" placeholder="Phone"></td><td><input id="new-address" class="inline-edit-input" placeholder="Address"></td>
-        <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button></td>`;
+        addRow.innerHTML = `<td>✨<\/td><td><input id="new-name" class="inline-edit-input" placeholder="Name *"><\/td>
+        <td><input id="new-cluster" class="inline-edit-input" placeholder="Cluster *"><\/td>
+        <td><input id="new-schno" class="inline-edit-input" placeholder="School No *"><\/td>
+        <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Add utilities after creation)</span><\/td>
+        <td><input id="new-bmoname" class="inline-edit-input" placeholder="BMO"><\/td>
+        <td><input id="new-bmophone" class="inline-edit-input" placeholder="Phone"><\/td>
+        <td><input id="new-address" class="inline-edit-input" placeholder="Address"><\/td>
+        <td><input id="new-notes" class="inline-edit-input" placeholder="Notes"><\/td>
+        <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button><\/td>`;
         const first = tbody.firstChild; if(first) tbody.insertBefore(addRow, first); else tbody.appendChild(addRow);
         document.getElementById('confirmAddBtn')?.addEventListener('click', async () => {
-            const name = document.getElementById('new-name')?.value.trim(); const cluster = document.getElementById('new-cluster')?.value.trim(); const schno = document.getElementById('new-schno')?.value.trim();
+            const name = document.getElementById('new-name')?.value.trim(); 
+            const cluster = document.getElementById('new-cluster')?.value.trim(); 
+            const schno = document.getElementById('new-schno')?.value.trim();
             if(!name || !cluster || !schno) { showMessage("Required fields", true); return; }
-            const payload = { name, clusterNumber: cluster, schoolNumber: schno, bmoName: document.getElementById('new-bmoname')?.value.trim()||'', bmoPhone: document.getElementById('new-bmophone')?.value.trim()||'', address: document.getElementById('new-address')?.value.trim()||'', notes:'', waterAccounts:[], electricityAccounts:[], telephoneAccounts:[] };
+            const payload = { 
+                name, 
+                clusterNumber: cluster, 
+                schoolNumber: schno, 
+                bmoName: document.getElementById('new-bmoname')?.value.trim()||'', 
+                bmoPhone: document.getElementById('new-bmophone')?.value.trim()||'', 
+                address: document.getElementById('new-address')?.value.trim()||'', 
+                notes: document.getElementById('new-notes')?.value.trim()||'',
+                waterAccounts: [], 
+                electricityAccounts: [], 
+                telephoneAccounts: [] 
+            };
             try {
                 const res = await fetch('/api/schools', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
                 const result = await res.json();
-                if(res.ok && result.success) { showMessage(`School "${name}" created`); addingMode=false; await loadSchools(); } else showMessage(result.error||'Creation failed', true);
+                if(res.ok && result.success) { showMessage(`School "${name}" created`); addingMode=false; await loadSchools(); } 
+                else showMessage(result.error||'Creation failed', true);
             } catch(e) { showMessage('Network error', true); } finally { addingMode=false; renderSchools(); }
         });
         document.getElementById('cancelAddBtn')?.addEventListener('click', () => { addingMode=false; renderSchools(); });
@@ -1300,41 +1324,45 @@
                 printHtml += `<th>BMO Phone</th>`;
             } else if (col.key === 'address') {
                 printHtml += `<th>Address</th>`;
+            } else if (col.key === 'notes') {
+                printHtml += `<th>Notes</th>`;
             }
         });
         
-        printHtml += `</tr></thead><tbody>`;
+        printHtml += `<tr></thead><tbody>`;
         
         let globalSeq = 1;
         for (let cluster of sortedClusters) {
             const schools = clusterMap.get(cluster);
             
             // Cluster group header
-            printHtml += `<tr class="cluster-group"><td colspan="${selectedColumns.length}"><strong>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</strong> <span class="group-count">(${schools.length} school${schools.length > 1 ? 's' : ''})</span></td></tr>`;
+            printHtml += `<tr class="cluster-group"><td colspan="${selectedColumns.length}"><strong>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</strong> <span class="group-count">(${schools.length} school${schools.length > 1 ? 's' : ''})</span> te <tr>`;
             
             for (let school of schools) {
                 printHtml += `<tr>`;
                 for (let col of selectedColumns) {
                     if (col.key === 'seq') {
-                        printHtml += `<td style="text-align:center">${globalSeq}</td>`;
+                        printHtml += `<td style="text-align:center">${globalSeq} </div>`;
                     } else if (col.key === 'schoolName') {
-                        printHtml += `<td>${escapeHtml(school.name || '-')}</td>`;
+                        printHtml += `<td>${escapeHtml(school.name || '-')} </div>`;
                     } else if (col.key === 'cluster') {
-                        printHtml += `<td>${escapeHtml(school.cluster_number || '-')}</td>`;
+                        printHtml += `<td>${escapeHtml(school.cluster_number || '-')} </div>`;
                     } else if (col.key === 'schoolNo') {
-                        printHtml += `<td>${escapeHtml(school.school_number || '-')}</td>`;
+                        printHtml += `<td>${escapeHtml(school.school_number || '-')} </div>`;
                     } else if (col.key === 'waterAccounts') {
-                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.water_accounts, 'water'))}</td>`;
+                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.water_accounts, 'water'))} </div>`;
                     } else if (col.key === 'electricityAccounts') {
-                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.electricity_accounts, 'electricity'))}</td>`;
+                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.electricity_accounts, 'electricity'))} </div>`;
                     } else if (col.key === 'telephoneAccounts') {
-                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.telephone_accounts, 'telephone'))}</td>`;
+                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.telephone_accounts, 'telephone'))} </div>`;
                     } else if (col.key === 'bmoName') {
-                        printHtml += `<td>${escapeHtml(school.bmo_name || '-')}</td>`;
+                        printHtml += `<td>${escapeHtml(school.bmo_name || '-')} </div>`;
                     } else if (col.key === 'bmoPhone') {
-                        printHtml += `<td>${escapeHtml(school.bmo_phone || '-')}</td>`;
+                        printHtml += `<td>${escapeHtml(school.bmo_phone || '-')} </div>`;
                     } else if (col.key === 'address') {
-                        printHtml += `<td>${escapeHtml(school.address || '-')}</td>`;
+                        printHtml += `<td>${escapeHtml(school.address || '-')} </div>`;
+                    } else if (col.key === 'notes') {
+                        printHtml += `<td>${escapeHtml(school.notes || '-')} </div>`;
                     }
                 }
                 printHtml += `</tr>`;
