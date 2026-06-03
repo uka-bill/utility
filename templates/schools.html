@@ -189,7 +189,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.8rem;
-            min-width: 2400px;
+            min-width: 2200px;
         }
         
         .data-table th {
@@ -643,8 +643,9 @@
         <li><a href="/water">Water</a></li>
         <li><a href="/electricity">Electricity</a></li>
         <li><a href="/telephone">Telephone</a></li>
-        <li><a href="/reports">Reports</a></li>
-        <li><a href="/backup">Backup</a></li>
+        <li><a href="/sut-office">SUT Office</a></li>
+        <li><a href="/reports">Reports & Print</a></li>
+        <li><a href="/backup">Backup & Restore</a></li>
     </ul>
 </nav>
 
@@ -880,7 +881,7 @@
             name: nameInput.value.trim(),
             clusterNumber: clusterInput.value.trim(),
             schoolNumber: schoolNoInput.value.trim(),
-            bmoName, bmoPhone, address, notes: notes
+            bmoName, bmoPhone, address, notes
         };
         if (!updatedBasic.name || !updatedBasic.clusterNumber || !updatedBasic.schoolNumber) {
             showMessage("School Name, Cluster and School Number required", true); return;
@@ -977,7 +978,7 @@
         const filtered = getFilteredSchools();
         const tbody = document.getElementById('schoolsTbody');
         tbody.innerHTML = '';
-        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="12" style="text-align:center">No schools</div></tr>'; return; }
+        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="12" style="text-align:center">No schools</div></td>'; return; }
         
         const clusterMap = new Map();
         filtered.forEach(s => { let c = s.cluster_number || 'Unassigned'; if(!clusterMap.has(c)) clusterMap.set(c, []); clusterMap.get(c).push(s); });
@@ -1051,15 +1052,15 @@
         addingMode = true;
         const tbody = document.getElementById('schoolsTbody');
         const addRow = document.createElement('tr'); addRow.className='add-new-row'; addRow.id='inline-add-row';
-        addRow.innerHTML = `<td>✨<\/td><td><input id="new-name" class="inline-edit-input" placeholder="Name *"><\/td>
-        <td><input id="new-cluster" class="inline-edit-input" placeholder="Cluster *"><\/td>
-        <td><input id="new-schno" class="inline-edit-input" placeholder="School No *"><\/td>
-        <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Add utilities after creation)</span><\/td>
-        <td><input id="new-bmoname" class="inline-edit-input" placeholder="BMO"><\/td>
-        <td><input id="new-bmophone" class="inline-edit-input" placeholder="Phone"><\/td>
-        <td><input id="new-address" class="inline-edit-input" placeholder="Address"><\/td>
-        <td><input id="new-notes" class="inline-edit-input" placeholder="Notes"><\/td>
-        <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button><\/td>`;
+        addRow.innerHTML = `<td>✨</div><td><input id="new-name" class="inline-edit-input" placeholder="Name *"></div>
+        <td><input id="new-cluster" class="inline-edit-input" placeholder="Cluster *"></div>
+        <td><input id="new-schno" class="inline-edit-input" placeholder="School No *"></div>
+        <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Add utilities after creation)</span></div>
+        <td><input id="new-bmoname" class="inline-edit-input" placeholder="BMO"></div>
+        <td><input id="new-bmophone" class="inline-edit-input" placeholder="Phone"></div>
+        <td><input id="new-address" class="inline-edit-input" placeholder="Address"></div>
+        <td><input id="new-notes" class="inline-edit-input" placeholder="Notes"></div>
+        <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button></div>`;
         const first = tbody.firstChild; if(first) tbody.insertBefore(addRow, first); else tbody.appendChild(addRow);
         document.getElementById('confirmAddBtn')?.addEventListener('click', async () => {
             const name = document.getElementById('new-name')?.value.trim(); 
@@ -1297,7 +1298,7 @@
                     <p>Generated on: ${new Date().toLocaleString()}</p>
                     <p>Total Schools: ${filteredSchools.length}</p>
                 </div>
-                <table>
+                <td>
                     <thead>
                         <tr>
         `;
@@ -1336,33 +1337,33 @@
             const schools = clusterMap.get(cluster);
             
             // Cluster group header
-            printHtml += `<tr class="cluster-group"><td colspan="${selectedColumns.length}"><strong>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</strong> <span class="group-count">(${schools.length} school${schools.length > 1 ? 's' : ''})</span> te <tr>`;
+            printHtml += `<tr class="cluster-group"><td colspan="${selectedColumns.length}"><strong>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</strong> <span class="group-count">(${schools.length} school${schools.length > 1 ? 's' : ''})</span> </div></tr>`;
             
             for (let school of schools) {
                 printHtml += `<tr>`;
                 for (let col of selectedColumns) {
                     if (col.key === 'seq') {
-                        printHtml += `<td style="text-align:center">${globalSeq} </div>`;
+                        printHtml += `<td style="text-align:center">${globalSeq}</div>`;
                     } else if (col.key === 'schoolName') {
-                        printHtml += `<td>${escapeHtml(school.name || '-')} </div>`;
+                        printHtml += `<td>${escapeHtml(school.name || '-')}</div>`;
                     } else if (col.key === 'cluster') {
-                        printHtml += `<td>${escapeHtml(school.cluster_number || '-')} </div>`;
+                        printHtml += `<td>${escapeHtml(school.cluster_number || '-')}</div>`;
                     } else if (col.key === 'schoolNo') {
-                        printHtml += `<td>${escapeHtml(school.school_number || '-')} </div>`;
+                        printHtml += `<td>${escapeHtml(school.school_number || '-')}</div>`;
                     } else if (col.key === 'waterAccounts') {
-                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.water_accounts, 'water'))} </div>`;
+                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.water_accounts, 'water'))}</div>`;
                     } else if (col.key === 'electricityAccounts') {
-                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.electricity_accounts, 'electricity'))} </div>`;
+                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.electricity_accounts, 'electricity'))}</div>`;
                     } else if (col.key === 'telephoneAccounts') {
-                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.telephone_accounts, 'telephone'))} </div>`;
+                        printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.telephone_accounts, 'telephone'))}</div>`;
                     } else if (col.key === 'bmoName') {
-                        printHtml += `<td>${escapeHtml(school.bmo_name || '-')} </div>`;
+                        printHtml += `<td>${escapeHtml(school.bmo_name || '-')}</div>`;
                     } else if (col.key === 'bmoPhone') {
-                        printHtml += `<td>${escapeHtml(school.bmo_phone || '-')} </div>`;
+                        printHtml += `<td>${escapeHtml(school.bmo_phone || '-')}</div>`;
                     } else if (col.key === 'address') {
-                        printHtml += `<td>${escapeHtml(school.address || '-')} </div>`;
+                        printHtml += `<td>${escapeHtml(school.address || '-')}</div>`;
                     } else if (col.key === 'notes') {
-                        printHtml += `<td>${escapeHtml(school.notes || '-')} </div>`;
+                        printHtml += `<td>${escapeHtml(school.notes || '-')}</div>`;
                     }
                 }
                 printHtml += `</tr>`;
