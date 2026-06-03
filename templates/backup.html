@@ -59,6 +59,7 @@
         .nav-tabs {
             display: flex;
             list-style: none;
+            flex-wrap: wrap;
         }
         
         .nav-tabs li {
@@ -498,6 +499,7 @@
             <li><a href="/water">Water</a></li>
             <li><a href="/electricity">Electricity</a></li>
             <li><a href="/telephone">Telephone</a></li>
+            <li><a href="/sut-office">SUT Office</a></li>
             <li><a href="/reports">Reports & Print</a></li>
             <li><a href="/backup" class="active">Backup & Restore</a></li>
         </ul>
@@ -559,10 +561,10 @@
                 </div>
             </div>
             
-            <!-- Export Data Card - NEW DESIGN -->
+            <!-- Export Data Card -->
             <div class="backup-card">
                 <div class="card-header">
-                    <div class="card-title">Export Data (Excel/CSV)</div>
+                    <div class="card-title">Export Data (CSV)</div>
                     <div class="card-icon">📤</div>
                 </div>
                 <div class="card-content">
@@ -626,21 +628,6 @@
                             <strong>Includes:</strong> Account numbers, meter numbers, consumption, charges, payments, periods, etc.
                         </div>
                     </div>
-                    
-                    <!-- Format Selection -->
-                    <div class="export-type-section">
-                        <div class="export-type-title">📁 Format</div>
-                        <div class="radio-group">
-                            <div class="radio-option">
-                                <input type="radio" name="exportFormat" id="formatExcel" value="xlsx" checked>
-                                <label for="formatExcel">📊 Excel (.xlsx)</label>
-                            </div>
-                            <div class="radio-option">
-                                <input type="radio" name="exportFormat" id="formatCSV" value="csv">
-                                <label for="formatCSV">📄 CSV (.csv)</label>
-                            </div>
-                        </div>
-                    </div>
                 </div>
                 <div class="card-actions">
                     <button class="btn btn-success" id="exportDataBtn">
@@ -692,8 +679,8 @@
                             <td colspan="5" class="empty-state">
                                 <h3>Loading backups...</h3>
                                 <p>Please wait while we load the backup list.</p>
-                            </td>
-                        </tr>
+                             </div>
+                        </div>
                     </tbody>
                 </table>
             </div>
@@ -996,7 +983,6 @@
         
         async function exportData() {
             const exportCategory = document.querySelector('input[name="exportCategory"]:checked').value;
-            const format = document.querySelector('input[name="exportFormat"]:checked').value;
             
             let exports = [];
             
@@ -1051,10 +1037,10 @@
                 if (exports.length === 1) {
                     // Single export - download directly
                     const exportType = exports[0].type;
-                    const url = `/api/export-data?type=${exportType}&format=${format}`;
+                    const url = `/api/export-data?type=${exportType}`;
                     const downloadLink = document.createElement('a');
                     downloadLink.href = url;
-                    downloadLink.download = `${exportType}_export_${Date.now()}.${format === 'xlsx' ? 'xlsx' : 'csv'}`;
+                    downloadLink.download = `${exportType}_export_${Date.now()}.csv`;
                     document.body.appendChild(downloadLink);
                     downloadLink.click();
                     document.body.removeChild(downloadLink);
@@ -1064,7 +1050,7 @@
                     const response = await fetch('/api/export-multiple', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ exports, format })
+                        body: JSON.stringify({ exports, format: 'csv' })
                     });
                     
                     if (!response.ok) {
@@ -1112,7 +1098,7 @@
                             <h3>No Backups Found</h3>
                             <p>Create your first backup to see it here.</p>
                          </div>
-                     </div>
+                    </div>
                 `;
                 return;
             }
