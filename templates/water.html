@@ -194,6 +194,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
+            table-layout: auto;
             min-width: 1400px;
         }
 
@@ -206,26 +207,14 @@
         .data-table th {
             background: var(--primary);
             color: white;
-            padding: 12px;
+            padding: 12px 10px;
             text-align: left;
             position: sticky;
             top: 0;
             z-index: 20;
             border-bottom: 2px solid white;
+            white-space: nowrap;
         }
-
-        /* Fixed column widths */
-        .data-table th:nth-child(1) { width: 5%; }
-        .data-table th:nth-child(2) { width: 15%; }
-        .data-table th:nth-child(3) { width: 8%; }
-        .data-table th:nth-child(4) { width: 12%; }
-        .data-table th:nth-child(5) { width: 8%; }
-        .data-table th:nth-child(6) { width: 8%; }
-        .data-table th:nth-child(7) { width: 8%; }
-        .data-table th:nth-child(8) { width: 8%; }
-        .data-table th:nth-child(9) { width: 8%; }
-        .data-table th:nth-child(10) { width: 8%; }
-        .data-table th:nth-child(11) { width: 12%; }
 
         .data-table td {
             padding: 10px;
@@ -256,11 +245,11 @@
 
         .inline-input {
             width: 100%;
-            min-width: 80px;
-            padding: 8px 10px;
+            min-width: 70px;
+            padding: 6px 8px;
             border-radius: 5px;
             border: 1px solid #ddd;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             text-align: right;
             transition: 0.1s;
             box-sizing: border-box;
@@ -277,13 +266,13 @@
             background: #f5f5f5;
             padding: 4px 8px;
             border-radius: 4px;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             display: inline-block;
         }
 
         .meter-number {
             font-family: monospace;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--gray);
             margin-top: 4px;
         }
@@ -313,7 +302,7 @@
 
         .btn-sm {
             padding: 5px 10px;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             border-radius: 5px;
         }
 
@@ -339,6 +328,15 @@
             text-align: center;
             padding: 40px;
             color: var(--gray);
+        }
+
+        .info-note {
+            background: #e3f2fd;
+            border-left: 4px solid var(--primary);
+            padding: 12px 18px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-size: 0.85rem;
         }
 
         .success-toast {
@@ -472,6 +470,14 @@
             margin-bottom: 15px;
             border-left: 4px solid #4caf50;
         }
+        
+        .notes-cell {
+            min-width: 150px;
+        }
+        
+        .actions-cell {
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -486,6 +492,7 @@
         <li><a href="/water" class="active">Water</a></li>
         <li><a href="/electricity">Electricity</a></li>
         <li><a href="/telephone">Telephone</a></li>
+        <li><a href="/sut-office">SUT Office</a></li>
         <li><a href="/reports">Reports & Print</a></li>
         <li><a href="/backup">Backup & Restore</a></li>
     </ul>
@@ -498,18 +505,10 @@
             <div class="period-field">
                 <label>📅 Month</label>
                 <select id="globalMonth" class="period-select">
-                    <option value="1">January</option>
-                    <option value="2">February</option>
-                    <option value="3">March</option>
-                    <option value="4">April</option>
-                    <option value="5">May</option>
-                    <option value="6">June</option>
-                    <option value="7">July</option>
-                    <option value="8">August</option>
-                    <option value="9">September</option>
-                    <option value="10">October</option>
-                    <option value="11">November</option>
-                    <option value="12">December</option>
+                    <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+                    <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+                    <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+                    <option value="10">October</option><option value="11">November</option><option value="12">December</option>
                 </select>
             </div>
             <div class="period-field">
@@ -522,7 +521,6 @@
 
     <div class="payment-note">
         💡 <strong>Note:</strong> The "Amount Paid" column is used to deduct from the budget. Enter the amount you actually paid.
-        "Bill Amount" and "Outstanding" are for reference only.
     </div>
 
     <div class="filters-bar">
@@ -562,12 +560,13 @@
                     <th>Outstanding ($)</th>
                     <th>Previous Payment ($)</th>
                     <th>Amount Paid ($)</th>
+                    <th>Notes</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="11" class="no-data">Loading schools & departments...<\/td></tr>
+                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></td>
             </tbody>
         </table>
     </div>
@@ -767,12 +766,14 @@
             const outstandingInput = row.querySelector('.outstanding-input');
             const previousPaidInput = row.querySelector('.previous-paid-input');
             const amountPaidInput = row.querySelector('.amount-paid-input');
+            const notesInput = row.querySelector('.notes-input');
             
             const consumption = parseFloat(consumptionInput?.value) || 0;
             const currentCharges = parseFloat(currentInput?.value) || 0;
             const outstandingCharges = parseFloat(outstandingInput?.value) || 0;
             const previousPaymentReceived = parseFloat(previousPaidInput?.value) || 0;
             const amountPaid = parseFloat(amountPaidInput?.value) || 0;
+            const notes = notesInput?.value || '';
             
             billsToSave.push({
                 id: existingBillId,
@@ -782,7 +783,8 @@
                 currentCharges: currentCharges,
                 outstandingCharges: outstandingCharges,
                 previousPaymentReceived: previousPaymentReceived,
-                amountPaid: amountPaid
+                amountPaid: amountPaid,
+                notes: notes
             });
         }
         
@@ -803,6 +805,7 @@
                 current_charges: bill.currentCharges,
                 unsettled_charges: bill.outstandingCharges,
                 amount_paid: bill.amountPaid,
+                notes: JSON.stringify({ previousPayment: bill.previousPaymentReceived, originalNotes: bill.notes }),
                 month: month,
                 year: year
             };
@@ -906,7 +909,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="11" class="no-data">Loading data...<\/td><tr>';
+        tbody.innerHTML = '<td><td colspan="12" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -924,7 +927,7 @@
         });
         
         if (filteredEntities.length === 0) {
-            tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No matching entities found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="12" class="no-data">No matching entities found.<\/td><\/tr>';
             isLoading = false;
             return;
         }
@@ -1006,7 +1009,7 @@
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
-                    <td colspan="11">
+                    <td colspan="12">
                         <div class="cluster-info">
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
                             <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
@@ -1087,7 +1090,7 @@
                 const deptSeparator = document.createElement('tr');
                 deptSeparator.className = 'department-group-separator';
                 deptSeparator.innerHTML = `
-                    <td colspan="11">
+                    <td colspan="12">
                         <div class="dept-group-info">
                             <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
                             <span class="dept-group-count">${visibleDeptEntities.length} unit${visibleDeptEntities.length > 1 ? 's' : ''}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
@@ -1122,11 +1125,17 @@
             
             for (const meter of account.meters) {
                 const existing = meter.existing;
+                let parsedNotes = {};
+                if (existing && existing.notes && existing.notes.startsWith('{')) {
+                    try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
+                }
                 
                 let consumption = existing ? (existing.consumption_m3 || 0) : 0;
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
                 let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
+                let previousPayment = parsedNotes.previousPayment || 0;
                 let amountPaid = existing ? (existing.amount_paid || 0) : 0;
+                let notes = parsedNotes.originalNotes || meter.notes || '';
                 
                 const isPlaceholderAccount = account.isPlaceholder || meter.isPlaceholder;
                 const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
@@ -1147,7 +1156,9 @@
                     consumption: consumption,
                     currentCharges: currentCharges,
                     outstandingCharges: outstandingCharges,
+                    previousPayment: previousPayment,
                     amountPaid: amountPaid,
+                    notes: notes,
                     billId: meter.billId,
                     isFirstMeterForAccount: isFirstMeterForAccount,
                     isPlaceholder: isPlaceholderAccount,
@@ -1190,11 +1201,7 @@
                 ${!isPlaceholder ? `<span class="total-due">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
              </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
-            <td colspan="3"></div>
-            <td></div>
-            <td></div>
-            <td></div>
-            <td></div>
+            <td colspan="6"></div>
             <td></div>
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
@@ -1212,7 +1219,7 @@
             if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
             
             meterRow.innerHTML = `
-                <td class="seq-number">${meterData.serial}</div>
+                <td class="seq-number">${meterData.serial} </div>
                 <td></div>
                 <td></div>
                 <td>${meterData.isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span>` : ''}
@@ -1222,10 +1229,10 @@
                 <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="m³" ${meterData.disabledAttr}><span class="consumption-unit">m³</span></div>
                 <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
                 <td><input type="number" step="0.01" class="inline-input outstanding-input ${meterData.placeholderClass}" value="${meterData.outstandingCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
-                <td><input type="number" step="0.01" class="inline-input previous-paid-input ${meterData.placeholderClass}" value="0.00" placeholder="$" disabled></div>
+                <td><input type="number" step="0.01" class="inline-input previous-paid-input ${meterData.placeholderClass}" value="${meterData.previousPayment.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
                 <td><input type="number" step="0.01" class="inline-input amount-paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
                 <td></div>
-                <td class="notes-cell"><input type="text" class="inline-input notes-input ${meterData.placeholderClass}" value="" placeholder="Notes..." disabled></div>
+                <td class="notes-cell"><input type="text" class="inline-input notes-input ${meterData.placeholderClass}" value="${escapeHtml(meterData.notes)}" placeholder="Notes..." ${meterData.disabledAttr}></div>
             `;
             tbody.appendChild(meterRow);
         }
