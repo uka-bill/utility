@@ -206,7 +206,7 @@
         .data-table th {
             background: var(--primary);
             color: white;
-            padding: 15px;
+            padding: 12px;
             text-align: left;
             position: sticky;
             top: 0;
@@ -222,10 +222,11 @@
         .data-table th:nth-child(6) { width: 8%; }
         .data-table th:nth-child(7) { width: 8%; }
         .data-table th:nth-child(8) { width: 8%; }
-        .data-table th:nth-child(9) { width: 10%; }
+        .data-table th:nth-child(9) { width: 8%; }
+        .data-table th:nth-child(10) { width: 10%; }
 
         .data-table td {
-            padding: 12px;
+            padding: 10px;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
         }
@@ -528,7 +529,7 @@
 
     <div class="payment-note">
         💡 <strong>Note:</strong> The "Amount Paid" column is used to deduct from the budget. Enter the amount you actually paid.
-        The bill amount shown is for reference only.
+        "Outstanding Charges" and "Previous Payment" are for your records only and do NOT affect the budget.
     </div>
 
     <div class="filters-bar">
@@ -565,13 +566,15 @@
                     <th>Account / Meter</th>
                     <th>Consumption (m³)</th>
                     <th>Bill Amount ($)</th>
+                    <th>Outstanding ($)</th>
+                    <th>Previous Payment ($)</th>
                     <th>Amount Paid ($)</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="9" class="no-data">Loading schools & departments...<\/td></td>
+                <tr><td colspan="11" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -768,11 +771,17 @@
             
             const consumptionInput = row.querySelector('.consumption-input');
             const currentInput = row.querySelector('.current-charge-input');
+            const outstandingInput = row.querySelector('.outstanding-input');
+            const previousPaidInput = row.querySelector('.previous-paid-input');
             const amountPaidInput = row.querySelector('.amount-paid-input');
+            const notesInput = row.querySelector('.notes-input');
             
             const consumption = parseFloat(consumptionInput?.value) || 0;
             const currentCharges = parseFloat(currentInput?.value) || 0;
+            const outstandingCharges = parseFloat(outstandingInput?.value) || 0;
+            const previousPaymentReceived = parseFloat(previousPaidInput?.value) || 0;
             const amountPaid = parseFloat(amountPaidInput?.value) || 0;
+            const notes = notesInput?.value || '';
             
             billsToSave.push({
                 id: existingBillId,
@@ -780,7 +789,10 @@
                 meterNumber: meterNumber === '—' ? '' : meterNumber,
                 consumption: consumption,
                 currentCharges: currentCharges,
-                amountPaid: amountPaid
+                outstandingCharges: outstandingCharges,
+                previousPaymentReceived: previousPaymentReceived,
+                amountPaid: amountPaid,
+                notes: notes
             });
         }
         
@@ -799,7 +811,9 @@
                 meter_number: bill.meterNumber,
                 consumption_m3: bill.consumption,
                 current_charges: bill.currentCharges,
+                unsettled_charges: bill.outstandingCharges,
                 amount_paid: bill.amountPaid,
+                notes: JSON.stringify({ previousPayment: bill.previousPaymentReceived, originalNotes: bill.notes }),
                 month: month,
                 year: year
             };
@@ -903,7 +917,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="9" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -921,7 +935,7 @@
         });
         
         if (filteredEntities.length === 0) {
-            tbody.innerHTML = '<tr class="no-data-row"><td colspan="9" class="no-data">No matching entities found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No matching entities found.<\/td><\/tr>';
             isLoading = false;
             return;
         }
@@ -1003,7 +1017,7 @@
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
-                    <td colspan="9">
+                    <td colspan="11">
                         <div class="cluster-info">
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
                             <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
@@ -1084,7 +1098,7 @@
                 const deptSeparator = document.createElement('tr');
                 deptSeparator.className = 'department-group-separator';
                 deptSeparator.innerHTML = `
-                    <td colspan="9">
+                    <td colspan="11">
                         <div class="dept-group-info">
                             <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
                             <span class="dept-group-count">${visibleDeptEntities.length} unit${visibleDeptEntities.length > 1 ? 's' : ''}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
@@ -1109,7 +1123,7 @@
         let serial = startSerial;
         
         let meterRowsData = [];
-        let entityTotalCurrent = 0;
+        let entityTotalPaid = 0;
         let entityHasBills = false;
         let isPlaceholder = false;
         
@@ -1119,17 +1133,24 @@
             
             for (const meter of account.meters) {
                 const existing = meter.existing;
+                let parsedNotes = {};
+                if (existing && existing.notes && existing.notes.startsWith('{')) {
+                    try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
+                }
                 
                 let consumption = existing ? (existing.consumption_m3 || 0) : 0;
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
+                let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
+                let previousPayment = parsedNotes.previousPayment || 0;
                 let amountPaid = existing ? (existing.amount_paid || 0) : 0;
+                let notes = parsedNotes.originalNotes || meter.notes || '';
                 
                 const isPlaceholderAccount = account.isPlaceholder || meter.isPlaceholder;
                 const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
                 const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
                 
                 if (!isPlaceholderAccount) {
-                    entityTotalCurrent += amountPaid;
+                    entityTotalPaid += amountPaid;
                     if (existing && amountPaid > 0) entityHasBills = true;
                 }
                 
@@ -1142,7 +1163,10 @@
                     locationDisplay: locationDisplay,
                     consumption: consumption,
                     currentCharges: currentCharges,
+                    outstandingCharges: outstandingCharges,
+                    previousPayment: previousPayment,
                     amountPaid: amountPaid,
+                    notes: notes,
                     billId: meter.billId,
                     isFirstMeterForAccount: isFirstMeterForAccount,
                     isPlaceholder: isPlaceholderAccount,
@@ -1161,7 +1185,7 @@
             if (entityHasBills) {
                 entityStatusText = 'Paid';
                 entityStatusClass = 'status-paid';
-            } else if (entityTotalCurrent === 0) {
+            } else if (entityTotalPaid === 0) {
                 entityStatusText = 'Not entered';
             } else {
                 entityStatusText = 'Partially Paid';
@@ -1179,13 +1203,16 @@
         entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
-            <td class="seq-number">${startSerial}</td>
+            <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due">(Total Paid: $${entityTotalCurrent.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
-             </div>
+                ${!isPlaceholder ? `<span class="total-due">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
+            </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
             <td colspan="3"></div>
+            <td></div>
+            <td></div>
+            <td></div>
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn" ${isPlaceholder ? 'disabled style="opacity:0.5;"' : ''}>💾 Save All</button>
@@ -1211,9 +1238,11 @@
                 </div>
                 <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="m³" ${meterData.disabledAttr}><span class="consumption-unit">m³</span></div>
                 <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="number" step="0.01" class="inline-input outstanding-input ${meterData.placeholderClass}" value="${meterData.outstandingCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="number" step="0.01" class="inline-input previous-paid-input ${meterData.placeholderClass}" value="${meterData.previousPayment.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
                 <td><input type="number" step="0.01" class="inline-input amount-paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
                 <td></div>
-                <td></div>
+                <td class="notes-cell"><input type="text" class="inline-input notes-input ${meterData.placeholderClass}" value="${escapeHtml(meterData.notes)}" placeholder="Notes..." ${meterData.disabledAttr}></div>
             `;
             tbody.appendChild(meterRow);
         }
