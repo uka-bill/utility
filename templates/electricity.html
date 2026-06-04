@@ -651,24 +651,13 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                // Sort schools by cluster number, then by name
-                allSchools.sort((a, b) => {
-                    const clusterA = a.cluster_number ? parseInt(a.cluster_number) : 999;
-                    const clusterB = b.cluster_number ? parseInt(b.cluster_number) : 999;
-                    if (clusterA !== clusterB) return clusterA - clusterB;
-                    return (a.name || '').localeCompare(b.name || '');
-                });
+                // Sort by ID to match water.html and telephone.html
+                allSchools.sort((a, b) => a.id - b.id);
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                // Sort departments by department name, then division, then unit
-                allDepartments.sort((a, b) => {
-                    const deptCompare = (a.department_name || '').localeCompare(b.department_name || '');
-                    if (deptCompare !== 0) return deptCompare;
-                    const divCompare = (a.division_name || '').localeCompare(b.division_name || '');
-                    if (divCompare !== 0) return divCompare;
-                    return (a.unit_name || '').localeCompare(b.unit_name || '');
-                });
+                // Sort by ID to match water.html and telephone.html
+                allDepartments.sort((a, b) => a.id - b.id);
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) { console.error(e); }
@@ -702,7 +691,7 @@
     function buildEntityList() {
         const entities = [];
         
-        // Add schools in sorted order
+        // Add schools in ID order (same as water.html)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
@@ -719,7 +708,7 @@
             });
         }
         
-        // Add departments in sorted order
+        // Add departments in ID order (same as water.html)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
@@ -932,12 +921,13 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        const schools = entities.filter(e => e.type === 'school');
-        const departments = entities.filter(e => e.type === 'department');
+        // Separate schools and departments
+        const schoolsList = entities.filter(e => e.type === 'school');
+        const departmentsList = entities.filter(e => e.type === 'department');
         
-        // Group schools by cluster - same as water.html and schools.html
+        // Group schools by cluster (for display grouping, but keep ID order within clusters)
         const schoolsByCluster = new Map();
-        for (const school of schools) {
+        for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
             if (!schoolsByCluster.has(cluster)) {
                 schoolsByCluster.set(cluster, []);
@@ -957,8 +947,8 @@
         
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
-            // Sort schools by name within cluster
-            clusterSchools.sort((a, b) => a.name.localeCompare(b.name));
+            // Sort by ID within cluster (to maintain original order)
+            clusterSchools.sort((a, b) => a.id - b.id);
             
             let visibleInCluster = [];
             for (const entity of clusterSchools) {
@@ -1001,9 +991,9 @@
             }
         }
         
-        // Group departments by department name - same as water.html and departments.html
+        // Group departments by department name
         const deptByDepartmentName = new Map();
-        for (const dept of departments) {
+        for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
             if (!deptByDepartmentName.has(deptName)) {
                 deptByDepartmentName.set(deptName, []);
@@ -1015,8 +1005,8 @@
         
         for (const deptName of deptGroupOrder) {
             const deptsInGroup = deptByDepartmentName.get(deptName);
-            // Sort by name within department group
-            deptsInGroup.sort((a, b) => a.name.localeCompare(b.name));
+            // Sort by ID within group (to maintain original order)
+            deptsInGroup.sort((a, b) => a.id - b.id);
             
             let visibleInGroup = [];
             for (const entity of deptsInGroup) {
