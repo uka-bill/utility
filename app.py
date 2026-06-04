@@ -971,6 +971,135 @@ def format_file_size(size):
         size /= 1024.0
     return f"{size:.1f} TB"
 
+# ============ BATCH SAVE API (FAST SAVING FOR MULTIPLE METERS) ============
+
+@app.route('/api/utility-bills/batch', methods=['POST'])
+def batch_create_utility_bills():
+    """Save multiple utility bills in ONE request - MUCH FASTER than individual saves"""
+    try:
+        print("💡 POST /api/utility-bills/batch called")
+        
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        data = request.get_json()
+        bills = data.get('bills', [])
+        
+        if not bills:
+            return jsonify({'error': 'No bills provided'}), 400
+        
+        success_count = 0
+        error_count = 0
+        errors = []
+        
+        for bill_data in bills:
+            try:
+                # Get entity name for the bill
+                entity_name = ""
+                if bill_data.get('entity_type') == 'school':
+                    school_resp = supabase.table("schools").select("name").eq("id", bill_data.get('entity_id')).execute()
+                    if school_resp.data and len(school_resp.data) > 0:
+                        entity_name = school_resp.data[0]['name']
+                elif bill_data.get('entity_type') == 'department':
+                    dept_resp = supabase.table("departments").select("unit_name", "department_name").eq("id", bill_data.get('entity_id')).execute()
+                    if dept_resp.data and len(dept_resp.data) > 0:
+                        entity_name = dept_resp.data[0].get('unit_name') or dept_resp.data[0].get('department_name') or 'Unknown'
+                
+                # Check if bill already exists
+                query = supabase.table("utility_bills").select("*")\
+                    .eq("utility_type", bill_data.get('utility_type'))\
+                    .eq("entity_type", bill_data.get('entity_type'))\
+                    .eq("entity_id", int(bill_data.get('entity_id')))\
+                    .eq("month", int(bill_data.get('month')))\
+                    .eq("year", int(bill_data.get('year')))
+                
+                # Add account number filter if provided and not placeholder
+                account_number = bill_data.get('account_number', '')
+                if account_number and account_number != '—' and account_number != '':
+                    query = query.eq("account_number", account_number)
+                
+                # Add meter number filter if provided and not placeholder
+                meter_number = bill_data.get('meter_number', '')
+                if meter_number and meter_number != '—' and meter_number != '':
+                    query = query.eq("meter_number", meter_number)
+                
+                existing = query.execute()
+                
+                if existing.data and len(existing.data) > 0:
+                    # Update existing bill
+                    bill_id = existing.data[0]['id']
+                    update_data = {
+                        "current_charges": float(bill_data.get('current_charges', 0)),
+                        "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
+                        "amount_paid": float(bill_data.get('amount_paid', 0)),
+                        "notes": bill_data.get('notes', ''),
+                        "updated_at": datetime.now().isoformat()
+                    }
+                    
+                    # Add consumption fields if present
+                    if bill_data.get('consumption_m3') is not None:
+                        update_data["consumption_m3"] = float(bill_data.get('consumption_m3'))
+                    if bill_data.get('consumption_kwh') is not None:
+                        update_data["consumption_kwh"] = float(bill_data.get('consumption_kwh'))
+                    if bill_data.get('phone_number') is not None:
+                        update_data["phone_number"] = bill_data.get('phone_number')
+                    
+                    response = supabase.table("utility_bills").update(update_data).eq("id", bill_id).execute()
+                    if response.data:
+                        success_count += 1
+                    else:
+                        error_count += 1
+                        errors.append(f"Failed to update meter {bill_data.get('meter_number', bill_data.get('phone_number', 'unknown'))}")
+                else:
+                    # Create new bill
+                    new_bill = {
+                        "utility_type": bill_data.get('utility_type'),
+                        "entity_type": bill_data.get('entity_type'),
+                        "entity_id": int(bill_data.get('entity_id')),
+                        "entity_name": entity_name,
+                        "account_number": bill_data.get('account_number', ''),
+                        "meter_number": bill_data.get('meter_number', ''),
+                        "phone_number": bill_data.get('phone_number', ''),
+                        "current_charges": float(bill_data.get('current_charges', 0)),
+                        "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
+                        "amount_paid": float(bill_data.get('amount_paid', 0)),
+                        "month": int(bill_data.get('month')),
+                        "year": int(bill_data.get('year')),
+                        "notes": bill_data.get('notes', ''),
+                        "created_at": datetime.now().isoformat(),
+                        "updated_at": datetime.now().isoformat()
+                    }
+                    
+                    # Add consumption fields if present
+                    if bill_data.get('consumption_m3') is not None:
+                        new_bill["consumption_m3"] = float(bill_data.get('consumption_m3'))
+                    if bill_data.get('consumption_kwh') is not None:
+                        new_bill["consumption_kwh"] = float(bill_data.get('consumption_kwh'))
+                    
+                    response = supabase.table("utility_bills").insert(new_bill).execute()
+                    if response.data:
+                        success_count += 1
+                    else:
+                        error_count += 1
+                        errors.append(f"Failed to create meter {bill_data.get('meter_number', bill_data.get('phone_number', 'unknown'))}")
+                        
+            except Exception as e:
+                error_count += 1
+                errors.append(str(e))
+        
+        return jsonify({
+            'success': error_count == 0,
+            'message': f'Saved {success_count} bills, {error_count} failed',
+            'success_count': success_count,
+            'error_count': error_count,
+            'errors': errors
+        })
+        
+    except Exception as e:
+        print(f"❌ Batch save error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
 # ============ BUDGET MANAGEMENT API ============
 
 @app.route('/api/budgets', methods=['GET'])
