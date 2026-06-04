@@ -122,10 +122,6 @@
             color: white;
         }
 
-        .btn-warning:hover {
-            background: #e68a00;
-        }
-
         .period-card {
             background: white;
             border-radius: 10px;
@@ -510,27 +506,25 @@
             background: #fff;
         }
         
-        .edit-mode-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
-        }
-        
-        .view-mode-text {
-            font-size: 0.75rem;
-            line-height: 1.4;
-        }
-        
-        .view-account-item {
-            padding: 4px 0;
-        }
-        
-        .view-meter {
+        .inline-save-btn {
+            background: var(--success);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
             font-size: 0.7rem;
-            color: #2c3e50;
-            padding-left: 12px;
-            margin-top: 2px;
-            font-family: monospace;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .inline-cancel-btn {
+            background: var(--gray);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            border: none;
+            cursor: pointer;
+            margin-left: 5px;
         }
     </style>
 </head>
@@ -621,8 +615,9 @@
     let allSchools = [], allDepartments = [], existingBills = [];
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
-    let isLoading = false;
+    let isSaving = false;
     let editingEntityId = null;
+    let editingAccountData = {};
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
@@ -713,7 +708,7 @@
     }
 
     async function saveEntityBills(entityRow, month, year) {
-        if (isLoading) { showToast('Please wait...', true); return; }
+        if (isSaving) { showToast('Please wait...', true); return; }
         
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
@@ -727,10 +722,10 @@
         
         if (meterRows.length === 0) { showToast('No meter data to save', true); return; }
         
-        isLoading = true;
+        isSaving = true;
         showLoading(true);
         
-        let successCount = 0, errorCount = 0;
+        const billsToSave = [];
         
         for (const row of meterRows) {
             const accountNumber = row.getAttribute('data-account');
@@ -744,7 +739,8 @@
             const amountPaid = parseFloat(row.querySelector('.amount-paid-input')?.value) || 0;
             const notes = row.querySelector('.notes-input')?.value || '';
             
-            const billData = {
+            billsToSave.push({
+                id: existingBillId,
                 utility_type: 'water',
                 entity_type: entityType,
                 entity_id: entityId,
@@ -757,30 +753,85 @@
                 month: month,
                 year: year,
                 notes: JSON.stringify({ previousPayment, originalNotes: notes })
-            };
-            
-            try {
-                let url = '/api/utility-bills';
-                let method = 'POST';
-                if (existingBillId) {
-                    url = `/api/utility-bills/${existingBillId}`;
-                    method = 'PUT';
-                }
-                
-                const resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(billData) });
-                if (resp.ok) successCount++;
-                else errorCount++;
-            } catch(err) { errorCount++; }
+            });
         }
         
-        isLoading = false;
-        showLoading(false);
+        try {
+            const resp = await fetch('/api/utility-bills/batch-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bills: billsToSave })
+            });
+            
+            const result = await resp.json();
+            
+            if (result.success) {
+                showToast(`✅ Saved ${result.success_count} record${result.success_count > 1 ? 's' : ''} successfully`);
+                await renderWaterTable();
+            } else {
+                showToast(`⚠️ Saved ${result.success_count} records, ${result.error_count} failed`, true);
+            }
+        } catch(err) {
+            console.error('Batch save error:', err);
+            showToast(`❌ Save failed: ${err.message}`, true);
+        }
         
-        if (errorCount === 0) {
-            showToast(`✅ Saved ${successCount} record${successCount > 1 ? 's' : ''} successfully`);
-            await renderWaterTable();
-        } else {
-            showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed`, true);
+        isSaving = false;
+        showLoading(false);
+    }
+    
+    async function updateMeterInfo(entityId, accountNumber, meterNumber, newAccountNumber, newMeterNumber) {
+        try {
+            // Call API to update the school/department with new account/meter info
+            const entity = [...allSchools, ...allDepartments].find(e => e.id == entityId);
+            if (!entity) return false;
+            
+            let accounts = [];
+            if (entity.type === 'school') {
+                const school = allSchools.find(s => s.id == entityId);
+                accounts = school.water_accounts && typeof school.water_accounts === 'string' ? JSON.parse(school.water_accounts) : (school.water_accounts || []);
+            } else {
+                const dept = allDepartments.find(d => d.id == entityId);
+                accounts = dept.water_accounts && typeof dept.water_accounts === 'string' ? JSON.parse(dept.water_accounts) : (dept.water_accounts || []);
+            }
+            
+            // Find and update the account/meter
+            let found = false;
+            for (const acc of accounts) {
+                if (acc.accountNumber === accountNumber) {
+                    if (acc.meters) {
+                        for (const m of acc.meters) {
+                            if (m.meterNumber === meterNumber) {
+                                m.meterNumber = newMeterNumber;
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (newAccountNumber && newAccountNumber !== accountNumber) {
+                        acc.accountNumber = newAccountNumber;
+                    }
+                    break;
+                }
+            }
+            
+            if (found) {
+                const updateData = {
+                    waterAccounts: accounts
+                };
+                
+                const url = entity.type === 'school' ? `/api/schools/${entityId}` : `/api/departments/${entityId}`;
+                const resp = await fetch(url, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updateData)
+                });
+                return resp.ok;
+            }
+            return false;
+        } catch(e) {
+            console.error(e);
+            return false;
         }
     }
     
@@ -898,7 +949,6 @@
         let isPlaceholder = false;
         let isEditing = (editingEntityId === entity.id);
         
-        // Collect all meter data
         let meterRowsData = [];
         
         for (const account of entity.accountGroups) {
@@ -936,7 +986,25 @@
             }
         }
         
-        // Render entity row
+        // Calculate status based on amount paid vs bill amount
+        let statusText = 'Pending';
+        let statusClass = 'status-pending';
+        
+        if (!isPlaceholder) {
+            if (entityTotalPaid > 0) {
+                const totalBillAmount = meterRowsData.reduce((sum, m) => sum + m.currentCharges, 0);
+                if (entityTotalPaid >= totalBillAmount && totalBillAmount > 0) {
+                    statusText = 'Paid';
+                    statusClass = 'status-paid';
+                } else if (entityTotalPaid > 0) {
+                    statusText = 'Partially Paid';
+                    statusClass = 'status-partial';
+                }
+            }
+        } else {
+            statusText = 'No account';
+        }
+        
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
@@ -944,12 +1012,12 @@
         entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
-            <td class="seq-number">${startSerial}</td>
+            <td class="seq-number">${startSerial}</div>
             <td class="entity-header"><span class="entity-name">${escapeHtml(entity.name)}</span>${!isPlaceholder ? `<span class="total-due">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}</div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
             <td colspan="6"></div>
             <td></div>
-            <td><span class="status-badge ${entityHasBills ? 'status-paid' : 'status-pending'}">${entityHasBills ? 'Paid' : 'Pending'}</span></div>
+            <td><span class="status-badge ${statusClass}">${statusText}</span></div>
             <td class="entity-actions">
                 ${isEditing ? `
                     <button class="btn btn-success btn-sm save-edit-btn">💾 Save Edit</button>
@@ -963,7 +1031,6 @@
         `;
         tbody.appendChild(entityRow);
         
-        // Render meter rows
         for (const m of meterRowsData) {
             const meterRow = document.createElement('tr');
             meterRow.className = 'meter-row';
@@ -972,21 +1039,17 @@
             if (m.billId) meterRow.setAttribute('data-bill-id', m.billId);
             
             if (isEditing) {
-                // EDIT MODE - show editable fields for account and meter info
                 meterRow.innerHTML = `
                     <td class="seq-number">${m.serial}</div>
-                    <td></div>
+                    <tr></div>
                     <td></div>
                     <td>
-                        <input type="text" class="edit-mode-input edit-account-input" value="${escapeHtml(m.accountNumber)}" placeholder="Account Number">
-                        <input type="text" class="edit-mode-input edit-meter-input" style="margin-top:4px;" value="${escapeHtml(m.meterNumber)}" placeholder="Meter Number">
+                        <input type="text" class="edit-mode-input edit-account-input" value="${escapeHtml(m.accountNumber)}" placeholder="Account Number" style="width:100%; margin-bottom:4px;">
+                        <input type="text" class="edit-mode-input edit-meter-input" value="${escapeHtml(m.meterNumber)}" placeholder="Meter Number" style="width:100%;">
                     </div>
                     <td colspan="8"></div>
-                    <td></div>
-                    <td></div>
                 `;
             } else {
-                // VIEW MODE - show read-only display
                 meterRow.innerHTML = `
                     <td class="seq-number">${m.serial}</div>
                     <td></div>
@@ -1036,12 +1099,37 @@
             
             const saveEditBtn = e.target.closest('.save-edit-btn');
             if (saveEditBtn) {
-                // Save edited account/meter info - update via API
                 const entityRow = saveEditBtn.closest('tr.entity-row');
                 if (entityRow) {
-                    showToast('Edit mode: Update account/meter info in Schools/Departments tab', true);
-                    editingEntityId = null;
-                    await renderWaterTable();
+                    const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
+                    let meterRows = [];
+                    let nextRow = entityRow.nextElementSibling;
+                    while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
+                        meterRows.push(nextRow);
+                        nextRow = nextRow.nextElementSibling;
+                    }
+                    
+                    let success = true;
+                    for (const row of meterRows) {
+                        const oldAccount = row.getAttribute('data-account');
+                        const oldMeter = row.getAttribute('data-meter');
+                        const newAccount = row.querySelector('.edit-account-input')?.value || oldAccount;
+                        const newMeter = row.querySelector('.edit-meter-input')?.value || oldMeter;
+                        
+                        if (oldAccount !== newAccount || oldMeter !== newMeter) {
+                            const result = await updateMeterInfo(entityId, oldAccount, oldMeter, newAccount, newMeter);
+                            if (!result) success = false;
+                        }
+                    }
+                    
+                    if (success) {
+                        showToast('✅ Account/Meter information updated successfully');
+                        editingEntityId = null;
+                        await loadAllEntities();
+                        await renderWaterTable();
+                    } else {
+                        showToast('⚠️ Some updates failed. Please try again.', true);
+                    }
                 }
                 return;
             }
