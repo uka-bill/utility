@@ -413,26 +413,46 @@
         .btn-print { background: var(--primary); color: white; }
         .btn-cancel { background: var(--gray); color: white; }
         
-        /* PRINT STYLES - Enhanced with proper margins */
+        /* ========== ENHANCED PRINT STYLES WITH PROPER MARGINS ========== */
         @media print {
+            /* Force page margins */
             @page {
-                margin: 2cm 1.5cm 2cm 1.5cm;
+                margin: 2.5cm 1.5cm 2.5cm 1.5cm !important;
                 size: A4;
             }
             
-            body {
-                margin: 0;
-                padding: 0;
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
                 background: white;
+                height: auto;
             }
             
-            .navbar, .filters-bar, .page-header .btn, .entity-actions, .modal-overlay, .scroll-hint, .add-new-row, .toast-message {
+            body {
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            
+            /* Hide non-printable elements */
+            .navbar, .filters-bar, .page-header .btn, .entity-actions, 
+            .modal-overlay, .scroll-hint, .add-new-row, .toast-message,
+            .edit-dept-btn, .delete-dept-btn, .inline-save-btn, .inline-cancel-btn {
                 display: none !important;
             }
             
+            /* Keep page header visible but remove button */
+            .page-header {
+                display: block !important;
+                margin-bottom: 20px !important;
+            }
+            
+            .page-title {
+                margin-bottom: 10px !important;
+            }
+            
             .container {
-                margin-top: 0;
-                padding: 0;
+                margin: 0 !important;
+                padding: 0 !important;
                 max-width: 100%;
             }
             
@@ -442,18 +462,20 @@
                 max-height: none;
                 border: none;
                 background: white;
+                margin: 0;
+                padding: 0;
             }
             
             .data-table {
-                min-width: auto;
                 width: 100%;
                 border-collapse: collapse;
-                font-size: 10pt;
+                font-size: 9pt;
+                margin: 0;
             }
             
             .data-table th, .data-table td {
-                border: 1px solid #ccc;
-                padding: 6px 8px;
+                border: 1px solid #999;
+                padding: 6px 6px;
                 vertical-align: top;
             }
             
@@ -479,9 +501,10 @@
                 page-break-inside: avoid;
             }
             
-            .badge {
-                border: 1px solid #999;
-                print-color-adjust: exact;
+            /* Ensure page breaks don't cut content badly */
+            tr, .department-separator, .view-account-item {
+                break-inside: avoid;
+                page-break-inside: avoid;
             }
         }
     </style>
@@ -569,6 +592,7 @@
     }
 
     function parseJsonField(field) { if (!field) return []; if (Array.isArray(field)) return field; if (typeof field === 'string') { try { return JSON.parse(field); } catch(e) { return []; } } return []; }
+    
     async function loadDepartments() {
         try {
             const res = await fetch('/api/departments');
@@ -623,6 +647,7 @@
     }
 
     function escapeHtml(str) { if(!str) return ''; return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
+    
     function getSimpleUtilityTextForPrint(accounts, type) {
         if (!accounts || accounts.length === 0) return '—';
         let lines = [];
@@ -740,9 +765,10 @@
         document.getElementById('cancelAddBtn')?.addEventListener('click', () => { addingMode=false; renderDepartments(); });
     }
     
-    // PRINT FUNCTIONALITY
+    // ============ PRINT FUNCTIONALITY ============
     function openPrintModal() { populateColumnSelector(); document.getElementById('printModal').classList.add('active'); }
     function closePrintModal() { document.getElementById('printModal').classList.remove('active'); }
+    
     function populateColumnSelector() {
         const container = document.getElementById('columnSelector');
         let html = `<div class="select-all-row column-option"><input type="checkbox" id="selectAllColumns" onchange="toggleAllColumns()"><label><strong>✓ Select All Columns</strong></label></div>`;
@@ -753,6 +779,7 @@
         document.querySelectorAll('.col-checkbox').forEach(cb => cb.addEventListener('change', () => { updateSelectAllState(); saveColumnSelections(); }));
         updateSelectAllState();
     }
+    
     function updateSelectAllState() { const checkboxes = document.querySelectorAll('.col-checkbox'), selectAll = document.getElementById('selectAllColumns'); if(selectAll) selectAll.checked = Array.from(checkboxes).every(cb => cb.checked); }
     function toggleAllColumns() { const selectAll = document.getElementById('selectAllColumns'); document.querySelectorAll('.col-checkbox').forEach(cb => cb.checked = selectAll.checked); saveColumnSelections(); }
     function saveColumnSelections() { columns.forEach(col => { const cb = document.getElementById(`col_${col.key}`); if(cb) localStorage.setItem(`dept_print_col_${col.key}`, cb.checked); }); }
@@ -762,30 +789,134 @@
         const selectedCols = getSelectedColumns();
         const filtered = getFilteredDepartments();
         if(filtered.length === 0) { showMessage('No data to print', true); closePrintModal(); return; }
+        
         const groupedMap = new Map();
         for(let dept of filtered) { const deptName = dept.department_name || 'Other'; if(!groupedMap.has(deptName)) groupedMap.set(deptName, []); groupedMap.get(deptName).push(dept); }
-        let printHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Departments Report - ${new Date().toLocaleString()}</title><style>
-            *{font-family:'Segoe UI',Arial,sans-serif; margin:0; padding:0; box-sizing:border-box;}
-            body{padding:0; margin:0; background:white;}
-            @page { margin: 2cm 1.5cm 2cm 1.5cm; size: A4; }
-            .print-container { max-width: 100%; margin: 0 auto; }
-            .print-header{text-align:center;margin-bottom:30px;border-bottom:2px solid #333;padding-bottom:15px;}
-            .print-header h1{margin:0;color:#4361ee; font-size:24px;}
-            .print-header p{margin:8px 0 0;color:#666; font-size:12px;}
-            table{width:100%;border-collapse:collapse;margin-top:20px;font-size:10pt;}
-            th,td{border:1px solid #999;padding:8px 8px;text-align:left;vertical-align:top;}
-            th{background-color:#e8e8e8;font-weight:bold;}
-            .department-group{background-color:#e8f0fe;font-weight:bold;}
-            .department-group td{background-color:#e8f0fe;font-size:12pt;font-weight:bold;}
-            .group-count{font-weight:normal;font-size:10pt;margin-left:10px;}
-            .utility-text{white-space:pre-line;font-size:9pt;line-height:1.3;}
-            .footer{margin-top:35px;text-align:center;font-size:10pt;color:#666;border-top:1px solid #ddd;padding-top:15px;}
-        </style></head><body>
-        <div class="print-container">
-        <div class="print-header"><h1>🏢 Departments Management Report</h1><p>Generated: ${new Date().toLocaleString()}</p><p>Total Departments: ${filtered.length}</p></div>
-        <table><thead><tr>`;
-        selectedCols.forEach(col => { if(col.key==='seq') printHtml+=`<th>No.</th>`; else if(col.key==='unitName') printHtml+=`<th>Unit Name</th>`; else if(col.key==='divisionName') printHtml+=`<th>Division Name</th>`; else if(col.key==='departmentName') printHtml+=`<th>Department Name</th>`; else if(col.key==='waterAccounts') printHtml+=`<th>💧 Water Accounts</th>`; else if(col.key==='electricityAccounts') printHtml+=`<th>⚡ Electricity Accounts</th>`; else if(col.key==='telephoneAccounts') printHtml+=`<th>📞 Telephone Accounts</th>`; else if(col.key==='hotlineNumbers') printHtml+=`<th>Hotline Numbers</th>`; else if(col.key==='address') printHtml+=`<th>Address</th>`; else if(col.key==='notes') printHtml+=`<th>Notes</th>`; });
-        printHtml += `<tr></thead><tbody>`;
+        
+        const now = new Date();
+        const dateStr = now.toLocaleDateString();
+        const timeStr = now.toLocaleTimeString();
+        
+        let printHtml = `<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Departments Report - ${dateStr}</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                body {
+                    background: white;
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                    padding: 0;
+                    margin: 0;
+                }
+                @page {
+                    margin: 2.5cm 1.5cm 2.5cm 1.5cm;
+                    size: A4;
+                }
+                .print-page {
+                    max-width: 100%;
+                    margin: 0 auto;
+                }
+                .print-header {
+                    text-align: center;
+                    margin-bottom: 30px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #333;
+                }
+                .print-header h1 {
+                    margin: 0 0 10px 0;
+                    color: #4361ee;
+                    font-size: 24px;
+                }
+                .print-header p {
+                    margin: 5px 0;
+                    color: #666;
+                    font-size: 12px;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                    font-size: 10pt;
+                }
+                th, td {
+                    border: 1px solid #999;
+                    padding: 8px 8px;
+                    text-align: left;
+                    vertical-align: top;
+                }
+                th {
+                    background-color: #e8e8e8;
+                    font-weight: bold;
+                }
+                .department-group {
+                    background-color: #e8f0fe;
+                    font-weight: bold;
+                }
+                .department-group td {
+                    background-color: #e8f0fe;
+                    font-size: 12pt;
+                    font-weight: bold;
+                }
+                .group-count {
+                    font-weight: normal;
+                    font-size: 10pt;
+                    margin-left: 10px;
+                }
+                .utility-text {
+                    white-space: pre-line;
+                    font-size: 9pt;
+                    line-height: 1.3;
+                }
+                .footer {
+                    margin-top: 35px;
+                    text-align: center;
+                    font-size: 10pt;
+                    color: #666;
+                    border-top: 1px solid #ddd;
+                    padding-top: 15px;
+                }
+                /* Prevent page breaks inside rows */
+                tr {
+                    break-inside: avoid;
+                    page-break-inside: avoid;
+                }
+                .department-group {
+                    break-inside: avoid;
+                    page-break-inside: avoid;
+                }
+            </style>
+        </head>
+        <body>
+        <div class="print-page">
+            <div class="print-header">
+                <h1>🏢 Departments Management Report</h1>
+                <p>Generated: ${dateStr} at ${timeStr}</p>
+                <p><strong>Total Departments:</strong> ${filtered.length}</p>
+            </div>
+            <table>
+                <thead>
+                    <tr>`;
+        
+        selectedCols.forEach(col => { 
+            if(col.key === 'seq') printHtml += `<th>No.</th>`;
+            else if(col.key === 'unitName') printHtml += `<th>Unit Name</th>`;
+            else if(col.key === 'divisionName') printHtml += `<th>Division Name</th>`;
+            else if(col.key === 'departmentName') printHtml += `<th>Department Name</th>`;
+            else if(col.key === 'waterAccounts') printHtml += `<th>💧 Water Accounts</th>`;
+            else if(col.key === 'electricityAccounts') printHtml += `<th>⚡ Electricity Accounts</th>`;
+            else if(col.key === 'telephoneAccounts') printHtml += `<th>📞 Telephone Accounts</th>`;
+            else if(col.key === 'hotlineNumbers') printHtml += `<th>Hotline Numbers</th>`;
+            else if(col.key === 'address') printHtml += `<th>Address</th>`;
+            else if(col.key === 'notes') printHtml += `<th>Notes</th>`;
+        });
+        printHtml += `</tr></thead><tbody>`;
+        
         let globalSeq = 1;
         for(let [deptName, departments] of groupedMap) {
             printHtml += `<tr class="department-group"><td colspan="${selectedCols.length}"><strong>🏢 ${escapeHtml(deptName)}</strong> <span class="group-count">(${departments.length} unit${departments.length > 1 ? 's' : ''})</span> </div></tr>`;
@@ -807,14 +938,27 @@
                 globalSeq++;
             }
         }
-        printHtml += `</tbody></table><div class="footer"><p>UKA Bill Utility System - Department Listing</p></div></div></body></html>`;
+        
+        printHtml += `
+                </tbody>
+            </table>
+            <div class="footer">
+                <p>UKA Bill Utility System - Official Department Listing</p>
+                <p>Page 1 of 1</p>
+            </div>
+        </div>
+        </body>
+        </html>`;
+        
         closePrintModal();
         const printWindow = window.open('', '_blank'); 
         if(printWindow) {
             printWindow.document.write(printHtml); 
             printWindow.document.close(); 
             printWindow.focus(); 
-            printWindow.print();
+            setTimeout(() => {
+                printWindow.print();
+            }, 500);
         } else {
             alert('Please allow pop-ups to print the report.');
         }
