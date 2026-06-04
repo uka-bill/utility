@@ -621,8 +621,25 @@
                 fetch('/api/schools'),
                 fetch('/api/departments')
             ]);
-            if (schoolsRes.ok) allSchools = await schoolsRes.json();
-            if (deptsRes.ok) allDepartments = await deptsRes.json();
+            if (schoolsRes.ok) {
+                allSchools = await schoolsRes.json();
+                allSchools.sort((a, b) => {
+                    if (a.cluster_number !== b.cluster_number) {
+                        return (parseInt(a.cluster_number) || 0) - (parseInt(b.cluster_number) || 0);
+                    }
+                    return (a.name || '').localeCompare(b.name || '');
+                });
+            }
+            if (deptsRes.ok) {
+                allDepartments = await deptsRes.json();
+                allDepartments.sort((a, b) => {
+                    const deptCompare = (a.department_name || '').localeCompare(b.department_name || '');
+                    if (deptCompare !== 0) return deptCompare;
+                    const divCompare = (a.division_name || '').localeCompare(b.division_name || '');
+                    if (divCompare !== 0) return divCompare;
+                    return (a.unit_name || '').localeCompare(b.unit_name || '');
+                });
+            }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) { console.error(e); }
     }
@@ -847,11 +864,13 @@
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // Group schools by cluster
+        // Group schools by cluster (same as schools.html)
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
-            if (!schoolsByCluster.has(cluster)) schoolsByCluster.set(cluster, []);
+            if (!schoolsByCluster.has(cluster)) {
+                schoolsByCluster.set(cluster, []);
+            }
             schoolsByCluster.get(cluster).push(school);
         }
         
@@ -867,53 +886,36 @@
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
             
-            // Filter by status for this cluster
-            let visibleInCluster = [];
-            for (const entity of clusterSchools) {
-                let hasVisible = false;
-                for (const account of entity.accountGroups) {
-                    for (const meter of account.meters) {
-                        const meterNum = meter.meterNumber || '—';
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
-                        if (statusFilter === 'all' || 
-                            (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                            (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                            hasVisible = true;
-                            break;
-                        }
-                    }
-                    if (hasVisible) break;
-                }
-                if (hasVisible) visibleInCluster.push(entity);
-            }
+            // Sort schools by name within cluster
+            clusterSchools.sort((a, b) => a.name.localeCompare(b.name));
             
-            if (visibleInCluster.length > 0) {
-                const totalMeters = visibleInCluster.reduce((sum, e) => 
-                    sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
-                
-                const separatorRow = document.createElement('tr');
-                separatorRow.className = 'cluster-separator';
-                separatorRow.innerHTML = `
-                    <td colspan="12">
-                        <div class="cluster-info">
-                            <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
-                            <span class="cluster-count">${visibleInCluster.length} entit${visibleInCluster.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
-                        </div>
+            const totalMeters = clusterSchools.reduce((sum, e) => 
+                sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
+            
+            const separatorRow = document.createElement('tr');
+            separatorRow.className = 'cluster-separator';
+            separatorRow.innerHTML = `
+                <td colspan="12">
+                    <div class="cluster-info">
+                        <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
+                        <span class="cluster-count">${clusterSchools.length} entit${clusterSchools.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
                     </div>
-                `;
-                tbody.appendChild(separatorRow);
-                
-                for (const entity of visibleInCluster) {
-                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
-                }
+                </div>
+            `;
+            tbody.appendChild(separatorRow);
+            
+            for (const entity of clusterSchools) {
+                globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
             }
         }
         
-        // Group departments by department name
+        // Group departments by department name (same as departments.html)
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
-            if (!deptByDepartmentName.has(deptName)) deptByDepartmentName.set(deptName, []);
+            if (!deptByDepartmentName.has(deptName)) {
+                deptByDepartmentName.set(deptName, []);
+            }
             deptByDepartmentName.get(deptName).push(dept);
         }
         
@@ -922,44 +924,26 @@
         for (const deptName of deptGroupOrder) {
             const deptsInGroup = deptByDepartmentName.get(deptName) || [];
             
-            let visibleInGroup = [];
-            for (const entity of deptsInGroup) {
-                let hasVisible = false;
-                for (const account of entity.accountGroups) {
-                    for (const meter of account.meters) {
-                        const meterNum = meter.meterNumber || '—';
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
-                        if (statusFilter === 'all' || 
-                            (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                            (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                            hasVisible = true;
-                            break;
-                        }
-                    }
-                    if (hasVisible) break;
-                }
-                if (hasVisible) visibleInGroup.push(entity);
-            }
+            // Sort departments by unit name within group
+            deptsInGroup.sort((a, b) => a.name.localeCompare(b.name));
             
-            if (visibleInGroup.length > 0) {
-                const totalMeters = visibleInGroup.reduce((sum, e) => 
-                    sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
-                
-                const deptSeparator = document.createElement('tr');
-                deptSeparator.className = 'department-group-separator';
-                deptSeparator.innerHTML = `
-                    <td colspan="12">
-                        <div class="dept-group-info">
-                            <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
-                            <span class="dept-group-count">${visibleInGroup.length} unit${visibleInGroup.length > 1 ? 's' : ''}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
-                        </div>
+            const totalMeters = deptsInGroup.reduce((sum, e) => 
+                sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
+            
+            const deptSeparator = document.createElement('tr');
+            deptSeparator.className = 'department-group-separator';
+            deptSeparator.innerHTML = `
+                <td colspan="12">
+                    <div class="dept-group-info">
+                        <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
+                        <span class="dept-group-count">${deptsInGroup.length} unit${deptsInGroup.length > 1 ? 's' : ''}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
                     </div>
-                `;
-                tbody.appendChild(deptSeparator);
-                
-                for (const entity of visibleInGroup) {
-                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
-                }
+                </div>
+            `;
+            tbody.appendChild(deptSeparator);
+            
+            for (const entity of deptsInGroup) {
+                globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
             }
         }
     }
