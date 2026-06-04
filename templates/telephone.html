@@ -15,7 +15,6 @@
             --light: #f8f9fa;
             --dark: #212529;
             --gray: #6c757d;
-            --telephone-shade: #e8f5e9;
             --bill-shade: #fff8e1;
             --bill-border: #ff9800;
         }
@@ -248,7 +247,7 @@
 
         .inline-input {
             width: 100%;
-            min-width: 70px;
+            min-width: 80px;
             padding: 6px 8px;
             border-radius: 5px;
             border: 1px solid #ddd;
@@ -334,26 +333,17 @@
             color: var(--gray);
         }
 
-        .info-note {
-            background: #e3f2fd;
-            border-left: 4px solid var(--primary);
-            padding: 12px 18px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-        }
-
         .success-toast {
             position: fixed;
             bottom: 20px;
             right: 20px;
-            background: var(--success);
+            background: #28a745;
             color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 12px 24px;
+            border-radius: 8px;
             font-size: 0.85rem;
             z-index: 2000;
-            animation: fadeOut 2s ease forwards;
+            animation: fadeOut 3s ease forwards;
         }
 
         .error-toast {
@@ -362,17 +352,17 @@
             right: 20px;
             background: var(--danger);
             color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 12px 24px;
+            border-radius: 8px;
             font-size: 0.85rem;
             z-index: 2000;
-            animation: fadeOut 3s ease forwards;
+            animation: fadeOut 4s ease forwards;
         }
 
         @keyframes fadeOut {
-            0% { opacity: 1; }
-            70% { opacity: 1; }
-            100% { opacity: 0; visibility: hidden; }
+            0% { opacity: 1; transform: translateY(0); }
+            80% { opacity: 1; }
+            100% { opacity: 0; visibility: hidden; transform: translateY(20px); }
         }
         
         .seq-number {
@@ -588,8 +578,39 @@
             min-width: 150px;
         }
         
-        .actions-cell {
-            white-space: nowrap;
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            visibility: hidden;
+        }
+        
+        .loading-overlay.active {
+            visibility: visible;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            background: white;
+            padding: 10px;
+            border-radius: 50%;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -684,6 +705,10 @@
     </div>
 </div>
 
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+</div>
+
 <script>
     let allSchools = [];
     let allDepartments = [];
@@ -692,6 +717,10 @@
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
     let isLoading = false;
+
+    function showLoading(show) {
+        document.getElementById('loadingOverlay').classList.toggle('active', show);
+    }
 
     function populateYears() {
         const yearSelect = document.getElementById('globalYear');
@@ -865,17 +894,21 @@
         toast.className = isError ? 'error-toast' : 'success-toast';
         toast.textContent = message;
         document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
+        setTimeout(() => toast.remove(), 4000);
     }
 
-    async function saveAllAccountBills(entityElement, summaryValues, month, year) {
-        if (isLoading) return;
+    async function saveEntityBills(entityRow, summaryValues, month, year) {
+        if (isLoading) {
+            showToast('Please wait, save in progress...', true);
+            return;
+        }
         
-        const entityType = entityElement.getAttribute('data-entity-type');
-        const entityId = parseInt(entityElement.getAttribute('data-entity-id'));
+        const entityType = entityRow.getAttribute('data-entity-type');
+        const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         
+        // Get all account header rows and phone rows
         let accountRows = [];
-        let nextRow = entityElement.nextElementSibling;
+        let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('account-header-row')) {
             accountRows.push(nextRow);
             nextRow = nextRow.nextElementSibling;
@@ -884,8 +917,8 @@
             }
         }
         
-        let totalSuccessCount = 0;
-        let totalErrorCount = 0;
+        // Collect all bills to save
+        const billsToSave = [];
         
         for (const accountRow of accountRows) {
             const accountNumber = accountRow.getAttribute('data-account-number');
@@ -912,50 +945,65 @@
                 const totalAmount = parseFloat(totalAmountInput?.value) || 0;
                 const notes = notesInput?.value || '';
                 
-                const notesData = {
+                billsToSave.push({
+                    id: existingBillId,
+                    accountNumber: accountNumber === '—' ? '' : accountNumber,
+                    phoneNumber: phoneNumber === '—' ? '' : phoneNumber,
+                    currentCharges: currentCharges,
                     totalAmount: totalAmount,
-                    originalNotes: notes
-                };
-                
-                const billData = {
-                    utility_type: 'telephone',
-                    entity_type: entityType,
-                    entity_id: entityId,
-                    account_number: accountNumber,
-                    phone_number: phoneNumber,
-                    current_charges: currentCharges,
-                    meter_number: accountBillNumber,
-                    notes: JSON.stringify(notesData),
-                    month: month,
-                    year: year
-                };
-                
-                try {
-                    let url = '/api/utility-bills';
-                    let method = 'POST';
-                    if (existingBillId) {
-                        url = `/api/utility-bills/${existingBillId}`;
-                        method = 'PUT';
-                    }
-                    
-                    const resp = await fetch(url, {
-                        method: method,
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(billData)
-                    });
-                    
-                    if (resp.ok) {
-                        totalSuccessCount++;
-                    } else {
-                        totalErrorCount++;
-                    }
-                } catch(err) {
-                    console.error('Network error:', err);
-                    totalErrorCount++;
-                }
+                    billNumber: accountBillNumber,
+                    notes: notes
+                });
             }
         }
         
+        isLoading = true;
+        showLoading(true);
+        
+        let successCount = 0;
+        let errorCount = 0;
+        
+        // Save each phone bill sequentially
+        for (const bill of billsToSave) {
+            const billData = {
+                utility_type: 'telephone',
+                entity_type: entityType,
+                entity_id: entityId,
+                account_number: bill.accountNumber,
+                phone_number: bill.phoneNumber,
+                current_charges: bill.currentCharges,
+                meter_number: bill.billNumber,
+                notes: JSON.stringify({ totalAmount: bill.totalAmount, originalNotes: bill.notes }),
+                month: month,
+                year: year
+            };
+            
+            try {
+                let url = '/api/utility-bills';
+                let method = 'POST';
+                if (bill.id) {
+                    url = `/api/utility-bills/${bill.id}`;
+                    method = 'PUT';
+                }
+                
+                const resp = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(billData)
+                });
+                
+                if (resp.ok) {
+                    successCount++;
+                } else {
+                    errorCount++;
+                }
+            } catch(err) {
+                console.error('Network error:', err);
+                errorCount++;
+            }
+        }
+        
+        // Save summary data
         if (summaryValues) {
             const summaryBillData = {
                 utility_type: 'telephone',
@@ -1003,13 +1051,13 @@
         }
         
         isLoading = false;
-        document.querySelector('.table-wrapper').classList.remove('loading');
+        showLoading(false);
         
-        if (totalErrorCount === 0) {
-            showToast(`✅ Saved ${totalSuccessCount} phone record${totalSuccessCount > 1 ? 's' : ''} successfully`);
+        if (errorCount === 0) {
+            showToast(`✅ Saved ${successCount} phone record${successCount > 1 ? 's' : ''} successfully`);
             await renderTelephoneTable();
         } else {
-            showToast(`⚠️ Saved ${totalSuccessCount} records, ${totalErrorCount} failed`, true);
+            showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed`, true);
         }
     }
 
@@ -1039,7 +1087,6 @@
         
         if (filteredEntities.length === 0) {
             tbody.innerHTML = '<tr class="no-data-row"><td colspan="10" class="no-data">No matching entities found.<\/td><\/tr>';
-            isLoading = false;
             return;
         }
         
@@ -1128,7 +1175,7 @@
                             <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
                             <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
                         </div>
-                     </div>
+                    </div>
                 `;
                 tbody.appendChild(separatorRow);
                 
@@ -1147,13 +1194,7 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        const deptGroupOrder = [];
-        for (const dept of departmentsList) {
-            const deptName = dept.departmentName || 'Other';
-            if (!deptGroupOrder.includes(deptName)) {
-                deptGroupOrder.push(deptName);
-            }
-        }
+        const deptGroupOrder = Array.from(deptByDepartmentName.keys()).sort();
         
         for (const deptName of deptGroupOrder) {
             const deptsInGroup = deptByDepartmentName.get(deptName) || [];
@@ -1212,7 +1253,7 @@
                             <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
                             <span class="dept-group-count">${visibleDeptEntities.length} unit${visibleDeptEntities.length > 1 ? 's' : ''}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
                         </div>
-                     </div>
+                    </div>
                 `;
                 tbody.appendChild(deptSeparator);
                 
@@ -1223,9 +1264,6 @@
                 }
             }
         }
-        
-        isLoading = false;
-        document.querySelector('.table-wrapper')?.classList.remove('loading');
     }
     
     async function renderEntity(tbody, entity, month, year, startSerial) {
@@ -1444,8 +1482,6 @@
         const saveBtn = summaryCell.querySelector('.save-entity-summary-btn');
         if (saveBtn) {
             saveBtn.onclick = async () => {
-                isLoading = true;
-                document.querySelector('.table-wrapper').classList.add('loading');
                 const summaryValues = {
                     previousOutstanding: parseFloat(prevOutInput?.value) || 0,
                     previousPayment: parseFloat(summaryCell.querySelector('.summary-previous-payment')?.value) || 0,
@@ -1455,7 +1491,7 @@
                     totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
                     amountPaid: parseFloat(amountPaidInput?.value) || 0
                 };
-                await saveAllAccountBills(entityRow, summaryValues, month, year);
+                await saveEntityBills(entityRow, summaryValues, month, year);
             };
         }
         
@@ -1491,7 +1527,7 @@
                     
                     if (billIdsToDelete.length > 0) {
                         isLoading = true;
-                        document.querySelector('.table-wrapper').classList.add('loading');
+                        showLoading(true);
                         
                         let successCount = 0;
                         for (const billId of billIdsToDelete) {
@@ -1504,7 +1540,7 @@
                         }
                         
                         isLoading = false;
-                        document.querySelector('.table-wrapper').classList.remove('loading');
+                        showLoading(false);
                         showToast(`🗑️ Deleted ${successCount} bills successfully`);
                         await renderTelephoneTable();
                     }
