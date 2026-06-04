@@ -15,6 +15,8 @@
             --light: #f8f9fa;
             --dark: #212529;
             --gray: #6c757d;
+            --bill-shade: #fff8e1;
+            --bill-border: #ff9800;
         }
 
         * {
@@ -330,15 +332,6 @@
             color: var(--gray);
         }
 
-        .info-note {
-            background: #e3f2fd;
-            border-left: 4px solid var(--primary);
-            padding: 12px 18px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-        }
-
         .success-toast {
             position: fixed;
             bottom: 20px;
@@ -469,8 +462,91 @@
             min-width: 150px;
         }
         
-        .actions-cell {
-            white-space: nowrap;
+        .summary-container {
+            background-color: var(--bill-shade);
+            border: 2px solid var(--bill-border);
+            border-radius: 10px;
+            margin: 15px 0 10px 0;
+            padding: 15px;
+            width: 100%;
+        }
+        
+        .summary-title-box {
+            background-color: var(--bill-border);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 8px;
+            display: inline-block;
+            margin-bottom: 15px;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 15px;
+            align-items: end;
+        }
+        
+        .summary-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .summary-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #e65100;
+        }
+        
+        .summary-input {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 5px;
+            border: 1px solid #ffcc80;
+            background: white;
+            font-size: 0.85rem;
+            text-align: right;
+            box-sizing: border-box;
+        }
+        
+        .summary-input:focus {
+            outline: none;
+            border-color: var(--warning);
+            box-shadow: 0 0 0 2px rgba(248, 150, 30, 0.2);
+        }
+        
+        .summary-value {
+            font-weight: bold;
+            font-size: 1rem;
+            color: #e65100;
+            background: white;
+            padding: 8px 10px;
+            border-radius: 5px;
+            text-align: right;
+            border: 1px solid #ffcc80;
+        }
+        
+        .summary-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #ffcc80;
+        }
+        
+        @media (max-width: 1200px) {
+            .summary-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        @media (max-width: 800px) {
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
     </style>
 </head>
@@ -514,7 +590,8 @@
     </div>
 
     <div class="payment-note">
-        💡 <strong>Note:</strong> The "Amount Paid" column is used to deduct from the budget. Enter the amount you actually paid.
+        💡 <strong>Note:</strong> The "Amount Paid" in the Bill Summary box is used to deduct from the budget.
+        Enter the amount you actually paid for this telephone bill.
     </div>
 
     <div class="filters-bar">
@@ -567,6 +644,7 @@
     let allSchools = [];
     let allDepartments = [];
     let existingBills = [];
+    let existingSummaryData = {};
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
     let isLoading = false;
@@ -611,6 +689,26 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
+                // Extract summary data from notes
+                for (const bill of existingBills) {
+                    if (bill.notes && bill.notes.startsWith('{')) {
+                        try {
+                            const summaryData = JSON.parse(bill.notes);
+                            if (summaryData.isSummary) {
+                                const key = `${bill.entity_type}_${bill.entity_id}`;
+                                existingSummaryData[key] = {
+                                    previousOutstanding: summaryData.previousOutstanding || 0,
+                                    previousPayment: summaryData.previousPayment || 0,
+                                    totalCurrentBill: summaryData.totalCurrentBill || 0,
+                                    otherCharges: summaryData.otherCharges || 0,
+                                    adjustment: summaryData.adjustment || 0,
+                                    totalBillCharges: summaryData.totalBillCharges || 0,
+                                    amountPaid: summaryData.amountPaid || 0
+                                };
+                            }
+                        } catch(e) {}
+                    }
+                }
             } else {
                 existingBills = [];
             }
@@ -714,7 +812,8 @@
             (bill.account_number || '—') === (accountNumber || '—') &&
             (bill.phone_number || '—') === (phoneNumber || '—') &&
             bill.month == month && 
-            bill.year == year
+            bill.year == year &&
+            !bill.notes?.includes('isSummary')
         );
     }
 
@@ -726,27 +825,26 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
-    async function saveEntityBills(entityRow, month, year) {
+    async function saveAllAccountBills(entityElement, summaryValues, month, year) {
         if (isLoading) return;
         
-        const entityType = entityRow.getAttribute('data-entity-type');
-        const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
-        const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
-        
-        if (!hasAccounts) {
-            showToast('❌ Cannot save: No telephone account configured for this entity.', true);
-            return;
-        }
+        const entityType = entityElement.getAttribute('data-entity-type');
+        const entityId = parseInt(entityElement.getAttribute('data-entity-id'));
         
         let phoneRows = [];
-        let nextRow = entityRow.nextElementSibling;
+        let nextRow = entityElement.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
             phoneRows.push(nextRow);
             nextRow = nextRow.nextElementSibling;
         }
         
-        const billsToSave = [];
+        isLoading = true;
+        document.querySelector('.table-wrapper').classList.add('loading');
         
+        let successCount = 0;
+        let errorCount = 0;
+        
+        // Save individual phone bills
         for (const row of phoneRows) {
             const accountNumber = row.getAttribute('data-account');
             const phoneNumber = row.getAttribute('data-phone');
@@ -760,32 +858,20 @@
             const amountPaid = parseFloat(amountPaidInput?.value) || 0;
             const notes = notesInput?.value || '';
             
-            billsToSave.push({
-                id: existingBillId,
-                accountNumber: accountNumber === '—' ? '' : accountNumber,
-                phoneNumber: phoneNumber === '—' ? '' : phoneNumber,
-                currentCharges: currentCharges,
-                amountPaid: amountPaid,
-                notes: notes
-            });
-        }
-        
-        isLoading = true;
-        document.querySelector('.table-wrapper').classList.add('loading');
-        
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (const bill of billsToSave) {
+            const notesData = {
+                totalAmount: currentCharges,
+                originalNotes: notes
+            };
+            
             const billData = {
                 utility_type: 'telephone',
                 entity_type: entityType,
                 entity_id: entityId,
-                account_number: bill.accountNumber,
-                phone_number: bill.phoneNumber,
-                current_charges: bill.currentCharges,
-                amount_paid: bill.amountPaid,
-                notes: JSON.stringify({ previousPayment: 0, originalNotes: bill.notes }),
+                account_number: accountNumber === '—' ? '' : accountNumber,
+                phone_number: phoneNumber === '—' ? '' : phoneNumber,
+                current_charges: currentCharges,
+                amount_paid: amountPaid,
+                notes: JSON.stringify(notesData),
                 month: month,
                 year: year
             };
@@ -793,8 +879,8 @@
             try {
                 let url = '/api/utility-bills';
                 let method = 'POST';
-                if (bill.id) {
-                    url = `/api/utility-bills/${bill.id}`;
+                if (existingBillId) {
+                    url = `/api/utility-bills/${existingBillId}`;
                     method = 'PUT';
                 }
                 
@@ -812,6 +898,53 @@
             } catch(err) {
                 console.error('Network error:', err);
                 errorCount++;
+            }
+        }
+        
+        // Save summary data
+        if (summaryValues) {
+            const summaryBillData = {
+                utility_type: 'telephone',
+                entity_type: entityType,
+                entity_id: entityId,
+                account_number: '',
+                phone_number: '',
+                current_charges: 0,
+                amount_paid: summaryValues.amountPaid || 0,
+                notes: JSON.stringify({
+                    isSummary: true,
+                    previousOutstanding: summaryValues.previousOutstanding,
+                    previousPayment: summaryValues.previousPayment,
+                    totalCurrentBill: summaryValues.totalCurrentBill,
+                    otherCharges: summaryValues.otherCharges,
+                    adjustment: summaryValues.adjustment,
+                    totalBillCharges: summaryValues.totalBillCharges,
+                    amountPaid: summaryValues.amountPaid || 0
+                }),
+                month: month,
+                year: year
+            };
+            
+            try {
+                const existingSummary = existingBills.find(b => 
+                    b.entity_type === entityType && 
+                    b.entity_id === entityId && 
+                    b.notes?.includes('isSummary')
+                );
+                let url = '/api/utility-bills';
+                let method = 'POST';
+                if (existingSummary && existingSummary.id) {
+                    url = `/api/utility-bills/${existingSummary.id}`;
+                    method = 'PUT';
+                }
+                
+                await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(summaryBillData)
+                });
+            } catch(err) {
+                console.error('Summary save error:', err);
             }
         }
         
@@ -845,6 +978,16 @@
             if (billId) {
                 billIdsToDelete.push(parseInt(billId));
             }
+        }
+        
+        // Also delete summary bill
+        const existingSummary = existingBills.find(b => 
+            b.entity_type === entityRow.getAttribute('data-entity-type') && 
+            b.entity_id === parseInt(entityRow.getAttribute('data-entity-id')) && 
+            b.notes?.includes('isSummary')
+        );
+        if (existingSummary && existingSummary.id) {
+            billIdsToDelete.push(existingSummary.id);
         }
         
         if (billIdsToDelete.length === 0) {
@@ -963,6 +1106,8 @@
                                 notes: num.notes || '',
                                 existing: existing,
                                 billId: existing?.id,
+                                currentCharges: existing?.current_charges || 0,
+                                amountPaid: existing?.amount_paid || 0,
                                 isPlaceholder: account.isPlaceholder
                             });
                         }
@@ -1045,6 +1190,8 @@
                                 notes: num.notes || '',
                                 existing: existing,
                                 billId: existing?.id,
+                                currentCharges: existing?.current_charges || 0,
+                                amountPaid: existing?.amount_paid || 0,
                                 isPlaceholder: account.isPlaceholder
                             });
                         }
@@ -1093,11 +1240,15 @@
     
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
-        
-        let phoneRowsData = [];
         let entityTotalPaid = 0;
         let entityHasBills = false;
         let isPlaceholder = false;
+        
+        const summaryKey = `${entity.type}_${entity.id}`;
+        const existingSummary = existingSummaryData[summaryKey] || {};
+        
+        // First, collect all phone rows data
+        let phoneRowsData = [];
         
         for (const account of entity.accountGroups) {
             let isFirstPhoneForAccount = true;
@@ -1120,7 +1271,7 @@
                 
                 if (!isPlaceholderAccount) {
                     entityTotalPaid += amountPaid;
-                    if (existing && amountPaid > 0) entityHasBills = true;
+                    if (amountPaid > 0) entityHasBills = true;
                 }
                 
                 const locationDisplay = num.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(num.location)}</div>` : '';
@@ -1186,6 +1337,7 @@
         `;
         tbody.appendChild(entityRow);
         
+        // Render phone rows
         for (const phoneData of phoneRowsData) {
             const phoneRow = document.createElement('tr');
             phoneRow.className = 'phone-row';
@@ -1210,6 +1362,104 @@
             tbody.appendChild(phoneRow);
         }
         
+        // Render BILL SUMMARY BOX
+        const summaryTotalBill = (existingSummary.totalCurrentBill || 0) + (existingSummary.otherCharges || 0) + (existingSummary.adjustment || 0);
+        const summaryAmountPaid = existingSummary.amountPaid || 0;
+        
+        const summaryRow = document.createElement('tr');
+        summaryRow.className = 'summary-row';
+        
+        const summaryCell = document.createElement('td');
+        summaryCell.colSpan = 9;
+        summaryCell.style.padding = '15px 20px';
+        summaryCell.style.backgroundColor = 'transparent';
+        
+        summaryCell.innerHTML = `
+            <div class="summary-container">
+                <div class="summary-title-box">💰 BILL SUMMARY - ${escapeHtml(entity.name)}</div>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <span class="summary-label">Previous Outstanding ($)</span>
+                        <input type="number" step="0.01" class="summary-input summary-previous-outstanding" id="prev_out_${entity.id}" value="${(existingSummary.previousOutstanding || 0).toFixed(2)}" placeholder="0.00">
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Previous Payment Received ($)</span>
+                        <input type="number" step="0.01" class="summary-input summary-previous-payment" id="prev_pay_${entity.id}" value="${(existingSummary.previousPayment || 0).toFixed(2)}" placeholder="0.00">
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Current Bill ($)</span>
+                        <input type="number" step="0.01" class="summary-input summary-total-current-bill" id="total_curr_${entity.id}" value="${(existingSummary.totalCurrentBill || 0).toFixed(2)}" placeholder="0.00">
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Other Charges ($)</span>
+                        <input type="number" step="0.01" class="summary-input summary-other-charges" id="other_${entity.id}" value="${(existingSummary.otherCharges || 0).toFixed(2)}" placeholder="0.00">
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Adjustment ($)</span>
+                        <input type="number" step="0.01" class="summary-input summary-adjustment" id="adj_${entity.id}" value="${(existingSummary.adjustment || 0).toFixed(2)}" placeholder="0.00">
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Bill Charges ($)</span>
+                        <div class="summary-value" id="total_bill_${entity.id}">${summaryTotalBill.toFixed(2)}</div>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Amount Paid ($)</span>
+                        <input type="number" step="0.01" class="summary-input summary-amount-paid" id="amount_paid_${entity.id}" value="${summaryAmountPaid.toFixed(2)}" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="summary-actions">
+                    <button class="btn btn-success save-entity-summary-btn">💾 Save All Changes</button>
+                    ${entityHasBills && !isPlaceholder ? '<button class="btn btn-danger delete-entity-summary-btn" style="margin-left: 10px;">🗑️ Delete All Bills</button>' : ''}
+                </div>
+            </div>
+        `;
+        
+        summaryRow.appendChild(summaryCell);
+        tbody.appendChild(summaryRow);
+        
+        // Attach event listeners for summary box
+        const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
+        const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
+        const otherInput = summaryCell.querySelector('.summary-other-charges');
+        const adjInput = summaryCell.querySelector('.summary-adjustment');
+        const totalBillDisplay = summaryCell.querySelector('.summary-value');
+        const amountPaidInput = summaryCell.querySelector('.summary-amount-paid');
+        
+        const updateSummaryTotal = () => {
+            const totalCurr = parseFloat(totalCurrInput?.value) || 0;
+            const other = parseFloat(otherInput?.value) || 0;
+            const adj = parseFloat(adjInput?.value) || 0;
+            const total = totalCurr + other + adj;
+            if (totalBillDisplay) totalBillDisplay.innerText = total.toFixed(2);
+        };
+        
+        if (totalCurrInput) totalCurrInput.addEventListener('input', updateSummaryTotal);
+        if (otherInput) otherInput.addEventListener('input', updateSummaryTotal);
+        if (adjInput) adjInput.addEventListener('input', updateSummaryTotal);
+        
+        const saveBtn = summaryCell.querySelector('.save-entity-summary-btn');
+        if (saveBtn) {
+            saveBtn.onclick = async () => {
+                const summaryValues = {
+                    previousOutstanding: parseFloat(prevOutInput?.value) || 0,
+                    previousPayment: parseFloat(summaryCell.querySelector('.summary-previous-payment')?.value) || 0,
+                    totalCurrentBill: parseFloat(totalCurrInput?.value) || 0,
+                    otherCharges: parseFloat(otherInput?.value) || 0,
+                    adjustment: parseFloat(adjInput?.value) || 0,
+                    totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
+                    amountPaid: parseFloat(amountPaidInput?.value) || 0
+                };
+                await saveAllAccountBills(entityRow, summaryValues, month, year);
+            };
+        }
+        
+        const deleteBtn = summaryCell.querySelector('.delete-entity-summary-btn');
+        if (deleteBtn) {
+            deleteBtn.onclick = async () => {
+                await deleteEntityBills(entityRow, month, year);
+            };
+        }
+        
         return serial;
     }
     
@@ -1229,15 +1479,34 @@
             if (saveBtn && !saveBtn.disabled) {
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
-                    await saveEntityBills(entityRow, currentMonth, currentYear);
-                }
-            }
-            
-            const deleteBtn = e.target.closest('.delete-entity-btn');
-            if (deleteBtn) {
-                const entityRow = deleteBtn.closest('tr.entity-row');
-                if (entityRow) {
-                    await deleteEntityBills(entityRow, currentMonth, currentYear);
+                    // Find the summary values from the summary box
+                    const summaryRow = entityRow.nextElementSibling;
+                    while (summaryRow && !summaryRow.classList.contains('summary-row')) {
+                        const next = summaryRow.nextElementSibling;
+                        if (!next) break;
+                    }
+                    if (summaryRow && summaryRow.classList.contains('summary-row')) {
+                        const summaryCell = summaryRow.querySelector('td');
+                        if (summaryCell) {
+                            const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
+                            const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
+                            const otherInput = summaryCell.querySelector('.summary-other-charges');
+                            const adjInput = summaryCell.querySelector('.summary-adjustment');
+                            const totalBillDisplay = summaryCell.querySelector('.summary-value');
+                            const amountPaidInput = summaryCell.querySelector('.summary-amount-paid');
+                            
+                            const summaryValues = {
+                                previousOutstanding: parseFloat(prevOutInput?.value) || 0,
+                                previousPayment: parseFloat(summaryCell.querySelector('.summary-previous-payment')?.value) || 0,
+                                totalCurrentBill: parseFloat(totalCurrInput?.value) || 0,
+                                otherCharges: parseFloat(otherInput?.value) || 0,
+                                adjustment: parseFloat(adjInput?.value) || 0,
+                                totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
+                                amountPaid: parseFloat(amountPaidInput?.value) || 0
+                            };
+                            await saveAllAccountBills(entityRow, summaryValues, currentMonth, currentYear);
+                        }
+                    }
                 }
             }
         });
