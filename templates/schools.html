@@ -401,27 +401,54 @@
         .btn-print { background: var(--primary); color: white; }
         .btn-cancel { background: var(--gray); color: white; }
         
-        /* PRINT STYLES - Enhanced with proper margins */
+        /* ========== ENHANCED PRINT STYLES WITH PROPER MARGINS ========== */
         @media print {
+            /* Force page margins using multiple methods */
             @page {
-                margin: 1.5cm 1cm 1.5cm 1cm;
+                margin: 2.5cm 1.5cm 2.5cm 1.5cm !important;
                 size: A4;
             }
             
-            body {
-                margin: 0;
-                padding: 0;
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
                 background: white;
+                height: auto;
             }
             
-            .navbar, .filters-bar, .page-header .btn, .entity-actions, .modal-overlay, .scroll-hint, .add-new-row, .toast-message {
+            body {
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            
+            /* Hide non-printable elements */
+            .navbar, .filters-bar, .page-header .btn, .entity-actions, 
+            .modal-overlay, .scroll-hint, .add-new-row, .toast-message,
+            .edit-school-btn, .delete-school-btn {
                 display: none !important;
             }
             
+            /* Keep page header visible but remove button */
+            .page-header {
+                display: block !important;
+                margin-bottom: 20px !important;
+            }
+            
+            .page-title {
+                margin-bottom: 10px !important;
+            }
+            
             .container {
-                margin-top: 0;
-                padding: 0;
+                margin: 0 !important;
+                padding: 0 !important;
                 max-width: 100%;
+            }
+            
+            /* Print wrapper for proper spacing */
+            .print-content {
+                display: block;
+                width: 100%;
+                padding-top: 0.5cm;
             }
             
             .table-wrapper {
@@ -430,18 +457,20 @@
                 max-height: none;
                 border: none;
                 background: white;
+                margin: 0;
+                padding: 0;
             }
             
             .data-table {
-                min-width: auto;
                 width: 100%;
                 border-collapse: collapse;
-                font-size: 10pt;
+                font-size: 9pt;
+                margin: 0;
             }
             
             .data-table th, .data-table td {
-                border: 1px solid #ccc;
-                padding: 6px 8px;
+                border: 1px solid #999;
+                padding: 6px 6px;
                 vertical-align: top;
             }
             
@@ -467,9 +496,22 @@
                 page-break-inside: avoid;
             }
             
-            .badge {
-                border: 1px solid #999;
-                print-color-adjust: exact;
+            /* Ensure page breaks don't cut content badly */
+            tr, .cluster-separator, .view-account-item {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            
+            /* Add space at top of first page */
+            .print-header {
+                margin-top: 0.8cm !important;
+                margin-bottom: 0.8cm !important;
+            }
+            
+            /* Footer spacing */
+            .footer {
+                margin-top: 0.8cm !important;
+                margin-bottom: 0.5cm !important;
             }
         }
     </style>
@@ -762,28 +804,133 @@
         const clusterMap = new Map();
         filtered.forEach(s => { let c = s.cluster_number || 'Unassigned'; if(!clusterMap.has(c)) clusterMap.set(c, []); clusterMap.get(c).push(s); });
         const sortedClusters = Array.from(clusterMap.keys()).sort((a,b) => a==='Unassigned'?1:b==='Unassigned'?-1:(parseInt(a)||0)-(parseInt(b)||0));
-        let printHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Schools Report - ${new Date().toLocaleString()}</title><style>
-            *{font-family:'Segoe UI',Arial,sans-serif; margin:0; padding:0; box-sizing:border-box;}
-            body{padding:0; margin:0; background:white;}
-            @page { margin: 2cm 1.5cm 2cm 1.5cm; size: A4; }
-            .print-container { max-width: 100%; margin: 0 auto; }
-            .print-header{text-align:center;margin-bottom:30px;border-bottom:2px solid #333;padding-bottom:15px;}
-            .print-header h1{margin:0;color:#4361ee; font-size:24px;}
-            .print-header p{margin:8px 0 0;color:#666; font-size:12px;}
-            table{width:100%;border-collapse:collapse;margin-top:20px;font-size:10pt;}
-            th,td{border:1px solid #999;padding:8px 8px;text-align:left;vertical-align:top;}
-            th{background-color:#e8e8e8;font-weight:bold;}
-            .cluster-group{background-color:#e8f0fe;font-weight:bold;}
-            .cluster-group td{background-color:#e8f0fe;font-size:12pt;font-weight:bold;}
-            .group-count{font-weight:normal;font-size:10pt;margin-left:10px;}
-            .utility-text{white-space:pre-line;font-size:9pt;line-height:1.3;}
-            .footer{margin-top:35px;text-align:center;font-size:10pt;color:#666;border-top:1px solid #ddd;padding-top:15px;}
-        </style></head><body>
-        <div class="print-container">
-        <div class="print-header"><h1>🏫 Schools Management Report</h1><p>Generated: ${new Date().toLocaleString()}</p><p>Total Schools: ${filtered.length}</p></div>
-        <table><thead><tr>`;
-        selectedCols.forEach(col => { if(col.key==='seq') printHtml+=`<th>No.</th>`; else if(col.key==='schoolName') printHtml+=`<th>School Name</th>`; else if(col.key==='cluster') printHtml+=`<th>Cluster</th>`; else if(col.key==='schoolNo') printHtml+=`<th>School No.</th>`; else if(col.key==='waterAccounts') printHtml+=`<th>💧 Water Accounts</th>`; else if(col.key==='electricityAccounts') printHtml+=`<th>⚡ Electricity Accounts</th>`; else if(col.key==='telephoneAccounts') printHtml+=`<th>📞 Telephone Accounts</th>`; else if(col.key==='bmoName') printHtml+=`<th>BMO Name</th>`; else if(col.key==='bmoPhone') printHtml+=`<th>BMO Phone</th>`; else if(col.key==='address') printHtml+=`<th>Address</th>`; else if(col.key==='notes') printHtml+=`<th>Notes</th>`; });
-        printHtml += `</tr></thead><tbody>`;
+        
+        // Calculate date for header
+        const now = new Date();
+        const dateStr = now.toLocaleDateString();
+        const timeStr = now.toLocaleTimeString();
+        
+        let printHtml = `<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Schools Report - ${dateStr}</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                body {
+                    background: white;
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                    padding: 0;
+                    margin: 0;
+                }
+                @page {
+                    margin: 2.5cm 1.5cm 2.5cm 1.5cm;
+                    size: A4;
+                }
+                .print-page {
+                    max-width: 100%;
+                    margin: 0 auto;
+                }
+                .print-header {
+                    text-align: center;
+                    margin-bottom: 30px;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #333;
+                }
+                .print-header h1 {
+                    margin: 0 0 10px 0;
+                    color: #4361ee;
+                    font-size: 24px;
+                }
+                .print-header p {
+                    margin: 5px 0;
+                    color: #666;
+                    font-size: 12px;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                    font-size: 10pt;
+                }
+                th, td {
+                    border: 1px solid #999;
+                    padding: 8px 8px;
+                    text-align: left;
+                    vertical-align: top;
+                }
+                th {
+                    background-color: #e8e8e8;
+                    font-weight: bold;
+                }
+                .cluster-group {
+                    background-color: #e8f0fe;
+                    font-weight: bold;
+                }
+                .cluster-group td {
+                    background-color: #e8f0fe;
+                    font-size: 12pt;
+                    font-weight: bold;
+                }
+                .group-count {
+                    font-weight: normal;
+                    font-size: 10pt;
+                    margin-left: 10px;
+                }
+                .utility-text {
+                    white-space: pre-line;
+                    font-size: 9pt;
+                    line-height: 1.3;
+                }
+                .footer {
+                    margin-top: 35px;
+                    text-align: center;
+                    font-size: 10pt;
+                    color: #666;
+                    border-top: 1px solid #ddd;
+                    padding-top: 15px;
+                }
+                /* Prevent page breaks inside rows */
+                tr {
+                    break-inside: avoid;
+                    page-break-inside: avoid;
+                }
+                .cluster-group {
+                    break-inside: avoid;
+                    page-break-inside: avoid;
+                }
+            </style>
+        </head>
+        <body>
+        <div class="print-page">
+            <div class="print-header">
+                <h1>🏫 Schools Management Report</h1>
+                <p>Generated: ${dateStr} at ${timeStr}</p>
+                <p><strong>Total Schools:</strong> ${filtered.length}</p>
+            </div>
+            <table>
+                <thead>
+                    <tr>`;
+        
+        selectedCols.forEach(col => { 
+            if(col.key==='seq') printHtml+=`<th>No.</th>`; 
+            else if(col.key==='schoolName') printHtml+=`<th>School Name</th>`; 
+            else if(col.key==='cluster') printHtml+=`<th>Cluster</th>`; 
+            else if(col.key==='schoolNo') printHtml+=`<th>School No.</th>`; 
+            else if(col.key==='waterAccounts') printHtml+=`<th>💧 Water Accounts</th>`; 
+            else if(col.key==='electricityAccounts') printHtml+=`<th>⚡ Electricity Accounts</th>`; 
+            else if(col.key==='telephoneAccounts') printHtml+=`<th>📞 Telephone Accounts</th>`; 
+            else if(col.key==='bmoName') printHtml+=`<th>BMO Name</th>`; 
+            else if(col.key==='bmoPhone') printHtml+=`<th>BMO Phone</th>`; 
+            else if(col.key==='address') printHtml+=`<th>Address</th>`; 
+            else if(col.key==='notes') printHtml+=`<th>Notes</th>`; 
+        });
+        printHtml += `</td></thead><tbody>`;
+        
         let globalSeq = 1;
         for(let cluster of sortedClusters) {
             const schools = clusterMap.get(cluster);
@@ -807,14 +954,27 @@
                 globalSeq++;
             }
         }
-        printHtml += `</tbody></table><div class="footer"><p>UKA Bill Utility System - School Listing</p></div></div></body></html>`;
+        
+        printHtml += `
+                </tbody>
+            </table>
+            <div class="footer">
+                <p>UKA Bill Utility System - Official School Listing</p>
+                <p>Page 1 of 1</p>
+            </div>
+        </div>
+        </body>
+        </html>`;
+        
         closePrintModal();
         const printWindow = window.open('', '_blank'); 
         if(printWindow) {
             printWindow.document.write(printHtml); 
             printWindow.document.close(); 
             printWindow.focus(); 
-            printWindow.print();
+            setTimeout(() => {
+                printWindow.print();
+            }, 500);
         } else {
             alert('Please allow pop-ups to print the report.');
         }
