@@ -64,10 +64,6 @@
             flex-wrap: wrap;
         }
 
-        .nav-tabs li {
-            margin: 0 5px;
-        }
-
         .nav-tabs a {
             text-decoration: none;
             color: var(--gray);
@@ -122,10 +118,6 @@
         .btn-warning {
             background: var(--warning);
             color: white;
-        }
-
-        .btn-warning:hover {
-            background: #e68a00;
         }
 
         .period-card {
@@ -260,12 +252,6 @@
             text-align: right;
             transition: 0.1s;
             box-sizing: border-box;
-        }
-
-        .inline-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
         }
 
         .account-number {
@@ -444,40 +430,40 @@
         .summary-title-box {
             background-color: var(--bill-border);
             color: white;
-            padding: 8px 15px;
-            border-radius: 8px;
+            padding: 6px 12px;
+            border-radius: 6px;
             display: inline-block;
-            margin-bottom: 15px;
-            font-weight: bold;
-            font-size: 1rem;
+            margin-bottom: 12px;
+            font-weight: 600;
+            font-size: 0.85rem;
         }
         
         .summary-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            gap: 15px;
+            gap: 12px;
             align-items: end;
         }
         
         .summary-item {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 4px;
         }
         
         .summary-label {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 600;
             color: #e65100;
         }
         
         .summary-input {
             width: 100%;
-            padding: 8px 10px;
-            border-radius: 5px;
+            padding: 6px 8px;
+            border-radius: 4px;
             border: 1px solid #ffcc80;
             background: white;
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             text-align: right;
             box-sizing: border-box;
         }
@@ -490,11 +476,11 @@
         
         .summary-value {
             font-weight: bold;
-            font-size: 1rem;
+            font-size: 0.85rem;
             color: #e65100;
             background: white;
-            padding: 8px 10px;
-            border-radius: 5px;
+            padding: 6px 8px;
+            border-radius: 4px;
             text-align: right;
             border: 1px solid #ffcc80;
         }
@@ -513,11 +499,6 @@
             font-weight: normal;
         }
         
-        .placeholder-text {
-            color: #999;
-            font-style: italic;
-        }
-        
         .department-name-badge {
             background: #7b1fa2;
             color: white;
@@ -528,28 +509,18 @@
         }
 
         .summary-row td {
-            padding: 15px 20px;
-            background-color: transparent;
-        }
-        
-        .summary-row {
+            padding: 12px 15px;
             background-color: transparent;
         }
         
         .bill-number-input {
             font-family: monospace;
             width: 100%;
-            padding: 6px 8px;
+            padding: 4px 6px;
             border-radius: 4px;
             border: 1px solid #ddd;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             background: white;
-        }
-        
-        .bill-number-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
         }
         
         .bill-number-cell {
@@ -559,8 +530,8 @@
         .summary-actions {
             display: flex;
             justify-content: flex-end;
-            margin-top: 15px;
-            padding-top: 10px;
+            margin-top: 12px;
+            padding-top: 8px;
             border-top: 1px solid #ffcc80;
         }
         
@@ -615,10 +586,10 @@
         
         .edit-mode-input {
             width: 100%;
-            padding: 6px 8px;
+            padding: 4px 6px;
             border-radius: 4px;
             border: 1px solid var(--primary);
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             background: #fff;
         }
     </style>
@@ -719,13 +690,11 @@
 </div>
 
 <script>
-    let allSchools = [];
-    let allDepartments = [];
-    let existingBills = [];
+    let allSchools = [], allDepartments = [], existingBills = [];
     let existingSummaryData = {};
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
-    let isLoading = false;
+    let isSaving = false;
     let editingEntityId = null;
 
     function showLoading(show) {
@@ -743,9 +712,7 @@
     function populateYears() {
         const yearSelect = document.getElementById('globalYear');
         yearSelect.innerHTML = '';
-        const start = 2020;
-        const end = 2035;
-        for (let y = start; y <= end; y++) {
+        for (let y = 2020; y <= 2035; y++) {
             const opt = document.createElement('option');
             opt.value = y;
             opt.textContent = y;
@@ -768,17 +735,12 @@
                 allDepartments = await deptsRes.json();
                 allDepartments.sort((a, b) => a.id - b.id);
             }
-            console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
-        } catch(e) {
-            console.error("Error loading entities:", e);
-            showToast("Error loading data", true);
-        }
+        } catch(e) { console.error(e); }
     }
 
     async function loadExistingBills(month, year) {
         try {
-            const url = `/api/utility-bills?utility_type=telephone&month=${month}&year=${year}`;
-            const resp = await fetch(url);
+            const resp = await fetch(`/api/utility-bills?utility_type=telephone&month=${month}&year=${year}`);
             if (resp.ok) {
                 existingBills = await resp.json();
                 for (const bill of existingBills) {
@@ -803,116 +765,58 @@
             } else {
                 existingBills = [];
             }
-            console.log(`Loaded ${existingBills.length} existing telephone bills for ${month}/${year}`);
-        } catch(e) {
-            console.error(e);
-            existingBills = [];
-        }
+        } catch(e) { existingBills = []; }
     }
 
     function extractTelephoneAccounts(entity) {
         let accounts = [];
         try {
             if (entity.telephone_accounts && typeof entity.telephone_accounts === 'string') {
-                const parsed = JSON.parse(entity.telephone_accounts);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    accounts = parsed;
-                }
+                accounts = JSON.parse(entity.telephone_accounts);
             } else if (entity.telephone_accounts && Array.isArray(entity.telephone_accounts)) {
                 accounts = entity.telephone_accounts;
             } else if (entity.telephone_account) {
-                const numbers = [];
-                if (entity.telephone_number) {
-                    numbers.push({ phoneNumber: entity.telephone_number, location: '', notes: '' });
-                }
-                accounts = [{ accountNumber: entity.telephone_account, numbers: numbers }];
+                accounts = [{ accountNumber: entity.telephone_account, numbers: [{ phoneNumber: entity.telephone_number || '—' }] }];
             }
-        } catch(e) {
-            console.error("Error parsing telephone accounts:", e);
+        } catch(e) {}
+        if (!accounts.length) {
+            accounts = [{ accountNumber: '—', numbers: [{ phoneNumber: '—' }], isPlaceholder: true }];
         }
         return accounts;
     }
 
     function buildEntityList() {
         const entities = [];
-        
-        for (let idx = 0; idx < allSchools.length; idx++) {
-            const school = allSchools[idx];
-            const accounts = extractTelephoneAccounts(school);
-            
-            let accountGroups = accounts;
-            let hasAccounts = accounts.length > 0;
-            
-            if (!hasAccounts) {
-                accountGroups = [{
-                    accountNumber: '—',
-                    numbers: [{ phoneNumber: '—', location: '', notes: '' }],
-                    isPlaceholder: true
-                }];
-            }
-            
+        allSchools.forEach((s, idx) => {
             entities.push({
-                id: school.id,
-                name: school.name || `School #${school.id}`,
-                type: 'school',
-                typeLabel: '🏫 School',
-                clusterNumber: school.cluster_number || null,
-                departmentName: null,
-                displayOrder: idx,
-                accountGroups: accountGroups,
-                hasAccounts: hasAccounts
+                id: s.id, name: s.name || `School #${s.id}`, type: 'school', typeLabel: '🏫 School',
+                clusterNumber: s.cluster_number, displayOrder: idx,
+                accountGroups: extractTelephoneAccounts(s)
             });
-        }
-        
-        for (let idx = 0; idx < allDepartments.length; idx++) {
-            const dept = allDepartments[idx];
-            const accounts = extractTelephoneAccounts(dept);
-            
-            let accountGroups = accounts;
-            let hasAccounts = accounts.length > 0;
-            
-            if (!hasAccounts) {
-                accountGroups = [{
-                    accountNumber: '—',
-                    numbers: [{ phoneNumber: '—', location: '', notes: '' }],
-                    isPlaceholder: true
-                }];
-            }
-            
-            const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
+        });
+        allDepartments.forEach((d, idx) => {
+            const displayName = d.unit_name || d.department_name || d.name || `Dept #${d.id}`;
             entities.push({
-                id: dept.id,
-                name: displayName,
-                type: 'department',
-                typeLabel: '🏛️ Department',
-                clusterNumber: null,
-                departmentName: dept.department_name || 'Other',
-                displayOrder: allSchools.length + idx,
-                accountGroups: accountGroups,
-                hasAccounts: hasAccounts
+                id: d.id, name: displayName, type: 'department', typeLabel: '🏛️ Department',
+                departmentName: d.department_name || 'Other', displayOrder: allSchools.length + idx,
+                accountGroups: extractTelephoneAccounts(d)
             });
-        }
-        
+        });
         return entities;
     }
 
     function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
-        return existingBills.find(bill => 
-            bill.entity_type === entityType &&
-            bill.entity_id == entityId &&
-            (bill.account_number || '—') === (accountNumber || '—') &&
-            (bill.phone_number || '—') === (phoneNumber || '—') &&
-            bill.month == month && 
-            bill.year == year &&
-            !bill.notes?.includes('isSummary')
+        return existingBills.find(b => 
+            b.entity_type === entityType && b.entity_id == entityId &&
+            (b.account_number || '—') === (accountNumber || '—') &&
+            (b.phone_number || '—') === (phoneNumber || '—') &&
+            b.month == month && b.year == year &&
+            !b.notes?.includes('isSummary')
         );
     }
 
     async function saveEntityBills(entityRow, summaryValues, month, year) {
-        if (isLoading) {
-            showToast('Please wait, save in progress...', true);
-            return;
-        }
+        if (isSaving) { showToast('Please wait...', true); return; }
         
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
@@ -928,14 +832,12 @@
             }
         }
         
-        isLoading = true;
+        isSaving = true;
         showLoading(true);
         
-        let successCount = 0;
-        let errorCount = 0;
-        const errors = [];
+        const billsToSave = [];
         
-        // Save each phone bill
+        // Prepare all phone bills
         for (const accountRow of accountRows) {
             const accountNumber = accountRow.getAttribute('data-account-number');
             const billNumberInput = accountRow.querySelector('.account-bill-number-input');
@@ -961,7 +863,8 @@
                 const totalAmount = parseFloat(totalAmountInput?.value) || 0;
                 const notes = notesInput?.value || '';
                 
-                const billData = {
+                billsToSave.push({
+                    id: existingBillId,
                     utility_type: 'telephone',
                     entity_type: entityType,
                     entity_id: entityId,
@@ -969,70 +872,57 @@
                     phone_number: phoneNumber === '—' ? '' : phoneNumber,
                     current_charges: currentCharges,
                     meter_number: accountBillNumber,
-                    notes: JSON.stringify({ totalAmount: totalAmount, originalNotes: notes }),
+                    notes: JSON.stringify({ totalAmount, originalNotes: notes }),
+                    month: month,
+                    year: year
+                });
+            }
+        }
+        
+        try {
+            // Save phone bills
+            if (billsToSave.length > 0) {
+                const resp = await fetch('/api/utility-bills/batch-update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bills: billsToSave })
+                });
+                const result = await resp.json();
+                if (!result.success) {
+                    showToast(`⚠️ Saved ${result.success_count} records, ${result.error_count} failed`, true);
+                }
+            }
+            
+            // Save summary data
+            if (summaryValues) {
+                const summaryBillData = {
+                    utility_type: 'telephone',
+                    entity_type: entityType,
+                    entity_id: entityId,
+                    account_number: '',
+                    phone_number: '',
+                    current_charges: 0,
+                    amount_paid: summaryValues.amountPaid || 0,
+                    notes: JSON.stringify({
+                        isSummary: true,
+                        previousOutstanding: summaryValues.previousOutstanding,
+                        previousPayment: summaryValues.previousPayment,
+                        totalCurrentBill: summaryValues.totalCurrentBill,
+                        otherCharges: summaryValues.otherCharges,
+                        adjustment: summaryValues.adjustment,
+                        totalBillCharges: summaryValues.totalBillCharges,
+                        amountPaid: summaryValues.amountPaid || 0
+                    }),
                     month: month,
                     year: year
                 };
                 
-                try {
-                    let url = '/api/utility-bills';
-                    let method = 'POST';
-                    if (existingBillId) {
-                        url = `/api/utility-bills/${existingBillId}`;
-                        method = 'PUT';
-                    }
-                    
-                    const resp = await fetch(url, {
-                        method: method,
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(billData)
-                    });
-                    
-                    if (resp.ok) {
-                        successCount++;
-                    } else {
-                        errorCount++;
-                        const result = await resp.json();
-                        errors.push(`${phoneNumber}: ${result.error || 'Unknown error'}`);
-                    }
-                } catch(err) {
-                    errorCount++;
-                    errors.push(`${phoneNumber}: ${err.message}`);
-                    console.error('Network error:', err);
-                }
-            }
-        }
-        
-        // Save summary data
-        if (summaryValues) {
-            const summaryBillData = {
-                utility_type: 'telephone',
-                entity_type: entityType,
-                entity_id: entityId,
-                account_number: '',
-                phone_number: '',
-                current_charges: 0,
-                amount_paid: summaryValues.amountPaid || 0,
-                notes: JSON.stringify({
-                    isSummary: true,
-                    previousOutstanding: summaryValues.previousOutstanding,
-                    previousPayment: summaryValues.previousPayment,
-                    totalCurrentBill: summaryValues.totalCurrentBill,
-                    otherCharges: summaryValues.otherCharges,
-                    adjustment: summaryValues.adjustment,
-                    totalBillCharges: summaryValues.totalBillCharges,
-                    amountPaid: summaryValues.amountPaid || 0
-                }),
-                month: month,
-                year: year
-            };
-            
-            try {
                 const existingSummary = existingBills.find(b => 
                     b.entity_type === entityType && 
                     b.entity_id === entityId && 
                     b.notes?.includes('isSummary')
                 );
+                
                 let url = '/api/utility-bills';
                 let method = 'POST';
                 if (existingSummary && existingSummary.id) {
@@ -1045,24 +935,22 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(summaryBillData)
                 });
-            } catch(err) {
-                console.error('Summary save error:', err);
             }
-        }
-        
-        isLoading = false;
-        showLoading(false);
-        
-        if (errorCount === 0) {
-            showToast(`✅ Saved ${successCount} phone record${successCount > 1 ? 's' : ''} successfully`);
+            
+            showToast(`✅ Saved ${billsToSave.length} phone record${billsToSave.length > 1 ? 's' : ''} successfully`);
             await renderTelephoneTable();
-        } else {
-            showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed. ${errors.join('; ')}`, true);
+            
+        } catch(err) {
+            console.error('Save error:', err);
+            showToast(`❌ Save failed: ${err.message}`, true);
         }
+        
+        isSaving = false;
+        showLoading(false);
     }
 
     async function deleteEntityBills(entityRow, month, year) {
-        if (isLoading) { showToast('Please wait...', true); return; }
+        if (isSaving) { showToast('Please wait...', true); return; }
         
         const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
         if (!confirm(`Delete ALL telephone bills for ${entityName} for ${month}/${year}?`)) return;
@@ -1076,13 +964,7 @@
             nextRow = nextRow.nextElementSibling;
         }
         
-        const billIdsToDelete = [];
-        for (const row of phoneRows) {
-            const billId = row.getAttribute('data-bill-id');
-            if (billId) {
-                billIdsToDelete.push(parseInt(billId));
-            }
-        }
+        const billIds = phoneRows.map(r => r.getAttribute('data-bill-id')).filter(id => id && id !== 'null');
         
         const existingSummary = existingBills.find(b => 
             b.entity_type === entityRow.getAttribute('data-entity-type') && 
@@ -1090,32 +972,75 @@
             b.notes?.includes('isSummary')
         );
         if (existingSummary && existingSummary.id) {
-            billIdsToDelete.push(existingSummary.id);
+            billIds.push(existingSummary.id);
         }
         
-        if (billIdsToDelete.length === 0) {
-            showToast('No bills to delete', true);
-            return;
-        }
+        if (billIds.length === 0) { showToast('No bills to delete', true); return; }
         
         showLoading(true);
         let success = 0;
-        for (const id of billIdsToDelete) {
-            try {
-                const resp = await fetch(`/api/utility-bills/${id}`, { method: 'DELETE' });
-                if (resp.ok) success++;
-            } catch(e) {}
+        for (const id of billIds) {
+            const resp = await fetch(`/api/utility-bills/${id}`, { method: 'DELETE' });
+            if (resp.ok) success++;
         }
         showLoading(false);
         showToast(`🗑️ Deleted ${success} bill${success > 1 ? 's' : ''} successfully`);
         await renderTelephoneTable();
     }
 
+    async function updatePhoneInfo(entityId, accountNumber, phoneNumber, newAccountNumber, newPhoneNumber, newLocation) {
+        try {
+            const entity = [...allSchools, ...allDepartments].find(e => e.id == entityId);
+            if (!entity) return false;
+            
+            let accounts = [];
+            if (entity.type === 'school') {
+                const school = allSchools.find(s => s.id == entityId);
+                accounts = school.telephone_accounts && typeof school.telephone_accounts === 'string' ? JSON.parse(school.telephone_accounts) : (school.telephone_accounts || []);
+            } else {
+                const dept = allDepartments.find(d => d.id == entityId);
+                accounts = dept.telephone_accounts && typeof dept.telephone_accounts === 'string' ? JSON.parse(dept.telephone_accounts) : (dept.telephone_accounts || []);
+            }
+            
+            for (const acc of accounts) {
+                if (acc.accountNumber === accountNumber) {
+                    if (acc.numbers) {
+                        for (const n of acc.numbers) {
+                            if (n.phoneNumber === phoneNumber) {
+                                if (newPhoneNumber) n.phoneNumber = newPhoneNumber;
+                                if (newLocation) n.location = newLocation;
+                                break;
+                            }
+                        }
+                    }
+                    if (newAccountNumber && newAccountNumber !== accountNumber) {
+                        acc.accountNumber = newAccountNumber;
+                    }
+                    break;
+                }
+            }
+            
+            const updateData = {
+                telephoneAccounts: accounts
+            };
+            
+            const url = entity.type === 'school' ? `/api/schools/${entityId}` : `/api/departments/${entityId}`;
+            const resp = await fetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updateData)
+            });
+            return resp.ok;
+        } catch(e) {
+            console.error(e);
+            return false;
+        }
+    }
+
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
-        currentMonth = month;
-        currentYear = year;
+        currentMonth = month; currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
         tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
@@ -1143,180 +1068,59 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        const schoolsList = filteredEntities.filter(e => e.type === 'school');
-        const departmentsList = filteredEntities.filter(e => e.type === 'department');
+        const schools = filteredEntities.filter(e => e.type === 'school');
+        const departments = filteredEntities.filter(e => e.type === 'department');
         
-        const schoolsByCluster = new Map();
-        for (const school of schoolsList) {
-            const cluster = school.clusterNumber || 'Unassigned';
-            if (!schoolsByCluster.has(cluster)) {
-                schoolsByCluster.set(cluster, []);
-            }
-            schoolsByCluster.get(cluster).push(school);
-        }
+        const clusterMap = new Map();
+        schools.forEach(s => {
+            const c = s.clusterNumber || 'Unassigned';
+            if (!clusterMap.has(c)) clusterMap.set(c, []);
+            clusterMap.get(c).push(s);
+        });
         
-        const sortedClusters = Array.from(schoolsByCluster.keys()).sort((a, b) => {
+        const sortedClusters = Array.from(clusterMap.keys()).sort((a,b) => {
             if (a === 'Unassigned') return 1;
             if (b === 'Unassigned') return -1;
-            const numA = parseInt(a);
-            const numB = parseInt(b);
-            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-            return String(a).localeCompare(String(b));
+            return (parseInt(a)||0) - (parseInt(b)||0);
         });
         
         for (const cluster of sortedClusters) {
-            const clusterSchools = schoolsByCluster.get(cluster);
-            clusterSchools.sort((a, b) => a.displayOrder - b.displayOrder);
+            const clusterSchools = clusterMap.get(cluster);
+            clusterSchools.sort((a, b) => a.name.localeCompare(b.name));
             
-            let hasVisibleInCluster = false;
-            const visibleClusterEntities = [];
+            const totalNumbers = clusterSchools.reduce((sum, e) => sum + e.accountGroups.reduce((s, a) => s + a.numbers.length, 0), 0);
+            const sepRow = document.createElement('tr');
+            sepRow.className = 'cluster-separator';
+            sepRow.innerHTML = `<td colspan="10"><div class="cluster-info"><span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span><span class="cluster-count">${clusterSchools.length} entities, ${totalNumbers} phones</span></div></div>`;
+            tbody.appendChild(sepRow);
             
             for (const entity of clusterSchools) {
-                const visibleAccounts = [];
-                let hasAnyVisible = false;
-                
-                for (const account of entity.accountGroups) {
-                    const numbers = account.numbers || [];
-                    const visibleNumbers = [];
-                    for (const num of numbers) {
-                        const phoneNum = num.phoneNumber || '—';
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phoneNum, month, year);
-                        
-                        if (statusFilter === 'all' || 
-                            (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                            (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                            visibleNumbers.push({
-                                phoneNumber: phoneNum,
-                                location: num.location || '',
-                                notes: num.notes || '',
-                                existing: existing,
-                                billId: existing?.id,
-                                billNumber: existing?.meter_number || '',
-                                currentCharges: existing?.current_charges || 0,
-                                amountPaid: existing?.amount_paid || 0,
-                                isPlaceholder: account.isPlaceholder
-                            });
-                        }
-                    }
-                    if (visibleNumbers.length > 0) {
-                        hasAnyVisible = true;
-                        visibleAccounts.push({
-                            accountNumber: account.accountNumber,
-                            numbers: visibleNumbers,
-                            isPlaceholder: account.isPlaceholder
-                        });
-                    }
-                }
-                if (hasAnyVisible) {
-                    hasVisibleInCluster = true;
-                    visibleClusterEntities.push({...entity, accountGroups: visibleAccounts});
-                }
-            }
-            
-            if (hasVisibleInCluster && visibleClusterEntities.length > 0) {
-                const totalNumbers = visibleClusterEntities.reduce((sum, e) => 
-                    sum + e.accountGroups.reduce((s, a) => s + a.numbers.length, 0), 0);
-                
-                const separatorRow = document.createElement('tr');
-                separatorRow.className = 'cluster-separator';
-                separatorRow.innerHTML = `
-                    <td colspan="10">
-                        <div class="cluster-info">
-                            <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
-                            <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
-                        </div>
-                    </div>
-                `;
-                tbody.appendChild(separatorRow);
-                
-                for (const entity of visibleClusterEntities) {
-                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
-                }
+                globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
             }
         }
         
-        const deptByDepartmentName = new Map();
-        for (const dept of departmentsList) {
-            const deptName = dept.departmentName || 'Other';
-            if (!deptByDepartmentName.has(deptName)) {
-                deptByDepartmentName.set(deptName, []);
-            }
-            deptByDepartmentName.get(deptName).push(dept);
-        }
+        const deptMap = new Map();
+        departments.forEach(d => {
+            const dn = d.departmentName || 'Other';
+            if (!deptMap.has(dn)) deptMap.set(dn, []);
+            deptMap.get(dn).push(d);
+        });
         
-        const deptGroupOrder = Array.from(deptByDepartmentName.keys()).sort();
-        
-        for (const deptName of deptGroupOrder) {
-            const deptsInGroup = deptByDepartmentName.get(deptName) || [];
+        for (const [deptName, deptList] of deptMap) {
+            deptList.sort((a, b) => a.name.localeCompare(b.name));
+            const totalNumbers = deptList.reduce((sum, e) => sum + e.accountGroups.reduce((s, a) => s + a.numbers.length, 0), 0);
+            const sepRow = document.createElement('tr');
+            sepRow.className = 'department-group-separator';
+            sepRow.innerHTML = `<td colspan="10"><div class="dept-group-info"><span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span><span class="dept-group-count">${deptList.length} units, ${totalNumbers} phones</span></div></div>`;
+            tbody.appendChild(sepRow);
             
-            const visibleDeptEntities = [];
-            for (const entity of deptsInGroup) {
-                const visibleAccounts = [];
-                let hasAnyVisible = false;
-                
-                for (const account of entity.accountGroups) {
-                    const numbers = account.numbers || [];
-                    const visibleNumbers = [];
-                    for (const num of numbers) {
-                        const phoneNum = num.phoneNumber || '—';
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phoneNum, month, year);
-                        
-                        if (statusFilter === 'all' || 
-                            (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                            (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                            visibleNumbers.push({
-                                phoneNumber: phoneNum,
-                                location: num.location || '',
-                                notes: num.notes || '',
-                                existing: existing,
-                                billId: existing?.id,
-                                billNumber: existing?.meter_number || '',
-                                currentCharges: existing?.current_charges || 0,
-                                amountPaid: existing?.amount_paid || 0,
-                                isPlaceholder: account.isPlaceholder
-                            });
-                        }
-                    }
-                    if (visibleNumbers.length > 0) {
-                        hasAnyVisible = true;
-                        visibleAccounts.push({
-                            accountNumber: account.accountNumber,
-                            numbers: visibleNumbers,
-                            isPlaceholder: account.isPlaceholder
-                        });
-                    }
-                }
-                if (hasAnyVisible) {
-                    visibleDeptEntities.push({...entity, accountGroups: visibleAccounts});
-                }
-            }
-            
-            if (visibleDeptEntities.length > 0) {
-                const totalNumbers = visibleDeptEntities.reduce((sum, e) => 
-                    sum + e.accountGroups.reduce((s, a) => s + a.numbers.length, 0), 0);
-                
-                const deptSeparator = document.createElement('tr');
-                deptSeparator.className = 'department-group-separator';
-                deptSeparator.innerHTML = `
-                    <td colspan="10">
-                        <div class="dept-group-info">
-                            <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
-                            <span class="dept-group-count">${visibleDeptEntities.length} unit${visibleDeptEntities.length > 1 ? 's' : ''}, ${totalNumbers} phone number${totalNumbers > 1 ? 's' : ''}</span>
-                        </div>
-                    </div>
-                `;
-                tbody.appendChild(deptSeparator);
-                
-                visibleDeptEntities.sort((a, b) => a.displayOrder - b.displayOrder);
-                
-                for (const entity of visibleDeptEntities) {
-                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
-                }
+            for (const entity of deptList) {
+                globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
             }
         }
     }
     
-    async function renderEntity(tbody, entity, month, year, startSerial) {
+    async function renderEntity(tbody, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasPaidBills = false;
@@ -1331,6 +1135,9 @@
         entityRow.setAttribute('data-entity-id', entity.id);
         entityRow.setAttribute('data-entity-name', entity.name);
         
+        let entityStatusText = 'Pending';
+        let entityStatusClass = 'status-pending';
+        
         entityRow.innerHTML = `
             <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
@@ -1341,15 +1148,13 @@
             <td colspan="3"></div>
             <td></div>
             <td></div>
-            <td><span class="status-badge status-pending" id="entity-status-${entity.id}">Pending</span></div>
+            <td><span class="status-badge ${entityStatusClass}" id="entity-status-${entity.id}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 ${isEditing ? `
                     <button class="btn btn-success btn-sm save-edit-btn">💾 Save Edit</button>
                     <button class="btn btn-secondary btn-sm cancel-edit-btn">✖ Cancel</button>
                 ` : `
                     <button class="btn btn-warning btn-sm edit-entity-btn">✏️ Edit</button>
-                    <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
-                    ${entityHasPaidBills ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
                 `}
             </div>
         `;
@@ -1359,20 +1164,12 @@
         for (const account of entity.accountGroups) {
             if (account.isPlaceholder) continue;
             
-            let accountHasPaid = false;
             let accountBillNumber = '';
-            let accountTotalPaid = 0;
-            
             if (account.numbers.length > 0) {
                 const firstNum = account.numbers[0];
-                const existing = firstNum.existing;
+                const existing = findExistingBill(entity.type, entity.id, account.accountNumber, firstNum.phoneNumber, month, year);
                 if (existing && existing.meter_number) {
                     accountBillNumber = existing.meter_number;
-                } else if (existing && existing.notes) {
-                    try {
-                        const parsed = JSON.parse(existing.notes);
-                        accountBillNumber = parsed.billNumber || '';
-                    } catch(e) {}
                 }
             }
             
@@ -1386,9 +1183,9 @@
                 accountRow.innerHTML = `
                     <td></div>
                     <td colspan="2">
-                        <input type="text" class="edit-mode-input edit-account-input" value="${escapeHtml(account.accountNumber)}" placeholder="Account Number">
+                        <input type="text" class="edit-mode-input edit-account-input" value="${escapeHtml(account.accountNumber)}" placeholder="Account Number" style="width:100%;">
                     </div>
-                    <td class="bill-number-cell"><input type="text" class="edit-mode-input edit-bill-input" value="${escapeHtml(accountBillNumber)}" placeholder="Bill No."></div>
+                    <td class="bill-number-cell"><input type="text" class="edit-mode-input edit-bill-input" value="${escapeHtml(accountBillNumber)}" placeholder="Bill No." style="width:100%;"></div>
                     <td colspan="2"></div>
                     <td></div>
                     <td></div>
@@ -1411,13 +1208,14 @@
             
             // Render phone rows
             for (const num of account.numbers) {
-                const existing = num.existing;
-                let currentCharges = existing ? (existing.current_charges || 0) : 0;
+                const existing = findExistingBill(entity.type, entity.id, account.accountNumber, num.phoneNumber, month, year);
+                
+                let currentCharges = existing?.current_charges || 0;
                 let totalAmount = 0;
-                let amountPaid = existing ? (existing.amount_paid || 0) : 0;
+                let amountPaid = existing?.amount_paid || 0;
                 let notes = num.notes || '';
                 
-                if (existing && existing.notes && existing.notes.startsWith('{')) {
+                if (existing?.notes?.startsWith('{')) {
                     try {
                         const parsed = JSON.parse(existing.notes);
                         totalAmount = parsed.totalAmount || 0;
@@ -1426,38 +1224,31 @@
                     } catch(e) {}
                 }
                 
-                if (!account.isPlaceholder) {
-                    accountTotalPaid += amountPaid;
-                    entityTotalPaid += amountPaid;
-                    if (amountPaid > 0) {
-                        accountHasPaid = true;
-                        entityHasPaidBills = true;
-                    }
-                }
-                
-                const locationDisplay = num.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(num.location)}</div>` : '';
+                entityTotalPaid += amountPaid;
+                if (amountPaid > 0) entityHasPaidBills = true;
                 
                 const phoneRow = document.createElement('tr');
                 phoneRow.className = 'phone-row';
                 phoneRow.setAttribute('data-account-number', account.accountNumber);
-                phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
-                if (num.billId) phoneRow.setAttribute('data-bill-id', num.billId);
+                phoneRow.setAttribute('data-phone', num.phoneNumber);
+                if (existing?.id) phoneRow.setAttribute('data-bill-id', existing.id);
                 
                 if (isEditing) {
                     phoneRow.innerHTML = `
                         <td class="seq-number">${serial}</div>
-                        <td></div>
+                        <tr></div>
                         <td></div>
                         <td></div>
                         <td>
-                            <input type="text" class="edit-mode-input edit-phone-input" value="${escapeHtml(num.phoneNumber)}" placeholder="Phone Number">
-                            <input type="text" class="edit-mode-input edit-location-input" style="margin-top:4px;" value="${escapeHtml(num.location)}" placeholder="Location">
+                            <input type="text" class="edit-mode-input edit-phone-input" value="${escapeHtml(num.phoneNumber)}" placeholder="Phone Number" style="width:100%; margin-bottom:4px;">
+                            <input type="text" class="edit-mode-input edit-location-input" value="${escapeHtml(num.location || '')}" placeholder="Location" style="width:100%;">
                         </div>
                         <td colspan="5"></div>
                         <td></div>
                         <td></div>
                     `;
                 } else {
+                    const locationDisplay = num.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(num.location)}</div>` : '';
                     phoneRow.innerHTML = `
                         <td class="seq-number">${serial}</div>
                         <td></div>
@@ -1476,21 +1267,39 @@
             }
         }
         
-        // Update totals
-        const entityStatusSpan = document.getElementById(`entity-status-${entity.id}`);
-        if (entityStatusSpan) {
-            const entityStatusText = entityHasPaidBills ? 'Paid' : 'Pending';
-            const entityStatusClass = entityHasPaidBills ? 'status-paid' : 'status-pending';
-            entityStatusSpan.innerHTML = entityStatusText;
-            entityStatusSpan.className = `status-badge ${entityStatusClass}`;
-        }
-        
+        // Update entity totals
         const entityTotalSpan = document.getElementById(`entity-total-${entity.id}`);
         if (entityTotalSpan) {
             entityTotalSpan.innerHTML = `(Total Paid: $${entityTotalPaid.toFixed(2)})`;
         }
         
-        // Render summary box (only in view mode, not in edit mode)
+        const entityStatusSpan = document.getElementById(`entity-status-${entity.id}`);
+        if (entityStatusSpan) {
+            let statusText = 'Pending';
+            let statusClass = 'status-pending';
+            if (entityTotalPaid > 0) {
+                // Calculate total bill amount
+                let totalBillAmount = 0;
+                let totalBillAmt = 0;
+                for (const account of entity.accountGroups) {
+                    for (const num of account.numbers) {
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, num.phoneNumber, month, year);
+                        if (existing?.current_charges) totalBillAmt += existing.current_charges;
+                    }
+                }
+                if (entityTotalPaid >= totalBillAmt && totalBillAmt > 0) {
+                    statusText = 'Paid';
+                    statusClass = 'status-paid';
+                } else if (entityTotalPaid > 0) {
+                    statusText = 'Partially Paid';
+                    statusClass = 'status-partial';
+                }
+            }
+            entityStatusSpan.innerHTML = statusText;
+            entityStatusSpan.className = `status-badge ${statusClass}`;
+        }
+        
+        // Render summary box (only in view mode)
         if (!isEditing) {
             const summaryTotalBill = (existingSummary.totalCurrentBill || 0) + (existingSummary.otherCharges || 0) + (existingSummary.adjustment || 0);
             const summaryAmountPaid = existingSummary.amountPaid || 0;
@@ -1500,7 +1309,7 @@
             
             const summaryCell = document.createElement('td');
             summaryCell.colSpan = 10;
-            summaryCell.style.padding = '15px 20px';
+            summaryCell.style.padding = '12px 15px';
             summaryCell.style.backgroundColor = 'transparent';
             
             summaryCell.innerHTML = `
@@ -1537,7 +1346,7 @@
                         </div>
                     </div>
                     <div class="summary-actions">
-                        <button class="btn btn-success save-entity-summary-btn">💾 Save All Changes</button>
+                        <button class="btn btn-success save-entity-summary-btn">💾 Save All</button>
                         ${entityHasPaidBills ? '<button class="btn btn-danger delete-entity-summary-btn" style="margin-left: 10px;">🗑️ Delete All Bills</button>' : ''}
                     </div>
                 </div>
@@ -1546,7 +1355,7 @@
             summaryRow.appendChild(summaryCell);
             tbody.appendChild(summaryRow);
             
-            // Attach event listeners for summary box
+            // Attach event listeners
             const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
             const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
             const otherInput = summaryCell.querySelector('.summary-other-charges');
@@ -1595,12 +1404,7 @@
     
     function escapeHtml(str) {
         if (!str) return '';
-        return String(str).replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;'
-            if (m === '>') return '&gt;';
-            return m;
-        });
+        return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
     }
     
     function attachEventListeners() {
@@ -1626,83 +1430,65 @@
             if (saveEditBtn) {
                 const entityRow = saveEditBtn.closest('tr.entity-row');
                 if (entityRow) {
-                    showToast('Edit mode: Update account/phone info in Schools/Departments tab', true);
-                    editingEntityId = null;
-                    await renderTelephoneTable();
-                }
-                return;
-            }
-            
-            const saveBtn = e.target.closest('.save-entity-summary-btn');
-            if (saveBtn && !saveBtn.disabled) {
-                const summaryRow = saveBtn.closest('.summary-row');
-                if (summaryRow) {
-                    const entityRow = summaryRow.previousElementSibling;
-                    while (entityRow && !entityRow.classList.contains('entity-row')) {
-                        const prev = entityRow.previousElementSibling;
-                        if (!prev) break;
-                        entityRow = prev;
-                    }
-                    if (entityRow && entityRow.classList.contains('entity-row')) {
-                        const summaryCell = summaryRow.querySelector('td');
-                        if (summaryCell) {
-                            const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
-                            const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
-                            const otherInput = summaryCell.querySelector('.summary-other-charges');
-                            const adjInput = summaryCell.querySelector('.summary-adjustment');
-                            const totalBillDisplay = summaryCell.querySelector('.summary-value');
-                            const amountPaidInput = summaryCell.querySelector('.summary-amount-paid');
-                            
-                            const summaryValues = {
-                                previousOutstanding: parseFloat(prevOutInput?.value) || 0,
-                                previousPayment: parseFloat(summaryCell.querySelector('.summary-previous-payment')?.value) || 0,
-                                totalCurrentBill: parseFloat(totalCurrInput?.value) || 0,
-                                otherCharges: parseFloat(otherInput?.value) || 0,
-                                adjustment: parseFloat(adjInput?.value) || 0,
-                                totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
-                                amountPaid: parseFloat(amountPaidInput?.value) || 0
-                            };
-                            await saveEntityBills(entityRow, summaryValues, currentMonth, currentYear);
+                    const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
+                    let accountRows = [];
+                    let nextRow = entityRow.nextElementSibling;
+                    while (nextRow && nextRow.classList && nextRow.classList.contains('account-header-row')) {
+                        accountRows.push(nextRow);
+                        nextRow = nextRow.nextElementSibling;
+                        while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
+                            nextRow = nextRow.nextElementSibling;
                         }
                     }
-                }
-            }
-            
-            const deleteBtn = e.target.closest('.delete-entity-summary-btn');
-            if (deleteBtn) {
-                const summaryRow = deleteBtn.closest('.summary-row');
-                if (summaryRow) {
-                    const entityRow = summaryRow.previousElementSibling;
-                    while (entityRow && !entityRow.classList.contains('entity-row')) {
-                        const prev = entityRow.previousElementSibling;
-                        if (!prev) break;
-                        entityRow = prev;
+                    
+                    let success = true;
+                    for (const accountRow of accountRows) {
+                        const oldAccount = accountRow.getAttribute('data-account-number');
+                        const newAccount = accountRow.querySelector('.edit-account-input')?.value || oldAccount;
+                        
+                        let phoneRows = [];
+                        let phoneRow = accountRow.nextElementSibling;
+                        while (phoneRow && phoneRow.classList && phoneRow.classList.contains('phone-row') && 
+                               phoneRow.getAttribute('data-account-number') === oldAccount) {
+                            phoneRows.push(phoneRow);
+                            phoneRow = phoneRow.nextElementSibling;
+                        }
+                        
+                        for (const row of phoneRows) {
+                            const oldPhone = row.getAttribute('data-phone');
+                            const newPhone = row.querySelector('.edit-phone-input')?.value || oldPhone;
+                            const newLocation = row.querySelector('.edit-location-input')?.value || '';
+                            
+                            if (oldAccount !== newAccount || oldPhone !== newPhone) {
+                                const result = await updatePhoneInfo(entityId, oldAccount, oldPhone, newAccount, newPhone, newLocation);
+                                if (!result) success = false;
+                            }
+                        }
                     }
-                    if (entityRow && entityRow.classList.contains('entity-row')) {
-                        await deleteEntityBills(entityRow, currentMonth, currentYear);
+                    
+                    if (success) {
+                        showToast('✅ Account/Phone information updated successfully');
+                        editingEntityId = null;
+                        await loadAllEntities();
+                        await renderTelephoneTable();
+                    } else {
+                        showToast('⚠️ Some updates failed. Please try again.', true);
                     }
                 }
+                return;
             }
         });
     }
     
     document.addEventListener('DOMContentLoaded', async () => {
         populateYears();
-        
         const now = new Date();
         document.getElementById('globalMonth').value = now.getMonth() + 1;
         document.getElementById('globalYear').value = now.getFullYear();
-        
         attachEventListeners();
         await renderTelephoneTable();
-        
-        document.getElementById('refreshTableBtn').addEventListener('click', async () => {
-            await renderTelephoneTable();
-        });
-        
-        document.getElementById('applyFiltersBtn').addEventListener('click', async () => {
-            await renderTelephoneTable();
-        });
+        document.getElementById('refreshTableBtn').addEventListener('click', () => renderTelephoneTable());
+        document.getElementById('applyFiltersBtn').addEventListener('click', () => renderTelephoneTable());
     });
 </script>
 </body>
