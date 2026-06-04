@@ -8,8 +8,8 @@
         :root {
             --primary: #4361ee;
             --secondary: #3f37c9;
-            --success: #4cc9f0;
-            --danger: #f72585;
+            --success: #28a745;
+            --danger: #dc3545;
             --warning: #f8961e;
             --info: #4895ef;
             --light: #f8f9fa;
@@ -119,6 +119,15 @@
             background: var(--secondary);
         }
 
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #e68a00;
+        }
+
         .period-card {
             background: white;
             border-radius: 10px;
@@ -224,10 +233,6 @@
             vertical-align: middle;
         }
 
-        .data-table tr:hover {
-            background: #f9f9f9;
-        }
-
         .badge {
             padding: 5px 10px;
             border-radius: 15px;
@@ -315,7 +320,7 @@
         }
 
         .btn-success:hover {
-            background: #3aa8c4;
+            background: #218838;
         }
 
         .btn-danger {
@@ -324,7 +329,7 @@
         }
 
         .btn-danger:hover {
-            background: #e05a8a;
+            background: #c82333;
         }
 
         .no-data {
@@ -337,7 +342,7 @@
             position: fixed;
             bottom: 20px;
             right: 20px;
-            background: #28a745;
+            background: var(--success);
             color: white;
             padding: 12px 24px;
             border-radius: 8px;
@@ -401,11 +406,6 @@
             border-radius: 10px;
             font-size: 0.8rem;
             font-weight: normal;
-        }
-        
-        .loading {
-            opacity: 0.6;
-            pointer-events: none;
         }
         
         .entity-row {
@@ -612,6 +612,15 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        .edit-mode-input {
+            width: 100%;
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--primary);
+            font-size: 0.75rem;
+            background: #fff;
+        }
     </style>
 </head>
 <body>
@@ -717,9 +726,18 @@
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
     let isLoading = false;
+    let editingEntityId = null;
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
+    }
+
+    function showToast(message, isError = false) {
+        const toast = document.createElement('div');
+        toast.className = isError ? 'error-toast' : 'success-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
     }
 
     function populateYears() {
@@ -753,6 +771,7 @@
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) {
             console.error("Error loading entities:", e);
+            showToast("Error loading data", true);
         }
     }
 
@@ -889,14 +908,6 @@
         );
     }
 
-    function showToast(message, isError = false) {
-        const toast = document.createElement('div');
-        toast.className = isError ? 'error-toast' : 'success-toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 4000);
-    }
-
     async function saveEntityBills(entityRow, summaryValues, month, year) {
         if (isLoading) {
             showToast('Please wait, save in progress...', true);
@@ -906,7 +917,7 @@
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         
-        // Get all account header rows and phone rows
+        // Get all account header rows
         let accountRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('account-header-row')) {
@@ -917,9 +928,14 @@
             }
         }
         
-        // Collect all bills to save
-        const billsToSave = [];
+        isLoading = true;
+        showLoading(true);
         
+        let successCount = 0;
+        let errorCount = 0;
+        const errors = [];
+        
+        // Save each phone bill
         for (const accountRow of accountRows) {
             const accountNumber = accountRow.getAttribute('data-account-number');
             const billNumberInput = accountRow.querySelector('.account-bill-number-input');
@@ -945,61 +961,45 @@
                 const totalAmount = parseFloat(totalAmountInput?.value) || 0;
                 const notes = notesInput?.value || '';
                 
-                billsToSave.push({
-                    id: existingBillId,
-                    accountNumber: accountNumber === '—' ? '' : accountNumber,
-                    phoneNumber: phoneNumber === '—' ? '' : phoneNumber,
-                    currentCharges: currentCharges,
-                    totalAmount: totalAmount,
-                    billNumber: accountBillNumber,
-                    notes: notes
-                });
-            }
-        }
-        
-        isLoading = true;
-        showLoading(true);
-        
-        let successCount = 0;
-        let errorCount = 0;
-        
-        // Save each phone bill sequentially
-        for (const bill of billsToSave) {
-            const billData = {
-                utility_type: 'telephone',
-                entity_type: entityType,
-                entity_id: entityId,
-                account_number: bill.accountNumber,
-                phone_number: bill.phoneNumber,
-                current_charges: bill.currentCharges,
-                meter_number: bill.billNumber,
-                notes: JSON.stringify({ totalAmount: bill.totalAmount, originalNotes: bill.notes }),
-                month: month,
-                year: year
-            };
-            
-            try {
-                let url = '/api/utility-bills';
-                let method = 'POST';
-                if (bill.id) {
-                    url = `/api/utility-bills/${bill.id}`;
-                    method = 'PUT';
-                }
+                const billData = {
+                    utility_type: 'telephone',
+                    entity_type: entityType,
+                    entity_id: entityId,
+                    account_number: accountNumber === '—' ? '' : accountNumber,
+                    phone_number: phoneNumber === '—' ? '' : phoneNumber,
+                    current_charges: currentCharges,
+                    meter_number: accountBillNumber,
+                    notes: JSON.stringify({ totalAmount: totalAmount, originalNotes: notes }),
+                    month: month,
+                    year: year
+                };
                 
-                const resp = await fetch(url, {
-                    method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(billData)
-                });
-                
-                if (resp.ok) {
-                    successCount++;
-                } else {
+                try {
+                    let url = '/api/utility-bills';
+                    let method = 'POST';
+                    if (existingBillId) {
+                        url = `/api/utility-bills/${existingBillId}`;
+                        method = 'PUT';
+                    }
+                    
+                    const resp = await fetch(url, {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(billData)
+                    });
+                    
+                    if (resp.ok) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                        const result = await resp.json();
+                        errors.push(`${phoneNumber}: ${result.error || 'Unknown error'}`);
+                    }
+                } catch(err) {
                     errorCount++;
+                    errors.push(`${phoneNumber}: ${err.message}`);
+                    console.error('Network error:', err);
                 }
-            } catch(err) {
-                console.error('Network error:', err);
-                errorCount++;
             }
         }
         
@@ -1057,8 +1057,58 @@
             showToast(`✅ Saved ${successCount} phone record${successCount > 1 ? 's' : ''} successfully`);
             await renderTelephoneTable();
         } else {
-            showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed`, true);
+            showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed. ${errors.join('; ')}`, true);
         }
+    }
+
+    async function deleteEntityBills(entityRow, month, year) {
+        if (isLoading) { showToast('Please wait...', true); return; }
+        
+        const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
+        if (!confirm(`Delete ALL telephone bills for ${entityName} for ${month}/${year}?`)) return;
+        
+        let phoneRows = [];
+        let nextRow = entityRow.nextElementSibling;
+        while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
+            if (nextRow.classList.contains('phone-row')) {
+                phoneRows.push(nextRow);
+            }
+            nextRow = nextRow.nextElementSibling;
+        }
+        
+        const billIdsToDelete = [];
+        for (const row of phoneRows) {
+            const billId = row.getAttribute('data-bill-id');
+            if (billId) {
+                billIdsToDelete.push(parseInt(billId));
+            }
+        }
+        
+        const existingSummary = existingBills.find(b => 
+            b.entity_type === entityRow.getAttribute('data-entity-type') && 
+            b.entity_id === parseInt(entityRow.getAttribute('data-entity-id')) && 
+            b.notes?.includes('isSummary')
+        );
+        if (existingSummary && existingSummary.id) {
+            billIdsToDelete.push(existingSummary.id);
+        }
+        
+        if (billIdsToDelete.length === 0) {
+            showToast('No bills to delete', true);
+            return;
+        }
+        
+        showLoading(true);
+        let success = 0;
+        for (const id of billIdsToDelete) {
+            try {
+                const resp = await fetch(`/api/utility-bills/${id}`, { method: 'DELETE' });
+                if (resp.ok) success++;
+            } catch(e) {}
+        }
+        showLoading(false);
+        showToast(`🗑️ Deleted ${success} bill${success > 1 ? 's' : ''} successfully`);
+        await renderTelephoneTable();
     }
 
     async function renderTelephoneTable() {
@@ -1270,6 +1320,7 @@
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasPaidBills = false;
+        let isEditing = (editingEntityId === entity.id);
         
         const summaryKey = `${entity.type}_${entity.id}`;
         const existingSummary = existingSummaryData[summaryKey] || {};
@@ -1291,10 +1342,20 @@
             <td></div>
             <td></div>
             <td><span class="status-badge status-pending" id="entity-status-${entity.id}">Pending</span></div>
-            <td class="entity-actions"></div>
+            <td class="entity-actions">
+                ${isEditing ? `
+                    <button class="btn btn-success btn-sm save-edit-btn">💾 Save Edit</button>
+                    <button class="btn btn-secondary btn-sm cancel-edit-btn">✖ Cancel</button>
+                ` : `
+                    <button class="btn btn-warning btn-sm edit-entity-btn">✏️ Edit</button>
+                    <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
+                    ${entityHasPaidBills ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
+                `}
+            </div>
         `;
         tbody.appendChild(entityRow);
         
+        // Render account rows
         for (const account of entity.accountGroups) {
             if (account.isPlaceholder) continue;
             
@@ -1321,20 +1382,34 @@
             accountRow.setAttribute('data-entity-id', entity.id);
             accountRow.setAttribute('data-account-number', account.accountNumber);
             
-            accountRow.innerHTML = `
-                <td></div>
-                <td colspan="2">
-                    <span class="account-number">📁 ${escapeHtml(account.accountNumber)}</span>
-                </div>
-                <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No."></div>
-                <td colspan="2"></div>
-                <td></div>
-                <td></div>
-                <td><span class="status-badge status-pending" id="account-status-${entity.id}-${account.accountNumber}">Pending</span></div>
-                <td></div>
-            `;
+            if (isEditing) {
+                accountRow.innerHTML = `
+                    <td></div>
+                    <td colspan="2">
+                        <input type="text" class="edit-mode-input edit-account-input" value="${escapeHtml(account.accountNumber)}" placeholder="Account Number">
+                    </div>
+                    <td class="bill-number-cell"><input type="text" class="edit-mode-input edit-bill-input" value="${escapeHtml(accountBillNumber)}" placeholder="Bill No."></div>
+                    <td colspan="2"></div>
+                    <td></div>
+                    <td></div>
+                    <td colspan="2"></div>
+                `;
+            } else {
+                accountRow.innerHTML = `
+                    <td></div>
+                    <td colspan="2">
+                        <span class="account-number">📁 ${escapeHtml(account.accountNumber)}</span>
+                    </div>
+                    <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No."></div>
+                    <td colspan="2"></div>
+                    <td></div>
+                    <td></div>
+                    <td colspan="2"></div>
+                `;
+            }
             tbody.appendChild(accountRow);
             
+            // Render phone rows
             for (const num of account.numbers) {
                 const existing = num.existing;
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
@@ -1368,31 +1443,40 @@
                 phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
                 if (num.billId) phoneRow.setAttribute('data-bill-id', num.billId);
                 
-                phoneRow.innerHTML = `
-                    <td class="seq-number">${serial}</div>
-                    <td></div>
-                    <td></div>
-                    <td></div>
-                    <td><div class="phone-number">📞 ${escapeHtml(num.phoneNumber)}</div>${locationDisplay}</div>
-                    <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${currentCharges.toFixed(2)}" placeholder="$"></div>
-                    <td><input type="number" step="0.01" class="inline-input total-amount-input" value="${totalAmount.toFixed(2)}" placeholder="$"></div>
-                    <td><input type="text" class="inline-input notes-input" value="${escapeHtml(notes)}" placeholder="Notes..."></div>
-                    <td></div>
-                    <td></div>
-                `;
+                if (isEditing) {
+                    phoneRow.innerHTML = `
+                        <td class="seq-number">${serial}</div>
+                        <td></div>
+                        <td></div>
+                        <td></div>
+                        <td>
+                            <input type="text" class="edit-mode-input edit-phone-input" value="${escapeHtml(num.phoneNumber)}" placeholder="Phone Number">
+                            <input type="text" class="edit-mode-input edit-location-input" style="margin-top:4px;" value="${escapeHtml(num.location)}" placeholder="Location">
+                        </div>
+                        <td colspan="5"></div>
+                        <td></div>
+                        <td></div>
+                    `;
+                } else {
+                    phoneRow.innerHTML = `
+                        <td class="seq-number">${serial}</div>
+                        <td></div>
+                        <td></div>
+                        <td></div>
+                        <td><div class="phone-number">📞 ${escapeHtml(num.phoneNumber)}</div>${locationDisplay}</div>
+                        <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${currentCharges.toFixed(2)}" placeholder="$"></div>
+                        <td><input type="number" step="0.01" class="inline-input total-amount-input" value="${totalAmount.toFixed(2)}" placeholder="$"></div>
+                        <td><input type="text" class="inline-input notes-input" value="${escapeHtml(notes)}" placeholder="Notes..."></div>
+                        <td></div>
+                        <td></div>
+                    `;
+                }
                 tbody.appendChild(phoneRow);
                 serial++;
             }
-            
-            const accountStatusSpan = document.getElementById(`account-status-${entity.id}-${account.accountNumber}`);
-            if (accountStatusSpan) {
-                const accountStatusText = accountHasPaid ? 'Paid' : 'Pending';
-                const accountStatusClass = accountHasPaid ? 'status-paid' : 'status-pending';
-                accountStatusSpan.innerHTML = accountStatusText;
-                accountStatusSpan.className = `status-badge ${accountStatusClass}`;
-            }
         }
         
+        // Update totals
         const entityStatusSpan = document.getElementById(`entity-status-${entity.id}`);
         if (entityStatusSpan) {
             const entityStatusText = entityHasPaidBills ? 'Paid' : 'Pending';
@@ -1406,146 +1490,104 @@
             entityTotalSpan.innerHTML = `(Total Paid: $${entityTotalPaid.toFixed(2)})`;
         }
         
-        const summaryTotalBill = (existingSummary.totalCurrentBill || 0) + (existingSummary.otherCharges || 0) + (existingSummary.adjustment || 0);
-        const summaryAmountPaid = existingSummary.amountPaid || 0;
-        
-        const summaryRow = document.createElement('tr');
-        summaryRow.className = 'summary-row';
-        
-        const summaryCell = document.createElement('td');
-        summaryCell.colSpan = 10;
-        summaryCell.style.padding = '15px 20px';
-        summaryCell.style.backgroundColor = 'transparent';
-        
-        summaryCell.innerHTML = `
-            <div class="summary-container">
-                <div class="summary-title-box">💰 BILL SUMMARY - ${escapeHtml(entity.name)}</div>
-                <div class="summary-grid">
-                    <div class="summary-item">
-                        <span class="summary-label">Previous Outstanding ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-previous-outstanding" id="prev_out_${entity.id}" value="${(existingSummary.previousOutstanding || 0).toFixed(2)}" placeholder="0.00">
+        // Render summary box (only in view mode, not in edit mode)
+        if (!isEditing) {
+            const summaryTotalBill = (existingSummary.totalCurrentBill || 0) + (existingSummary.otherCharges || 0) + (existingSummary.adjustment || 0);
+            const summaryAmountPaid = existingSummary.amountPaid || 0;
+            
+            const summaryRow = document.createElement('tr');
+            summaryRow.className = 'summary-row';
+            
+            const summaryCell = document.createElement('td');
+            summaryCell.colSpan = 10;
+            summaryCell.style.padding = '15px 20px';
+            summaryCell.style.backgroundColor = 'transparent';
+            
+            summaryCell.innerHTML = `
+                <div class="summary-container">
+                    <div class="summary-title-box">💰 BILL SUMMARY - ${escapeHtml(entity.name)}</div>
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <span class="summary-label">Previous Outstanding ($)</span>
+                            <input type="number" step="0.01" class="summary-input summary-previous-outstanding" id="prev_out_${entity.id}" value="${(existingSummary.previousOutstanding || 0).toFixed(2)}" placeholder="0.00">
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Previous Payment Received ($)</span>
+                            <input type="number" step="0.01" class="summary-input summary-previous-payment" id="prev_pay_${entity.id}" value="${(existingSummary.previousPayment || 0).toFixed(2)}" placeholder="0.00">
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Total Current Bill ($)</span>
+                            <input type="number" step="0.01" class="summary-input summary-total-current-bill" id="total_curr_${entity.id}" value="${(existingSummary.totalCurrentBill || 0).toFixed(2)}" placeholder="0.00">
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Other Charges ($)</span>
+                            <input type="number" step="0.01" class="summary-input summary-other-charges" id="other_${entity.id}" value="${(existingSummary.otherCharges || 0).toFixed(2)}" placeholder="0.00">
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Adjustment ($)</span>
+                            <input type="number" step="0.01" class="summary-input summary-adjustment" id="adj_${entity.id}" value="${(existingSummary.adjustment || 0).toFixed(2)}" placeholder="0.00">
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Total Bill Charges ($)</span>
+                            <div class="summary-value" id="total_bill_${entity.id}">${summaryTotalBill.toFixed(2)}</div>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Amount Paid ($)</span>
+                            <input type="number" step="0.01" class="summary-input summary-amount-paid" id="amount_paid_${entity.id}" value="${summaryAmountPaid.toFixed(2)}" placeholder="0.00">
+                        </div>
                     </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Previous Payment Received ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-previous-payment" id="prev_pay_${entity.id}" value="${(existingSummary.previousPayment || 0).toFixed(2)}" placeholder="0.00">
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Total Current Bill ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-total-current-bill" id="total_curr_${entity.id}" value="${(existingSummary.totalCurrentBill || 0).toFixed(2)}" placeholder="0.00">
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Other Charges ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-other-charges" id="other_${entity.id}" value="${(existingSummary.otherCharges || 0).toFixed(2)}" placeholder="0.00">
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Adjustment ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-adjustment" id="adj_${entity.id}" value="${(existingSummary.adjustment || 0).toFixed(2)}" placeholder="0.00">
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Total Bill Charges ($)</span>
-                        <div class="summary-value" id="total_bill_${entity.id}">${summaryTotalBill.toFixed(2)}</div>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Amount Paid ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-amount-paid" id="amount_paid_${entity.id}" value="${summaryAmountPaid.toFixed(2)}" placeholder="0.00">
+                    <div class="summary-actions">
+                        <button class="btn btn-success save-entity-summary-btn">💾 Save All Changes</button>
+                        ${entityHasPaidBills ? '<button class="btn btn-danger delete-entity-summary-btn" style="margin-left: 10px;">🗑️ Delete All Bills</button>' : ''}
                     </div>
                 </div>
-                <div class="summary-actions">
-                    <button class="btn btn-success save-entity-summary-btn">💾 Save All Changes</button>
-                    ${entityHasPaidBills ? '<button class="btn btn-danger delete-entity-summary-btn" style="margin-left: 10px;">🗑️ Delete All Bills</button>' : ''}
-                </div>
-            </div>
-        `;
-        
-        summaryRow.appendChild(summaryCell);
-        tbody.appendChild(summaryRow);
-        
-        const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
-        const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
-        const otherInput = summaryCell.querySelector('.summary-other-charges');
-        const adjInput = summaryCell.querySelector('.summary-adjustment');
-        const totalBillDisplay = summaryCell.querySelector('.summary-value');
-        const amountPaidInput = summaryCell.querySelector('.summary-amount-paid');
-        
-        const updateSummaryTotal = () => {
-            const totalCurr = parseFloat(totalCurrInput?.value) || 0;
-            const other = parseFloat(otherInput?.value) || 0;
-            const adj = parseFloat(adjInput?.value) || 0;
-            const total = totalCurr + other + adj;
-            if (totalBillDisplay) totalBillDisplay.innerText = total.toFixed(2);
-        };
-        
-        if (totalCurrInput) totalCurrInput.addEventListener('input', updateSummaryTotal);
-        if (otherInput) otherInput.addEventListener('input', updateSummaryTotal);
-        if (adjInput) adjInput.addEventListener('input', updateSummaryTotal);
-        
-        const saveBtn = summaryCell.querySelector('.save-entity-summary-btn');
-        if (saveBtn) {
-            saveBtn.onclick = async () => {
-                const summaryValues = {
-                    previousOutstanding: parseFloat(prevOutInput?.value) || 0,
-                    previousPayment: parseFloat(summaryCell.querySelector('.summary-previous-payment')?.value) || 0,
-                    totalCurrentBill: parseFloat(totalCurrInput?.value) || 0,
-                    otherCharges: parseFloat(otherInput?.value) || 0,
-                    adjustment: parseFloat(adjInput?.value) || 0,
-                    totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
-                    amountPaid: parseFloat(amountPaidInput?.value) || 0
+            `;
+            
+            summaryRow.appendChild(summaryCell);
+            tbody.appendChild(summaryRow);
+            
+            // Attach event listeners for summary box
+            const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
+            const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
+            const otherInput = summaryCell.querySelector('.summary-other-charges');
+            const adjInput = summaryCell.querySelector('.summary-adjustment');
+            const totalBillDisplay = summaryCell.querySelector('.summary-value');
+            const amountPaidInput = summaryCell.querySelector('.summary-amount-paid');
+            
+            const updateSummaryTotal = () => {
+                const totalCurr = parseFloat(totalCurrInput?.value) || 0;
+                const other = parseFloat(otherInput?.value) || 0;
+                const adj = parseFloat(adjInput?.value) || 0;
+                const total = totalCurr + other + adj;
+                if (totalBillDisplay) totalBillDisplay.innerText = total.toFixed(2);
+            };
+            
+            if (totalCurrInput) totalCurrInput.addEventListener('input', updateSummaryTotal);
+            if (otherInput) otherInput.addEventListener('input', updateSummaryTotal);
+            if (adjInput) adjInput.addEventListener('input', updateSummaryTotal);
+            
+            const saveBtn = summaryCell.querySelector('.save-entity-summary-btn');
+            if (saveBtn) {
+                saveBtn.onclick = async () => {
+                    const summaryValues = {
+                        previousOutstanding: parseFloat(prevOutInput?.value) || 0,
+                        previousPayment: parseFloat(summaryCell.querySelector('.summary-previous-payment')?.value) || 0,
+                        totalCurrentBill: parseFloat(totalCurrInput?.value) || 0,
+                        otherCharges: parseFloat(otherInput?.value) || 0,
+                        adjustment: parseFloat(adjInput?.value) || 0,
+                        totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
+                        amountPaid: parseFloat(amountPaidInput?.value) || 0
+                    };
+                    await saveEntityBills(entityRow, summaryValues, month, year);
                 };
-                await saveEntityBills(entityRow, summaryValues, month, year);
-            };
-        }
-        
-        const deleteBtn = summaryCell.querySelector('.delete-entity-summary-btn');
-        if (deleteBtn) {
-            deleteBtn.onclick = async () => {
-                if (confirm(`Delete ALL telephone bills for ${entity.name} for ${month}/${year}?`)) {
-                    let phoneRows = [];
-                    let nextRow = entityRow.nextElementSibling;
-                    while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
-                        if (nextRow.classList.contains('phone-row')) {
-                            phoneRows.push(nextRow);
-                        }
-                        nextRow = nextRow.nextElementSibling;
-                    }
-                    
-                    const billIdsToDelete = [];
-                    for (const row of phoneRows) {
-                        const billId = row.getAttribute('data-bill-id');
-                        if (billId) {
-                            billIdsToDelete.push(parseInt(billId));
-                        }
-                    }
-                    
-                    const existingSummary = existingBills.find(b => 
-                        b.entity_type === entity.type && 
-                        b.entity_id === entity.id && 
-                        b.notes?.includes('isSummary')
-                    );
-                    if (existingSummary && existingSummary.id) {
-                        billIdsToDelete.push(existingSummary.id);
-                    }
-                    
-                    if (billIdsToDelete.length > 0) {
-                        isLoading = true;
-                        showLoading(true);
-                        
-                        let successCount = 0;
-                        for (const billId of billIdsToDelete) {
-                            try {
-                                const resp = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
-                                if (resp.ok) successCount++;
-                            } catch(err) {
-                                console.error('Delete error:', err);
-                            }
-                        }
-                        
-                        isLoading = false;
-                        showLoading(false);
-                        showToast(`🗑️ Deleted ${successCount} bills successfully`);
-                        await renderTelephoneTable();
-                    }
-                }
-            };
+            }
+            
+            const deleteBtn = summaryCell.querySelector('.delete-entity-summary-btn');
+            if (deleteBtn) {
+                deleteBtn.onclick = async () => {
+                    await deleteEntityBills(entityRow, month, year);
+                };
+            }
         }
         
         return serial;
@@ -1555,9 +1597,92 @@
         if (!str) return '';
         return String(str).replace(/[&<>]/g, function(m) {
             if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
+            if (m === '<') return '&lt;'
             if (m === '>') return '&gt;';
             return m;
+        });
+    }
+    
+    function attachEventListeners() {
+        document.getElementById('billsTableBody').addEventListener('click', async (e) => {
+            const editBtn = e.target.closest('.edit-entity-btn');
+            if (editBtn) {
+                const entityRow = editBtn.closest('tr.entity-row');
+                if (entityRow) {
+                    editingEntityId = parseInt(entityRow.getAttribute('data-entity-id'));
+                    await renderTelephoneTable();
+                }
+                return;
+            }
+            
+            const cancelBtn = e.target.closest('.cancel-edit-btn');
+            if (cancelBtn) {
+                editingEntityId = null;
+                await renderTelephoneTable();
+                return;
+            }
+            
+            const saveEditBtn = e.target.closest('.save-edit-btn');
+            if (saveEditBtn) {
+                const entityRow = saveEditBtn.closest('tr.entity-row');
+                if (entityRow) {
+                    showToast('Edit mode: Update account/phone info in Schools/Departments tab', true);
+                    editingEntityId = null;
+                    await renderTelephoneTable();
+                }
+                return;
+            }
+            
+            const saveBtn = e.target.closest('.save-entity-summary-btn');
+            if (saveBtn && !saveBtn.disabled) {
+                const summaryRow = saveBtn.closest('.summary-row');
+                if (summaryRow) {
+                    const entityRow = summaryRow.previousElementSibling;
+                    while (entityRow && !entityRow.classList.contains('entity-row')) {
+                        const prev = entityRow.previousElementSibling;
+                        if (!prev) break;
+                        entityRow = prev;
+                    }
+                    if (entityRow && entityRow.classList.contains('entity-row')) {
+                        const summaryCell = summaryRow.querySelector('td');
+                        if (summaryCell) {
+                            const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
+                            const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
+                            const otherInput = summaryCell.querySelector('.summary-other-charges');
+                            const adjInput = summaryCell.querySelector('.summary-adjustment');
+                            const totalBillDisplay = summaryCell.querySelector('.summary-value');
+                            const amountPaidInput = summaryCell.querySelector('.summary-amount-paid');
+                            
+                            const summaryValues = {
+                                previousOutstanding: parseFloat(prevOutInput?.value) || 0,
+                                previousPayment: parseFloat(summaryCell.querySelector('.summary-previous-payment')?.value) || 0,
+                                totalCurrentBill: parseFloat(totalCurrInput?.value) || 0,
+                                otherCharges: parseFloat(otherInput?.value) || 0,
+                                adjustment: parseFloat(adjInput?.value) || 0,
+                                totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
+                                amountPaid: parseFloat(amountPaidInput?.value) || 0
+                            };
+                            await saveEntityBills(entityRow, summaryValues, currentMonth, currentYear);
+                        }
+                    }
+                }
+            }
+            
+            const deleteBtn = e.target.closest('.delete-entity-summary-btn');
+            if (deleteBtn) {
+                const summaryRow = deleteBtn.closest('.summary-row');
+                if (summaryRow) {
+                    const entityRow = summaryRow.previousElementSibling;
+                    while (entityRow && !entityRow.classList.contains('entity-row')) {
+                        const prev = entityRow.previousElementSibling;
+                        if (!prev) break;
+                        entityRow = prev;
+                    }
+                    if (entityRow && entityRow.classList.contains('entity-row')) {
+                        await deleteEntityBills(entityRow, currentMonth, currentYear);
+                    }
+                }
+            }
         });
     }
     
@@ -1568,6 +1693,7 @@
         document.getElementById('globalMonth').value = now.getMonth() + 1;
         document.getElementById('globalYear').value = now.getFullYear();
         
+        attachEventListeners();
         await renderTelephoneTable();
         
         document.getElementById('refreshTableBtn').addEventListener('click', async () => {
