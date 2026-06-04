@@ -745,7 +745,7 @@
         isSaving = true;
         showLoading(true);
         
-        let successCount = 0, errorCount = 0;
+        const billsToSave = [];
         
         for (const row of meterRows) {
             const accountNumber = row.getAttribute('data-account');
@@ -759,7 +759,8 @@
             const amountPaid = parseFloat(row.querySelector('.amount-paid-input')?.value) || 0;
             const notes = row.querySelector('.notes-input')?.value || '';
             
-            const billData = {
+            billsToSave.push({
+                id: existingBillId,
                 utility_type: 'water',
                 entity_type: entityType,
                 entity_id: entityId,
@@ -772,31 +773,31 @@
                 month: month,
                 year: year,
                 notes: JSON.stringify({ previousPayment, originalNotes: notes })
-            };
+            });
+        }
+        
+        try {
+            const resp = await fetch('/api/utility-bills/batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bills: billsToSave })
+            });
             
-            try {
-                let url = '/api/utility-bills';
-                let method = 'POST';
-                if (existingBillId) {
-                    url = `/api/utility-bills/${existingBillId}`;
-                    method = 'PUT';
-                }
-                
-                const resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(billData) });
-                if (resp.ok) successCount++;
-                else errorCount++;
-            } catch(err) { errorCount++; }
+            const result = await resp.json();
+            
+            if (result.success) {
+                showToast(`✅ Saved ${result.success_count} meter record${result.success_count > 1 ? 's' : ''} successfully`);
+                await renderWaterTable();
+            } else {
+                showToast(`⚠️ Saved ${result.success_count} records, ${result.error_count} failed`, true);
+            }
+        } catch(err) {
+            console.error('Batch save error:', err);
+            showToast(`❌ Save failed: ${err.message}`, true);
         }
         
         isSaving = false;
         showLoading(false);
-        
-        if (errorCount === 0) {
-            showToast(`✅ Saved ${successCount} record${successCount > 1 ? 's' : ''} successfully`);
-            await renderWaterTable();
-        } else {
-            showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed`, true);
-        }
     }
     
     async function deleteEntityBills(entityRow, month, year) {
@@ -864,13 +865,10 @@
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // Group schools by cluster (same as schools.html)
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
-            if (!schoolsByCluster.has(cluster)) {
-                schoolsByCluster.set(cluster, []);
-            }
+            if (!schoolsByCluster.has(cluster)) schoolsByCluster.set(cluster, []);
             schoolsByCluster.get(cluster).push(school);
         }
         
@@ -885,37 +883,53 @@
         
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
-            
-            // Sort schools by name within cluster
             clusterSchools.sort((a, b) => a.name.localeCompare(b.name));
             
-            const totalMeters = clusterSchools.reduce((sum, e) => 
-                sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
-            
-            const separatorRow = document.createElement('tr');
-            separatorRow.className = 'cluster-separator';
-            separatorRow.innerHTML = `
-                <td colspan="12">
-                    <div class="cluster-info">
-                        <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
-                        <span class="cluster-count">${clusterSchools.length} entit${clusterSchools.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
-                    </div>
-                </div>
-            `;
-            tbody.appendChild(separatorRow);
-            
+            let visibleInCluster = [];
             for (const entity of clusterSchools) {
-                globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
+                let hasVisible = false;
+                for (const account of entity.accountGroups) {
+                    for (const meter of account.meters) {
+                        const meterNum = meter.meterNumber || '—';
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
+                        if (statusFilter === 'all' || 
+                            (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
+                            (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
+                            hasVisible = true;
+                            break;
+                        }
+                    }
+                    if (hasVisible) break;
+                }
+                if (hasVisible) visibleInCluster.push(entity);
+            }
+            
+            if (visibleInCluster.length > 0) {
+                const totalMeters = visibleInCluster.reduce((sum, e) => 
+                    sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
+                
+                const separatorRow = document.createElement('tr');
+                separatorRow.className = 'cluster-separator';
+                separatorRow.innerHTML = `
+                    <td colspan="12">
+                        <div class="cluster-info">
+                            <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
+                            <span class="cluster-count">${visibleInCluster.length} entit${visibleInCluster.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
+                        </div>
+                    </div>
+                `;
+                tbody.appendChild(separatorRow);
+                
+                for (const entity of visibleInCluster) {
+                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
+                }
             }
         }
         
-        // Group departments by department name (same as departments.html)
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
-            if (!deptByDepartmentName.has(deptName)) {
-                deptByDepartmentName.set(deptName, []);
-            }
+            if (!deptByDepartmentName.has(deptName)) deptByDepartmentName.set(deptName, []);
             deptByDepartmentName.get(deptName).push(dept);
         }
         
@@ -923,27 +937,46 @@
         
         for (const deptName of deptGroupOrder) {
             const deptsInGroup = deptByDepartmentName.get(deptName) || [];
-            
-            // Sort departments by unit name within group
             deptsInGroup.sort((a, b) => a.name.localeCompare(b.name));
             
-            const totalMeters = deptsInGroup.reduce((sum, e) => 
-                sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
-            
-            const deptSeparator = document.createElement('tr');
-            deptSeparator.className = 'department-group-separator';
-            deptSeparator.innerHTML = `
-                <td colspan="12">
-                    <div class="dept-group-info">
-                        <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
-                        <span class="dept-group-count">${deptsInGroup.length} unit${deptsInGroup.length > 1 ? 's' : ''}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
-                    </div>
-                </div>
-            `;
-            tbody.appendChild(deptSeparator);
-            
+            let visibleInGroup = [];
             for (const entity of deptsInGroup) {
-                globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
+                let hasVisible = false;
+                for (const account of entity.accountGroups) {
+                    for (const meter of account.meters) {
+                        const meterNum = meter.meterNumber || '—';
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
+                        if (statusFilter === 'all' || 
+                            (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
+                            (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
+                            hasVisible = true;
+                            break;
+                        }
+                    }
+                    if (hasVisible) break;
+                }
+                if (hasVisible) visibleInGroup.push(entity);
+            }
+            
+            if (visibleInGroup.length > 0) {
+                const totalMeters = visibleInGroup.reduce((sum, e) => 
+                    sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
+                
+                const deptSeparator = document.createElement('tr');
+                deptSeparator.className = 'department-group-separator';
+                deptSeparator.innerHTML = `
+                    <td colspan="12">
+                        <div class="dept-group-info">
+                            <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
+                            <span class="dept-group-count">${visibleInGroup.length} unit${visibleInGroup.length > 1 ? 's' : ''}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
+                        </div>
+                    </div>
+                `;
+                tbody.appendChild(deptSeparator);
+                
+                for (const entity of visibleInGroup) {
+                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, statusFilter);
+                }
             }
         }
     }
@@ -954,7 +987,6 @@
         let entityHasBills = false;
         let isPlaceholder = false;
         
-        // First, collect all meter data
         let meterRowsData = [];
         
         for (const account of entity.accountGroups) {
@@ -965,7 +997,6 @@
                 const meterNum = meter.meterNumber || '—';
                 const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                 
-                // Apply status filter at meter level
                 if (statusFilter !== 'all') {
                     if (statusFilter === 'paid' && (!existing || (existing.amount_paid || 0) === 0)) continue;
                     if (statusFilter === 'pending' && (existing && (existing.amount_paid || 0) > 0)) continue;
@@ -1017,7 +1048,6 @@
             }
         }
         
-        // If no meters after filtering, don't render this entity
         if (meterRowsData.length === 0) return startSerial;
         
         let entityStatusClass = 'status-pending';
@@ -1044,7 +1074,7 @@
         entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
-            <td class="seq-number">${startSerial}</td>
+            <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
                 ${!isPlaceholder ? `<span class="total-due">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
