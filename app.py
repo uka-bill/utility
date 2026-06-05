@@ -138,8 +138,8 @@ def get_all_data_with_order():
         response = supabase.table("financial_years").select("*").order("start_year", desc=True).execute()
         data['financial_years'] = response.data if response.data else []
         
-        # Get schools ordered by cluster_number, then by name
-        response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
+        # Get schools ordered by cluster_number, then by display_order, then by id
+        response = supabase.table("schools").select("*").order("cluster_number").order("display_order").order("id").execute()
         schools = response.data if response.data else []
         
         # Process schools to parse JSON accounts
@@ -162,8 +162,8 @@ def get_all_data_with_order():
         
         data['schools'] = schools
         
-        # Get departments ordered by department_name, division_name, unit_name
-        response = supabase.table("departments").select("*").order("department_name").order("division_name").order("unit_name").execute()
+        # Get departments ordered by display_order, then by department_name, then by id
+        response = supabase.table("departments").select("*").order("display_order").order("department_name").order("id").execute()
         departments = response.data if response.data else []
         
         # Process departments to parse JSON accounts
@@ -652,7 +652,7 @@ def export_schools_csv():
                      'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
                      'Telephone Account', 'Telephone Number', 'Notes'])
     
-    response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
+    response = supabase.table("schools").select("*").order("cluster_number").order("display_order").order("name").execute()
     schools = response.data if response.data else []
     
     for school in schools:
@@ -690,7 +690,7 @@ def export_departments_csv():
                      'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
                      'Telephone Account', 'Telephone Number', 'Notes'])
     
-    response = supabase.table("departments").select("*").order("department_name").order("division_name").order("unit_name").execute()
+    response = supabase.table("departments").select("*").order("display_order").order("department_name").order("id").execute()
     departments = response.data if response.data else []
     
     for dept in departments:
@@ -829,7 +829,7 @@ def export_schools_csv_to_string():
                      'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
                      'Telephone Account', 'Telephone Number', 'Notes'])
     
-    response = supabase.table("schools").select("*").order("cluster_number").order("name").execute()
+    response = supabase.table("schools").select("*").order("cluster_number").order("display_order").order("name").execute()
     schools = response.data if response.data else []
     
     for school in schools:
@@ -860,7 +860,7 @@ def export_departments_csv_to_string():
                      'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
                      'Telephone Account', 'Telephone Number', 'Notes'])
     
-    response = supabase.table("departments").select("*").order("department_name").order("division_name").order("unit_name").execute()
+    response = supabase.table("departments").select("*").order("display_order").order("department_name").order("id").execute()
     departments = response.data if response.data else []
     
     for dept in departments:
@@ -1376,7 +1376,7 @@ def get_entities():
             return jsonify([]), 500
         
         if entity_type == 'school':
-            response = supabase.table("schools").select("id, name, cluster_number").order("name").execute()
+            response = supabase.table("schools").select("id, name, cluster_number").order("cluster_number").order("display_order").order("name").execute()
             entities = []
             for school in (response.data or []):
                 entities.append({
@@ -1386,7 +1386,7 @@ def get_entities():
                 })
             return jsonify(entities)
         elif entity_type == 'department':
-            response = supabase.table("departments").select("id, name, department_name, unit_name").order("name").execute()
+            response = supabase.table("departments").select("id, name, department_name, unit_name").order("display_order").order("department_name").order("id").execute()
             entities = []
             for dept in (response.data or []):
                 display_name = dept.get('unit_name') or dept.get('name') or f"Department #{dept['id']}"
@@ -2002,14 +2002,15 @@ def api_schools():
         print("🏫 GET /api/schools called")
         
         if not supabase:
-            return jsonify({'data': []}), 500
+            return jsonify([]), 500
         
-        response = supabase.table("schools").select("*").execute()
+        # Order by cluster_number, then display_order, then id
+        response = supabase.table("schools").select("*").order("cluster_number").order("display_order").order("id").execute()
         return jsonify(response.data if response.data else [])
         
     except Exception as e:
         print(f"❌ Schools GET error: {e}")
-        return jsonify({'data': []}), 500
+        return jsonify([]), 500
 
 @app.route('/api/schools', methods=['POST'])
 def create_school():
@@ -2045,6 +2046,7 @@ def create_school():
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
+            "display_order": data.get('displayOrder', 0),
             "created_at": datetime.now().isoformat()
         }
         
@@ -2088,7 +2090,8 @@ def update_school(school_id):
             "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts and len(electricity_accounts) > 0 else '',
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
-            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else ''
+            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
+            "display_order": data.get('displayOrder', 0)
         }
         
         response = supabase.table("schools").update(school_data).eq("id", school_id).execute()
@@ -2138,14 +2141,15 @@ def api_departments():
         print("🏢 GET /api/departments called")
         
         if not supabase:
-            return jsonify({'data': []}), 500
+            return jsonify([]), 500
         
-        response = supabase.table("departments").select("*").execute()
+        # Order by display_order first, then by department_name, then by id
+        response = supabase.table("departments").select("*").order("display_order").order("department_name").order("id").execute()
         return jsonify(response.data if response.data else [])
         
     except Exception as e:
         print(f"❌ Departments GET error: {e}")
-        return jsonify({'data': []}), 500
+        return jsonify([]), 500
 
 @app.route('/api/departments', methods=['POST'])
 def create_department():
@@ -2188,6 +2192,7 @@ def create_department():
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
+            "display_order": data.get('displayOrder', 0),
             "created_at": datetime.now().isoformat()
         }
         
@@ -2231,7 +2236,8 @@ def update_department(department_id):
             "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts and len(electricity_accounts) > 0 else '',
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
-            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else ''
+            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
+            "display_order": data.get('displayOrder', 0)
         }
         
         response = supabase.table("departments").update(department_data).eq("id", department_id).execute()
@@ -2281,7 +2287,7 @@ def api_utility_bills():
         print("💡 GET /api/utility-bills called")
         
         if not supabase:
-            return jsonify({'data': []}), 500
+            return jsonify([]), 500
         
         utility_type = request.args.get('utility_type')
         entity_type = request.args.get('entity_type')
@@ -2330,7 +2336,7 @@ def api_utility_bills():
         
     except Exception as e:
         print(f"❌ Utility bills GET error: {e}")
-        return jsonify({'data': []}), 500
+        return jsonify([]), 500
 
 @app.route('/api/utility-bills', methods=['POST'])
 def create_utility_bill():
