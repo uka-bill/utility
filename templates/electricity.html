@@ -638,12 +638,14 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                // NO SORTING HERE - Use the exact order from API
-                console.log(`Loaded ${allSchools.length} schools`);
+                // Schools are already ordered by cluster_number, then by id from API
+                // Preserve the original order - do NOT sort again here
+                console.log(`Loaded ${allSchools.length} schools in API order`);
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                console.log(`Loaded ${allDepartments.length} departments`);
+                // Departments are already ordered by display_order, then department_name, then id from API
+                console.log(`Loaded ${allDepartments.length} departments in API order`);
             }
         } catch(e) {
             console.error("Error loading entities:", e);
@@ -692,7 +694,7 @@
     function buildEntityList() {
         const entities = [];
         
-        // Add schools in the EXACT order they come from API (NO SORTING)
+        // Add schools - PRESERVE THE EXACT ORDER FROM API (already sorted by cluster_number, then by id)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
@@ -708,20 +710,24 @@
                 }];
             }
             
+            // Use cluster_number directly - same as in water.html and telephone.html
+            const clusterNumber = school.cluster_number ? `CLUSTER ${school.cluster_number}` : 'Unassigned';
+            
             entities.push({
                 id: school.id,
                 name: school.name || `School #${school.id}`,
                 type: 'school',
                 typeLabel: '🏫 School',
-                clusterNumber: school.cluster_number || null,
+                clusterNumber: clusterNumber,
+                originalClusterNumber: school.cluster_number,
                 departmentName: null,
-                displayOrder: idx,
+                originalOrder: idx,  // Preserve original index for consistent ordering
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
         }
         
-        // Add departments in the EXACT order they come from API (NO SORTING)
+        // Add departments - PRESERVE THE EXACT ORDER FROM API
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
@@ -744,8 +750,9 @@
                 type: 'department',
                 typeLabel: '🏛️ Department',
                 clusterNumber: null,
+                originalClusterNumber: null,
                 departmentName: dept.department_name || 'Other',
-                displayOrder: allSchools.length + idx,
+                originalOrder: allSchools.length + idx,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -1028,10 +1035,11 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
+        // Separate schools and departments
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // Group schools by cluster
+        // Group schools by cluster number (preserving original cluster number for sorting)
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -1041,18 +1049,17 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
-        // Sort clusters numerically (1,2,3,4,5,6), with Unassigned at the end
-        const sortedClusters = Array.from(schoolsByCluster.keys()).sort((a, b) => {
-            if (a === 'Unassigned') return 1;
-            if (b === 'Unassigned') return -1;
-            const numA = parseInt(a);
-            const numB = parseInt(b);
-            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-            return String(a).localeCompare(String(b));
-        });
+        // Define cluster order - same as in schools.html, water.html, telephone.html
+        const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
         
-        for (const cluster of sortedClusters) {
+        // Process clusters in the defined order
+        for (const cluster of clusterOrder) {
             const clusterSchools = schoolsByCluster.get(cluster);
+            if (!clusterSchools || clusterSchools.length === 0) continue;
+            
+            // Sort schools within cluster by their original order from API (preserves the backend order)
+            // This ensures schools appear in the same order as in schools.html
+            clusterSchools.sort((a, b) => a.originalOrder - b.originalOrder);
             
             let hasVisibleInCluster = false;
             const visibleClusterEntities = [];
@@ -1105,7 +1112,7 @@
                 separatorRow.innerHTML = `
                     <td colspan="12">
                         <div class="cluster-info">
-                            <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : `CLUSTER ${cluster}`}</span>
+                            <span>🏫 ${cluster === 'Unassigned' ? 'SCHOOLS (No Cluster)' : cluster}</span>
                             <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
                         </div>
                      </div>
@@ -1118,7 +1125,7 @@
             }
         }
         
-        // Group departments by department name
+        // Group departments by department name, preserving original order from API
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1128,17 +1135,22 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        // Keep department groups in the order they appear from API
-        const deptGroupOrder = [];
+        // Get department names in the order they appear from API (preserves display_order)
+        // This matches the behavior in departments.html and water.html
+        const deptNamesInOrder = [];
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
-            if (!deptGroupOrder.includes(deptName)) {
-                deptGroupOrder.push(deptName);
+            if (!deptNamesInOrder.includes(deptName)) {
+                deptNamesInOrder.push(deptName);
             }
         }
         
-        for (const deptName of deptGroupOrder) {
-            const deptsInGroup = deptByDepartmentName.get(deptName) || [];
+        for (const deptName of deptNamesInOrder) {
+            const deptsInGroup = deptByDepartmentName.get(deptName);
+            if (!deptsInGroup || deptsInGroup.length === 0) continue;
+            
+            // Sort departments within group by their original order from API
+            deptsInGroup.sort((a, b) => a.originalOrder - b.originalOrder);
             
             let hasVisibleInGroup = false;
             const visibleGroupEntities = [];
