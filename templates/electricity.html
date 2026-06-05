@@ -593,7 +593,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></table>
+                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -638,15 +638,12 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                // IMPORTANT: DO NOT RE-SORT - Use the exact order from API
-                // The API already returns schools sorted by cluster_number then by id
-                console.log(`Loaded ${allSchools.length} schools in API order`);
+                // NO SORTING HERE - Use the exact order from API
+                console.log(`Loaded ${allSchools.length} schools`);
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                // IMPORTANT: DO NOT RE-SORT - Use the exact order from API
-                // The API already returns departments sorted by display_order then by department_name then by id
-                console.log(`Loaded ${allDepartments.length} departments in API order`);
+                console.log(`Loaded ${allDepartments.length} departments`);
             }
         } catch(e) {
             console.error("Error loading entities:", e);
@@ -1034,7 +1031,7 @@
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // Group schools by cluster (matching Schools tab)
+        // Group schools by cluster
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -1056,7 +1053,6 @@
         
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
-            // Schools are already in the correct order from API (by id within cluster)
             
             let hasVisibleInCluster = false;
             const visibleClusterEntities = [];
@@ -1122,7 +1118,7 @@
             }
         }
         
-        // Group departments by department name (matching Departments tab)
+        // Group departments by department name
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1132,7 +1128,7 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        // Keep department groups in the order they appear from API (preserves display_order)
+        // Keep department groups in the order they appear from API
         const deptGroupOrder = [];
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
