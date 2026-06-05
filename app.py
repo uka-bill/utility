@@ -138,8 +138,8 @@ def get_all_data_with_order():
         response = supabase.table("financial_years").select("*").order("start_year", desc=True).execute()
         data['financial_years'] = response.data if response.data else []
         
-        # Get schools ordered by cluster_number, then by display_order, then by id
-        response = supabase.table("schools").select("*").order("cluster_number").order("display_order").order("id").execute()
+        # Get schools ordered by cluster_number, then by id (matches Schools Report)
+        response = supabase.table("schools").select("*").order("cluster_number").order("id").execute()
         schools = response.data if response.data else []
         
         # Process schools to parse JSON accounts
@@ -652,7 +652,7 @@ def export_schools_csv():
                      'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
                      'Telephone Account', 'Telephone Number', 'Notes'])
     
-    response = supabase.table("schools").select("*").order("cluster_number").order("display_order").order("name").execute()
+    response = supabase.table("schools").select("*").order("cluster_number").order("id").execute()
     schools = response.data if response.data else []
     
     for school in schools:
@@ -829,7 +829,7 @@ def export_schools_csv_to_string():
                      'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
                      'Telephone Account', 'Telephone Number', 'Notes'])
     
-    response = supabase.table("schools").select("*").order("cluster_number").order("display_order").order("name").execute()
+    response = supabase.table("schools").select("*").order("cluster_number").order("id").execute()
     schools = response.data if response.data else []
     
     for school in schools:
@@ -1376,7 +1376,7 @@ def get_entities():
             return jsonify([]), 500
         
         if entity_type == 'school':
-            response = supabase.table("schools").select("id, name, cluster_number").order("cluster_number").order("display_order").order("name").execute()
+            response = supabase.table("schools").select("id, name, cluster_number").order("cluster_number").order("id").execute()
             entities = []
             for school in (response.data or []):
                 entities.append({
@@ -2004,8 +2004,9 @@ def api_schools():
         if not supabase:
             return jsonify([]), 500
         
-        # Order by cluster_number, then display_order, then id
-        response = supabase.table("schools").select("*").order("cluster_number").order("display_order").order("id").execute()
+        # Order by cluster_number, then by id to preserve insertion order within each cluster
+        # This matches your Schools Report order (Cluster 1: IDs 1-25, Cluster 2: IDs 26-51, etc.)
+        response = supabase.table("schools").select("*").order("cluster_number").order("id").execute()
         return jsonify(response.data if response.data else [])
         
     except Exception as e:
