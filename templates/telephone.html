@@ -338,13 +338,13 @@
             position: fixed;
             bottom: 20px;
             right: 20px;
-            background: var(--success);
+            background: #28a745;
             color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 12px 24px;
+            border-radius: 8px;
             font-size: 0.85rem;
             z-index: 2000;
-            animation: fadeOut 2s ease forwards;
+            animation: fadeOut 3s ease forwards;
         }
 
         .error-toast {
@@ -353,17 +353,17 @@
             right: 20px;
             background: var(--danger);
             color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 12px 24px;
+            border-radius: 8px;
             font-size: 0.85rem;
             z-index: 2000;
-            animation: fadeOut 3s ease forwards;
+            animation: fadeOut 4s ease forwards;
         }
 
         @keyframes fadeOut {
-            0% { opacity: 1; }
-            70% { opacity: 1; }
-            100% { opacity: 0; visibility: hidden; }
+            0% { opacity: 1; transform: translateY(0); }
+            80% { opacity: 1; }
+            100% { opacity: 0; visibility: hidden; transform: translateY(20px); }
         }
         
         .seq-number {
@@ -724,49 +724,6 @@
     let isLoading = false;
     let editingEntityId = null;
 
-    // EXACT ORDER from Schools Report - Cluster 1 to 6 with schools in document order
-    const cluster1Ids = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25];
-    const cluster2Ids = [26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51];
-    const cluster3Ids = [52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75];
-    const cluster4Ids = [76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102];
-    const cluster5Ids = [103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129];
-    const cluster6Ids = [130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150];
-    
-    // EXACT DEPARTMENT ORDER from Departments Report
-    const departmentOrder = [
-        "Kementerian Pendidikan",
-        "Brunei Darussalam",
-        "SUT (CE)",
-        "TSUT (CE)",
-        "SUT (HE)",
-        "TSUT (HE)",
-        "TSUT (PC)",
-        "Jabatan Sekolah-Sekolah",
-        "Jabatan Pentadbiran Dan Perkhidmatan-Perkhidmatan",
-        "Jabatan Peperiksaan",
-        "Jabatan Kenaziran Sekolah-Sekolah",
-        "Jabatan Perkembangan Kurikulum",
-        "Jabatan Pendidikan Swasta",
-        "Jabatan Pengurusan Pendidik",
-        "Jabatan Pendidikan Khas",
-        "Science, Technology And Enviroment Partnership Centre (STEP)",
-        "Education Technology Centre",
-        "Bahagian Kaunseling",
-        "Jabatan Pengajian Tinggi",
-        "Jabatan Pendidikan Biasiswa",
-        "Jabatan Perancangan Dan Pengurusan Estet",
-        "Jabatan Teknologi Maklumat Dan Komunikasi",
-        "Urus Setia Majlis Kebangsaan Pengiktirafan Kelulusan (MKPK)",
-        "Unit Audit Dalaman",
-        "Jabatan Perancangan, Perkembangan Dan Penyelidikan",
-        "Bahagian Komunikasi Korporat",
-        "Bahagian Perhubungan Antarabangsa",
-        "Urus Setia Majlis Pelajaran Kebangsaan (UMPK)",
-        "Strategic Enterprise Performance And Delivery Unit (SEPADU)",
-        "Unit Undang-Undang (Legal Unit)",
-        "Jabatan Pendidikan Kokurikulum"
-    ];
-
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
     }
@@ -793,47 +750,16 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
+                // Schools are already ordered by cluster_number, then by id from API
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
+                // Departments are already ordered by display_order, then department_name, then id from API
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) {
             console.error("Error loading entities:", e);
         }
-    }
-
-    function sortSchoolsByDocumentOrder(schools) {
-        const orderMap = new Map();
-        let position = 1;
-        for (const id of cluster1Ids) { orderMap.set(id, position++); }
-        for (const id of cluster2Ids) { orderMap.set(id, position++); }
-        for (const id of cluster3Ids) { orderMap.set(id, position++); }
-        for (const id of cluster4Ids) { orderMap.set(id, position++); }
-        for (const id of cluster5Ids) { orderMap.set(id, position++); }
-        for (const id of cluster6Ids) { orderMap.set(id, position++); }
-        
-        return schools.sort((a, b) => {
-            const orderA = orderMap.get(a.id) || 9999;
-            const orderB = orderMap.get(b.id) || 9999;
-            return orderA - orderB;
-        });
-    }
-
-    function sortDepartmentsByDocumentOrder(departments) {
-        const deptOrderMap = new Map();
-        departmentOrder.forEach((name, idx) => {
-            deptOrderMap.set(name, idx);
-        });
-        
-        return departments.sort((a, b) => {
-            const deptA = a.department_name || 'Other';
-            const deptB = b.department_name || 'Other';
-            const orderA = deptOrderMap.get(deptA) !== undefined ? deptOrderMap.get(deptA) : 9999;
-            const orderB = deptOrderMap.get(deptB) !== undefined ? deptOrderMap.get(deptB) : 9999;
-            if (orderA !== orderB) return orderA - orderB;
-            return a.id - b.id;
-        });
     }
 
     async function loadExistingBills(month, year) {
@@ -897,10 +823,9 @@
     function buildEntityList() {
         const entities = [];
         
-        const sortedSchools = sortSchoolsByDocumentOrder([...allSchools]);
-        
-        for (let idx = 0; idx < sortedSchools.length; idx++) {
-            const school = sortedSchools[idx];
+        // Add schools in the order they come from API (already sorted by cluster_number, then by id)
+        for (let idx = 0; idx < allSchools.length; idx++) {
+            const school = allSchools[idx];
             const accounts = extractTelephoneAccounts(school);
             
             let accountGroups = accounts;
@@ -914,13 +839,7 @@
                 }];
             }
             
-            let cluster = school.cluster_number || 'Unassigned';
-            if (cluster === '1') cluster = 'CLUSTER 1';
-            else if (cluster === '2') cluster = 'CLUSTER 2';
-            else if (cluster === '3') cluster = 'CLUSTER 3';
-            else if (cluster === '4') cluster = 'CLUSTER 4';
-            else if (cluster === '5') cluster = 'CLUSTER 5';
-            else if (cluster === '6') cluster = 'CLUSTER 6';
+            let cluster = school.cluster_number ? `CLUSTER ${school.cluster_number}` : 'Unassigned';
             
             entities.push({
                 id: school.id,
@@ -935,10 +854,9 @@
             });
         }
         
-        const sortedDepartments = sortDepartmentsByDocumentOrder([...allDepartments]);
-        
-        for (let idx = 0; idx < sortedDepartments.length; idx++) {
-            const dept = sortedDepartments[idx];
+        // Add departments in the order they come from API (already sorted by display_order, then department_name, then id)
+        for (let idx = 0; idx < allDepartments.length; idx++) {
+            const dept = allDepartments[idx];
             const accounts = extractTelephoneAccounts(dept);
             
             let accountGroups = accounts;
@@ -960,7 +878,7 @@
                 typeLabel: '🏛️ Department',
                 clusterNumber: null,
                 departmentName: dept.department_name || 'Other',
-                displayOrder: sortedSchools.length + idx,
+                displayOrder: allSchools.length + idx,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -1137,6 +1055,62 @@
         }
     }
 
+    async function deleteEntityBills(entityRow, month, year) {
+        if (isLoading) return;
+        
+        const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
+        if (!confirm(`Delete ALL telephone bills for ${entityName} for ${month}/${year}?`)) return;
+        
+        let phoneRows = [];
+        let nextRow = entityRow.nextElementSibling;
+        while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
+            if (nextRow.classList.contains('phone-row')) {
+                phoneRows.push(nextRow);
+            }
+            nextRow = nextRow.nextElementSibling;
+        }
+        
+        const billIdsToDelete = [];
+        for (const row of phoneRows) {
+            const billId = row.getAttribute('data-bill-id');
+            if (billId) {
+                billIdsToDelete.push(parseInt(billId));
+            }
+        }
+        
+        const existingSummary = existingBills.find(b => 
+            b.entity_type === entityRow.getAttribute('data-entity-type') && 
+            b.entity_id === parseInt(entityRow.getAttribute('data-entity-id')) && 
+            b.notes?.includes('isSummary')
+        );
+        if (existingSummary && existingSummary.id) {
+            billIdsToDelete.push(existingSummary.id);
+        }
+        
+        if (billIdsToDelete.length === 0) {
+            showToast('No bills to delete', true);
+            return;
+        }
+        
+        isLoading = true;
+        showLoading(true);
+        
+        let successCount = 0;
+        for (const billId of billIdsToDelete) {
+            try {
+                const resp = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
+                if (resp.ok) successCount++;
+            } catch(err) {
+                console.error('Delete error:', err);
+            }
+        }
+        
+        isLoading = false;
+        showLoading(false);
+        showToast(`🗑️ Deleted ${successCount} bill${successCount > 1 ? 's' : ''} successfully`);
+        await renderTelephoneTable();
+    }
+
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1144,7 +1118,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></td>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1173,6 +1147,7 @@
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
+        // Group schools by cluster
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -1255,6 +1230,7 @@
             }
         }
         
+        // Group departments by department name (preserving API order from display_order)
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1264,7 +1240,16 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        for (const deptName of departmentOrder) {
+        // Get department names in the order they appear from API (preserves display_order)
+        const deptNamesInOrder = [];
+        for (const dept of departmentsList) {
+            const deptName = dept.departmentName || 'Other';
+            if (!deptNamesInOrder.includes(deptName)) {
+                deptNamesInOrder.push(deptName);
+            }
+        }
+        
+        for (const deptName of deptNamesInOrder) {
             const deptsInGroup = deptByDepartmentName.get(deptName);
             if (!deptsInGroup || deptsInGroup.length === 0) continue;
             
@@ -1603,53 +1588,7 @@
             const deleteBtn = summaryCell.querySelector('.delete-entity-summary-btn');
             if (deleteBtn) {
                 deleteBtn.onclick = async () => {
-                    if (confirm(`Delete ALL telephone bills for ${entity.name} for ${month}/${year}?`)) {
-                        let phoneRows = [];
-                        let nextRow = entityRow.nextElementSibling;
-                        while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
-                            if (nextRow.classList.contains('phone-row')) {
-                                phoneRows.push(nextRow);
-                            }
-                            nextRow = nextRow.nextElementSibling;
-                        }
-                        
-                        const billIdsToDelete = [];
-                        for (const row of phoneRows) {
-                            const billId = row.getAttribute('data-bill-id');
-                            if (billId) {
-                                billIdsToDelete.push(parseInt(billId));
-                            }
-                        }
-                        
-                        const existingSummary = existingBills.find(b => 
-                            b.entity_type === entity.type && 
-                            b.entity_id === entity.id && 
-                            b.notes?.includes('isSummary')
-                        );
-                        if (existingSummary && existingSummary.id) {
-                            billIdsToDelete.push(existingSummary.id);
-                        }
-                        
-                        if (billIdsToDelete.length > 0) {
-                            isLoading = true;
-                            showLoading(true);
-                            
-                            let successCount = 0;
-                            for (const billId of billIdsToDelete) {
-                                try {
-                                    const resp = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
-                                    if (resp.ok) successCount++;
-                                } catch(err) {
-                                    console.error('Delete error:', err);
-                                }
-                            }
-                            
-                            isLoading = false;
-                            showLoading(false);
-                            showToast(`🗑️ Deleted ${successCount} bills successfully`);
-                            await renderTelephoneTable();
-                        }
-                    }
+                    await deleteEntityBills(entityRow, month, year);
                 };
             }
         }
@@ -1690,47 +1629,62 @@
             if (saveEditBtn) {
                 const entityRow = saveEditBtn.closest('tr.entity-row');
                 if (entityRow) {
-                    const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
-                    let accountRows = [];
-                    let nextRow = entityRow.nextElementSibling;
-                    while (nextRow && nextRow.classList && nextRow.classList.contains('account-header-row')) {
-                        accountRows.push(nextRow);
-                        nextRow = nextRow.nextElementSibling;
-                        while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
-                            nextRow = nextRow.nextElementSibling;
-                        }
-                    }
-                    
-                    let success = true;
-                    for (const accountRow of accountRows) {
-                        const oldAccount = accountRow.getAttribute('data-account-number');
-                        const newAccount = accountRow.querySelector('.edit-account-input')?.value || oldAccount;
-                        
-                        let phoneRows = [];
-                        let phoneRow = accountRow.nextElementSibling;
-                        while (phoneRow && phoneRow.classList && phoneRow.classList.contains('phone-row') && 
-                               phoneRow.getAttribute('data-account-number') === oldAccount) {
-                            phoneRows.push(phoneRow);
-                            phoneRow = phoneRow.nextElementSibling;
-                        }
-                        
-                        for (const row of phoneRows) {
-                            const oldPhone = row.getAttribute('data-phone');
-                            const newPhone = row.querySelector('.edit-phone-input')?.value || oldPhone;
-                            const newLocation = row.querySelector('.edit-location-input')?.value || '';
-                            
-                            if (oldAccount !== newAccount || oldPhone !== newPhone) {
-                                // Update would require API call to schools/departments
-                                showToast('Edit mode: Update account/phone info in Schools/Departments tab', true);
-                                success = false;
-                            }
-                        }
-                    }
-                    
+                    showToast('Edit account/phone info in Schools/Departments tab', true);
                     editingEntityId = null;
                     await renderTelephoneTable();
                 }
                 return;
+            }
+            
+            const saveBtn = e.target.closest('.save-entity-summary-btn');
+            if (saveBtn && !saveBtn.disabled) {
+                const summaryRow = saveBtn.closest('.summary-row');
+                if (summaryRow) {
+                    const entityRow = summaryRow.previousElementSibling;
+                    while (entityRow && !entityRow.classList.contains('entity-row')) {
+                        const prev = entityRow.previousElementSibling;
+                        if (!prev) break;
+                        entityRow = prev;
+                    }
+                    if (entityRow && entityRow.classList.contains('entity-row')) {
+                        const summaryCell = summaryRow.querySelector('td');
+                        if (summaryCell) {
+                            const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
+                            const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
+                            const otherInput = summaryCell.querySelector('.summary-other-charges');
+                            const adjInput = summaryCell.querySelector('.summary-adjustment');
+                            const totalBillDisplay = summaryCell.querySelector('.summary-value');
+                            const amountPaidInput = summaryCell.querySelector('.summary-amount-paid');
+                            
+                            const summaryValues = {
+                                previousOutstanding: parseFloat(prevOutInput?.value) || 0,
+                                previousPayment: parseFloat(summaryCell.querySelector('.summary-previous-payment')?.value) || 0,
+                                totalCurrentBill: parseFloat(totalCurrInput?.value) || 0,
+                                otherCharges: parseFloat(otherInput?.value) || 0,
+                                adjustment: parseFloat(adjInput?.value) || 0,
+                                totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
+                                amountPaid: parseFloat(amountPaidInput?.value) || 0
+                            };
+                            await saveEntityBills(entityRow, summaryValues, currentMonth, currentYear);
+                        }
+                    }
+                }
+            }
+            
+            const deleteBtn = e.target.closest('.delete-entity-summary-btn');
+            if (deleteBtn) {
+                const summaryRow = deleteBtn.closest('.summary-row');
+                if (summaryRow) {
+                    const entityRow = summaryRow.previousElementSibling;
+                    while (entityRow && !entityRow.classList.contains('entity-row')) {
+                        const prev = entityRow.previousElementSibling;
+                        if (!prev) break;
+                        entityRow = prev;
+                    }
+                    if (entityRow && entityRow.classList.contains('entity-row')) {
+                        await deleteEntityBills(entityRow, currentMonth, currentYear);
+                    }
+                }
             }
         });
     }
