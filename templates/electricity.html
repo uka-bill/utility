@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Electricity Utility - Direct Bill Entry</title>
     <style>
-        /* Same styles as water.html - using identical structure */
         :root {
             --primary: #4361ee;
             --secondary: #3f37c9;
@@ -336,13 +335,13 @@
             position: fixed;
             bottom: 20px;
             right: 20px;
-            background: var(--success);
+            background: #28a745;
             color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 12px 24px;
+            border-radius: 8px;
             font-size: 0.85rem;
             z-index: 2000;
-            animation: fadeOut 2s ease forwards;
+            animation: fadeOut 3s ease forwards;
         }
 
         .error-toast {
@@ -351,17 +350,17 @@
             right: 20px;
             background: var(--danger);
             color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 12px 24px;
+            border-radius: 8px;
             font-size: 0.85rem;
             z-index: 2000;
-            animation: fadeOut 3s ease forwards;
+            animation: fadeOut 4s ease forwards;
         }
 
         @keyframes fadeOut {
-            0% { opacity: 1; }
-            70% { opacity: 1; }
-            100% { opacity: 0; visibility: hidden; }
+            0% { opacity: 1; transform: translateY(0); }
+            80% { opacity: 1; }
+            100% { opacity: 0; visibility: hidden; transform: translateY(20px); }
         }
         
         .seq-number {
@@ -639,9 +638,11 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
+                // NO additional sorting - API already returns in correct order (cluster_number then id)
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
+                // NO additional sorting - API already returns in correct order (display_order then department_name then id)
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) {
@@ -691,6 +692,7 @@
     function buildEntityList() {
         const entities = [];
         
+        // Add schools in the order they come from API (already sorted correctly)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
@@ -721,6 +723,7 @@
             });
         }
         
+        // Add departments in the order they come from API (already sorted by display_order)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
@@ -1001,7 +1004,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td><tr>';
+        tbody.innerHTML = '</table><td colspan="12" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1030,6 +1033,7 @@
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
+        // Group schools by cluster (matching Schools tab layout)
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -1039,6 +1043,7 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
+        // Define the order of clusters (numerical order, Unassigned at the end)
         const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
         
         for (const cluster of clusterOrder) {
@@ -1109,6 +1114,7 @@
             }
         }
         
+        // Group departments by department name (preserving API order from display_order)
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1118,6 +1124,7 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
+        // Get department names in the order they appear from API (preserves display_order)
         const deptNamesInOrder = [];
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
