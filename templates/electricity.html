@@ -593,7 +593,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></tr>
+                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></table>
             </tbody>
         </table>
     </div>
@@ -638,24 +638,16 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                // Sort schools by cluster number, then by id to match Schools tab
-                allSchools.sort((a, b) => {
-                    const clusterA = a.cluster_number ? parseInt(a.cluster_number) : 999;
-                    const clusterB = b.cluster_number ? parseInt(b.cluster_number) : 999;
-                    if (clusterA !== clusterB) return clusterA - clusterB;
-                    return a.id - b.id;
-                });
+                // IMPORTANT: DO NOT RE-SORT - Use the exact order from API
+                // The API already returns schools sorted by cluster_number then by id
+                console.log(`Loaded ${allSchools.length} schools in API order`);
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                // Sort departments by department name, then by id to match Departments tab
-                allDepartments.sort((a, b) => {
-                    const deptCompare = (a.department_name || '').localeCompare(b.department_name || '');
-                    if (deptCompare !== 0) return deptCompare;
-                    return a.id - b.id;
-                });
+                // IMPORTANT: DO NOT RE-SORT - Use the exact order from API
+                // The API already returns departments sorted by display_order then by department_name then by id
+                console.log(`Loaded ${allDepartments.length} departments in API order`);
             }
-            console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) {
             console.error("Error loading entities:", e);
         }
@@ -703,7 +695,7 @@
     function buildEntityList() {
         const entities = [];
         
-        // Add schools in sorted order (by cluster, then by id)
+        // Add schools in the EXACT order they come from API (NO SORTING)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
@@ -732,7 +724,7 @@
             });
         }
         
-        // Add departments in sorted order (by department name, then by id)
+        // Add departments in the EXACT order they come from API (NO SORTING)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
@@ -1052,7 +1044,7 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
-        // Sort clusters numerically, with Unassigned at the end
+        // Sort clusters numerically (1,2,3,4,5,6), with Unassigned at the end
         const sortedClusters = Array.from(schoolsByCluster.keys()).sort((a, b) => {
             if (a === 'Unassigned') return 1;
             if (b === 'Unassigned') return -1;
@@ -1064,7 +1056,7 @@
         
         for (const cluster of sortedClusters) {
             const clusterSchools = schoolsByCluster.get(cluster);
-            // Schools already sorted by id within cluster from loadAllEntities
+            // Schools are already in the correct order from API (by id within cluster)
             
             let hasVisibleInCluster = false;
             const visibleClusterEntities = [];
@@ -1140,7 +1132,7 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        // Keep department groups in the order they appear (by first occurrence id)
+        // Keep department groups in the order they appear from API (preserves display_order)
         const deptGroupOrder = [];
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
