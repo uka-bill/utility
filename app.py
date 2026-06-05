@@ -138,9 +138,12 @@ def get_all_data_with_order():
         response = supabase.table("financial_years").select("*").order("start_year", desc=True).execute()
         data['financial_years'] = response.data if response.data else []
         
-        # Get schools ordered by cluster_number, then by id (matches Schools Report)
-        response = supabase.table("schools").select("*").order("cluster_number").order("id").execute()
+        # Get schools - will sort in Python for numeric cluster order
+        response = supabase.table("schools").select("*").execute()
         schools = response.data if response.data else []
+        
+        # Sort schools by cluster_number (numeric), then by id
+        schools.sort(key=lambda x: (int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
         
         # Process schools to parse JSON accounts
         for school in schools:
@@ -652,8 +655,11 @@ def export_schools_csv():
                      'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
                      'Telephone Account', 'Telephone Number', 'Notes'])
     
-    response = supabase.table("schools").select("*").order("cluster_number").order("id").execute()
+    response = supabase.table("schools").select("*").execute()
     schools = response.data if response.data else []
+    
+    # Sort by cluster_number (numeric), then by id
+    schools.sort(key=lambda x: (int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
     
     for school in schools:
         writer.writerow([
@@ -829,8 +835,11 @@ def export_schools_csv_to_string():
                      'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
                      'Telephone Account', 'Telephone Number', 'Notes'])
     
-    response = supabase.table("schools").select("*").order("cluster_number").order("id").execute()
+    response = supabase.table("schools").select("*").execute()
     schools = response.data if response.data else []
+    
+    # Sort by cluster_number (numeric), then by id
+    schools.sort(key=lambda x: (int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
     
     for school in schools:
         writer.writerow([
@@ -1376,9 +1385,12 @@ def get_entities():
             return jsonify([]), 500
         
         if entity_type == 'school':
-            response = supabase.table("schools").select("id, name, cluster_number").order("cluster_number").order("id").execute()
+            response = supabase.table("schools").select("id, name, cluster_number").execute()
+            schools = response.data if response.data else []
+            # Sort by cluster_number (numeric), then by id
+            schools.sort(key=lambda x: (int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
             entities = []
-            for school in (response.data or []):
+            for school in schools:
                 entities.append({
                     'id': school['id'],
                     'name': school['name'],
@@ -2004,10 +2016,24 @@ def api_schools():
         if not supabase:
             return jsonify([]), 500
         
-        # Order by cluster_number, then by id to preserve insertion order within each cluster
-        # This matches your Schools Report order (Cluster 1: IDs 1-25, Cluster 2: IDs 26-51, etc.)
-        response = supabase.table("schools").select("*").order("cluster_number").order("id").execute()
-        return jsonify(response.data if response.data else [])
+        # Get all schools
+        response = supabase.table("schools").select("*").execute()
+        schools = response.data if response.data else []
+        
+        # Sort schools by cluster_number (as integer), then by id
+        # This ensures Cluster 1 comes before Cluster 2, etc.
+        def get_cluster_order(school):
+            cluster = school.get('cluster_number')
+            if cluster is not None:
+                try:
+                    return int(cluster)
+                except (ValueError, TypeError):
+                    return 999
+            return 999
+        
+        schools.sort(key=lambda x: (get_cluster_order(x), x.get('id', 0)))
+        
+        return jsonify(schools)
         
     except Exception as e:
         print(f"❌ Schools GET error: {e}")
