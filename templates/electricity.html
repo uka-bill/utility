@@ -638,11 +638,11 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                // NO additional sorting - API already returns in correct order (cluster_number then id)
+                // Schools are already sorted by cluster_number (numeric), then by id from API
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                // NO additional sorting - API already returns in correct order (display_order then department_name then id)
+                // Departments are already sorted by display_order, then department_name, then id from API
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) {
@@ -692,7 +692,7 @@
     function buildEntityList() {
         const entities = [];
         
-        // Add schools in the order they come from API (already sorted correctly)
+        // Add schools in the order they come from API (already sorted by cluster_number, then by id)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
@@ -723,7 +723,7 @@
             });
         }
         
-        // Add departments in the order they come from API (already sorted by display_order)
+        // Add departments in the order they come from API (already sorted by display_order, then department_name, then id)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
@@ -1004,7 +1004,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '</table><td colspan="12" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1033,7 +1033,7 @@
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // Group schools by cluster (matching Schools tab layout)
+        // ========== GROUP SCHOOLS BY CLUSTER (MATCHES WATER.HTML AND SCHOOLS TAB) ==========
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -1043,7 +1043,7 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
-        // Define the order of clusters (numerical order, Unassigned at the end)
+        // Define cluster order (CLUSTER 1, CLUSTER 2, CLUSTER 3, CLUSTER 4, CLUSTER 5, CLUSTER 6, then Unassigned)
         const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
         
         for (const cluster of clusterOrder) {
@@ -1114,7 +1114,7 @@
             }
         }
         
-        // Group departments by department name (preserving API order from display_order)
+        // ========== GROUP DEPARTMENTS BY DEPARTMENT NAME (MATCHES DEPARTMENTS TAB) ==========
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
