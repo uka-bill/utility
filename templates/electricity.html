@@ -668,21 +668,17 @@
     function extractElectricityAccounts(entity) {
         let accounts = [];
         try {
-            // Parse water_accounts JSON string if present
             if (entity.electricity_accounts) {
                 if (typeof entity.electricity_accounts === 'string') {
                     const parsed = JSON.parse(entity.electricity_accounts);
                     if (Array.isArray(parsed)) {
                         accounts = parsed;
-                    } else {
-                        accounts = [];
                     }
                 } else if (Array.isArray(entity.electricity_accounts)) {
                     accounts = entity.electricity_accounts;
                 }
             }
             
-            // If no structured accounts found, try legacy fields
             if (accounts.length === 0 && entity.electricity_account) {
                 const meters = [];
                 if (entity.electricity_meter) {
@@ -728,7 +724,6 @@
             return;
         }
         
-        // Find all meter rows that belong to this entity
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
@@ -830,7 +825,6 @@
     
     async function updateMeterInfo(entityId, accountNumber, meterNumber, newAccountNumber, newMeterNumber) {
         try {
-            // Find the entity (school or department)
             const school = allSchools.find(s => s.id == entityId);
             const dept = allDepartments.find(d => d.id == entityId);
             const entity = school || dept;
@@ -904,7 +898,6 @@
         const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
         if (!confirm(`Delete ALL electricity bills for ${entityName} for ${month}/${year}?`)) return;
         
-        // Find all meter rows that belong to this entity
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
@@ -962,7 +955,7 @@
         const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
         
-        // Filter schools
+        // Filter schools - SAME ORDER AS schools.html
         let filteredSchools = [...allSchools];
         let filteredDepartments = [...allDepartments];
         
@@ -979,7 +972,15 @@
             );
         }
         
-        // Group schools by cluster - EXACT SAME LOGIC AS schools.html
+        // Sort schools by cluster number (numeric) then by id - SAME AS schools.html
+        filteredSchools.sort((a, b) => {
+            const clusterA = a.cluster_number ? parseInt(a.cluster_number) : 999;
+            const clusterB = b.cluster_number ? parseInt(b.cluster_number) : 999;
+            if (clusterA !== clusterB) return clusterA - clusterB;
+            return (a.id || 0) - (b.id || 0);
+        });
+        
+        // Group schools by cluster
         const clusterMap = new Map();
         filteredSchools.forEach(school => {
             let cluster = school.cluster_number || 'Unassigned';
@@ -987,7 +988,7 @@
             clusterMap.get(cluster).push(school);
         });
         
-        // Sort clusters numerically - EXACT SAME LOGIC AS schools.html
+        // Sort clusters numerically
         const sortedClusters = Array.from(clusterMap.keys()).sort((a, b) => {
             if (a === 'Unassigned') return 1;
             if (b === 'Unassigned') return -1;
@@ -1001,62 +1002,37 @@
         for (let cluster of sortedClusters) {
             const schoolsInCluster = clusterMap.get(cluster);
             
-            // Check if any school in this cluster has visible data based on status filter
-            let hasVisibleInCluster = false;
-            const visibleSchoolsInCluster = [];
+            // Add cluster separator
+            const separatorRow = document.createElement('tr');
+            separatorRow.className = 'cluster-separator';
+            separatorRow.innerHTML = `
+                <td colspan="12">
+                    <div class="cluster-info">
+                        <span>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</span>
+                        <span class="cluster-count">${schoolsInCluster.length} schools</span>
+                    </div>
+                 </div>
+            `;
+            tbody.appendChild(separatorRow);
             
+            // Render each school
             for (const school of schoolsInCluster) {
-                const accounts = extractElectricityAccounts(school);
-                let hasVisibleForSchool = false;
-                
-                // If no accounts, still show the school (so users can add data)
-                if (accounts.length === 0) {
-                    hasVisibleForSchool = true;
-                } else {
-                    // Check if any meter passes the status filter
-                    for (const account of accounts) {
-                        const meters = account.meters || [];
-                        for (const meter of meters) {
-                            const meterNum = meter.meterNumber || '—';
-                            const existing = findExistingBill('school', school.id, account.accountNumber, meterNum, month, year);
-                            
-                            if (statusFilter === 'all' || 
-                                (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                                (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                                hasVisibleForSchool = true;
-                                break;
-                            }
-                        }
-                        if (hasVisibleForSchool) break;
-                    }
-                }
-                
-                if (hasVisibleForSchool) {
-                    hasVisibleInCluster = true;
-                    visibleSchoolsInCluster.push(school);
-                }
-            }
-            
-            if (hasVisibleInCluster && visibleSchoolsInCluster.length > 0) {
-                // Add cluster separator
-                const separatorRow = document.createElement('tr');
-                separatorRow.className = 'cluster-separator';
-                separatorRow.innerHTML = `
-                    <td colspan="12">
-                        <div class="cluster-info">
-                            <span>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</span>
-                            <span class="cluster-count">${visibleSchoolsInCluster.length} schools</span>
-                        </div>
-                     </div>
-                `;
-                tbody.appendChild(separatorRow);
-                
-                // Render each school in the cluster (preserving original order)
-                for (const school of visibleSchoolsInCluster) {
-                    globalSerial = await renderSchoolEntity(tbody, school, month, year, globalSerial, statusFilter);
-                }
+                globalSerial = await renderSchoolEntity(tbody, school, month, year, globalSerial, statusFilter);
             }
         }
+        
+        // Sort departments by display_order, department_name, id - SAME AS departments.html
+        filteredDepartments.sort((a, b) => {
+            const orderA = a.display_order || 0;
+            const orderB = b.display_order || 0;
+            if (orderA !== orderB) return orderA - orderB;
+            
+            const nameA = a.department_name || '';
+            const nameB = b.department_name || '';
+            if (nameA !== nameB) return nameA.localeCompare(nameB);
+            
+            return (a.id || 0) - (b.id || 0);
+        });
         
         // Group departments by department name
         const deptGroupMap = new Map();
@@ -1066,7 +1042,7 @@
             deptGroupMap.get(deptName).push(dept);
         });
         
-        // Get department names in API order (preserves display_order)
+        // Get department names in order
         const deptNamesInOrder = [];
         for (const dept of filteredDepartments) {
             const deptName = dept.department_name || 'Other';
@@ -1078,60 +1054,25 @@
         for (const deptName of deptNamesInOrder) {
             const deptsInGroup = deptGroupMap.get(deptName) || [];
             
-            let hasVisibleInGroup = false;
-            const visibleDeptsInGroup = [];
+            const totalMeters = deptsInGroup.reduce((sum, d) => {
+                const accounts = extractElectricityAccounts(d);
+                return sum + accounts.reduce((s, a) => s + (a.meters || []).length, 0);
+            }, 0);
+            
+            const deptSeparator = document.createElement('tr');
+            deptSeparator.className = 'department-group-separator';
+            deptSeparator.innerHTML = `
+                <td colspan="12">
+                    <div class="dept-group-info">
+                        <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
+                        <span class="dept-group-count">${deptsInGroup.length} units, ${totalMeters} meters</span>
+                    </div>
+                 </div>
+            `;
+            tbody.appendChild(deptSeparator);
             
             for (const dept of deptsInGroup) {
-                const accounts = extractElectricityAccounts(dept);
-                let hasVisibleForDept = false;
-                
-                if (accounts.length === 0) {
-                    hasVisibleForDept = true;
-                } else {
-                    for (const account of accounts) {
-                        const meters = account.meters || [];
-                        for (const meter of meters) {
-                            const meterNum = meter.meterNumber || '—';
-                            const existing = findExistingBill('department', dept.id, account.accountNumber, meterNum, month, year);
-                            
-                            if (statusFilter === 'all' || 
-                                (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                                (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                                hasVisibleForDept = true;
-                                break;
-                            }
-                        }
-                        if (hasVisibleForDept) break;
-                    }
-                }
-                
-                if (hasVisibleForDept) {
-                    hasVisibleInGroup = true;
-                    visibleDeptsInGroup.push(dept);
-                }
-            }
-            
-            if (hasVisibleInGroup && visibleDeptsInGroup.length > 0) {
-                const totalMeters = visibleDeptsInGroup.reduce((sum, d) => {
-                    const accounts = extractElectricityAccounts(d);
-                    return sum + accounts.reduce((s, a) => s + (a.meters || []).length, 0);
-                }, 0);
-                
-                const deptSeparator = document.createElement('tr');
-                deptSeparator.className = 'department-group-separator';
-                deptSeparator.innerHTML = `
-                    <td colspan="12">
-                        <div class="dept-group-info">
-                            <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
-                            <span class="dept-group-count">${visibleDeptsInGroup.length} units, ${totalMeters} meters</span>
-                        </div>
-                     </div>
-                `;
-                tbody.appendChild(deptSeparator);
-                
-                for (const dept of visibleDeptsInGroup) {
-                    globalSerial = await renderDepartmentEntity(tbody, dept, month, year, globalSerial, statusFilter);
-                }
+                globalSerial = await renderDepartmentEntity(tbody, dept, month, year, globalSerial, statusFilter);
             }
         }
         
@@ -1146,13 +1087,13 @@
         let isEditing = (editingEntityId === school.id);
         
         const accounts = extractElectricityAccounts(school);
+        const hasAccounts = accounts.length > 0;
         
-        // Build meter rows data first
+        // Build meter rows data
         let meterRowsData = [];
-        let hasAnyVisibleMeters = false;
         
-        if (accounts.length === 0) {
-            // No accounts configured - show a placeholder row
+        if (!hasAccounts) {
+            // No accounts configured - show one placeholder row
             meterRowsData.push({
                 serial: serial,
                 accountNumber: '—',
@@ -1222,7 +1163,7 @@
                             if (existing && amountPaid > 0) entityHasBills = true;
                         }
                         
-                        // Check if this meter passes status filter
+                        // Check status filter
                         let passesFilter = true;
                         if (statusFilter !== 'all') {
                             if (statusFilter === 'paid') {
@@ -1233,7 +1174,6 @@
                         }
                         
                         if (passesFilter) {
-                            hasAnyVisibleMeters = true;
                             const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
                             
                             meterRowsData.push({
@@ -1262,15 +1202,10 @@
             }
         }
         
-        // If no meters passed filter and there are accounts, skip this school
-        if (accounts.length > 0 && !hasAnyVisibleMeters && statusFilter !== 'all') {
-            return serial;
-        }
-        
         // Determine status display
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
-        if (accounts.length === 0) {
+        if (!hasAccounts) {
             entityStatusText = 'No account';
             entityStatusClass = 'status-pending';
         } else if (entityHasBills) {
@@ -1289,13 +1224,13 @@
         entityRow.setAttribute('data-entity-type', 'school');
         entityRow.setAttribute('data-entity-id', school.id);
         entityRow.setAttribute('data-entity-name', school.name);
-        entityRow.setAttribute('data-has-accounts', accounts.length > 0);
+        entityRow.setAttribute('data-has-accounts', hasAccounts);
         
         entityRow.innerHTML = `
             <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(school.name || '')}</span>
-                ${accounts.length > 0 ? `<span class="total-due">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No electricity account configured)</span>'}
+                ${hasAccounts ? `<span class="total-due">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No electricity account configured)</span>'}
              </div>
             <td><span class="badge badge-school">🏫 School</span></div>
             <td colspan="6"></div>
@@ -1308,7 +1243,7 @@
                 ` : `
                     <button class="btn btn-warning btn-sm edit-entity-btn">✏️ Edit</button>
                     <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
-                    ${entityHasBills && accounts.length > 0 ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
+                    ${entityHasBills && hasAccounts ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
                 `}
             </div>
         `;
@@ -1365,13 +1300,12 @@
         let isEditing = (editingEntityId === dept.id);
         
         const accounts = extractElectricityAccounts(dept);
+        const hasAccounts = accounts.length > 0;
         const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
         
-        // Build meter rows data first
         let meterRowsData = [];
-        let hasAnyVisibleMeters = false;
         
-        if (accounts.length === 0) {
+        if (!hasAccounts) {
             meterRowsData.push({
                 serial: serial,
                 accountNumber: '—',
@@ -1450,7 +1384,6 @@
                         }
                         
                         if (passesFilter) {
-                            hasAnyVisibleMeters = true;
                             const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
                             
                             meterRowsData.push({
@@ -1479,13 +1412,9 @@
             }
         }
         
-        if (accounts.length > 0 && !hasAnyVisibleMeters && statusFilter !== 'all') {
-            return serial;
-        }
-        
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
-        if (accounts.length === 0) {
+        if (!hasAccounts) {
             entityStatusText = 'No account';
             entityStatusClass = 'status-pending';
         } else if (entityHasBills) {
@@ -1503,13 +1432,13 @@
         entityRow.setAttribute('data-entity-type', 'department');
         entityRow.setAttribute('data-entity-id', dept.id);
         entityRow.setAttribute('data-entity-name', displayName);
-        entityRow.setAttribute('data-has-accounts', accounts.length > 0);
+        entityRow.setAttribute('data-has-accounts', hasAccounts);
         
         entityRow.innerHTML = `
             <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(displayName)}</span>
-                ${accounts.length > 0 ? `<span class="total-due">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No electricity account configured)</span>'}
+                ${hasAccounts ? `<span class="total-due">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No electricity account configured)</span>'}
              </div>
             <td><span class="badge badge-department">🏛️ Department</span></div>
             <td colspan="6"></div>
@@ -1522,7 +1451,7 @@
                 ` : `
                     <button class="btn btn-warning btn-sm edit-entity-btn">✏️ Edit</button>
                     <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
-                    ${entityHasBills && accounts.length > 0 ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
+                    ${entityHasBills && hasAccounts ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
                 `}
             </div>
         `;
