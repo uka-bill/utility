@@ -335,13 +335,13 @@
             position: fixed;
             bottom: 20px;
             right: 20px;
-            background: var(--success);
+            background: #28a745;
             color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 12px 24px;
+            border-radius: 8px;
             font-size: 0.85rem;
             z-index: 2000;
-            animation: fadeOut 2s ease forwards;
+            animation: fadeOut 3s ease forwards;
         }
 
         .error-toast {
@@ -350,17 +350,17 @@
             right: 20px;
             background: var(--danger);
             color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 12px 24px;
+            border-radius: 8px;
             font-size: 0.85rem;
             z-index: 2000;
-            animation: fadeOut 3s ease forwards;
+            animation: fadeOut 4s ease forwards;
         }
 
         @keyframes fadeOut {
-            0% { opacity: 1; }
-            70% { opacity: 1; }
-            100% { opacity: 0; visibility: hidden; }
+            0% { opacity: 1; transform: translateY(0); }
+            80% { opacity: 1; }
+            100% { opacity: 0; visibility: hidden; transform: translateY(20px); }
         }
         
         .seq-number {
@@ -593,7 +593,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></tr>
+                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></td>
             </tbody>
         </table>
     </div>
@@ -611,6 +611,26 @@
     let currentYear = new Date().getFullYear();
     let isLoading = false;
     let editingEntityId = null;
+    
+    // ============ SCROLL POSITION FIX ============
+    let savedScrollPosition = 0;
+
+    function saveScrollPosition() {
+        const wrapper = document.querySelector('.table-wrapper');
+        if (wrapper) {
+            savedScrollPosition = wrapper.scrollTop;
+        }
+    }
+
+    function restoreScrollPosition() {
+        const wrapper = document.querySelector('.table-wrapper');
+        if (wrapper && savedScrollPosition > 0) {
+            setTimeout(() => {
+                wrapper.scrollTop = savedScrollPosition;
+            }, 50);
+        }
+    }
+    // ============ END SCROLL POSITION FIX ============
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
@@ -773,6 +793,7 @@
         setTimeout(() => toast.remove(), 4000);
     }
 
+    // ============ BATCH SAVE FUNCTION (FAST) ============
     async function saveEntityBills(entityRow, month, year) {
         if (isLoading) return;
         
@@ -792,7 +813,7 @@
             nextRow = nextRow.nextElementSibling;
         }
         
-        const billsToSave = [];
+        const batchBills = [];
         
         for (const row of meterRows) {
             const accountNumber = row.getAttribute('data-account');
@@ -813,7 +834,7 @@
             const amountPaid = parseFloat(amountPaidInput?.value) || 0;
             const notes = notesInput?.value || '';
             
-            billsToSave.push({
+            batchBills.push({
                 id: existingBillId,
                 accountNumber: accountNumber === '—' ? '' : accountNumber,
                 meterNumber: meterNumber === '—' ? '' : meterNumber,
@@ -826,63 +847,52 @@
             });
         }
         
+        if (batchBills.length === 0) {
+            showToast('No data to save', true);
+            return;
+        }
+        
         isLoading = true;
         showLoading(true);
         
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (const bill of billsToSave) {
-            const billData = {
-                utility_type: 'water',
-                entity_type: entityType,
-                entity_id: entityId,
-                account_number: bill.accountNumber,
-                meter_number: bill.meterNumber,
-                consumption_m3: bill.consumption,
-                current_charges: bill.currentCharges,
-                unsettled_charges: bill.outstandingCharges,
-                amount_paid: bill.amountPaid,
-                notes: JSON.stringify({ previousPayment: bill.previousPaymentReceived, originalNotes: bill.notes }),
-                month: month,
-                year: year
-            };
+        try {
+            const resp = await fetch('/api/utility-bills/batch-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bills: batchBills.map(bill => ({
+                    utility_type: 'water',
+                    entity_type: entityType,
+                    entity_id: entityId,
+                    account_number: bill.accountNumber,
+                    meter_number: bill.meterNumber,
+                    consumption_m3: bill.consumption,
+                    current_charges: bill.currentCharges,
+                    unsettled_charges: bill.outstandingCharges,
+                    amount_paid: bill.amountPaid,
+                    notes: JSON.stringify({ previousPayment: bill.previousPaymentReceived, originalNotes: bill.notes }),
+                    month: month,
+                    year: year,
+                    id: bill.id
+                })) })
+            });
             
-            try {
-                let url = '/api/utility-bills';
-                let method = 'POST';
-                if (bill.id) {
-                    url = `/api/utility-bills/${bill.id}`;
-                    method = 'PUT';
-                }
-                
-                const resp = await fetch(url, {
-                    method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(billData)
-                });
-                
-                if (resp.ok) {
-                    successCount++;
-                } else {
-                    errorCount++;
-                }
-            } catch(err) {
-                console.error('Network error:', err);
-                errorCount++;
+            const result = await resp.json();
+            
+            if (result.success) {
+                showToast(`✅ Saved ${result.success_count} record${result.success_count > 1 ? 's' : ''} successfully`);
+                await renderWaterTable();
+            } else {
+                showToast(`⚠️ Saved ${result.success_count} records, ${result.error_count} failed`, true);
             }
-        }
-        
-        isLoading = false;
-        showLoading(false);
-        
-        if (errorCount === 0) {
-            showToast(`✅ Saved ${successCount} meter record${successCount > 1 ? 's' : ''} successfully`);
-            await renderWaterTable();
-        } else {
-            showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed`, true);
+        } catch (err) {
+            console.error('Batch save error:', err);
+            showToast('Network error. Please try again.', true);
+        } finally {
+            isLoading = false;
+            showLoading(false);
         }
     }
+    // ============ END BATCH SAVE ============
     
     async function updateMeterInfo(entityId, accountNumber, meterNumber, newAccountNumber, newMeterNumber) {
         try {
@@ -1002,7 +1012,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td></td>';
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1021,6 +1031,7 @@
         
         if (filteredEntities.length === 0) {
             tbody.innerHTML = '<tr class="no-data-row"><td colspan="12" class="no-data">No matching entities found.<\/td><\/tr>';
+            restoreScrollPosition();
             isLoading = false;
             return;
         }
@@ -1199,6 +1210,7 @@
             }
         }
         
+        restoreScrollPosition();
         isLoading = false;
         showLoading(false);
     }
@@ -1369,6 +1381,7 @@
             if (editBtn) {
                 const entityRow = editBtn.closest('tr.entity-row');
                 if (entityRow) {
+                    saveScrollPosition();  // Save scroll position before edit
                     editingEntityId = parseInt(entityRow.getAttribute('data-entity-id'));
                     await renderWaterTable();
                 }
@@ -1423,6 +1436,7 @@
             if (saveBtn && !saveBtn.disabled) {
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
+                    saveScrollPosition();  // Save scroll position before save
                     await saveEntityBills(entityRow, currentMonth, currentYear);
                 }
             }
