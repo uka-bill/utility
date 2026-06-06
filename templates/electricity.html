@@ -638,11 +638,11 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                console.log(`Loaded ${allSchools.length} schools in API order`);
+                console.log(`Loaded ${allSchools.length} schools`);
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                console.log(`Loaded ${allDepartments.length} departments in API order`);
+                console.log(`Loaded ${allDepartments.length} departments`);
             }
         } catch(e) {
             console.error("Error loading entities:", e);
@@ -668,14 +668,22 @@
     function extractElectricityAccounts(entity) {
         let accounts = [];
         try {
-            if (entity.electricity_accounts && typeof entity.electricity_accounts === 'string') {
-                const parsed = JSON.parse(entity.electricity_accounts);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    accounts = parsed;
+            // Parse water_accounts JSON string if present
+            if (entity.electricity_accounts) {
+                if (typeof entity.electricity_accounts === 'string') {
+                    const parsed = JSON.parse(entity.electricity_accounts);
+                    if (Array.isArray(parsed)) {
+                        accounts = parsed;
+                    } else {
+                        accounts = [];
+                    }
+                } else if (Array.isArray(entity.electricity_accounts)) {
+                    accounts = entity.electricity_accounts;
                 }
-            } else if (entity.electricity_accounts && Array.isArray(entity.electricity_accounts)) {
-                accounts = entity.electricity_accounts;
-            } else if (entity.electricity_account) {
+            }
+            
+            // If no structured accounts found, try legacy fields
+            if (accounts.length === 0 && entity.electricity_account) {
                 const meters = [];
                 if (entity.electricity_meter) {
                     meters.push({ meterNumber: entity.electricity_meter, location: '', notes: '' });
@@ -684,6 +692,7 @@
             }
         } catch(e) {
             console.error("Error parsing electricity accounts:", e);
+            accounts = [];
         }
         return accounts;
     }
@@ -719,6 +728,7 @@
             return;
         }
         
+        // Find all meter rows that belong to this entity
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
@@ -729,8 +739,8 @@
         const billsToSave = [];
         
         for (const row of meterRows) {
-            const accountNumber = row.getAttribute('data-account');
-            const meterNumber = row.getAttribute('data-meter');
+            const accountNumber = row.getAttribute('data-account') || '';
+            const meterNumber = row.getAttribute('data-meter') || '';
             const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
             
             const consumptionInput = row.querySelector('.consumption-input');
@@ -820,16 +830,31 @@
     
     async function updateMeterInfo(entityId, accountNumber, meterNumber, newAccountNumber, newMeterNumber) {
         try {
-            const entity = [...allSchools, ...allDepartments].find(e => e.id == entityId);
+            // Find the entity (school or department)
+            const school = allSchools.find(s => s.id == entityId);
+            const dept = allDepartments.find(d => d.id == entityId);
+            const entity = school || dept;
             if (!entity) return false;
             
             let accounts = [];
-            if (entity.type === 'school') {
-                const school = allSchools.find(s => s.id == entityId);
-                accounts = school.electricity_accounts && typeof school.electricity_accounts === 'string' ? JSON.parse(school.electricity_accounts) : (school.electricity_accounts || []);
+            const isSchool = !!school;
+            
+            if (isSchool) {
+                if (school.electricity_accounts && typeof school.electricity_accounts === 'string') {
+                    accounts = JSON.parse(school.electricity_accounts);
+                } else if (school.electricity_accounts && Array.isArray(school.electricity_accounts)) {
+                    accounts = school.electricity_accounts;
+                } else {
+                    accounts = [];
+                }
             } else {
-                const dept = allDepartments.find(d => d.id == entityId);
-                accounts = dept.electricity_accounts && typeof dept.electricity_accounts === 'string' ? JSON.parse(dept.electricity_accounts) : (dept.electricity_accounts || []);
+                if (dept.electricity_accounts && typeof dept.electricity_accounts === 'string') {
+                    accounts = JSON.parse(dept.electricity_accounts);
+                } else if (dept.electricity_accounts && Array.isArray(dept.electricity_accounts)) {
+                    accounts = dept.electricity_accounts;
+                } else {
+                    accounts = [];
+                }
             }
             
             let found = false;
@@ -858,7 +883,7 @@
                     electricityAccounts: accounts
                 };
                 
-                const url = entity.type === 'school' ? `/api/schools/${entityId}` : `/api/departments/${entityId}`;
+                const url = isSchool ? `/api/schools/${entityId}` : `/api/departments/${entityId}`;
                 const resp = await fetch(url, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -879,6 +904,7 @@
         const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
         if (!confirm(`Delete ALL electricity bills for ${entityName} for ${month}/${year}?`)) return;
         
+        // Find all meter rows that belong to this entity
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
@@ -889,7 +915,7 @@
         const billIdsToDelete = [];
         for (const row of meterRows) {
             const billId = row.getAttribute('data-bill-id');
-            if (billId) {
+            if (billId && billId !== 'null') {
                 billIdsToDelete.push(parseInt(billId));
             }
         }
@@ -903,30 +929,21 @@
         showLoading(true);
         
         let successCount = 0;
-        let errorCount = 0;
-        
         for (const billId of billIdsToDelete) {
             try {
                 const resp = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
                 if (resp.ok) {
                     successCount++;
-                } else {
-                    errorCount++;
                 }
             } catch(err) {
                 console.error('Delete error:', err);
-                errorCount++;
             }
         }
         
-        if (errorCount === 0) {
-            showToast(`🗑️ Deleted ${successCount} bill${successCount > 1 ? 's' : ''} successfully`);
-            await renderElectricityTable();
-        } else {
-            showToast(`⚠️ Deleted ${successCount} records, ${errorCount} failed`, true);
-            isLoading = false;
-            showLoading(false);
-        }
+        isLoading = false;
+        showLoading(false);
+        showToast(`🗑️ Deleted ${successCount} bill${successCount > 1 ? 's' : ''} successfully`);
+        await renderElectricityTable();
     }
 
     async function renderElectricityTable() {
@@ -945,7 +962,7 @@
         const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
         
-        // Filter schools first
+        // Filter schools
         let filteredSchools = [...allSchools];
         let filteredDepartments = [...allDepartments];
         
@@ -977,17 +994,14 @@
             return (parseInt(a) || 0) - (parseInt(b) || 0);
         });
         
-        // Render schools - EXACT SAME ORDER AS schools.html
+        // Render schools
         tbody.innerHTML = '';
         let globalSerial = 1;
         
         for (let cluster of sortedClusters) {
             const schoolsInCluster = clusterMap.get(cluster);
             
-            // Schools are already in the order from API (sorted by cluster_number then id)
-            // Do NOT re-sort them - preserve API order exactly like schools.html
-            
-            // Check if any school in this cluster has visible meters based on status filter
+            // Check if any school in this cluster has visible data based on status filter
             let hasVisibleInCluster = false;
             const visibleSchoolsInCluster = [];
             
@@ -995,30 +1009,36 @@
                 const accounts = extractElectricityAccounts(school);
                 let hasVisibleForSchool = false;
                 
-                // Check if any meter for this school passes the status filter
-                for (const account of accounts) {
-                    for (const meter of (account.meters || [])) {
-                        const meterNum = meter.meterNumber || '—';
-                        const existing = findExistingBill('school', school.id, account.accountNumber, meterNum, month, year);
-                        
-                        if (statusFilter === 'all' || 
-                            (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                            (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                            hasVisibleForSchool = true;
-                            break;
+                // If no accounts, still show the school (so users can add data)
+                if (accounts.length === 0) {
+                    hasVisibleForSchool = true;
+                } else {
+                    // Check if any meter passes the status filter
+                    for (const account of accounts) {
+                        const meters = account.meters || [];
+                        for (const meter of meters) {
+                            const meterNum = meter.meterNumber || '—';
+                            const existing = findExistingBill('school', school.id, account.accountNumber, meterNum, month, year);
+                            
+                            if (statusFilter === 'all' || 
+                                (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
+                                (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
+                                hasVisibleForSchool = true;
+                                break;
+                            }
                         }
+                        if (hasVisibleForSchool) break;
                     }
-                    if (hasVisibleForSchool) break;
                 }
                 
-                if (hasVisibleForSchool || accounts.length === 0) {
+                if (hasVisibleForSchool) {
                     hasVisibleInCluster = true;
                     visibleSchoolsInCluster.push(school);
                 }
             }
             
             if (hasVisibleInCluster && visibleSchoolsInCluster.length > 0) {
-                // Add cluster separator (exactly like schools.html)
+                // Add cluster separator
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
@@ -1031,14 +1051,14 @@
                 `;
                 tbody.appendChild(separatorRow);
                 
-                // Render each school in the cluster (preserving API order)
+                // Render each school in the cluster (preserving original order)
                 for (const school of visibleSchoolsInCluster) {
-                    globalSerial = await renderSchoolEntity(tbody, school, month, year, globalSerial);
+                    globalSerial = await renderSchoolEntity(tbody, school, month, year, globalSerial, statusFilter);
                 }
             }
         }
         
-        // Group departments by department name (preserving order from API)
+        // Group departments by department name
         const deptGroupMap = new Map();
         filteredDepartments.forEach(dept => {
             const deptName = dept.department_name || 'Other';
@@ -1046,7 +1066,7 @@
             deptGroupMap.get(deptName).push(dept);
         });
         
-        // Get department names in API order
+        // Get department names in API order (preserves display_order)
         const deptNamesInOrder = [];
         for (const dept of filteredDepartments) {
             const deptName = dept.department_name || 'Other';
@@ -1065,22 +1085,27 @@
                 const accounts = extractElectricityAccounts(dept);
                 let hasVisibleForDept = false;
                 
-                for (const account of accounts) {
-                    for (const meter of (account.meters || [])) {
-                        const meterNum = meter.meterNumber || '—';
-                        const existing = findExistingBill('department', dept.id, account.accountNumber, meterNum, month, year);
-                        
-                        if (statusFilter === 'all' || 
-                            (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                            (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                            hasVisibleForDept = true;
-                            break;
+                if (accounts.length === 0) {
+                    hasVisibleForDept = true;
+                } else {
+                    for (const account of accounts) {
+                        const meters = account.meters || [];
+                        for (const meter of meters) {
+                            const meterNum = meter.meterNumber || '—';
+                            const existing = findExistingBill('department', dept.id, account.accountNumber, meterNum, month, year);
+                            
+                            if (statusFilter === 'all' || 
+                                (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
+                                (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
+                                hasVisibleForDept = true;
+                                break;
+                            }
                         }
+                        if (hasVisibleForDept) break;
                     }
-                    if (hasVisibleForDept) break;
                 }
                 
-                if (hasVisibleForDept || accounts.length === 0) {
+                if (hasVisibleForDept) {
                     hasVisibleInGroup = true;
                     visibleDeptsInGroup.push(dept);
                 }
@@ -1105,7 +1130,7 @@
                 tbody.appendChild(deptSeparator);
                 
                 for (const dept of visibleDeptsInGroup) {
-                    globalSerial = await renderDepartmentEntity(tbody, dept, month, year, globalSerial);
+                    globalSerial = await renderDepartmentEntity(tbody, dept, month, year, globalSerial, statusFilter);
                 }
             }
         }
@@ -1114,107 +1139,151 @@
         showLoading(false);
     }
     
-    async function renderSchoolEntity(tbody, school, month, year, startSerial) {
+    async function renderSchoolEntity(tbody, school, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
-        let isPlaceholder = false;
         let isEditing = (editingEntityId === school.id);
         
         const accounts = extractElectricityAccounts(school);
         
+        // Build meter rows data first
         let meterRowsData = [];
+        let hasAnyVisibleMeters = false;
         
-        for (const account of accounts) {
-            let isFirstMeterForAccount = true;
-            const meters = account.meters || [];
-            
-            if (meters.length === 0) {
-                // No meters for this account
-                meterRowsData.push({
-                    serial: serial,
-                    accountNumber: account.accountNumber,
-                    meterNumber: '—',
-                    locationDisplay: '',
-                    consumption: 0,
-                    currentCharges: 0,
-                    outstandingCharges: 0,
-                    previousPayment: 0,
-                    amountPaid: 0,
-                    notes: '',
-                    billId: null,
-                    isFirstMeterForAccount: true,
-                    isPlaceholder: true,
-                    disabledAttr: 'disabled',
-                    placeholderClass: 'placeholder-text'
-                });
-                serial++;
-            } else {
-                for (const meter of meters) {
-                    const meterNum = meter.meterNumber || '—';
-                    const existing = findExistingBill('school', school.id, account.accountNumber, meterNum, month, year);
-                    
-                    let parsedNotes = {};
-                    if (existing && existing.notes && existing.notes.startsWith('{')) {
-                        try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
-                    }
-                    
-                    let consumption = existing ? (existing.consumption_kwh || 0) : 0;
-                    let currentCharges = existing ? (existing.current_charges || 0) : 0;
-                    let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
-                    let previousPayment = parsedNotes.previousPayment || 0;
-                    let amountPaid = existing ? (existing.amount_paid || 0) : 0;
-                    let notes = parsedNotes.originalNotes || meter.notes || '';
-                    
-                    const isPlaceholderMeter = (meterNum === '—');
-                    const disabledAttr = isPlaceholderMeter ? 'disabled' : '';
-                    const placeholderClass = isPlaceholderMeter ? 'placeholder-text' : '';
-                    
-                    if (!isPlaceholderMeter) {
-                        entityTotalPaid += amountPaid;
-                        if (existing && amountPaid > 0) entityHasBills = true;
-                    }
-                    
-                    const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
-                    
+        if (accounts.length === 0) {
+            // No accounts configured - show a placeholder row
+            meterRowsData.push({
+                serial: serial,
+                accountNumber: '—',
+                meterNumber: '—',
+                locationDisplay: '',
+                consumption: 0,
+                currentCharges: 0,
+                outstandingCharges: 0,
+                previousPayment: 0,
+                amountPaid: 0,
+                notes: '',
+                billId: null,
+                isFirstMeterForAccount: true,
+                isPlaceholder: true,
+                disabledAttr: 'disabled',
+                placeholderClass: 'placeholder-text'
+            });
+            serial++;
+        } else {
+            for (const account of accounts) {
+                let isFirstMeterForAccount = true;
+                const meters = account.meters || [];
+                
+                if (meters.length === 0) {
+                    // Account has no meters - show placeholder
                     meterRowsData.push({
                         serial: serial,
-                        accountNumber: account.accountNumber,
-                        meterNumber: meterNum,
-                        locationDisplay: locationDisplay,
-                        consumption: consumption,
-                        currentCharges: currentCharges,
-                        outstandingCharges: outstandingCharges,
-                        previousPayment: previousPayment,
-                        amountPaid: amountPaid,
-                        notes: notes,
-                        billId: existing?.id,
-                        isFirstMeterForAccount: isFirstMeterForAccount,
-                        isPlaceholder: isPlaceholderMeter,
-                        disabledAttr: disabledAttr,
-                        placeholderClass: placeholderClass
+                        accountNumber: account.accountNumber || '—',
+                        meterNumber: '—',
+                        locationDisplay: '',
+                        consumption: 0,
+                        currentCharges: 0,
+                        outstandingCharges: 0,
+                        previousPayment: 0,
+                        amountPaid: 0,
+                        notes: '',
+                        billId: null,
+                        isFirstMeterForAccount: true,
+                        isPlaceholder: true,
+                        disabledAttr: 'disabled',
+                        placeholderClass: 'placeholder-text'
                     });
-                    
-                    isFirstMeterForAccount = false;
                     serial++;
+                } else {
+                    for (const meter of meters) {
+                        const meterNum = meter.meterNumber || '—';
+                        const existing = findExistingBill('school', school.id, account.accountNumber, meterNum, month, year);
+                        
+                        let parsedNotes = {};
+                        if (existing && existing.notes && existing.notes.startsWith('{')) {
+                            try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
+                        }
+                        
+                        let consumption = existing ? (existing.consumption_kwh || 0) : 0;
+                        let currentCharges = existing ? (existing.current_charges || 0) : 0;
+                        let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
+                        let previousPayment = parsedNotes.previousPayment || 0;
+                        let amountPaid = existing ? (existing.amount_paid || 0) : 0;
+                        let notes = parsedNotes.originalNotes || meter.notes || '';
+                        
+                        const isPlaceholderMeter = (meterNum === '—');
+                        const disabledAttr = isPlaceholderMeter ? 'disabled' : '';
+                        const placeholderClass = isPlaceholderMeter ? 'placeholder-text' : '';
+                        
+                        if (!isPlaceholderMeter) {
+                            entityTotalPaid += amountPaid;
+                            if (existing && amountPaid > 0) entityHasBills = true;
+                        }
+                        
+                        // Check if this meter passes status filter
+                        let passesFilter = true;
+                        if (statusFilter !== 'all') {
+                            if (statusFilter === 'paid') {
+                                passesFilter = existing && (amountPaid > 0);
+                            } else if (statusFilter === 'pending') {
+                                passesFilter = !existing || (amountPaid === 0);
+                            }
+                        }
+                        
+                        if (passesFilter) {
+                            hasAnyVisibleMeters = true;
+                            const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
+                            
+                            meterRowsData.push({
+                                serial: serial,
+                                accountNumber: account.accountNumber || '—',
+                                meterNumber: meterNum,
+                                locationDisplay: locationDisplay,
+                                consumption: consumption,
+                                currentCharges: currentCharges,
+                                outstandingCharges: outstandingCharges,
+                                previousPayment: previousPayment,
+                                amountPaid: amountPaid,
+                                notes: notes,
+                                billId: existing?.id,
+                                isFirstMeterForAccount: isFirstMeterForAccount,
+                                isPlaceholder: isPlaceholderMeter,
+                                disabledAttr: disabledAttr,
+                                placeholderClass: placeholderClass
+                            });
+                        }
+                        
+                        isFirstMeterForAccount = false;
+                        serial++;
+                    }
                 }
             }
         }
         
+        // If no meters passed filter and there are accounts, skip this school
+        if (accounts.length > 0 && !hasAnyVisibleMeters && statusFilter !== 'all') {
+            return serial;
+        }
+        
+        // Determine status display
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
-        if (entityHasBills) {
+        if (accounts.length === 0) {
+            entityStatusText = 'No account';
+            entityStatusClass = 'status-pending';
+        } else if (entityHasBills) {
             entityStatusText = 'Paid';
             entityStatusClass = 'status-paid';
-        } else if (entityTotalPaid === 0 && accounts.length > 0) {
+        } else if (entityTotalPaid === 0) {
             entityStatusText = 'Not entered';
-        } else if (accounts.length === 0) {
-            entityStatusText = 'No account';
         } else {
             entityStatusText = 'Partially Paid';
             entityStatusClass = 'status-partial';
         }
         
+        // Create entity row
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', 'school');
@@ -1245,6 +1314,7 @@
         `;
         tbody.appendChild(entityRow);
         
+        // Create meter rows
         for (const meterData of meterRowsData) {
             const meterRow = document.createElement('tr');
             meterRow.className = 'meter-row';
@@ -1288,102 +1358,141 @@
         return serial;
     }
     
-    async function renderDepartmentEntity(tbody, dept, month, year, startSerial) {
+    async function renderDepartmentEntity(tbody, dept, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
-        let isPlaceholder = false;
         let isEditing = (editingEntityId === dept.id);
         
         const accounts = extractElectricityAccounts(dept);
         const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
         
+        // Build meter rows data first
         let meterRowsData = [];
+        let hasAnyVisibleMeters = false;
         
-        for (const account of accounts) {
-            let isFirstMeterForAccount = true;
-            const meters = account.meters || [];
-            
-            if (meters.length === 0) {
-                meterRowsData.push({
-                    serial: serial,
-                    accountNumber: account.accountNumber,
-                    meterNumber: '—',
-                    locationDisplay: '',
-                    consumption: 0,
-                    currentCharges: 0,
-                    outstandingCharges: 0,
-                    previousPayment: 0,
-                    amountPaid: 0,
-                    notes: '',
-                    billId: null,
-                    isFirstMeterForAccount: true,
-                    isPlaceholder: true,
-                    disabledAttr: 'disabled',
-                    placeholderClass: 'placeholder-text'
-                });
-                serial++;
-            } else {
-                for (const meter of meters) {
-                    const meterNum = meter.meterNumber || '—';
-                    const existing = findExistingBill('department', dept.id, account.accountNumber, meterNum, month, year);
-                    
-                    let parsedNotes = {};
-                    if (existing && existing.notes && existing.notes.startsWith('{')) {
-                        try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
-                    }
-                    
-                    let consumption = existing ? (existing.consumption_kwh || 0) : 0;
-                    let currentCharges = existing ? (existing.current_charges || 0) : 0;
-                    let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
-                    let previousPayment = parsedNotes.previousPayment || 0;
-                    let amountPaid = existing ? (existing.amount_paid || 0) : 0;
-                    let notes = parsedNotes.originalNotes || meter.notes || '';
-                    
-                    const isPlaceholderMeter = (meterNum === '—');
-                    const disabledAttr = isPlaceholderMeter ? 'disabled' : '';
-                    const placeholderClass = isPlaceholderMeter ? 'placeholder-text' : '';
-                    
-                    if (!isPlaceholderMeter) {
-                        entityTotalPaid += amountPaid;
-                        if (existing && amountPaid > 0) entityHasBills = true;
-                    }
-                    
-                    const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
-                    
+        if (accounts.length === 0) {
+            meterRowsData.push({
+                serial: serial,
+                accountNumber: '—',
+                meterNumber: '—',
+                locationDisplay: '',
+                consumption: 0,
+                currentCharges: 0,
+                outstandingCharges: 0,
+                previousPayment: 0,
+                amountPaid: 0,
+                notes: '',
+                billId: null,
+                isFirstMeterForAccount: true,
+                isPlaceholder: true,
+                disabledAttr: 'disabled',
+                placeholderClass: 'placeholder-text'
+            });
+            serial++;
+        } else {
+            for (const account of accounts) {
+                let isFirstMeterForAccount = true;
+                const meters = account.meters || [];
+                
+                if (meters.length === 0) {
                     meterRowsData.push({
                         serial: serial,
-                        accountNumber: account.accountNumber,
-                        meterNumber: meterNum,
-                        locationDisplay: locationDisplay,
-                        consumption: consumption,
-                        currentCharges: currentCharges,
-                        outstandingCharges: outstandingCharges,
-                        previousPayment: previousPayment,
-                        amountPaid: amountPaid,
-                        notes: notes,
-                        billId: existing?.id,
-                        isFirstMeterForAccount: isFirstMeterForAccount,
-                        isPlaceholder: isPlaceholderMeter,
-                        disabledAttr: disabledAttr,
-                        placeholderClass: placeholderClass
+                        accountNumber: account.accountNumber || '—',
+                        meterNumber: '—',
+                        locationDisplay: '',
+                        consumption: 0,
+                        currentCharges: 0,
+                        outstandingCharges: 0,
+                        previousPayment: 0,
+                        amountPaid: 0,
+                        notes: '',
+                        billId: null,
+                        isFirstMeterForAccount: true,
+                        isPlaceholder: true,
+                        disabledAttr: 'disabled',
+                        placeholderClass: 'placeholder-text'
                     });
-                    
-                    isFirstMeterForAccount = false;
                     serial++;
+                } else {
+                    for (const meter of meters) {
+                        const meterNum = meter.meterNumber || '—';
+                        const existing = findExistingBill('department', dept.id, account.accountNumber, meterNum, month, year);
+                        
+                        let parsedNotes = {};
+                        if (existing && existing.notes && existing.notes.startsWith('{')) {
+                            try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
+                        }
+                        
+                        let consumption = existing ? (existing.consumption_kwh || 0) : 0;
+                        let currentCharges = existing ? (existing.current_charges || 0) : 0;
+                        let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
+                        let previousPayment = parsedNotes.previousPayment || 0;
+                        let amountPaid = existing ? (existing.amount_paid || 0) : 0;
+                        let notes = parsedNotes.originalNotes || meter.notes || '';
+                        
+                        const isPlaceholderMeter = (meterNum === '—');
+                        const disabledAttr = isPlaceholderMeter ? 'disabled' : '';
+                        const placeholderClass = isPlaceholderMeter ? 'placeholder-text' : '';
+                        
+                        if (!isPlaceholderMeter) {
+                            entityTotalPaid += amountPaid;
+                            if (existing && amountPaid > 0) entityHasBills = true;
+                        }
+                        
+                        let passesFilter = true;
+                        if (statusFilter !== 'all') {
+                            if (statusFilter === 'paid') {
+                                passesFilter = existing && (amountPaid > 0);
+                            } else if (statusFilter === 'pending') {
+                                passesFilter = !existing || (amountPaid === 0);
+                            }
+                        }
+                        
+                        if (passesFilter) {
+                            hasAnyVisibleMeters = true;
+                            const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
+                            
+                            meterRowsData.push({
+                                serial: serial,
+                                accountNumber: account.accountNumber || '—',
+                                meterNumber: meterNum,
+                                locationDisplay: locationDisplay,
+                                consumption: consumption,
+                                currentCharges: currentCharges,
+                                outstandingCharges: outstandingCharges,
+                                previousPayment: previousPayment,
+                                amountPaid: amountPaid,
+                                notes: notes,
+                                billId: existing?.id,
+                                isFirstMeterForAccount: isFirstMeterForAccount,
+                                isPlaceholder: isPlaceholderMeter,
+                                disabledAttr: disabledAttr,
+                                placeholderClass: placeholderClass
+                            });
+                        }
+                        
+                        isFirstMeterForAccount = false;
+                        serial++;
+                    }
                 }
             }
         }
         
+        if (accounts.length > 0 && !hasAnyVisibleMeters && statusFilter !== 'all') {
+            return serial;
+        }
+        
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
-        if (entityHasBills) {
+        if (accounts.length === 0) {
+            entityStatusText = 'No account';
+            entityStatusClass = 'status-pending';
+        } else if (entityHasBills) {
             entityStatusText = 'Paid';
             entityStatusClass = 'status-paid';
-        } else if (entityTotalPaid === 0 && accounts.length > 0) {
+        } else if (entityTotalPaid === 0) {
             entityStatusText = 'Not entered';
-        } else if (accounts.length === 0) {
-            entityStatusText = 'No account';
         } else {
             entityStatusText = 'Partially Paid';
             entityStatusClass = 'status-partial';
@@ -1496,7 +1605,6 @@
                 const entityRow = saveEditBtn.closest('tr.entity-row');
                 if (entityRow) {
                     const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
-                    const entityType = entityRow.getAttribute('data-entity-type');
                     let meterRows = [];
                     let nextRow = entityRow.nextElementSibling;
                     while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
