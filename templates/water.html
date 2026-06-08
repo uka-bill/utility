@@ -189,6 +189,12 @@
             min-width: 250px;
         }
 
+        .search-hint {
+            font-size: 0.7rem;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+
         .table-wrapper {
             background: white;
             border-radius: 10px;
@@ -499,6 +505,18 @@
             font-size: 0.75rem;
             background: #fff;
         }
+
+        .saving-indicator {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body>
@@ -550,8 +568,9 @@
             </select>
         </div>
         <div class="filter-group">
-            <label>🔍 Search</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Search...">
+            <label>🔍 Search (Name / Account / Meter)</label>
+            <input type="text" id="searchFilter" class="filter-input" placeholder="Search by entity name, account number, or meter number...">
+            <div class="search-hint">🔎 Searches entity names, account numbers, and meter numbers</div>
         </div>
         <div class="filter-group">
             <label>Filter by status</label>
@@ -601,8 +620,8 @@
     let currentYear = new Date().getFullYear();
     let isLoading = false;
     let editingEntityId = null;
+    let savingEntities = new Set();
     
-    // ============ SCROLL POSITION FIX ============
     let savedScrollPosition = 0;
 
     function saveScrollPosition() {
@@ -620,7 +639,6 @@
             }, 50);
         }
     }
-    // ============ END SCROLL POSITION FIX ============
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
@@ -781,15 +799,47 @@
         setTimeout(() => toast.remove(), 4000);
     }
 
-    async function saveEntityBills(entityRow, month, year) {
+    // Enhanced search function
+    function matchesSearch(entity, searchTerm) {
+        if (!searchTerm) return true;
+        
+        const term = searchTerm.toLowerCase();
+        
+        if (entity.name.toLowerCase().includes(term)) return true;
+        
+        for (const account of entity.accountGroups) {
+            if (account.accountNumber && account.accountNumber !== '—' && 
+                account.accountNumber.toLowerCase().includes(term)) {
+                return true;
+            }
+            
+            if (account.meters) {
+                for (const meter of account.meters) {
+                    if (meter.meterNumber && meter.meterNumber !== '—' && 
+                        meter.meterNumber.toLowerCase().includes(term)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        return false;
+    }
+
+    async function saveEntityData(entityRow, month, year) {
         if (isLoading) return;
         
-        const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
+        const entityType = entityRow.getAttribute('data-entity-type');
         const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
         
         if (!hasAccounts) {
             showToast('❌ Cannot save: No water account configured for this entity.', true);
+            return;
+        }
+        
+        if (savingEntities.has(entityId)) {
+            showToast('⏳ Already saving...', true);
             return;
         }
         
@@ -800,8 +850,12 @@
             nextRow = nextRow.nextElementSibling;
         }
         
-        const batchBills = [];
+        if (meterRows.length === 0) {
+            showToast('No data to save', true);
+            return;
+        }
         
+        const batchBills = [];
         for (const row of meterRows) {
             const accountNumber = row.getAttribute('data-account');
             const meterNumber = row.getAttribute('data-meter');
@@ -828,19 +882,19 @@
                 consumption: consumption,
                 currentCharges: currentCharges,
                 outstandingCharges: outstandingCharges,
-                previousPaymentReceived: previousPaymentReceived,
                 amountPaid: amountPaid,
-                notes: notes
+                notes: JSON.stringify({ previousPayment: previousPaymentReceived, originalNotes: notes })
             });
         }
         
-        if (batchBills.length === 0) {
-            showToast('No data to save', true);
-            return;
+        const saveBtn = entityRow.querySelector('.save-entity-btn');
+        const originalBtnText = saveBtn?.innerHTML || '💾 Save All';
+        if (saveBtn) {
+            saveBtn.innerHTML = '<span class="saving-indicator"></span> Saving...';
+            saveBtn.disabled = true;
         }
         
-        isLoading = true;
-        showLoading(true);
+        savingEntities.add(entityId);
         
         try {
             const resp = await fetch('/api/utility-bills/batch-update', {
@@ -856,7 +910,7 @@
                     current_charges: bill.currentCharges,
                     unsettled_charges: bill.outstandingCharges,
                     amount_paid: bill.amountPaid,
-                    notes: JSON.stringify({ previousPayment: bill.previousPaymentReceived, originalNotes: bill.notes }),
+                    notes: bill.notes,
                     month: month,
                     year: year,
                     id: bill.id
@@ -872,11 +926,14 @@
                 showToast(`⚠️ Saved ${result.success_count} records, ${result.error_count} failed`, true);
             }
         } catch (err) {
-            console.error('Batch save error:', err);
+            console.error('Save error:', err);
             showToast('Network error. Please try again.', true);
         } finally {
-            isLoading = false;
-            showLoading(false);
+            savingEntities.delete(entityId);
+            if (saveBtn) {
+                saveBtn.innerHTML = originalBtnText;
+                saveBtn.disabled = false;
+            }
         }
     }
     
@@ -965,30 +1022,19 @@
         showLoading(true);
         
         let successCount = 0;
-        let errorCount = 0;
-        
         for (const billId of billIdsToDelete) {
             try {
                 const resp = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
-                if (resp.ok) {
-                    successCount++;
-                } else {
-                    errorCount++;
-                }
+                if (resp.ok) successCount++;
             } catch(err) {
                 console.error('Delete error:', err);
-                errorCount++;
             }
         }
         
-        if (errorCount === 0) {
-            showToast(`🗑️ Deleted ${successCount} bill${successCount > 1 ? 's' : ''} successfully`);
-            await renderWaterTable();
-        } else {
-            showToast(`⚠️ Deleted ${successCount} records, ${errorCount} failed`, true);
-            isLoading = false;
-            showLoading(false);
-        }
+        isLoading = false;
+        showLoading(false);
+        showToast(`🗑️ Deleted ${successCount} bill${successCount > 1 ? 's' : ''} successfully`);
+        await renderWaterTable();
     }
 
     async function renderWaterTable() {
@@ -1006,12 +1052,12 @@
         let allEntities = buildEntityList();
         
         const entityFilter = document.getElementById('entityTypeFilter').value;
-        const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
+        const searchTerm = document.getElementById('searchFilter').value;
         const statusFilter = document.getElementById('statusFilter').value;
         
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
-            if (searchTerm && !entity.name.toLowerCase().includes(searchTerm)) return false;
+            if (searchTerm && !matchesSearch(entity, searchTerm)) return false;
             return true;
         });
         
@@ -1419,7 +1465,7 @@
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
                     saveScrollPosition();
-                    await saveEntityBills(entityRow, currentMonth, currentYear);
+                    await saveEntityData(entityRow, currentMonth, currentYear);
                 }
             }
             
