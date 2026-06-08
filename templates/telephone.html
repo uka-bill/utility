@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telephone Utility - Direct Bill Entry</title>
     <style>
+        /* Original styles - keeping everything same */
         :root {
             --primary: #4361ee;
             --secondary: #3f37c9;
@@ -189,10 +190,48 @@
             min-width: 250px;
         }
 
-        .search-hint {
+        /* YELLOW BILL SUMMARY BOX - ORIGINAL STYLE */
+        .bill-summary {
+            background: #fff9c4;
+            border: 2px solid #f9a825;
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .summary-item {
+            text-align: center;
+            flex: 1;
+            min-width: 120px;
+            padding: 8px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .summary-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        
+        .summary-amount {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .summary-amount small {
             font-size: 0.7rem;
-            color: #6c757d;
-            margin-top: 4px;
+            font-weight: normal;
         }
 
         .table-wrapper {
@@ -200,7 +239,7 @@
             border-radius: 10px;
             overflow-x: auto;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-            max-height: calc(100vh - 300px);
+            max-height: calc(100vh - 380px);
             overflow-y: auto;
             position: relative;
         }
@@ -256,7 +295,7 @@
 
         .inline-input {
             width: 100%;
-            min-width: 70px;
+            min-width: 80px;
             padding: 6px 8px;
             border-radius: 5px;
             border: 1px solid #ddd;
@@ -264,6 +303,10 @@
             text-align: right;
             transition: 0.1s;
             box-sizing: border-box;
+        }
+
+        .inline-input[type="text"] {
+            text-align: left;
         }
 
         .inline-input:focus {
@@ -438,12 +481,6 @@
             margin-left: 10px;
         }
         
-        .consumption-unit {
-            font-size: 0.7rem;
-            color: #666;
-            margin-left: 5px;
-        }
-        
         .placeholder-text {
             color: #999;
             font-style: italic;
@@ -456,16 +493,6 @@
             border-radius: 20px;
             font-size: 0.85rem;
             font-weight: 600;
-        }
-        
-        .payment-note {
-            background: #e8f5e9;
-            padding: 8px 15px;
-            border-radius: 8px;
-            font-size: 0.8rem;
-            color: #2e7d32;
-            margin-bottom: 15px;
-            border-left: 4px solid #4caf50;
         }
         
         .notes-cell {
@@ -568,9 +595,24 @@
         </div>
     </div>
 
-    <div class="payment-note">
-        💡 <strong>Note:</strong> Click "Save All" to save ALL data for this entity (Bill Number, Bill Amount, Outstanding, Amount Paid, Notes).
-        <br>💡 You can edit phone numbers directly here - click Edit, change the phone number, and Save.
+    <!-- YELLOW BILL SUMMARY BOX -->
+    <div class="bill-summary" id="billSummary">
+        <div class="summary-item">
+            <div class="summary-label">Total Outstanding (Previous)</div>
+            <div class="summary-amount" id="totalOutstanding">$0.00</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Total Account Charges</div>
+            <div class="summary-amount" id="totalAccountCharges">$0.00</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Total Current Charges</div>
+            <div class="summary-amount" id="totalCurrentTotal">$0.00</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Amount Paid</div>
+            <div class="summary-amount" id="totalAmountPaid">$0.00</div>
+        </div>
     </div>
 
     <div class="filters-bar">
@@ -583,9 +625,8 @@
             </select>
         </div>
         <div class="filter-group">
-            <label>🔍 Search (Name / Account / Phone)</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Search by entity name, account number, or phone number...">
-            <div class="search-hint">💡 Searches entity names, account numbers, and phone numbers</div>
+            <label>🔍 Search</label>
+            <input type="text" id="searchFilter" class="filter-input" placeholder="Search by name, account, or phone...">
         </div>
         <div class="filter-group">
             <label>Filter by status</label>
@@ -636,7 +677,6 @@
     let editingEntityId = null;
     let savingEntities = new Set();
     
-    // ============ SCROLL POSITION FIX ============
     let savedScrollPosition = 0;
 
     function saveScrollPosition() {
@@ -654,7 +694,6 @@
             }, 50);
         }
     }
-    // ============ END SCROLL POSITION FIX ============
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
@@ -815,7 +854,36 @@
         setTimeout(() => toast.remove(), 4000);
     }
 
-    // Save all data for an entity
+    function updateBillSummary() {
+        const rows = document.querySelectorAll('.meter-row');
+        let totalOutstanding = 0;
+        let totalAccountCharges = 0;
+        let totalAmountPaid = 0;
+        
+        rows.forEach(row => {
+            const outstandingInput = row.querySelector('.outstanding-input');
+            const currentInput = row.querySelector('.current-charge-input');
+            const amountPaidInput = row.querySelector('.amount-paid-input');
+            
+            if (outstandingInput && !outstandingInput.disabled) {
+                totalOutstanding += parseFloat(outstandingInput.value) || 0;
+            }
+            if (currentInput && !currentInput.disabled) {
+                totalAccountCharges += parseFloat(currentInput.value) || 0;
+            }
+            if (amountPaidInput && !amountPaidInput.disabled) {
+                totalAmountPaid += parseFloat(amountPaidInput.value) || 0;
+            }
+        });
+        
+        const totalCurrentTotal = totalOutstanding + totalAccountCharges;
+        
+        document.getElementById('totalOutstanding').textContent = `$${totalOutstanding.toFixed(2)}`;
+        document.getElementById('totalAccountCharges').textContent = `$${totalAccountCharges.toFixed(2)}`;
+        document.getElementById('totalCurrentTotal').textContent = `$${totalCurrentTotal.toFixed(2)}`;
+        document.getElementById('totalAmountPaid').textContent = `$${totalAmountPaid.toFixed(2)}`;
+    }
+
     async function saveEntityData(entityRow, month, year) {
         if (isLoading) return;
         
@@ -925,7 +993,6 @@
         }
     }
     
-    // Update phone number directly on telephone page
     async function updatePhoneInfo(entityId, accountNumber, oldPhoneNumber, newPhoneNumber) {
         try {
             const entity = [...allSchools, ...allDepartments].find(e => e.id == entityId);
@@ -1034,7 +1101,6 @@
         }
     }
 
-    // Enhanced search function
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
         
@@ -1068,7 +1134,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="11" class="no-data">Loading data...<\/td></td>';
+        tbody.innerHTML = '<tr><td colspan="11" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1267,6 +1333,7 @@
         restoreScrollPosition();
         isLoading = false;
         showLoading(false);
+        updateBillSummary();
     }
     
     async function renderEntity(tbody, entity, month, year, startSerial) {
@@ -1497,6 +1564,10 @@
                     await deleteEntityBills(entityRow, currentMonth, currentYear);
                 }
             }
+        });
+        
+        document.getElementById('billsTableBody').addEventListener('input', () => {
+            updateBillSummary();
         });
     }
     
