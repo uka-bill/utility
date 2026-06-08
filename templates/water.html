@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Water Utility - Direct Bill Entry</title>
     <style>
+        /* [Previous styles remain the same - keeping for brevity] */
         :root {
             --primary: #4361ee;
             --secondary: #3f37c9;
@@ -182,7 +183,11 @@
             border-radius: 5px;
             border: 1px solid #ddd;
             background: white;
-            min-width: 160px;
+            min-width: 200px;
+        }
+
+        .filter-input {
+            min-width: 250px;
         }
 
         .table-wrapper {
@@ -505,6 +510,12 @@
             font-size: 0.75rem;
             background: #fff;
         }
+
+        .search-hint {
+            font-size: 0.7rem;
+            color: #6c757d;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -560,8 +571,9 @@
             </select>
         </div>
         <div class="filter-group">
-            <label>🔍 Search</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Name...">
+            <label>🔍 Search (Name / Account / Meter)</label>
+            <input type="text" id="searchFilter" class="filter-input" placeholder="Search by entity name, account number, or meter number...">
+            <div class="search-hint">💡 Searches entity names, account numbers, and meter numbers</div>
         </div>
         <div class="filter-group">
             <label>Filter by status</label>
@@ -593,7 +605,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></td>
+                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -1005,6 +1017,37 @@
         }
     }
 
+    // Enhanced search function that searches entity name, account number, meter number
+    function matchesSearch(entity, searchTerm, month, year) {
+        if (!searchTerm) return true;
+        
+        const term = searchTerm.toLowerCase();
+        
+        // Search entity name
+        if (entity.name.toLowerCase().includes(term)) return true;
+        
+        // Search through account groups for account number and meter number
+        for (const account of entity.accountGroups) {
+            // Search account number
+            if (account.accountNumber && account.accountNumber !== '—' && 
+                account.accountNumber.toLowerCase().includes(term)) {
+                return true;
+            }
+            
+            // Search meter numbers
+            if (account.meters) {
+                for (const meter of account.meters) {
+                    if (meter.meterNumber && meter.meterNumber !== '—' && 
+                        meter.meterNumber.toLowerCase().includes(term)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        return false;
+    }
+
     async function renderWaterTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1020,12 +1063,13 @@
         let allEntities = buildEntityList();
         
         const entityFilter = document.getElementById('entityTypeFilter').value;
-        const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
+        const searchTerm = document.getElementById('searchFilter').value;
         const statusFilter = document.getElementById('statusFilter').value;
         
+        // Apply enhanced search with entity name, account, meter
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
-            if (searchTerm && !entity.name.toLowerCase().includes(searchTerm)) return false;
+            if (searchTerm && !matchesSearch(entity, searchTerm, month, year)) return false;
             return true;
         });
         
