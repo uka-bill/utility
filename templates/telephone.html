@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telephone Utility - Direct Bill Entry</title>
     <style>
-        /* Original styles - keeping everything same */
         :root {
             --primary: #4361ee;
             --secondary: #3f37c9;
@@ -190,56 +189,12 @@
             min-width: 250px;
         }
 
-        /* YELLOW BILL SUMMARY BOX - ORIGINAL STYLE */
-        .bill-summary {
-            background: #fff9c4;
-            border: 2px solid #f9a825;
-            border-radius: 12px;
-            padding: 15px 20px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .summary-item {
-            text-align: center;
-            flex: 1;
-            min-width: 120px;
-            padding: 8px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        .summary-label {
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: var(--dark);
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
-        
-        .summary-amount {
-            font-size: 1.3rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
-        
-        .summary-amount small {
-            font-size: 0.7rem;
-            font-weight: normal;
-        }
-
         .table-wrapper {
             background: white;
             border-radius: 10px;
             overflow-x: auto;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-            max-height: calc(100vh - 380px);
+            max-height: calc(100vh - 300px);
             overflow-y: auto;
             position: relative;
         }
@@ -249,7 +204,7 @@
             border-collapse: collapse;
             font-size: 0.85rem;
             table-layout: auto;
-            min-width: 1400px;
+            min-width: 1500px;
         }
 
         .data-table thead {
@@ -295,7 +250,7 @@
 
         .inline-input {
             width: 100%;
-            min-width: 80px;
+            min-width: 70px;
             padding: 6px 8px;
             border-radius: 5px;
             border: 1px solid #ddd;
@@ -303,10 +258,6 @@
             text-align: right;
             transition: 0.1s;
             box-sizing: border-box;
-        }
-
-        .inline-input[type="text"] {
-            text-align: left;
         }
 
         .inline-input:focus {
@@ -543,6 +494,44 @@
             background: #fff;
         }
 
+        /* Yellow Bill Summary Box for each entity */
+        .entity-bill-summary {
+            background: #fff9c4;
+            border: 2px solid #f9a825;
+            border-radius: 10px;
+            padding: 10px 15px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .entity-summary-item {
+            text-align: center;
+            flex: 1;
+            min-width: 100px;
+            background: white;
+            border-radius: 6px;
+            padding: 6px 10px;
+        }
+        
+        .entity-summary-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 3px;
+            text-transform: uppercase;
+        }
+        
+        .entity-summary-amount {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
         .saving-indicator {
             display: inline-block;
             width: 16px;
@@ -595,26 +584,6 @@
         </div>
     </div>
 
-    <!-- YELLOW BILL SUMMARY BOX -->
-    <div class="bill-summary" id="billSummary">
-        <div class="summary-item">
-            <div class="summary-label">Total Outstanding (Previous)</div>
-            <div class="summary-amount" id="totalOutstanding">$0.00</div>
-        </div>
-        <div class="summary-item">
-            <div class="summary-label">Total Account Charges</div>
-            <div class="summary-amount" id="totalAccountCharges">$0.00</div>
-        </div>
-        <div class="summary-item">
-            <div class="summary-label">Total Current Charges</div>
-            <div class="summary-amount" id="totalCurrentTotal">$0.00</div>
-        </div>
-        <div class="summary-item">
-            <div class="summary-label">Amount Paid</div>
-            <div class="summary-amount" id="totalAmountPaid">$0.00</div>
-        </div>
-    </div>
-
     <div class="filters-bar">
         <div class="filter-group">
             <label>Entity Type</label>
@@ -626,7 +595,7 @@
         </div>
         <div class="filter-group">
             <label>🔍 Search</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Search by name, account, or phone...">
+            <input type="text" id="searchFilter" class="filter-input" placeholder="Search...">
         </div>
         <div class="filter-group">
             <label>Filter by status</label>
@@ -854,37 +823,7 @@
         setTimeout(() => toast.remove(), 4000);
     }
 
-    function updateBillSummary() {
-        const rows = document.querySelectorAll('.meter-row');
-        let totalOutstanding = 0;
-        let totalAccountCharges = 0;
-        let totalAmountPaid = 0;
-        
-        rows.forEach(row => {
-            const outstandingInput = row.querySelector('.outstanding-input');
-            const currentInput = row.querySelector('.current-charge-input');
-            const amountPaidInput = row.querySelector('.amount-paid-input');
-            
-            if (outstandingInput && !outstandingInput.disabled) {
-                totalOutstanding += parseFloat(outstandingInput.value) || 0;
-            }
-            if (currentInput && !currentInput.disabled) {
-                totalAccountCharges += parseFloat(currentInput.value) || 0;
-            }
-            if (amountPaidInput && !amountPaidInput.disabled) {
-                totalAmountPaid += parseFloat(amountPaidInput.value) || 0;
-            }
-        });
-        
-        const totalCurrentTotal = totalOutstanding + totalAccountCharges;
-        
-        document.getElementById('totalOutstanding').textContent = `$${totalOutstanding.toFixed(2)}`;
-        document.getElementById('totalAccountCharges').textContent = `$${totalAccountCharges.toFixed(2)}`;
-        document.getElementById('totalCurrentTotal').textContent = `$${totalCurrentTotal.toFixed(2)}`;
-        document.getElementById('totalAmountPaid').textContent = `$${totalAmountPaid.toFixed(2)}`;
-    }
-
-    async function saveEntityData(entityRow, month, year) {
+    async function saveEntityBills(entityRow, entitySummaryDiv, month, year) {
         if (isLoading) return;
         
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
@@ -1101,32 +1040,6 @@
         }
     }
 
-    function matchesSearch(entity, searchTerm) {
-        if (!searchTerm) return true;
-        
-        const term = searchTerm.toLowerCase();
-        
-        if (entity.name.toLowerCase().includes(term)) return true;
-        
-        for (const account of entity.accountGroups) {
-            if (account.accountNumber && account.accountNumber !== '—' && 
-                account.accountNumber.toLowerCase().includes(term)) {
-                return true;
-            }
-            
-            if (account.numbers) {
-                for (const num of account.numbers) {
-                    if (num.phoneNumber && num.phoneNumber !== '—' && 
-                        num.phoneNumber.toLowerCase().includes(term)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        
-        return false;
-    }
-
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1142,12 +1055,12 @@
         let allEntities = buildEntityList();
         
         const entityFilter = document.getElementById('entityTypeFilter').value;
-        const searchTerm = document.getElementById('searchFilter').value;
+        const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
         
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
-            if (searchTerm && !matchesSearch(entity, searchTerm)) return false;
+            if (searchTerm && !entity.name.toLowerCase().includes(searchTerm)) return false;
             return true;
         });
         
@@ -1333,12 +1246,13 @@
         restoreScrollPosition();
         isLoading = false;
         showLoading(false);
-        updateBillSummary();
     }
     
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
-        let entityTotalPaid = 0;
+        let entityTotalOutstanding = 0;
+        let entityTotalAccountCharges = 0;
+        let entityTotalAmountPaid = 0;
         let entityHasBills = false;
         let isPlaceholder = false;
         let isEditing = (editingEntityId === entity.id);
@@ -1363,7 +1277,9 @@
                 const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
                 
                 if (!isPlaceholderAccount) {
-                    entityTotalPaid += amountPaid;
+                    entityTotalAccountCharges += currentCharges;
+                    entityTotalOutstanding += outstandingCharges;
+                    entityTotalAmountPaid += amountPaid;
                     if (existing && amountPaid > 0) entityHasBills = true;
                 }
                 
@@ -1397,8 +1313,8 @@
             if (entityHasBills) {
                 entityStatusText = 'Paid';
                 entityStatusClass = 'status-paid';
-            } else if (entityTotalPaid === 0) {
-                entityStatusText = 'Not entered';
+            } else if (entityTotalAmountPaid === 0 && (entityTotalAccountCharges > 0 || entityTotalOutstanding > 0)) {
+                entityStatusText = 'Not paid';
             } else {
                 entityStatusText = 'Partially Paid';
                 entityStatusClass = 'status-partial';
@@ -1406,6 +1322,8 @@
         } else {
             entityStatusText = 'No account';
         }
+        
+        const entityTotalCurrentTotal = entityTotalOutstanding + entityTotalAccountCharges;
         
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
@@ -1418,10 +1336,9 @@
             <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No telephone account configured)</span>'}
              </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
-            <td colspan="7"></div>
+            <td colspan="8"></div>
             <td></div>
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
@@ -1436,6 +1353,33 @@
             </div>
         `;
         tbody.appendChild(entityRow);
+        
+        // YELLOW BILL SUMMARY BOX FOR THIS ENTITY
+        const summaryRow = document.createElement('tr');
+        summaryRow.className = 'entity-summary-row';
+        summaryRow.innerHTML = `
+            <td colspan="11">
+                <div class="entity-bill-summary">
+                    <div class="entity-summary-item">
+                        <div class="entity-summary-label">Total Outstanding</div>
+                        <div class="entity-summary-amount" id="entity-outstanding-${entity.id}">$${entityTotalOutstanding.toFixed(2)}</div>
+                    </div>
+                    <div class="entity-summary-item">
+                        <div class="entity-summary-label">Total Account Charges</div>
+                        <div class="entity-summary-amount" id="entity-account-${entity.id}">$${entityTotalAccountCharges.toFixed(2)}</div>
+                    </div>
+                    <div class="entity-summary-item">
+                        <div class="entity-summary-label">Total Current Charges</div>
+                        <div class="entity-summary-amount" id="entity-current-total-${entity.id}">$${entityTotalCurrentTotal.toFixed(2)}</div>
+                    </div>
+                    <div class="entity-summary-item">
+                        <div class="entity-summary-label">Amount Paid</div>
+                        <div class="entity-summary-amount" id="entity-paid-${entity.id}">$${entityTotalAmountPaid.toFixed(2)}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        tbody.appendChild(summaryRow);
         
         for (const phoneData of phoneRowsData) {
             const phoneRow = document.createElement('tr');
@@ -1473,6 +1417,45 @@
                     <td></div>
                     <td></div>
                 `;
+                
+                // Add event listeners to update entity summary when inputs change
+                const currentInput = phoneRow.querySelector('.current-charge-input');
+                const outstandingInput = phoneRow.querySelector('.outstanding-input');
+                const amountPaidInput = phoneRow.querySelector('.amount-paid-input');
+                
+                const updateSummary = () => {
+                    let totalOutstanding = 0;
+                    let totalAccountCharges = 0;
+                    let totalAmountPaid = 0;
+                    
+                    const entityPhoneRows = document.querySelectorAll(`.meter-row`);
+                    entityPhoneRows.forEach(row => {
+                        const currInput = row.querySelector('.current-charge-input');
+                        const outInput = row.querySelector('.outstanding-input');
+                        const paidInput = row.querySelector('.amount-paid-input');
+                        
+                        if (currInput && !currInput.disabled) {
+                            totalAccountCharges += parseFloat(currInput.value) || 0;
+                        }
+                        if (outInput && !outInput.disabled) {
+                            totalOutstanding += parseFloat(outInput.value) || 0;
+                        }
+                        if (paidInput && !paidInput.disabled) {
+                            totalAmountPaid += parseFloat(paidInput.value) || 0;
+                        }
+                    });
+                    
+                    const totalCurrentTotal = totalOutstanding + totalAccountCharges;
+                    
+                    document.getElementById(`entity-outstanding-${entity.id}`).textContent = `$${totalOutstanding.toFixed(2)}`;
+                    document.getElementById(`entity-account-${entity.id}`).textContent = `$${totalAccountCharges.toFixed(2)}`;
+                    document.getElementById(`entity-current-total-${entity.id}`).textContent = `$${totalCurrentTotal.toFixed(2)}`;
+                    document.getElementById(`entity-paid-${entity.id}`).textContent = `$${totalAmountPaid.toFixed(2)}`;
+                };
+                
+                if (currentInput) currentInput.addEventListener('input', updateSummary);
+                if (outstandingInput) outstandingInput.addEventListener('input', updateSummary);
+                if (amountPaidInput) amountPaidInput.addEventListener('input', updateSummary);
             }
             tbody.appendChild(phoneRow);
         }
@@ -1552,7 +1535,7 @@
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
                     saveScrollPosition();
-                    await saveEntityData(entityRow, currentMonth, currentYear);
+                    await saveEntityBills(entityRow, null, currentMonth, currentYear);
                 }
                 return;
             }
@@ -1564,10 +1547,6 @@
                     await deleteEntityBills(entityRow, currentMonth, currentYear);
                 }
             }
-        });
-        
-        document.getElementById('billsTableBody').addEventListener('input', () => {
-            updateBillSummary();
         });
     }
     
