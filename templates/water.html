@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Water Utility - Direct Bill Entry</title>
     <style>
-        /* [Previous styles remain the same - keeping for brevity] */
         :root {
             --primary: #4361ee;
             --secondary: #3f37c9;
@@ -453,16 +452,6 @@
             font-weight: 600;
         }
         
-        .payment-note {
-            background: #e8f5e9;
-            padding: 8px 15px;
-            border-radius: 8px;
-            font-size: 0.8rem;
-            color: #2e7d32;
-            margin-bottom: 15px;
-            border-left: 4px solid #4caf50;
-        }
-        
         .notes-cell {
             min-width: 150px;
         }
@@ -510,12 +499,6 @@
             font-size: 0.75rem;
             background: #fff;
         }
-
-        .search-hint {
-            font-size: 0.7rem;
-            color: #6c757d;
-            margin-top: 4px;
-        }
     </style>
 </head>
 <body>
@@ -557,10 +540,6 @@
         </div>
     </div>
 
-    <div class="payment-note">
-        💡 <strong>Note:</strong> The "Amount Paid" column is used to deduct from the budget. Enter the amount you actually paid.
-    </div>
-
     <div class="filters-bar">
         <div class="filter-group">
             <label>Entity Type</label>
@@ -571,9 +550,8 @@
             </select>
         </div>
         <div class="filter-group">
-            <label>🔍 Search (Name / Account / Meter)</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Search by entity name, account number, or meter number...">
-            <div class="search-hint">💡 Searches entity names, account numbers, and meter numbers</div>
+            <label>🔍 Search</label>
+            <input type="text" id="searchFilter" class="filter-input" placeholder="Search...">
         </div>
         <div class="filter-group">
             <label>Filter by status</label>
@@ -722,7 +700,6 @@
     function buildEntityList() {
         const entities = [];
         
-        // Add schools in the order they come from API (already sorted by cluster_number, display_order, id)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractWaterAccounts(school);
@@ -753,7 +730,6 @@
             });
         }
         
-        // Add departments in the order they come from API (already sorted by display_order, department_name, id)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept);
@@ -805,7 +781,6 @@
         setTimeout(() => toast.remove(), 4000);
     }
 
-    // ============ BATCH SAVE FUNCTION (FAST) ============
     async function saveEntityBills(entityRow, month, year) {
         if (isLoading) return;
         
@@ -904,7 +879,6 @@
             showLoading(false);
         }
     }
-    // ============ END BATCH SAVE ============
     
     async function updateMeterInfo(entityId, accountNumber, meterNumber, newAccountNumber, newMeterNumber) {
         try {
@@ -1017,37 +991,6 @@
         }
     }
 
-    // Enhanced search function that searches entity name, account number, meter number
-    function matchesSearch(entity, searchTerm, month, year) {
-        if (!searchTerm) return true;
-        
-        const term = searchTerm.toLowerCase();
-        
-        // Search entity name
-        if (entity.name.toLowerCase().includes(term)) return true;
-        
-        // Search through account groups for account number and meter number
-        for (const account of entity.accountGroups) {
-            // Search account number
-            if (account.accountNumber && account.accountNumber !== '—' && 
-                account.accountNumber.toLowerCase().includes(term)) {
-                return true;
-            }
-            
-            // Search meter numbers
-            if (account.meters) {
-                for (const meter of account.meters) {
-                    if (meter.meterNumber && meter.meterNumber !== '—' && 
-                        meter.meterNumber.toLowerCase().includes(term)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        
-        return false;
-    }
-
     async function renderWaterTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1063,13 +1006,12 @@
         let allEntities = buildEntityList();
         
         const entityFilter = document.getElementById('entityTypeFilter').value;
-        const searchTerm = document.getElementById('searchFilter').value;
+        const searchTerm = document.getElementById('searchFilter').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
         
-        // Apply enhanced search with entity name, account, meter
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
-            if (searchTerm && !matchesSearch(entity, searchTerm, month, year)) return false;
+            if (searchTerm && !entity.name.toLowerCase().includes(searchTerm)) return false;
             return true;
         });
         
@@ -1086,7 +1028,6 @@
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // Group schools by cluster
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -1096,7 +1037,6 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
-        // Cluster order (CLUSTER 1, CLUSTER 2, etc., then Unassigned)
         const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
         
         for (const cluster of clusterOrder) {
@@ -1167,7 +1107,6 @@
             }
         }
         
-        // Group departments by department name (preserving API order)
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1177,7 +1116,6 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        // Get department names in the order they appear from API (preserves display_order)
         const deptNamesInOrder = [];
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1425,7 +1363,7 @@
             if (editBtn) {
                 const entityRow = editBtn.closest('tr.entity-row');
                 if (entityRow) {
-                    saveScrollPosition();  // Save scroll position before edit
+                    saveScrollPosition();
                     editingEntityId = parseInt(entityRow.getAttribute('data-entity-id'));
                     await renderWaterTable();
                 }
@@ -1480,7 +1418,7 @@
             if (saveBtn && !saveBtn.disabled) {
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
-                    saveScrollPosition();  // Save scroll position before save
+                    saveScrollPosition();
                     await saveEntityBills(entityRow, currentMonth, currentYear);
                 }
             }
