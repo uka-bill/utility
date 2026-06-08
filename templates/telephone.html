@@ -455,7 +455,7 @@
             display: inline-block;
             margin-bottom: 15px;
             font-weight: bold;
-            font-size: 1rem;
+            font-size: 0.9rem;
         }
         
         .summary-grid {
@@ -472,18 +472,18 @@
         }
         
         .summary-label {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 600;
             color: #e65100;
         }
         
         .summary-input {
             width: 100%;
-            padding: 8px 10px;
+            padding: 6px 8px;
             border-radius: 5px;
             border: 1px solid #ffcc80;
             background: white;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             text-align: right;
             box-sizing: border-box;
         }
@@ -496,10 +496,10 @@
         
         .summary-value {
             font-weight: bold;
-            font-size: 1rem;
+            font-size: 0.85rem;
             color: #e65100;
             background: white;
-            padding: 8px 10px;
+            padding: 6px 8px;
             border-radius: 5px;
             text-align: right;
             border: 1px solid #ffcc80;
@@ -568,16 +568,6 @@
             margin-top: 15px;
             padding-top: 10px;
             border-top: 1px solid #ffcc80;
-        }
-        
-        .payment-note {
-            background: #e8f5e9;
-            padding: 8px 15px;
-            border-radius: 8px;
-            font-size: 0.8rem;
-            color: #2e7d32;
-            margin-bottom: 15px;
-            border-left: 4px solid #4caf50;
         }
         
         .notes-cell {
@@ -680,11 +670,6 @@
         </div>
     </div>
 
-    <div class="payment-note">
-        💡 <strong>Note:</strong> The "Amount Paid" in the Bill Summary box is used to deduct from the budget.
-        Enter the amount you actually paid for this telephone bill.
-    </div>
-
     <div class="filters-bar">
         <div class="filter-group">
             <label>Entity Type</label>
@@ -697,7 +682,7 @@
         <div class="filter-group">
             <label>🔍 Search (Name / Account / Phone)</label>
             <input type="text" id="searchFilter" class="filter-input" placeholder="Search by entity name, account number, or phone number...">
-            <div class="search-hint">💡 Searches entity names, account numbers, and phone numbers</div>
+            <div class="search-hint">🔎 Searches entity names, account numbers, and phone numbers</div>
         </div>
         <div class="filter-group">
             <label>Filter by status</label>
@@ -748,7 +733,6 @@
     let editingEntityId = null;
     let savingEntities = new Set();
     
-    // ============ SCROLL POSITION FIX ============
     let savedScrollPosition = 0;
 
     function saveScrollPosition() {
@@ -766,7 +750,6 @@
             }, 50);
         }
     }
-    // ============ END SCROLL POSITION FIX ============
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
@@ -978,7 +961,7 @@
         return false;
     }
 
-    // Update phone number directly on telephone page
+    // Update phone number directly on telephone page (Edit button)
     async function updatePhoneInfo(entityId, accountNumber, oldPhoneNumber, newPhoneNumber, newLocation) {
         try {
             const entity = [...allSchools, ...allDepartments].find(e => e.id == entityId);
@@ -1002,7 +985,7 @@
                                 if (newPhoneNumber && newPhoneNumber !== oldPhoneNumber) {
                                     num.phoneNumber = newPhoneNumber;
                                 }
-                                if (newLocation !== undefined) {
+                                if (newLocation !== undefined && newLocation !== num.location) {
                                     num.location = newLocation;
                                 }
                                 found = true;
@@ -1034,7 +1017,7 @@
         }
     }
 
-    // Save all data for an entity
+    // Save all data for an entity - ONE BUTTON saves everything
     async function saveEntityBills(entityRow, summaryValues, month, year) {
         if (isLoading) return;
         
@@ -1091,7 +1074,7 @@
                     account_number: accountNumber === '—' ? '' : accountNumber,
                     phone_number: phoneNumber === '—' ? '' : phoneNumber,
                     current_charges: currentCharges,
-                    meter_number: accountBillNumber,
+                    meter_number: accountBillNumber,  // Bill No. saved here
                     amount_paid: 0,
                     notes: JSON.stringify({ totalAmount: totalAmount, originalNotes: notes }),
                     month: month,
@@ -1100,7 +1083,12 @@
             }
         }
         
-        const saveBtn = entityRow.querySelector('.save-entity-summary-btn');
+        // Show saving indicator
+        const summaryContainer = entityRow.nextElementSibling?.querySelector('.summary-container');
+        let saveBtn = null;
+        if (summaryContainer) {
+            saveBtn = summaryContainer.querySelector('.save-entity-summary-btn');
+        }
         const originalBtnText = saveBtn?.innerHTML || '💾 Save All';
         if (saveBtn) {
             saveBtn.innerHTML = '<span class="saving-indicator"></span> Saving...';
@@ -1113,6 +1101,7 @@
             let successCount = 0;
             let errorCount = 0;
             
+            // Save phone records (Bill Amount, Total Amount, Notes)
             if (batchBills.length > 0) {
                 const resp = await fetch('/api/utility-bills/batch-update', {
                     method: 'POST',
@@ -1124,6 +1113,7 @@
                 errorCount = result.error_count || 0;
             }
             
+            // Save summary box data
             if (summaryValues) {
                 const summaryBillData = {
                     utility_type: 'telephone',
@@ -1169,7 +1159,7 @@
             }
             
             if (errorCount === 0) {
-                showToast(`✅ Saved ${successCount} phone record${successCount > 1 ? 's' : ''} successfully`);
+                showToast(`✅ Saved ${successCount} record${successCount > 1 ? 's' : ''} successfully`);
                 await renderTelephoneTable();
             } else {
                 showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed`, true);
@@ -1179,6 +1169,10 @@
             showToast('Network error. Please try again.', true);
         } finally {
             savingEntities.delete(entityId);
+            if (saveBtn) {
+                saveBtn.innerHTML = originalBtnText;
+                saveBtn.disabled = false;
+            }
             isLoading = false;
             showLoading(false);
         }
@@ -1247,7 +1241,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></td>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1415,7 +1409,7 @@
                         hasAnyVisible = true;
                         visibleAccounts.push({
                             accountNumber: account.accountNumber,
-                            numbers: visibleNumbers,
+                            numbers: visibleAccounts,
                             isPlaceholder: account.isPlaceholder
                         });
                     }
@@ -1493,7 +1487,6 @@
         for (const account of entity.accountGroups) {
             if (account.isPlaceholder) continue;
             
-            let accountHasPaid = false;
             let accountBillNumber = '';
             let accountTotalPaid = 0;
             
@@ -1563,7 +1556,6 @@
                     accountTotalPaid += amountPaid;
                     entityTotalPaid += amountPaid;
                     if (amountPaid > 0) {
-                        accountHasPaid = true;
                         entityHasPaidBills = true;
                     }
                 }
@@ -1623,8 +1615,11 @@
         }
         
         if (!isEditing) {
-            const summaryTotalBill = (existingSummary.totalCurrentBill || 0) + (existingSummary.otherCharges || 0) + (existingSummary.adjustment || 0);
-            const summaryAmountPaid = existingSummary.amountPaid || 0;
+            // Calculate totals for summary box
+            let totalCurrentBill = existingSummary.totalCurrentBill || 0;
+            let totalOtherCharges = existingSummary.otherCharges || 0;
+            let totalAdjustment = existingSummary.adjustment || 0;
+            const totalBillCharges = totalCurrentBill + totalOtherCharges + totalAdjustment;
             
             const summaryRow = document.createElement('tr');
             summaryRow.className = 'summary-row';
@@ -1643,28 +1638,32 @@
                             <input type="number" step="0.01" class="summary-input summary-previous-outstanding" id="prev_out_${entity.id}" value="${(existingSummary.previousOutstanding || 0).toFixed(2)}" placeholder="0.00">
                         </div>
                         <div class="summary-item">
-                            <span class="summary-label">Previous Payment Received ($)</span>
+                            <span class="summary-label">Previous Payment ($)</span>
                             <input type="number" step="0.01" class="summary-input summary-previous-payment" id="prev_pay_${entity.id}" value="${(existingSummary.previousPayment || 0).toFixed(2)}" placeholder="0.00">
                         </div>
                         <div class="summary-item">
-                            <span class="summary-label">Total Current Bill ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-total-current-bill" id="total_curr_${entity.id}" value="${(existingSummary.totalCurrentBill || 0).toFixed(2)}" placeholder="0.00">
+                            <span class="summary-label">Total Account Charges ($)</span>
+                            <input type="number" step="0.01" class="summary-input summary-total-current-bill" id="total_curr_${entity.id}" value="${totalCurrentBill.toFixed(2)}" placeholder="0.00">
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Total Current Charges ($)</span>
+                            <div class="summary-value" id="total_current_charges_${entity.id}">${(totalCurrentBill + (existingSummary.previousOutstanding || 0)).toFixed(2)}</div>
                         </div>
                         <div class="summary-item">
                             <span class="summary-label">Other Charges ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-other-charges" id="other_${entity.id}" value="${(existingSummary.otherCharges || 0).toFixed(2)}" placeholder="0.00">
+                            <input type="number" step="0.01" class="summary-input summary-other-charges" id="other_${entity.id}" value="${totalOtherCharges.toFixed(2)}" placeholder="0.00">
                         </div>
                         <div class="summary-item">
                             <span class="summary-label">Adjustment ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-adjustment" id="adj_${entity.id}" value="${(existingSummary.adjustment || 0).toFixed(2)}" placeholder="0.00">
+                            <input type="number" step="0.01" class="summary-input summary-adjustment" id="adj_${entity.id}" value="${totalAdjustment.toFixed(2)}" placeholder="0.00">
                         </div>
                         <div class="summary-item">
                             <span class="summary-label">Total Bill Charges ($)</span>
-                            <div class="summary-value" id="total_bill_${entity.id}">${summaryTotalBill.toFixed(2)}</div>
+                            <div class="summary-value" id="total_bill_${entity.id}">${totalBillCharges.toFixed(2)}</div>
                         </div>
                         <div class="summary-item">
                             <span class="summary-label">Amount Paid ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-amount-paid" id="amount_paid_${entity.id}" value="${summaryAmountPaid.toFixed(2)}" placeholder="0.00">
+                            <input type="number" step="0.01" class="summary-input summary-amount-paid" id="amount_paid_${entity.id}" value="${(existingSummary.amountPaid || 0).toFixed(2)}" placeholder="0.00">
                         </div>
                     </div>
                     <div class="summary-actions">
@@ -1677,14 +1676,27 @@
             summaryRow.appendChild(summaryCell);
             tbody.appendChild(summaryRow);
             
+            // Add event listeners for dynamic calculation
             const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
             const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
+            
+            const updateCurrentCharges = () => {
+                const prevOut = parseFloat(prevOutInput?.value) || 0;
+                const totalCurr = parseFloat(totalCurrInput?.value) || 0;
+                const currentChargesDiv = document.getElementById(`total_current_charges_${entity.id}`);
+                if (currentChargesDiv) {
+                    currentChargesDiv.innerText = (prevOut + totalCurr).toFixed(2);
+                }
+            };
+            
+            if (prevOutInput) prevOutInput.addEventListener('input', updateCurrentCharges);
+            if (totalCurrInput) totalCurrInput.addEventListener('input', updateCurrentCharges);
+            
             const otherInput = summaryCell.querySelector('.summary-other-charges');
             const adjInput = summaryCell.querySelector('.summary-adjustment');
-            const totalBillDisplay = summaryCell.querySelector('.summary-value');
-            const amountPaidInput = summaryCell.querySelector('.summary-amount-paid');
+            const totalBillDisplay = summaryCell.querySelector('#total_bill_' + entity.id);
             
-            const updateSummaryTotal = () => {
+            const updateTotalBill = () => {
                 const totalCurr = parseFloat(totalCurrInput?.value) || 0;
                 const other = parseFloat(otherInput?.value) || 0;
                 const adj = parseFloat(adjInput?.value) || 0;
@@ -1692,9 +1704,9 @@
                 if (totalBillDisplay) totalBillDisplay.innerText = total.toFixed(2);
             };
             
-            if (totalCurrInput) totalCurrInput.addEventListener('input', updateSummaryTotal);
-            if (otherInput) otherInput.addEventListener('input', updateSummaryTotal);
-            if (adjInput) adjInput.addEventListener('input', updateSummaryTotal);
+            if (totalCurrInput) totalCurrInput.addEventListener('input', updateTotalBill);
+            if (otherInput) otherInput.addEventListener('input', updateTotalBill);
+            if (adjInput) adjInput.addEventListener('input', updateTotalBill);
             
             const saveBtn = summaryCell.querySelector('.save-entity-summary-btn');
             if (saveBtn) {
@@ -1707,7 +1719,7 @@
                         otherCharges: parseFloat(otherInput?.value) || 0,
                         adjustment: parseFloat(adjInput?.value) || 0,
                         totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
-                        amountPaid: parseFloat(amountPaidInput?.value) || 0
+                        amountPaid: parseFloat(summaryCell.querySelector('.summary-amount-paid')?.value) || 0
                     };
                     await saveEntityBills(entityRow, summaryValues, month, year);
                 };
@@ -1772,7 +1784,6 @@
                     let success = true;
                     for (const accountRow of accountRows) {
                         const accountNumber = accountRow.getAttribute('data-account-number');
-                        const newAccountNumber = accountRow.querySelector('.edit-account-input')?.value || accountNumber;
                         
                         let phoneRows = [];
                         let phoneRow = accountRow.nextElementSibling;
@@ -1787,19 +1798,10 @@
                             const newPhone = row.querySelector('.edit-phone-input')?.value || oldPhone;
                             const newLocation = row.querySelector('.edit-location-input')?.value || '';
                             
-                            if (oldPhone !== newPhone) {
+                            if (oldPhone !== newPhone || newLocation) {
                                 const result = await updatePhoneInfo(entityId, accountNumber, oldPhone, newPhone, newLocation);
                                 if (!result) success = false;
-                            } else if (newLocation) {
-                                const result = await updatePhoneInfo(entityId, accountNumber, oldPhone, oldPhone, newLocation);
-                                if (!result) success = false;
                             }
-                        }
-                        
-                        if (newAccountNumber !== accountNumber) {
-                            // Account number change would need to update all phones under this account
-                            // This is complex - show message to use Schools/Departments page
-                            showToast('To change Account Number, please use the Schools/Departments page', true);
                         }
                     }
                     
@@ -1813,65 +1815,6 @@
                     }
                 }
                 return;
-            }
-            
-            const saveBtn = e.target.closest('.save-entity-summary-btn');
-            if (saveBtn && !saveBtn.disabled) {
-                const summaryRow = saveBtn.closest('.summary-row');
-                if (summaryRow) {
-                    const entityRow = summaryRow.previousElementSibling;
-                    while (entityRow && !entityRow.classList.contains('entity-row')) {
-                        const prev = entityRow.previousElementSibling;
-                        if (!prev) break;
-                        entityRow = prev;
-                    }
-                    if (entityRow && entityRow.classList.contains('entity-row')) {
-                        const summaryCell = summaryRow.querySelector('td');
-                        if (summaryCell) {
-                            const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
-                            const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
-                            const otherInput = summaryCell.querySelector('.summary-other-charges');
-                            const adjInput = summaryCell.querySelector('.summary-adjustment');
-                            const totalBillDisplay = summaryCell.querySelector('.summary-value');
-                            const amountPaidInput = summaryCell.querySelector('.summary-amount-paid');
-                            
-                            const summaryValues = {
-                                previousOutstanding: parseFloat(prevOutInput?.value) || 0,
-                                previousPayment: parseFloat(summaryCell.querySelector('.summary-previous-payment')?.value) || 0,
-                                totalCurrentBill: parseFloat(totalCurrInput?.value) || 0,
-                                otherCharges: parseFloat(otherInput?.value) || 0,
-                                adjustment: parseFloat(adjInput?.value) || 0,
-                                totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
-                                amountPaid: parseFloat(amountPaidInput?.value) || 0
-                            };
-                            saveScrollPosition();
-                            await saveEntityBills(entityRow, summaryValues, currentMonth, currentYear);
-                        }
-                    }
-                }
-            }
-            
-            const deleteBtn = e.target.closest('.delete-entity-summary-btn');
-            if (deleteBtn) {
-                const summaryRow = deleteBtn.closest('.summary-row');
-                if (summaryRow) {
-                    const entityRow = summaryRow.previousElementSibling;
-                    while (entityRow && !entityRow.classList.contains('entity-row')) {
-                        const prev = entityRow.previousElementSibling;
-                        if (!prev) break;
-                        entityRow = prev;
-                    }
-                    if (entityRow && entityRow.classList.contains('entity-row')) {
-                        await deleteEntityBills(entityRow, currentMonth, currentYear);
-                    }
-                }
-            }
-        });
-        
-        // Update total paid when bill amount or total amount changes
-        document.getElementById('billsTableBody').addEventListener('input', (e) => {
-            if (e.target.classList.contains('current-charge-input') || e.target.classList.contains('total-amount-input')) {
-                // Could implement real-time total calculation if needed
             }
         });
     }
