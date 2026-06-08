@@ -1032,14 +1032,25 @@ def batch_update_utility_bills():
                     "amount_paid": float(bill_data.get('amount_paid', 0))
                 }
                 
+                # Add consumption data if provided
                 if bill_data.get('consumption_m3') is not None:
                     update_data["consumption_m3"] = float(bill_data.get('consumption_m3'))
                 if bill_data.get('consumption_kwh') is not None:
                     update_data["consumption_kwh"] = float(bill_data.get('consumption_kwh'))
+                
+                # Add bill_number for telephone bills (store in meter_number field)
+                if bill_data.get('bill_number') is not None:
+                    update_data["meter_number"] = bill_data.get('bill_number')
+                elif bill_data.get('meter_number') is not None and bill_data.get('meter_number') != '—':
+                    update_data["meter_number"] = bill_data.get('meter_number')
+                
+                # Add phone number if provided
+                if bill_data.get('phone_number') is not None and bill_data.get('phone_number') != '—':
+                    update_data["phone_number"] = bill_data.get('phone_number')
+                
+                # Add notes if provided
                 if bill_data.get('notes') is not None:
                     update_data["notes"] = bill_data.get('notes')
-                if bill_data.get('meter_number') is not None and bill_data.get('meter_number') != '—':
-                    update_data["meter_number"] = bill_data.get('meter_number')
                 
                 if existing.data and len(existing.data) > 0:
                     # Update existing bill
@@ -1068,7 +1079,7 @@ def batch_update_utility_bills():
                         "entity_id": int(bill_data.get('entity_id')),
                         "entity_name": entity_name,
                         "account_number": bill_data.get('account_number', ''),
-                        "meter_number": bill_data.get('meter_number', ''),
+                        "meter_number": bill_data.get('bill_number', bill_data.get('meter_number', '')),
                         "phone_number": bill_data.get('phone_number', ''),
                         "current_charges": float(bill_data.get('current_charges', 0)),
                         "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
@@ -2685,4 +2696,4 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"🌐 Server will run on port: {port}")
     
-    app.run(host='0.0.0.0', port=port, debug=False) 
+    app.run(host='0.0.0.0', port=port, debug=False)
