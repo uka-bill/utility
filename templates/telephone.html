@@ -460,7 +460,7 @@
         
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(7, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: 15px;
             align-items: end;
         }
@@ -680,6 +680,7 @@
             </select>
         </div>
         <div class="filter-group">
+            <label>🔍 Search (Name / Account / Phone)</label>
             <input type="text" id="searchFilter" class="filter-input" placeholder="Search by entity name, account number, or phone number...">
         </div>
         <div class="filter-group">
@@ -800,10 +801,7 @@
                                 existingSummaryData[key] = {
                                     previousOutstanding: summaryData.previousOutstanding || 0,
                                     previousPayment: summaryData.previousPayment || 0,
-                                    totalCurrentBill: summaryData.totalCurrentBill || 0,
-                                    otherCharges: summaryData.otherCharges || 0,
-                                    adjustment: summaryData.adjustment || 0,
-                                    totalBillCharges: summaryData.totalBillCharges || 0,
+                                    totalAccountCharges: summaryData.totalAccountCharges || 0,
                                     amountPaid: summaryData.amountPaid || 0
                                 };
                             }
@@ -934,18 +932,14 @@
         
         const term = searchTerm.toLowerCase();
         
-        // Search entity name
         if (entity.name.toLowerCase().includes(term)) return true;
         
-        // Search through account groups for account number and phone number
         for (const account of entity.accountGroups) {
-            // Search account number
             if (account.accountNumber && account.accountNumber !== '—' && 
                 account.accountNumber.toLowerCase().includes(term)) {
                 return true;
             }
             
-            // Search phone numbers
             if (account.numbers) {
                 for (const num of account.numbers) {
                     if (num.phoneNumber && num.phoneNumber !== '—' && 
@@ -959,7 +953,7 @@
         return false;
     }
 
-    // Update phone number directly on telephone page (Edit button)
+    // Update phone number directly on telephone page
     async function updatePhoneInfo(entityId, accountNumber, oldPhoneNumber, newPhoneNumber, newLocation) {
         try {
             const entity = [...allSchools, ...allDepartments].find(e => e.id == entityId);
@@ -1015,7 +1009,7 @@
         }
     }
 
-    // Save all data for an entity - ONE BUTTON saves everything
+    // Save all data for an entity
     async function saveEntityBills(entityRow, summaryValues, month, year) {
         if (isLoading) return;
         
@@ -1072,7 +1066,7 @@
                     account_number: accountNumber === '—' ? '' : accountNumber,
                     phone_number: phoneNumber === '—' ? '' : phoneNumber,
                     current_charges: currentCharges,
-                    meter_number: accountBillNumber,  // Bill No. saved here
+                    meter_number: accountBillNumber,
                     amount_paid: 0,
                     notes: JSON.stringify({ totalAmount: totalAmount, originalNotes: notes }),
                     month: month,
@@ -1081,12 +1075,7 @@
             }
         }
         
-        // Show saving indicator
-        const summaryContainer = entityRow.nextElementSibling?.querySelector('.summary-container');
-        let saveBtn = null;
-        if (summaryContainer) {
-            saveBtn = summaryContainer.querySelector('.save-entity-summary-btn');
-        }
+        const saveBtn = entityRow.querySelector('.save-entity-summary-btn');
         const originalBtnText = saveBtn?.innerHTML || '💾 Save All';
         if (saveBtn) {
             saveBtn.innerHTML = '<span class="saving-indicator"></span> Saving...';
@@ -1099,7 +1088,6 @@
             let successCount = 0;
             let errorCount = 0;
             
-            // Save phone records (Bill Amount, Total Amount, Notes)
             if (batchBills.length > 0) {
                 const resp = await fetch('/api/utility-bills/batch-update', {
                     method: 'POST',
@@ -1111,7 +1099,6 @@
                 errorCount = result.error_count || 0;
             }
             
-            // Save summary box data
             if (summaryValues) {
                 const summaryBillData = {
                     utility_type: 'telephone',
@@ -1125,10 +1112,7 @@
                         isSummary: true,
                         previousOutstanding: summaryValues.previousOutstanding,
                         previousPayment: summaryValues.previousPayment,
-                        totalCurrentBill: summaryValues.totalCurrentBill,
-                        otherCharges: summaryValues.otherCharges,
-                        adjustment: summaryValues.adjustment,
-                        totalBillCharges: summaryValues.totalBillCharges,
+                        totalAccountCharges: summaryValues.totalAccountCharges,
                         amountPaid: summaryValues.amountPaid || 0
                     }),
                     month: month,
@@ -1239,7 +1223,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></td>';
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td><tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1250,7 +1234,6 @@
         const searchTerm = document.getElementById('searchFilter').value;
         const statusFilter = document.getElementById('statusFilter').value;
         
-        // Apply enhanced search
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
             if (searchTerm && !matchesSearch(entity, searchTerm)) return false;
@@ -1407,7 +1390,7 @@
                         hasAnyVisible = true;
                         visibleAccounts.push({
                             accountNumber: account.accountNumber,
-                            numbers: visibleAccounts,
+                            numbers: visibleNumbers,
                             isPlaceholder: account.isPlaceholder
                         });
                     }
@@ -1613,11 +1596,13 @@
         }
         
         if (!isEditing) {
-            // Calculate totals for summary box
-            let totalCurrentBill = existingSummary.totalCurrentBill || 0;
-            let totalOtherCharges = existingSummary.otherCharges || 0;
-            let totalAdjustment = existingSummary.adjustment || 0;
-            const totalBillCharges = totalCurrentBill + totalOtherCharges + totalAdjustment;
+            const previousOutstanding = existingSummary.previousOutstanding || 0;
+            const previousPayment = existingSummary.previousPayment || 0;
+            const totalAccountCharges = existingSummary.totalAccountCharges || 0;
+            const amountPaid = existingSummary.amountPaid || 0;
+            
+            // Calculate Total Current Charges = Outstanding + (- Previous Payment) + Total Account Charges
+            const totalCurrentCharges = previousOutstanding + (-previousPayment) + totalAccountCharges;
             
             const summaryRow = document.createElement('tr');
             summaryRow.className = 'summary-row';
@@ -1633,35 +1618,23 @@
                     <div class="summary-grid">
                         <div class="summary-item">
                             <span class="summary-label">Previous Outstanding ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-previous-outstanding" id="prev_out_${entity.id}" value="${(existingSummary.previousOutstanding || 0).toFixed(2)}" placeholder="0.00">
+                            <input type="number" step="0.01" class="summary-input summary-previous-outstanding" id="prev_out_${entity.id}" value="${previousOutstanding.toFixed(2)}" placeholder="0.00">
                         </div>
                         <div class="summary-item">
                             <span class="summary-label">Previous Payment ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-previous-payment" id="prev_pay_${entity.id}" value="${(existingSummary.previousPayment || 0).toFixed(2)}" placeholder="0.00">
+                            <input type="number" step="0.01" class="summary-input summary-previous-payment" id="prev_pay_${entity.id}" value="${previousPayment.toFixed(2)}" placeholder="0.00">
                         </div>
                         <div class="summary-item">
                             <span class="summary-label">Total Account Charges ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-total-current-bill" id="total_curr_${entity.id}" value="${totalCurrentBill.toFixed(2)}" placeholder="0.00">
+                            <input type="number" step="0.01" class="summary-input summary-total-account-charges" id="total_acc_${entity.id}" value="${totalAccountCharges.toFixed(2)}" placeholder="0.00">
                         </div>
                         <div class="summary-item">
                             <span class="summary-label">Total Current Charges ($)</span>
-                            <div class="summary-value" id="total_current_charges_${entity.id}">${(totalCurrentBill + (existingSummary.previousOutstanding || 0)).toFixed(2)}</div>
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Other Charges ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-other-charges" id="other_${entity.id}" value="${totalOtherCharges.toFixed(2)}" placeholder="0.00">
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Adjustment ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-adjustment" id="adj_${entity.id}" value="${totalAdjustment.toFixed(2)}" placeholder="0.00">
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Total Bill Charges ($)</span>
-                            <div class="summary-value" id="total_bill_${entity.id}">${totalBillCharges.toFixed(2)}</div>
+                            <div class="summary-value" id="total_current_charges_${entity.id}">${totalCurrentCharges.toFixed(2)}</div>
                         </div>
                         <div class="summary-item">
                             <span class="summary-label">Amount Paid ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-amount-paid" id="amount_paid_${entity.id}" value="${(existingSummary.amountPaid || 0).toFixed(2)}" placeholder="0.00">
+                            <input type="number" step="0.01" class="summary-input summary-amount-paid" id="amount_paid_${entity.id}" value="${amountPaid.toFixed(2)}" placeholder="0.00">
                         </div>
                     </div>
                     <div class="summary-actions">
@@ -1676,35 +1649,23 @@
             
             // Add event listeners for dynamic calculation
             const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
-            const totalCurrInput = summaryCell.querySelector('.summary-total-current-bill');
+            const prevPayInput = summaryCell.querySelector('.summary-previous-payment');
+            const totalAccInput = summaryCell.querySelector('.summary-total-account-charges');
+            const currentChargesDiv = summaryCell.querySelector('#total_current_charges_' + entity.id);
             
             const updateCurrentCharges = () => {
                 const prevOut = parseFloat(prevOutInput?.value) || 0;
-                const totalCurr = parseFloat(totalCurrInput?.value) || 0;
-                const currentChargesDiv = document.getElementById(`total_current_charges_${entity.id}`);
+                const prevPay = parseFloat(prevPayInput?.value) || 0;
+                const totalAcc = parseFloat(totalAccInput?.value) || 0;
+                const totalCurrent = prevOut + (-prevPay) + totalAcc;
                 if (currentChargesDiv) {
-                    currentChargesDiv.innerText = (prevOut + totalCurr).toFixed(2);
+                    currentChargesDiv.innerText = totalCurrent.toFixed(2);
                 }
             };
             
             if (prevOutInput) prevOutInput.addEventListener('input', updateCurrentCharges);
-            if (totalCurrInput) totalCurrInput.addEventListener('input', updateCurrentCharges);
-            
-            const otherInput = summaryCell.querySelector('.summary-other-charges');
-            const adjInput = summaryCell.querySelector('.summary-adjustment');
-            const totalBillDisplay = summaryCell.querySelector('#total_bill_' + entity.id);
-            
-            const updateTotalBill = () => {
-                const totalCurr = parseFloat(totalCurrInput?.value) || 0;
-                const other = parseFloat(otherInput?.value) || 0;
-                const adj = parseFloat(adjInput?.value) || 0;
-                const total = totalCurr + other + adj;
-                if (totalBillDisplay) totalBillDisplay.innerText = total.toFixed(2);
-            };
-            
-            if (totalCurrInput) totalCurrInput.addEventListener('input', updateTotalBill);
-            if (otherInput) otherInput.addEventListener('input', updateTotalBill);
-            if (adjInput) adjInput.addEventListener('input', updateTotalBill);
+            if (prevPayInput) prevPayInput.addEventListener('input', updateCurrentCharges);
+            if (totalAccInput) totalAccInput.addEventListener('input', updateCurrentCharges);
             
             const saveBtn = summaryCell.querySelector('.save-entity-summary-btn');
             if (saveBtn) {
@@ -1712,11 +1673,8 @@
                     saveScrollPosition();
                     const summaryValues = {
                         previousOutstanding: parseFloat(prevOutInput?.value) || 0,
-                        previousPayment: parseFloat(summaryCell.querySelector('.summary-previous-payment')?.value) || 0,
-                        totalCurrentBill: parseFloat(totalCurrInput?.value) || 0,
-                        otherCharges: parseFloat(otherInput?.value) || 0,
-                        adjustment: parseFloat(adjInput?.value) || 0,
-                        totalBillCharges: parseFloat(totalBillDisplay?.innerText) || 0,
+                        previousPayment: parseFloat(prevPayInput?.value) || 0,
+                        totalAccountCharges: parseFloat(totalAccInput?.value) || 0,
                         amountPaid: parseFloat(summaryCell.querySelector('.summary-amount-paid')?.value) || 0
                     };
                     await saveEntityBills(entityRow, summaryValues, month, year);
