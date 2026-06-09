@@ -911,18 +911,12 @@
         return false;
     }
 
-    // ============ FIXED SAVE ENTITY DATA FUNCTION ============
     async function saveEntityData(entityRow, summaryValues, month, year) {
         if (isLoading) return;
         
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         const entityType = entityRow.getAttribute('data-entity-type');
         const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
-        
-        console.log('=== SAVING TELEPHONE BILLS ===');
-        console.log('Entity ID:', entityId);
-        console.log('Entity Type:', entityType);
-        console.log('Month/Year:', month, year);
         
         if (!hasAccounts) {
             showToast('❌ Cannot save: No telephone account configured for this entity.', true);
@@ -934,80 +928,68 @@
             return;
         }
         
-        // Get ALL account-header-rows for this entity
+        // Get all account rows first to get Bill No.
         let accountRows = [];
+        let accountRow = entityRow.nextElementSibling;
+        while (accountRow && accountRow.classList && accountRow.classList.contains('account-header-row')) {
+            accountRows.push(accountRow);
+            accountRow = accountRow.nextElementSibling;
+            while (accountRow && accountRow.classList && accountRow.classList.contains('phone-row')) {
+                accountRow = accountRow.nextElementSibling;
+            }
+        }
+        
+        // Build a map of account number to Bill No.
+        const billNoMap = {};
+        for (const accRow of accountRows) {
+            const accNumber = accRow.getAttribute('data-account-number');
+            const billNoInput = accRow.querySelector('.account-bill-number-input');
+            if (accNumber && billNoInput) {
+                billNoMap[accNumber] = billNoInput.value;
+            }
+        }
+        
+        // Now get all phone rows to collect bill data
+        let phoneRows = [];
         let nextRow = entityRow.nextElementSibling;
-        while (nextRow && nextRow.classList && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row') || nextRow.classList.contains('summary-row'))) {
-            if (nextRow.classList.contains('account-header-row')) {
-                accountRows.push(nextRow);
+        while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
+            if (nextRow.classList.contains('phone-row')) {
+                phoneRows.push(nextRow);
             }
             nextRow = nextRow.nextElementSibling;
         }
         
-        console.log('Found account rows:', accountRows.length);
-        
-        // Build bill data from phone rows under each account
         const batchBills = [];
         
-        for (const accountRow of accountRows) {
-            const accountNumber = accountRow.getAttribute('data-account-number');
+        for (const row of phoneRows) {
+            const accountNumber = row.getAttribute('data-account-number');
+            const phoneNumber = row.getAttribute('data-phone');
+            const billNo = billNoMap[accountNumber] || '';
             
-            // Get Bill No. from this account row
-            const billNoInput = accountRow.querySelector('.account-bill-number-input');
-            const billNo = billNoInput ? billNoInput.value : '';
+            const currentInput = row.querySelector('.current-charge-input');
+            const totalAmountInput = row.querySelector('.total-amount-input');
+            const notesInput = row.querySelector('.notes-input');
             
-            console.log(`Processing account: ${accountNumber}, Bill No: ${billNo}`);
+            const currentCharges = parseFloat(currentInput?.value) || 0;
+            const totalAmount = parseFloat(totalAmountInput?.value) || 0;
+            const notes = notesInput?.value || '';
             
-            // Get phone rows for this account (next siblings until next account-header-row)
-            let phoneRows = [];
-            let phoneRow = accountRow.nextElementSibling;
-            while (phoneRow && phoneRow.classList && phoneRow.classList.contains('phone-row')) {
-                phoneRows.push(phoneRow);
-                phoneRow = phoneRow.nextElementSibling;
-            }
-            
-            console.log(`  Found ${phoneRows.length} phone rows for account ${accountNumber}`);
-            
-            for (const row of phoneRows) {
-                const phoneNumber = row.getAttribute('data-phone');
-                
-                // Get input values
-                const currentInput = row.querySelector('.current-charge-input');
-                const totalAmountInput = row.querySelector('.total-amount-input');
-                const notesInput = row.querySelector('.notes-input');
-                
-                const currentCharges = parseFloat(currentInput?.value) || 0;
-                const totalAmount = parseFloat(totalAmountInput?.value) || 0;
-                const notes = notesInput?.value || '';
-                
-                console.log(`    Phone: ${phoneNumber}, Bill Amount: ${currentCharges}, Total Amount: ${totalAmount}, Notes: ${notes}`);
-                
-                // Create bill object - NO ID field
-                const billData = {
-                    account_number: accountNumber === '—' ? '' : accountNumber,
-                    phone_number: phoneNumber === '—' ? '' : phoneNumber,
-                    meter_number: billNo,  // Bill No.
-                    current_charges: currentCharges,  // Bill Amount
-                    amount_paid: 0,
-                    notes: JSON.stringify({ 
-                        totalAmount: totalAmount, 
-                        originalNotes: notes 
-                    }),
-                    month: month,
-                    year: year,
-                    entity_type: entityType,
-                    entity_id: entityId,
-                    utility_type: 'telephone'
-                };
-                
-                batchBills.push(billData);
-            }
+            batchBills.push({
+                account_number: accountNumber === '—' ? '' : accountNumber,
+                phone_number: phoneNumber === '—' ? '' : phoneNumber,
+                meter_number: billNo,
+                current_charges: currentCharges,
+                amount_paid: 0,
+                notes: JSON.stringify({ totalAmount: totalAmount, originalNotes: notes }),
+                month: month,
+                year: year,
+                entity_type: entityType,
+                entity_id: entityId,
+                utility_type: 'telephone'
+            });
         }
         
-        console.log('Total bills to save:', batchBills.length);
-        console.log('Batch bills data:', batchBills);
-        
-        // Find save button and disable it
+        // Find save button
         let summaryContainer = entityRow.nextElementSibling;
         while (summaryContainer && !summaryContainer.querySelector('.summary-container')) {
             summaryContainer = summaryContainer.nextElementSibling;
@@ -1028,7 +1010,6 @@
             let successCount = 0;
             let errorCount = 0;
             
-            // Save phone records
             if (batchBills.length > 0) {
                 const resp = await fetch('/api/utility-bills/batch-update', {
                     method: 'POST',
@@ -1038,10 +1019,8 @@
                 const result = await resp.json();
                 successCount = result.success_count || 0;
                 errorCount = result.error_count || 0;
-                console.log('Save result:', result);
             }
             
-            // Save summary data
             if (summaryValues) {
                 const summaryBillData = {
                     utility_type: 'telephone',
@@ -1102,7 +1081,6 @@
             showLoading(false);
         }
     }
-    // ============ END FIXED SAVE ENTITY DATA FUNCTION ============
 
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
