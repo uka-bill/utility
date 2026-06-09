@@ -898,30 +898,20 @@
 
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
-        
         const term = searchTerm.toLowerCase();
-        
         if (entity.name.toLowerCase().includes(term)) return true;
-        
         for (const account of entity.accountGroups) {
-            if (account.accountNumber && account.accountNumber !== '—' && 
-                account.accountNumber.toLowerCase().includes(term)) {
-                return true;
-            }
-            
+            if (account.accountNumber && account.accountNumber !== '—' && account.accountNumber.toLowerCase().includes(term)) return true;
             if (account.numbers) {
                 for (const num of account.numbers) {
-                    if (num.phoneNumber && num.phoneNumber !== '—' && 
-                        num.phoneNumber.toLowerCase().includes(term)) {
-                        return true;
-                    }
+                    if (num.phoneNumber && num.phoneNumber !== '—' && num.phoneNumber.toLowerCase().includes(term)) return true;
                 }
             }
         }
-        
         return false;
     }
 
+    // ============ FIXED SAVE ENTITY DATA FUNCTION ============
     async function saveEntityData(entityRow, summaryValues, month, year) {
         if (isLoading) return;
         
@@ -939,7 +929,29 @@
             return;
         }
         
-        // Get all phone rows directly (phone rows contain all the data we need)
+        // Get all account rows first to get Bill No.
+        let accountRows = [];
+        let accountRow = entityRow.nextElementSibling;
+        while (accountRow && accountRow.classList && accountRow.classList.contains('account-header-row')) {
+            accountRows.push(accountRow);
+            accountRow = accountRow.nextElementSibling;
+            // Skip phone rows
+            while (accountRow && accountRow.classList && accountRow.classList.contains('phone-row')) {
+                accountRow = accountRow.nextElementSibling;
+            }
+        }
+        
+        // Build a map of account number to Bill No.
+        const billNoMap = {};
+        for (const accRow of accountRows) {
+            const accNumber = accRow.getAttribute('data-account-number');
+            const billNoInput = accRow.querySelector('.account-bill-number-input');
+            if (accNumber && billNoInput) {
+                billNoMap[accNumber] = billNoInput.value;
+            }
+        }
+        
+        // Now get all phone rows to collect bill data
         let phoneRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
@@ -952,16 +964,12 @@
         const batchBills = [];
         
         for (const row of phoneRows) {
-            // Get the account number from the previous account-header-row
-            let accountRow = row.previousElementSibling;
-            while (accountRow && !accountRow.classList.contains('account-header-row')) {
-                accountRow = accountRow.previousElementSibling;
-            }
-            const accountNumber = accountRow ? accountRow.getAttribute('data-account-number') : '';
-            
+            // Get the account number from the row's attribute
+            const accountNumber = row.getAttribute('data-account-number');
             const phoneNumber = row.getAttribute('data-phone');
-            const billNumberInput = accountRow ? accountRow.querySelector('.account-bill-number-input') : null;
-            const accountBillNumber = billNumberInput?.value || '';
+            
+            // Get Bill No. from the map
+            const accountBillNumber = billNoMap[accountNumber] || '';
             
             const currentInput = row.querySelector('.current-charge-input');
             const totalAmountInput = row.querySelector('.total-amount-input');
@@ -971,23 +979,28 @@
             const totalAmount = parseFloat(totalAmountInput?.value) || 0;
             const notes = notesInput?.value || '';
             
-            // Create the bill object - NO ID field
-            batchBills.push({
+            // Create bill object - NO ID field
+            const billData = {
                 account_number: accountNumber === '—' ? '' : accountNumber,
                 phone_number: phoneNumber === '—' ? '' : phoneNumber,
-                meter_number: accountBillNumber,
-                current_charges: currentCharges,
+                meter_number: accountBillNumber,  // Bill No.
+                current_charges: currentCharges,  // Bill Amount
                 amount_paid: 0,
-                notes: JSON.stringify({ totalAmount: totalAmount, originalNotes: notes }),
+                notes: JSON.stringify({ 
+                    totalAmount: totalAmount, 
+                    originalNotes: notes 
+                }),
                 month: month,
                 year: year,
                 entity_type: entityType,
                 entity_id: entityId,
                 utility_type: 'telephone'
-            });
+            };
+            
+            batchBills.push(billData);
         }
         
-        // Find the save button in the summary container
+        // Find save button
         let summaryContainer = entityRow.nextElementSibling;
         while (summaryContainer && !summaryContainer.querySelector('.summary-container')) {
             summaryContainer = summaryContainer.nextElementSibling;
@@ -1008,9 +1021,9 @@
             let successCount = 0;
             let errorCount = 0;
             
-            // Save phone records (Bill Amount, Total Amount, Notes, Bill No.)
+            // Save phone records
             if (batchBills.length > 0) {
-                console.log('Saving bills:', batchBills);
+                console.log('Saving telephone bills:', batchBills);
                 const resp = await fetch('/api/utility-bills/batch-update', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1022,7 +1035,7 @@
                 console.log('Save result:', result);
             }
             
-            // Save summary box data
+            // Save summary data
             if (summaryValues) {
                 const summaryBillData = {
                     utility_type: 'telephone',
@@ -1083,6 +1096,7 @@
             showLoading(false);
         }
     }
+    // ============ END FIXED SAVE ENTITY DATA FUNCTION ============
 
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
@@ -1397,7 +1411,7 @@
                 phoneRow.className = 'phone-row';
                 phoneRow.setAttribute('data-account-number', account.accountNumber);
                 phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
-                if (num.billId) phoneRow.setAttribute('data-bill-id', num.billId);
+                phoneRow.setAttribute('data-bill-id', num.billId || '');
                 
                 phoneRow.innerHTML = `
                     <td class="seq-number">${serial}</div>
