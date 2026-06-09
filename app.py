@@ -1031,25 +1031,17 @@ def batch_update_utility_bills():
                         "year": int(bill_data.get('year')),
                         "phone_number": bill_data.get('phone_number', ''),
                         "account_number": bill_data.get('account_number', ''),
-                        "meter_number": bill_data.get('meter_number', ''),  # Bill No.
+                        "meter_number": bill_data.get('meter_number', ''),
                         "current_charges": float(bill_data.get('current_charges', 0)),
                         "amount_paid": float(bill_data.get('amount_paid', 0)),
                         "notes": bill_data.get('notes', ''),
+                        "created_at": datetime.now().isoformat(),
                         "updated_at": datetime.now().isoformat()
                     }
                     
-                    # Check if record exists to decide whether to add created_at
-                    check_query = supabase.table("utility_bills").select("id").eq("phone_number", bill_record["phone_number"])\
-                        .eq("month", bill_record["month"]).eq("year", bill_record["year"])\
-                        .eq("entity_id", bill_record["entity_id"]).eq("entity_type", bill_record["entity_type"])\
-                        .eq("utility_type", utility_type).execute()
-                    
-                    if not check_query.data or len(check_query.data) == 0:
-                        bill_record["created_at"] = datetime.now().isoformat()
-                    
-                    # Use upsert - this is the key optimization!
+                    # ONE database call - UPSERT
                     result = supabase.table("utility_bills").upsert(
-                        bill_record, 
+                        bill_record,
                         on_conflict="phone_number,month,year,entity_id,entity_type,utility_type"
                     ).execute()
                     
@@ -1089,17 +1081,9 @@ def batch_update_utility_bills():
                         "amount_paid": float(bill_data.get('amount_paid', 0)),
                         "consumption_m3": float(bill_data.get('consumption_m3', 0)),
                         "notes": bill_data.get('notes', ''),
+                        "created_at": datetime.now().isoformat(),
                         "updated_at": datetime.now().isoformat()
                     }
-                    
-                    # Check if exists to set created_at
-                    check_query = supabase.table("utility_bills").select("id").eq("account_number", bill_record["account_number"])\
-                        .eq("meter_number", bill_record["meter_number"]).eq("month", bill_record["month"])\
-                        .eq("year", bill_record["year"]).eq("entity_id", bill_record["entity_id"])\
-                        .eq("entity_type", bill_record["entity_type"]).eq("utility_type", utility_type).execute()
-                    
-                    if not check_query.data or len(check_query.data) == 0:
-                        bill_record["created_at"] = datetime.now().isoformat()
                     
                     result = supabase.table("utility_bills").upsert(
                         bill_record,
@@ -1140,16 +1124,9 @@ def batch_update_utility_bills():
                         "amount_paid": float(bill_data.get('amount_paid', 0)),
                         "consumption_kwh": float(bill_data.get('consumption_kwh', 0)),
                         "notes": bill_data.get('notes', ''),
+                        "created_at": datetime.now().isoformat(),
                         "updated_at": datetime.now().isoformat()
                     }
-                    
-                    check_query = supabase.table("utility_bills").select("id").eq("account_number", bill_record["account_number"])\
-                        .eq("meter_number", bill_record["meter_number"]).eq("month", bill_record["month"])\
-                        .eq("year", bill_record["year"]).eq("entity_id", bill_record["entity_id"])\
-                        .eq("entity_type", bill_record["entity_type"]).eq("utility_type", utility_type).execute()
-                    
-                    if not check_query.data or len(check_query.data) == 0:
-                        bill_record["created_at"] = datetime.now().isoformat()
                     
                     result = supabase.table("utility_bills").upsert(
                         bill_record,
