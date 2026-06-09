@@ -922,6 +922,7 @@
         return false;
     }
 
+    // ============ FIXED SAVE ENTITY DATA FUNCTION ============
     async function saveEntityData(entityRow, summaryValues, month, year) {
         if (isLoading) return;
         
@@ -969,7 +970,6 @@
             
             for (const row of phoneRows) {
                 const phoneNumber = row.getAttribute('data-phone');
-                const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
                 
                 const currentInput = row.querySelector('.current-charge-input');
                 const totalAmountInput = row.querySelector('.total-amount-input');
@@ -979,9 +979,8 @@
                 const totalAmount = parseFloat(totalAmountInput?.value) || 0;
                 const notes = notesInput?.value || '';
                 
-                // IMPORTANT FIX: Match the exact format that water.html uses
+                // IMPORTANT: Do NOT include 'id' field - let the backend handle upsert
                 batchBills.push({
-                    id: existingBillId,
                     account_number: accountNumber === '—' ? '' : accountNumber,
                     phone_number: phoneNumber === '—' ? '' : phoneNumber,
                     meter_number: accountBillNumber,  // Bill No. stored here
@@ -997,7 +996,7 @@
             }
         }
         
-        // Find the save button in the summary container (only ONE save button)
+        // Find the save button in the summary container
         let summaryContainer = entityRow.nextElementSibling;
         while (summaryContainer && !summaryContainer.querySelector('.summary-container')) {
             summaryContainer = summaryContainer.nextElementSibling;
@@ -1091,6 +1090,7 @@
             showLoading(false);
         }
     }
+    // ============ END FIXED SAVE ENTITY DATA FUNCTION ============
 
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
@@ -1099,7 +1099,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<td><td colspan="10" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1405,7 +1405,7 @@
                 phoneRow.className = 'phone-row';
                 phoneRow.setAttribute('data-account-number', account.accountNumber);
                 phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
-                phoneRow.setAttribute('data-bill-id', num.billId || '');
+                if (num.billId) phoneRow.setAttribute('data-bill-id', num.billId);
                 
                 phoneRow.innerHTML = `
                     <td class="seq-number">${serial}</div>
@@ -1553,7 +1553,6 @@
                     saveScrollPosition();
                     
                     const entityId = entityRow.getAttribute('data-entity-id');
-                    const summaryContainer = document.querySelector(`#entity-${entityId}`)?.closest('.summary-container');
                     const prevOutInput = document.querySelector(`#prev_out_${entityId}`);
                     const prevPayInput = document.querySelector(`#prev_pay_${entityId}`);
                     const totalAccInput = document.querySelector(`#total_acc_${entityId}`);
