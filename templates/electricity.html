@@ -5,16 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Electricity Utility - Direct Bill Entry</title>
     <style>
-        /* Same styles as water.html - keeping original */
         :root {
             --primary: #4361ee;
             --secondary: #3f37c9;
-            --success: #4cc9f0;
-            --danger: #f72585;
-            --warning: #f8961e;
-            --info: #4895ef;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --info: #17a2b8;
             --light: #f8f9fa;
-            --dark: #212529;
+            --dark: #343a40;
             --gray: #6c757d;
         }
 
@@ -118,9 +117,13 @@
             background: var(--secondary);
         }
 
-        .btn-warning {
-            background: var(--warning);
+        .btn-success {
+            background: var(--success);
             color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
         }
 
         .period-card {
@@ -188,12 +191,6 @@
 
         .filter-input {
             min-width: 250px;
-        }
-
-        .search-hint {
-            font-size: 0.7rem;
-            color: #6c757d;
-            margin-top: 4px;
         }
 
         .table-wrapper {
@@ -316,24 +313,6 @@
             padding: 5px 10px;
             font-size: 0.7rem;
             border-radius: 5px;
-        }
-
-        .btn-success {
-            background: var(--success);
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #3aa8c4;
-        }
-
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #e05a8a;
         }
 
         .no-data {
@@ -497,15 +476,6 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
-        .edit-mode-input {
-            width: 100%;
-            padding: 6px 8px;
-            border-radius: 4px;
-            border: 1px solid var(--primary);
-            font-size: 0.75rem;
-            background: #fff;
-        }
 
         .saving-indicator {
             display: inline-block;
@@ -569,6 +539,7 @@
             </select>
         </div>
         <div class="filter-group">
+            <label>🔍 Search (Name / Account / Meter)</label>
             <input type="text" id="searchFilter" class="filter-input" placeholder="Search by entity name, account number, or meter number...">
         </div>
         <div class="filter-group">
@@ -618,7 +589,6 @@
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
     let isLoading = false;
-    let editingEntityId = null;
     let savingEntities = new Set();
     
     let savedScrollPosition = 0;
@@ -935,106 +905,6 @@
             }
         }
     }
-    
-    async function updateMeterInfo(entityId, accountNumber, meterNumber, newAccountNumber, newMeterNumber) {
-        try {
-            const entity = [...allSchools, ...allDepartments].find(e => e.id == entityId);
-            if (!entity) return false;
-            
-            let accounts = [];
-            if (entity.type === 'school') {
-                const school = allSchools.find(s => s.id == entityId);
-                accounts = school.electricity_accounts && typeof school.electricity_accounts === 'string' ? JSON.parse(school.electricity_accounts) : (school.electricity_accounts || []);
-            } else {
-                const dept = allDepartments.find(d => d.id == entityId);
-                accounts = dept.electricity_accounts && typeof dept.electricity_accounts === 'string' ? JSON.parse(dept.electricity_accounts) : (dept.electricity_accounts || []);
-            }
-            
-            let found = false;
-            for (const acc of accounts) {
-                if (acc.accountNumber === accountNumber) {
-                    if (acc.meters) {
-                        for (const m of acc.meters) {
-                            if (m.meterNumber === meterNumber) {
-                                if (newMeterNumber && newMeterNumber !== meterNumber) {
-                                    m.meterNumber = newMeterNumber;
-                                }
-                                found = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (newAccountNumber && newAccountNumber !== accountNumber) {
-                        acc.accountNumber = newAccountNumber;
-                    }
-                    break;
-                }
-            }
-            
-            if (found) {
-                const updateData = {
-                    electricityAccounts: accounts
-                };
-                
-                const url = entity.type === 'school' ? `/api/schools/${entityId}` : `/api/departments/${entityId}`;
-                const resp = await fetch(url, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updateData)
-                });
-                return resp.ok;
-            }
-            return false;
-        } catch(e) {
-            console.error(e);
-            return false;
-        }
-    }
-    
-    async function deleteEntityBills(entityRow, month, year) {
-        if (isLoading) return;
-        
-        const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
-        if (!confirm(`Delete ALL electricity bills for ${entityName} for ${month}/${year}?`)) return;
-        
-        let meterRows = [];
-        let nextRow = entityRow.nextElementSibling;
-        while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
-            meterRows.push(nextRow);
-            nextRow = nextRow.nextElementSibling;
-        }
-        
-        const billIdsToDelete = [];
-        for (const row of meterRows) {
-            const billId = row.getAttribute('data-bill-id');
-            if (billId) {
-                billIdsToDelete.push(parseInt(billId));
-            }
-        }
-        
-        if (billIdsToDelete.length === 0) {
-            showToast('No bills to delete', true);
-            return;
-        }
-        
-        isLoading = true;
-        showLoading(true);
-        
-        let successCount = 0;
-        for (const billId of billIdsToDelete) {
-            try {
-                const resp = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
-                if (resp.ok) successCount++;
-            } catch(err) {
-                console.error('Delete error:', err);
-            }
-        }
-        
-        isLoading = false;
-        showLoading(false);
-        showToast(`🗑️ Deleted ${successCount} bill${successCount > 1 ? 's' : ''} successfully`);
-        await renderElectricityTable();
-    }
 
     async function renderElectricityTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
@@ -1247,7 +1117,6 @@
         let entityTotalPaid = 0;
         let entityHasBills = false;
         let isPlaceholder = false;
-        let isEditing = (editingEntityId === entity.id);
         
         let meterRowsData = [];
         
@@ -1337,14 +1206,7 @@
             <td></div>
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
-                ${isEditing ? `
-                    <button class="btn btn-success btn-sm save-edit-btn">💾 Save Edit</button>
-                    <button class="btn btn-secondary btn-sm cancel-edit-btn">✖ Cancel</button>
-                ` : `
-                    <button class="btn btn-warning btn-sm edit-entity-btn">✏️ Edit</button>
-                    <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
-                    ${entityHasBills && !isPlaceholder ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
-                `}
+                <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
             </div>
         `;
         tbody.appendChild(entityRow);
@@ -1356,36 +1218,23 @@
             meterRow.setAttribute('data-meter', escapeHtml(meterData.meterNumber));
             if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
             
-            if (isEditing) {
-                meterRow.innerHTML = `
-                    <td class="seq-number">${meterData.isFirstMeterForAccount ? meterData.serial : ''}</div>
-                    <td></div>
-                    <td></div>
-                    <td>
-                        <input type="text" class="edit-mode-input edit-account-input" value="${escapeHtml(meterData.accountNumber)}" placeholder="Account Number" style="width:100%; margin-bottom:4px;">
-                        <input type="text" class="edit-mode-input edit-meter-input" value="${escapeHtml(meterData.meterNumber)}" placeholder="Meter Number" style="width:100%;">
-                    </div>
-                    <td colspan="8"></div>
-                `;
-            } else {
-                meterRow.innerHTML = `
-                    <td class="seq-number">${meterData.isFirstMeterForAccount ? meterData.serial : ''}</div>
-                    <td></div>
-                    <td></div>
-                    <td>${meterData.isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span>` : ''}
-                        <div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>
-                        ${meterData.locationDisplay}
-                    </div>
-                    <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="kWh" ${meterData.disabledAttr}><span class="consumption-unit">kWh</span></div>
-                    <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
-                    <td><input type="number" step="0.01" class="inline-input outstanding-input ${meterData.placeholderClass}" value="${meterData.outstandingCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
-                    <td><input type="number" step="0.01" class="inline-input previous-paid-input ${meterData.placeholderClass}" value="${meterData.previousPayment.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
-                    <td><input type="number" step="0.01" class="inline-input amount-paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
-                    <td class="notes-cell"><input type="text" class="inline-input notes-input ${meterData.placeholderClass}" value="${escapeHtml(meterData.notes)}" placeholder="Notes..." ${meterData.disabledAttr}></div>
-                    <td></div>
-                    <td></div>
-                `;
-            }
+            meterRow.innerHTML = `
+                <td class="seq-number">${meterData.isFirstMeterForAccount ? meterData.serial : ''}</div>
+                <td></div>
+                <td></div>
+                <td>${meterData.isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span>` : ''}
+                    <div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>
+                    ${meterData.locationDisplay}
+                </div>
+                <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="kWh" ${meterData.disabledAttr}><span class="consumption-unit">kWh</span></div>
+                <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="number" step="0.01" class="inline-input outstanding-input ${meterData.placeholderClass}" value="${meterData.outstandingCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="number" step="0.01" class="inline-input previous-paid-input ${meterData.placeholderClass}" value="${meterData.previousPayment.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="number" step="0.01" class="inline-input amount-paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td class="notes-cell"><input type="text" class="inline-input notes-input ${meterData.placeholderClass}" value="${escapeHtml(meterData.notes)}" placeholder="Notes..." ${meterData.disabledAttr}></div>
+                <td></div>
+                <td></div>
+            `;
             tbody.appendChild(meterRow);
         }
         
@@ -1404,61 +1253,6 @@
     
     function attachEventListeners() {
         document.getElementById('billsTableBody').addEventListener('click', async (e) => {
-            const editBtn = e.target.closest('.edit-entity-btn');
-            if (editBtn) {
-                const entityRow = editBtn.closest('tr.entity-row');
-                if (entityRow) {
-                    saveScrollPosition();
-                    editingEntityId = parseInt(entityRow.getAttribute('data-entity-id'));
-                    await renderElectricityTable();
-                }
-                return;
-            }
-            
-            const cancelBtn = e.target.closest('.cancel-edit-btn');
-            if (cancelBtn) {
-                editingEntityId = null;
-                await renderElectricityTable();
-                return;
-            }
-            
-            const saveEditBtn = e.target.closest('.save-edit-btn');
-            if (saveEditBtn) {
-                const entityRow = saveEditBtn.closest('tr.entity-row');
-                if (entityRow) {
-                    const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
-                    let meterRows = [];
-                    let nextRow = entityRow.nextElementSibling;
-                    while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
-                        meterRows.push(nextRow);
-                        nextRow = nextRow.nextElementSibling;
-                    }
-                    
-                    let success = true;
-                    for (const row of meterRows) {
-                        const oldAccount = row.getAttribute('data-account');
-                        const oldMeter = row.getAttribute('data-meter');
-                        const newAccount = row.querySelector('.edit-account-input')?.value || oldAccount;
-                        const newMeter = row.querySelector('.edit-meter-input')?.value || oldMeter;
-                        
-                        if (oldAccount !== newAccount || oldMeter !== newMeter) {
-                            const result = await updateMeterInfo(entityId, oldAccount, oldMeter, newAccount, newMeter);
-                            if (!result) success = false;
-                        }
-                    }
-                    
-                    if (success) {
-                        showToast('✅ Account/Meter information updated successfully');
-                        editingEntityId = null;
-                        await loadAllEntities();
-                        await renderElectricityTable();
-                    } else {
-                        showToast('⚠️ Some updates failed. Please try again.', true);
-                    }
-                }
-                return;
-            }
-            
             const saveBtn = e.target.closest('.save-entity-btn');
             if (saveBtn && !saveBtn.disabled) {
                 const entityRow = saveBtn.closest('tr.entity-row');
@@ -1466,14 +1260,7 @@
                     saveScrollPosition();
                     await saveEntityData(entityRow, currentMonth, currentYear);
                 }
-            }
-            
-            const deleteBtn = e.target.closest('.delete-entity-btn');
-            if (deleteBtn) {
-                const entityRow = deleteBtn.closest('tr.entity-row');
-                if (entityRow) {
-                    await deleteEntityBills(entityRow, currentMonth, currentYear);
-                }
+                return;
             }
         });
     }
