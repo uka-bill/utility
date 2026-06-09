@@ -980,11 +980,11 @@ def format_file_size(size):
         size /= 1024.0
     return f"{size:.1f} TB"
 
-# ============ BATCH UPDATE API (FAST PARALLEL SAVING) ============
+# ============ BATCH UPDATE API (OPTIMIZED WITH UPSERT) ============
 
 @app.route('/api/utility-bills/batch-update', methods=['POST'])
 def batch_update_utility_bills():
-    """Update multiple utility bills in parallel for faster saving"""
+    """Update multiple utility bills using UPSERT for speed"""
     try:
         print("💡 POST /api/utility-bills/batch-update called")
         
@@ -997,7 +997,7 @@ def batch_update_utility_bills():
         if not bills:
             return jsonify({'error': 'No bills provided'}), 400
         
-        print(f"📦 Batch updating {len(bills)} bills")
+        print(f"📦 Batch updating {len(bills)} bills using UPSERT")
         
         success_count = 0
         error_count = 0
@@ -1007,189 +1007,159 @@ def batch_update_utility_bills():
                 utility_type = bill_data.get('utility_type')
                 
                 if utility_type == 'telephone':
-                    # For telephone bills - use phone_number + month + year + entity_id as unique key
-                    query = supabase.table("utility_bills").select("*")\
-                        .eq("utility_type", utility_type)\
-                        .eq("entity_type", bill_data.get('entity_type'))\
-                        .eq("entity_id", int(bill_data.get('entity_id')))\
-                        .eq("month", int(bill_data.get('month')))\
-                        .eq("year", int(bill_data.get('year')))\
-                        .eq("phone_number", bill_data.get('phone_number', ''))
-                    
-                    existing = query.execute()
-                    
                     # Get entity name
                     entity_name = ""
-                    if bill_data.get('entity_type') == 'school':
-                        school_resp = supabase.table("schools").select("name").eq("id", bill_data.get('entity_id')).execute()
-                        if school_resp.data:
-                            entity_name = school_resp.data[0]['name']
-                    elif bill_data.get('entity_type') == 'department':
-                        dept_resp = supabase.table("departments").select("unit_name").eq("id", bill_data.get('entity_id')).execute()
-                        if dept_resp.data:
-                            entity_name = dept_resp.data[0].get('unit_name', '')
+                    try:
+                        if bill_data.get('entity_type') == 'school':
+                            school_resp = supabase.table("schools").select("name").eq("id", bill_data.get('entity_id')).execute()
+                            if school_resp.data:
+                                entity_name = school_resp.data[0]['name']
+                        elif bill_data.get('entity_type') == 'department':
+                            dept_resp = supabase.table("departments").select("unit_name").eq("id", bill_data.get('entity_id')).execute()
+                            if dept_resp.data:
+                                entity_name = dept_resp.data[0].get('unit_name', '')
+                    except Exception as e:
+                        print(f"Error getting entity name: {e}")
                     
-                    if existing.data and len(existing.data) > 0:
-                        # Update existing bill
-                        bill_id = existing.data[0]['id']
-                        update_data = {
-                            "current_charges": float(bill_data.get('current_charges', 0)),
-                            "amount_paid": float(bill_data.get('amount_paid', 0)),
-                            "meter_number": bill_data.get('meter_number', ''),
-                            "account_number": bill_data.get('account_number', ''),
-                            "notes": bill_data.get('notes', ''),
-                            "updated_at": datetime.now().isoformat()
-                        }
-                        response = supabase.table("utility_bills").update(update_data).eq("id", bill_id).execute()
-                        if response.data:
-                            success_count += 1
-                            print(f"✅ Updated telephone bill for phone: {bill_data.get('phone_number')}")
-                        else:
-                            error_count += 1
-                            print(f"❌ Failed to update telephone bill for phone: {bill_data.get('phone_number')}")
+                    # Prepare data for upsert
+                    bill_record = {
+                        "utility_type": utility_type,
+                        "entity_type": bill_data.get('entity_type'),
+                        "entity_id": int(bill_data.get('entity_id')),
+                        "entity_name": entity_name,
+                        "month": int(bill_data.get('month')),
+                        "year": int(bill_data.get('year')),
+                        "phone_number": bill_data.get('phone_number', ''),
+                        "account_number": bill_data.get('account_number', ''),
+                        "meter_number": bill_data.get('meter_number', ''),  # Bill No.
+                        "current_charges": float(bill_data.get('current_charges', 0)),
+                        "amount_paid": float(bill_data.get('amount_paid', 0)),
+                        "notes": bill_data.get('notes', ''),
+                        "updated_at": datetime.now().isoformat()
+                    }
+                    
+                    # Check if record exists to decide whether to add created_at
+                    check_query = supabase.table("utility_bills").select("id").eq("phone_number", bill_record["phone_number"])\
+                        .eq("month", bill_record["month"]).eq("year", bill_record["year"])\
+                        .eq("entity_id", bill_record["entity_id"]).eq("entity_type", bill_record["entity_type"])\
+                        .eq("utility_type", utility_type).execute()
+                    
+                    if not check_query.data or len(check_query.data) == 0:
+                        bill_record["created_at"] = datetime.now().isoformat()
+                    
+                    # Use upsert - this is the key optimization!
+                    result = supabase.table("utility_bills").upsert(
+                        bill_record, 
+                        on_conflict="phone_number,month,year,entity_id,entity_type,utility_type"
+                    ).execute()
+                    
+                    if result.data:
+                        success_count += 1
+                        print(f"✅ UPSERT successful for phone: {bill_data.get('phone_number')}")
                     else:
-                        # Create new bill
-                        new_bill = {
-                            "utility_type": utility_type,
-                            "entity_type": bill_data.get('entity_type'),
-                            "entity_id": int(bill_data.get('entity_id')),
-                            "entity_name": entity_name,
-                            "account_number": bill_data.get('account_number', ''),
-                            "phone_number": bill_data.get('phone_number', ''),
-                            "meter_number": bill_data.get('meter_number', ''),
-                            "current_charges": float(bill_data.get('current_charges', 0)),
-                            "amount_paid": float(bill_data.get('amount_paid', 0)),
-                            "month": int(bill_data.get('month')),
-                            "year": int(bill_data.get('year')),
-                            "notes": bill_data.get('notes', ''),
-                            "created_at": datetime.now().isoformat(),
-                            "updated_at": datetime.now().isoformat()
-                        }
-                        response = supabase.table("utility_bills").insert(new_bill).execute()
-                        if response.data:
-                            success_count += 1
-                            print(f"✅ Created new telephone bill for phone: {bill_data.get('phone_number')}")
-                        else:
-                            error_count += 1
-                            print(f"❌ Failed to create telephone bill for phone: {bill_data.get('phone_number')}")
+                        error_count += 1
+                        print(f"❌ UPSERT failed for phone: {bill_data.get('phone_number')}")
                 
                 elif utility_type == 'water':
-                    query = supabase.table("utility_bills").select("*")\
-                        .eq("utility_type", utility_type)\
-                        .eq("entity_type", bill_data.get('entity_type'))\
-                        .eq("entity_id", int(bill_data.get('entity_id')))\
-                        .eq("month", int(bill_data.get('month')))\
-                        .eq("year", int(bill_data.get('year')))\
-                        .eq("account_number", bill_data.get('account_number', ''))\
-                        .eq("meter_number", bill_data.get('meter_number', ''))
-                    
-                    existing = query.execute()
-                    
+                    # Get entity name
                     entity_name = ""
-                    if bill_data.get('entity_type') == 'school':
-                        school_resp = supabase.table("schools").select("name").eq("id", bill_data.get('entity_id')).execute()
-                        if school_resp.data:
-                            entity_name = school_resp.data[0]['name']
-                    elif bill_data.get('entity_type') == 'department':
-                        dept_resp = supabase.table("departments").select("unit_name").eq("id", bill_data.get('entity_id')).execute()
-                        if dept_resp.data:
-                            entity_name = dept_resp.data[0].get('unit_name', '')
+                    try:
+                        if bill_data.get('entity_type') == 'school':
+                            school_resp = supabase.table("schools").select("name").eq("id", bill_data.get('entity_id')).execute()
+                            if school_resp.data:
+                                entity_name = school_resp.data[0]['name']
+                        elif bill_data.get('entity_type') == 'department':
+                            dept_resp = supabase.table("departments").select("unit_name").eq("id", bill_data.get('entity_id')).execute()
+                            if dept_resp.data:
+                                entity_name = dept_resp.data[0].get('unit_name', '')
+                    except Exception as e:
+                        print(f"Error getting entity name: {e}")
                     
-                    if existing.data and len(existing.data) > 0:
-                        bill_id = existing.data[0]['id']
-                        update_data = {
-                            "current_charges": float(bill_data.get('current_charges', 0)),
-                            "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
-                            "amount_paid": float(bill_data.get('amount_paid', 0)),
-                            "consumption_m3": float(bill_data.get('consumption_m3', 0)),
-                            "notes": bill_data.get('notes', '')
-                        }
-                        response = supabase.table("utility_bills").update(update_data).eq("id", bill_id).execute()
-                        if response.data:
-                            success_count += 1
-                        else:
-                            error_count += 1
+                    bill_record = {
+                        "utility_type": utility_type,
+                        "entity_type": bill_data.get('entity_type'),
+                        "entity_id": int(bill_data.get('entity_id')),
+                        "entity_name": entity_name,
+                        "month": int(bill_data.get('month')),
+                        "year": int(bill_data.get('year')),
+                        "account_number": bill_data.get('account_number', ''),
+                        "meter_number": bill_data.get('meter_number', ''),
+                        "current_charges": float(bill_data.get('current_charges', 0)),
+                        "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
+                        "amount_paid": float(bill_data.get('amount_paid', 0)),
+                        "consumption_m3": float(bill_data.get('consumption_m3', 0)),
+                        "notes": bill_data.get('notes', ''),
+                        "updated_at": datetime.now().isoformat()
+                    }
+                    
+                    # Check if exists to set created_at
+                    check_query = supabase.table("utility_bills").select("id").eq("account_number", bill_record["account_number"])\
+                        .eq("meter_number", bill_record["meter_number"]).eq("month", bill_record["month"])\
+                        .eq("year", bill_record["year"]).eq("entity_id", bill_record["entity_id"])\
+                        .eq("entity_type", bill_record["entity_type"]).eq("utility_type", utility_type).execute()
+                    
+                    if not check_query.data or len(check_query.data) == 0:
+                        bill_record["created_at"] = datetime.now().isoformat()
+                    
+                    result = supabase.table("utility_bills").upsert(
+                        bill_record,
+                        on_conflict="account_number,meter_number,month,year,entity_id,entity_type,utility_type"
+                    ).execute()
+                    
+                    if result.data:
+                        success_count += 1
                     else:
-                        new_bill = {
-                            "utility_type": utility_type,
-                            "entity_type": bill_data.get('entity_type'),
-                            "entity_id": int(bill_data.get('entity_id')),
-                            "entity_name": entity_name,
-                            "account_number": bill_data.get('account_number', ''),
-                            "meter_number": bill_data.get('meter_number', ''),
-                            "current_charges": float(bill_data.get('current_charges', 0)),
-                            "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
-                            "amount_paid": float(bill_data.get('amount_paid', 0)),
-                            "consumption_m3": float(bill_data.get('consumption_m3', 0)),
-                            "month": int(bill_data.get('month')),
-                            "year": int(bill_data.get('year')),
-                            "notes": bill_data.get('notes', ''),
-                            "created_at": datetime.now().isoformat()
-                        }
-                        response = supabase.table("utility_bills").insert(new_bill).execute()
-                        if response.data:
-                            success_count += 1
-                        else:
-                            error_count += 1
+                        error_count += 1
                 
                 elif utility_type == 'electricity':
-                    query = supabase.table("utility_bills").select("*")\
-                        .eq("utility_type", utility_type)\
-                        .eq("entity_type", bill_data.get('entity_type'))\
-                        .eq("entity_id", int(bill_data.get('entity_id')))\
-                        .eq("month", int(bill_data.get('month')))\
-                        .eq("year", int(bill_data.get('year')))\
-                        .eq("account_number", bill_data.get('account_number', ''))\
-                        .eq("meter_number", bill_data.get('meter_number', ''))
-                    
-                    existing = query.execute()
-                    
+                    # Get entity name
                     entity_name = ""
-                    if bill_data.get('entity_type') == 'school':
-                        school_resp = supabase.table("schools").select("name").eq("id", bill_data.get('entity_id')).execute()
-                        if school_resp.data:
-                            entity_name = school_resp.data[0]['name']
-                    elif bill_data.get('entity_type') == 'department':
-                        dept_resp = supabase.table("departments").select("unit_name").eq("id", bill_data.get('entity_id')).execute()
-                        if dept_resp.data:
-                            entity_name = dept_resp.data[0].get('unit_name', '')
+                    try:
+                        if bill_data.get('entity_type') == 'school':
+                            school_resp = supabase.table("schools").select("name").eq("id", bill_data.get('entity_id')).execute()
+                            if school_resp.data:
+                                entity_name = school_resp.data[0]['name']
+                        elif bill_data.get('entity_type') == 'department':
+                            dept_resp = supabase.table("departments").select("unit_name").eq("id", bill_data.get('entity_id')).execute()
+                            if dept_resp.data:
+                                entity_name = dept_resp.data[0].get('unit_name', '')
+                    except Exception as e:
+                        print(f"Error getting entity name: {e}")
                     
-                    if existing.data and len(existing.data) > 0:
-                        bill_id = existing.data[0]['id']
-                        update_data = {
-                            "current_charges": float(bill_data.get('current_charges', 0)),
-                            "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
-                            "amount_paid": float(bill_data.get('amount_paid', 0)),
-                            "consumption_kwh": float(bill_data.get('consumption_kwh', 0)),
-                            "notes": bill_data.get('notes', '')
-                        }
-                        response = supabase.table("utility_bills").update(update_data).eq("id", bill_id).execute()
-                        if response.data:
-                            success_count += 1
-                        else:
-                            error_count += 1
+                    bill_record = {
+                        "utility_type": utility_type,
+                        "entity_type": bill_data.get('entity_type'),
+                        "entity_id": int(bill_data.get('entity_id')),
+                        "entity_name": entity_name,
+                        "month": int(bill_data.get('month')),
+                        "year": int(bill_data.get('year')),
+                        "account_number": bill_data.get('account_number', ''),
+                        "meter_number": bill_data.get('meter_number', ''),
+                        "current_charges": float(bill_data.get('current_charges', 0)),
+                        "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
+                        "amount_paid": float(bill_data.get('amount_paid', 0)),
+                        "consumption_kwh": float(bill_data.get('consumption_kwh', 0)),
+                        "notes": bill_data.get('notes', ''),
+                        "updated_at": datetime.now().isoformat()
+                    }
+                    
+                    check_query = supabase.table("utility_bills").select("id").eq("account_number", bill_record["account_number"])\
+                        .eq("meter_number", bill_record["meter_number"]).eq("month", bill_record["month"])\
+                        .eq("year", bill_record["year"]).eq("entity_id", bill_record["entity_id"])\
+                        .eq("entity_type", bill_record["entity_type"]).eq("utility_type", utility_type).execute()
+                    
+                    if not check_query.data or len(check_query.data) == 0:
+                        bill_record["created_at"] = datetime.now().isoformat()
+                    
+                    result = supabase.table("utility_bills").upsert(
+                        bill_record,
+                        on_conflict="account_number,meter_number,month,year,entity_id,entity_type,utility_type"
+                    ).execute()
+                    
+                    if result.data:
+                        success_count += 1
                     else:
-                        new_bill = {
-                            "utility_type": utility_type,
-                            "entity_type": bill_data.get('entity_type'),
-                            "entity_id": int(bill_data.get('entity_id')),
-                            "entity_name": entity_name,
-                            "account_number": bill_data.get('account_number', ''),
-                            "meter_number": bill_data.get('meter_number', ''),
-                            "current_charges": float(bill_data.get('current_charges', 0)),
-                            "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
-                            "amount_paid": float(bill_data.get('amount_paid', 0)),
-                            "consumption_kwh": float(bill_data.get('consumption_kwh', 0)),
-                            "month": int(bill_data.get('month')),
-                            "year": int(bill_data.get('year')),
-                            "notes": bill_data.get('notes', ''),
-                            "created_at": datetime.now().isoformat()
-                        }
-                        response = supabase.table("utility_bills").insert(new_bill).execute()
-                        if response.data:
-                            success_count += 1
-                        else:
-                            error_count += 1
+                        error_count += 1
                 
                 else:
                     error_count += 1
@@ -1211,7 +1181,7 @@ def batch_update_utility_bills():
     except Exception as e:
         print(f"❌ Batch update error: {e}")
         print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e), 'success': False}), 500
 
 # ============ BUDGET MANAGEMENT API ============
 
