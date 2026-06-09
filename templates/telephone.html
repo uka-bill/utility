@@ -600,15 +600,6 @@
             margin-right: 8px;
             vertical-align: middle;
         }
-
-        .edit-mode-input {
-            width: 100%;
-            padding: 6px 8px;
-            border-radius: 4px;
-            border: 1px solid var(--primary);
-            font-size: 0.75rem;
-            background: #fff;
-        }
     </style>
 </head>
 <body>
@@ -693,7 +684,7 @@
             <tbody id="billsTableBody">
                 <tr><td colspan="10" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
-        <table>
+        </table>
     </div>
 </div>
 
@@ -1006,6 +997,7 @@
             }
         }
         
+        // Find the save button in the summary container (only ONE save button)
         const summaryContainer = entityRow.nextElementSibling?.querySelector('.summary-container');
         let saveBtn = null;
         if (summaryContainer) {
@@ -1104,7 +1096,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></td>';
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1337,7 +1329,7 @@
             <td></div>
             <td><span class="status-badge status-pending" id="entity-status-${entity.id}">Pending</span></div>
             <td class="entity-actions">
-                <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
+                <!-- No actions here - only Save All button in summary box -->
             </div>
         `;
         tbody.appendChild(entityRow);
@@ -1518,22 +1510,18 @@
                 saveScrollPosition();
                 
                 // Collect bill numbers from account rows
-                const accountBillNumbers = {};
                 const accountRows2 = document.querySelectorAll(`.account-header-row[data-entity-id="${entity.id}"]`);
                 accountRows2.forEach(accountRow => {
                     const accountNum = accountRow.getAttribute('data-account-number');
                     const billNoInput = accountRow.querySelector('.account-bill-number-input');
-                    if (billNoInput && accountNum) {
-                        accountBillNumbers[accountNum] = billNoInput.value;
-                    }
+                    // Bill numbers will be saved when we call saveEntityData with the summaryValues
                 });
                 
                 const summaryValues = {
                     previousOutstanding: parseFloat(prevOutInput?.value) || 0,
                     previousPayment: parseFloat(prevPayInput?.value) || 0,
                     totalAccountCharges: parseFloat(totalAccInput?.value) || 0,
-                    amountPaid: parseFloat(summaryCell.querySelector('.summary-amount-paid')?.value) || 0,
-                    billNumbers: accountBillNumbers
+                    amountPaid: parseFloat(summaryCell.querySelector('.summary-amount-paid')?.value) || 0
                 };
                 await saveEntityData(entityRow, summaryValues, month, year);
             };
@@ -1553,7 +1541,7 @@
     }
     
     function attachEventListeners() {
-        // Save button click handling - using event delegation
+        // Only handle save button clicks - NO double save buttons
         document.getElementById('billsTableBody').addEventListener('click', async (e) => {
             const saveBtn = e.target.closest('.save-entity-btn');
             if (saveBtn && !saveBtn.disabled) {
