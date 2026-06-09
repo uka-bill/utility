@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Schools Management - Expanded Utility View</title>
+    <title>Schools Management - Full Utility Management</title>
     <style>
         :root {
             --primary: #4361ee;
             --secondary: #3f37c9;
-            --success: #2ecc71;
-            --danger: #e74c3c;
-            --warning: #f39c12;
-            --info: #3498db;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --info: #17a2b8;
             --light: #f8f9fa;
-            --dark: #2c3e50;
-            --gray: #7f8c8d;
-            --border: #e2e8f0;
+            --dark: #343a40;
+            --gray: #6c757d;
+            --border: #dee2e6;
         }
         
         * {
@@ -118,14 +118,31 @@
             transform: translateY(-1px);
         }
         
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
         .btn-warning {
             background: var(--warning);
-            color: white;
+            color: var(--dark);
+        }
+        
+        .btn-warning:hover {
+            background: #e0a800;
         }
         
         .btn-danger {
             background: var(--danger);
             color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
         }
         
         .btn-sm {
@@ -136,6 +153,11 @@
         
         .btn-secondary {
             background: var(--gray);
+            color: white;
+        }
+        
+        .btn-info {
+            background: var(--info);
             color: white;
         }
         
@@ -189,7 +211,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.8rem;
-            min-width: 2200px;
+            min-width: 1400px;
         }
         
         .data-table th {
@@ -212,13 +234,102 @@
             background-color: white;
         }
         
-        .inline-edit-input {
+        .edit-form-group {
+            margin-bottom: 12px;
+        }
+        
+        .edit-form-group label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--gray);
+            margin-bottom: 4px;
+        }
+        
+        .edit-input, .edit-textarea {
             width: 100%;
-            padding: 8px 10px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 0.8rem;
+        }
+        
+        .edit-input:focus, .edit-textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
+        }
+        
+        .utility-section {
+            background: #f8f9fa;
             border-radius: 12px;
-            border: 1px solid #ddd;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border);
+        }
+        
+        .utility-title {
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .account-item {
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid var(--border);
+        }
+        
+        .account-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+        
+        .meter-item, .phone-item {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .meter-item input, .phone-item input {
+            flex: 1;
+            padding: 6px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
             font-size: 0.75rem;
-            transition: 0.2s;
+        }
+        
+        .add-btn {
+            background: var(--success);
+            color: white;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+        
+        .remove-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            cursor: pointer;
         }
         
         .badge {
@@ -268,27 +379,6 @@
             font-size: 0.7rem;
         }
         
-        .add-new-row {
-            background: #fef9e3;
-            border-top: 2px dashed var(--warning);
-        }
-        
-        .add-new-row td {
-            background: #fffbee;
-        }
-        
-        .inline-save-btn, .inline-cancel-btn {
-            padding: 6px 14px;
-            border-radius: 30px;
-            font-weight: bold;
-            border: none;
-            cursor: pointer;
-            font-size: 0.7rem;
-        }
-        
-        .inline-save-btn { background: var(--success); color: white; }
-        .inline-cancel-btn { background: var(--gray); color: white; }
-        
         .view-mode-text {
             font-size: 0.7rem;
             line-height: 1.4;
@@ -337,11 +427,6 @@
             margin-bottom: 12px;
         }
         
-        .fixed-width-col {
-            min-width: 280px;
-            max-width: 320px;
-        }
-        
         .seq-cell {
             font-weight: bold;
             color: #2c5282;
@@ -362,14 +447,48 @@
             font-weight: bold;
         }
         
-        /* Print Modal */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            visibility: hidden;
+        }
+        
+        .loading-overlay.active {
+            visibility: visible;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            background: white;
+            padding: 10px;
+            border-radius: 50%;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
         .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0,0,0,0.5);
             z-index: 3000;
             display: flex;
             align-items: center;
@@ -378,96 +497,69 @@
             visibility: hidden;
             transition: all 0.3s ease;
         }
-        .modal-overlay.active { opacity: 1; visibility: visible; }
-        .print-modal {
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .edit-modal {
             background: white;
             border-radius: 24px;
             width: 90%;
-            max-width: 500px;
-            max-height: 80vh;
+            max-width: 800px;
+            max-height: 85vh;
             overflow-y: auto;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
         }
-        .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        .modal-header h3 { font-size: 1.3rem; color: var(--dark); }
-        .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--gray); }
-        .modal-body { padding: 20px 24px; }
-        .column-selector { display: flex; flex-direction: column; gap: 12px; }
-        .column-option { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #f8f9fa; border-radius: 12px; cursor: pointer; }
-        .column-option input { width: 18px; height: 18px; cursor: pointer; }
-        .column-option label { flex: 1; cursor: pointer; font-weight: 500; }
-        .select-all-row { border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px; }
-        .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 12px; justify-content: flex-end; }
-        .btn-print { background: var(--primary); color: white; }
-        .btn-cancel { background: var(--gray); color: white; }
-        
-        /* Print Styles */
-        @media print {
-            @page {
-                margin: 2.5cm 1.5cm 2.5cm 1.5cm !important;
-                size: A4;
-            }
-            
-            body {
-                margin: 0 !important;
-                padding: 0 !important;
-                background: white;
-            }
-            
-            .navbar, .filters-bar, .page-header .btn, .entity-actions, 
-            .modal-overlay, .scroll-hint, .add-new-row, .toast-message,
-            .edit-school-btn, .delete-school-btn {
-                display: none !important;
-            }
-            
-            .page-header {
-                display: block !important;
-                margin-bottom: 20px !important;
-            }
-            
-            .container {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            
-            .table-wrapper {
-                box-shadow: none;
-                overflow: visible;
-                max-height: none;
-                border: none;
-            }
-            
-            .data-table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 9pt;
-            }
-            
-            .data-table th, .data-table td {
-                border: 1px solid #999;
-                padding: 6px 6px;
-                vertical-align: top;
-            }
-            
-            .data-table th {
-                background: #e0e0e0 !important;
-                print-color-adjust: exact;
-            }
-            
-            .cluster-separator td {
-                background: #d0d8e8 !important;
-                print-color-adjust: exact;
-            }
-            
-            .view-mode-text {
-                max-height: none;
-                overflow: visible;
-            }
-            
-            tr, .cluster-separator, .view-account-item {
-                break-inside: avoid;
-                page-break-inside: avoid;
-            }
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+        .modal-header h3 {
+            font-size: 1.3rem;
+            color: var(--dark);
+        }
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray);
+        }
+        .modal-body {
+            padding: 20px 24px;
+        }
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            position: sticky;
+            bottom: 0;
+            background: white;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .form-group-full {
+            margin-bottom: 15px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: var(--dark);
         }
     </style>
 </head>
@@ -489,9 +581,8 @@
 
 <div class="container">
     <div class="page-header">
-        <h1 class="page-title">🏫 Schools · Utility View</h1>
+        <h1 class="page-title">🏫 Schools Management</h1>
         <div style="display: flex; gap: 12px;">
-            <button class="btn btn-primary" id="printBtn">🖨️ Print</button>
             <button class="btn btn-primary" id="addNewSchoolBtn">➕ Add New School</button>
         </div>
     </div>
@@ -499,97 +590,111 @@
     <div class="filters-bar">
         <div class="filter-group"><label>🔍 Search</label><input type="text" id="searchFilter" class="filter-input" placeholder="Name, cluster..."></div>
         <div class="filter-group"><label>📌 Cluster</label><select id="clusterFilter" class="filter-select"></select></div>
-        <div class="filter-group"><label>🔄 Sort</label><select id="sortFilter" class="filter-select"><option value="seq">ID</option><option value="name">Name</option><option value="cluster">Cluster</option></select></div>
         <button id="refreshBtn" class="btn btn-primary" style="background:#6c757d;">⟳ Refresh</button>
     </div>
-    <div class="scroll-hint">↔️ Scroll horizontally | 📋 Each utility column has vertical scroll | ✏️ Click Edit to modify</div>
+    <div class="scroll-hint">↔️ Scroll horizontally | ✏️ Click Edit to modify all school details including accounts</div>
 
     <div class="table-wrapper">
         <table class="data-table" id="schoolsTable">
             <thead>
-                <tr><th>#</th><th>School Name</th><th>Cluster</th><th>School No.</th><th class="fixed-width-col">💧 WATER Accounts</th><th class="fixed-width-col">⚡ ELECTRICITY Accounts</th><th class="fixed-width-col">📞 TELEPHONE Accounts</th><th>BMO Name</th><th>BMO Phone</th><th>Address</th><th>Notes</th><th>Actions</th></tr>
+                <tr><th>#</th><th>School Name</th><th>Cluster</th><th>School No.</th><th>💧 WATER Accounts</th><th>⚡ ELECTRICITY Accounts</th><th>📞 TELEPHONE Accounts</th><th>BMO Name</th><th>BMO Phone</th><th>Address</th><th>Notes</th><th>Actions</th></tr>
             </thead>
             <tbody id="schoolsTbody"></tbody>
         </table>
     </div>
 </div>
 
-<div id="printModal" class="modal-overlay">
-    <div class="print-modal">
-        <div class="modal-header"><h3>📄 Select Columns to Print</h3><button class="close-modal" onclick="closePrintModal()">&times;</button></div>
-        <div class="modal-body"><div class="column-selector" id="columnSelector"></div></div>
-        <div class="modal-footer"><button class="btn btn-cancel" onclick="closePrintModal()">Cancel</button><button class="btn btn-print" id="confirmPrintBtn">🖨️ Print</button></div>
+<div id="editModal" class="modal-overlay">
+    <div class="edit-modal">
+        <div class="modal-header">
+            <h3 id="modalTitle">Edit School</h3>
+            <button class="close-modal" onclick="closeEditModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <!-- Dynamic form will be inserted here -->
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+            <button class="btn btn-primary" id="saveSchoolBtn">Save Changes</button>
+        </div>
     </div>
 </div>
 
-<script>
-    let allSchoolsRaw = [];
-    let currentEditingId = null;
-    const columns = [
-        { key: 'seq', label: 'No.', default: true },
-        { key: 'schoolName', label: 'School Name', default: true },
-        { key: 'cluster', label: 'Cluster', default: true },
-        { key: 'schoolNo', label: 'School No.', default: true },
-        { key: 'waterAccounts', label: 'Water Accounts & Meters', default: false },
-        { key: 'electricityAccounts', label: 'Electricity Accounts & Meters', default: false },
-        { key: 'telephoneAccounts', label: 'Telephone Accounts & Numbers', default: false },
-        { key: 'bmoName', label: 'BMO Name', default: false },
-        { key: 'bmoPhone', label: 'BMO Phone', default: false },
-        { key: 'address', label: 'Address', default: false },
-        { key: 'notes', label: 'Notes', default: false }
-    ];
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+</div>
 
+<script>
+    let allSchools = [];
+    let currentEditingSchool = null;
+    
+    function showLoading(show) {
+        document.getElementById('loadingOverlay').classList.toggle('active', show);
+    }
+    
     function showMessage(msg, isError = false) {
         const toast = document.createElement('div');
         toast.className = 'toast-message';
-        toast.style.background = isError ? '#e74c3c' : '#2c3e50';
+        toast.style.background = isError ? '#dc3545' : '#343a40';
         toast.textContent = msg;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 2500);
     }
-
-    function parseJsonField(field) {
-        if (!field) return [];
-        if (Array.isArray(field)) return field;
-        if (typeof field === 'string') { try { return JSON.parse(field); } catch(e) { return []; } }
-        return [];
+    
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
     }
-
+    
     async function loadSchools() {
+        showLoading(true);
         try {
             const res = await fetch('/api/schools');
             if (!res.ok) throw new Error('Fetch failed');
-            let data = await res.json();
-            allSchoolsRaw = data.map(s => ({ ...s, water_accounts: parseJsonField(s.water_accounts), electricity_accounts: parseJsonField(s.electricity_accounts), telephone_accounts: parseJsonField(s.telephone_accounts) }));
-            allSchoolsRaw.sort((a,b) => a.id - b.id);
+            allSchools = await res.json();
             updateClusterFilter();
             renderSchools();
-        } catch(err) { showMessage('Error loading schools', true); console.error(err); }
+        } catch(err) { 
+            showMessage('Error loading schools', true); 
+            console.error(err);
+        } finally {
+            showLoading(false);
+        }
     }
-
+    
     function updateClusterFilter() {
         const set = new Set();
-        allSchoolsRaw.forEach(s => { if(s.cluster_number) set.add(s.cluster_number); });
+        allSchools.forEach(s => { if(s.cluster_number) set.add(s.cluster_number); });
         const select = document.getElementById('clusterFilter');
         select.innerHTML = '<option value="all">All Clusters</option>';
         Array.from(set).sort((a,b)=> (parseInt(a)||0) - (parseInt(b)||0)).forEach(c => {
-            let opt = document.createElement('option'); opt.value = c; opt.textContent = `Cluster ${c}`; select.appendChild(opt);
+            let opt = document.createElement('option'); 
+            opt.value = c; 
+            opt.textContent = `Cluster ${c}`; 
+            select.appendChild(opt);
         });
     }
-
+    
     function getFilteredSchools() {
-        let filtered = [...allSchoolsRaw];
+        let filtered = [...allSchools];
         const search = document.getElementById('searchFilter').value.toLowerCase();
         const cluster = document.getElementById('clusterFilter').value;
-        const sortBy = document.getElementById('sortFilter').value;
         if(search) filtered = filtered.filter(s => s.name?.toLowerCase().includes(search) || s.cluster_number?.toLowerCase().includes(search));
         if(cluster !== 'all') filtered = filtered.filter(s => s.cluster_number === cluster);
-        if(sortBy === 'name') filtered.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
-        else if(sortBy === 'cluster') filtered.sort((a,b)=> (a.cluster_number||'').localeCompare(b.cluster_number||''));
-        else filtered.sort((a,b)=> a.id - b.id);
+        filtered.sort((a,b)=> {
+            const clusterA = parseInt(a.cluster_number) || 999;
+            const clusterB = parseInt(b.cluster_number) || 999;
+            if(clusterA !== clusterB) return clusterA - clusterB;
+            return a.id - b.id;
+        });
         return filtered;
     }
-
+    
     function renderViewModeUtility(accounts, type) {
         if (!accounts || accounts.length === 0) return '<div style="color:#aaa; padding:10px; text-align:center;">— No data —</div>';
         let html = `<div class="view-mode-text">`;
@@ -597,286 +702,419 @@
             const accNum = acc.accountNumber || acc.account_number || '?';
             html += `<div class="view-account-item"><strong>📁 ${escapeHtml(accNum)}</strong>`;
             if (type === 'telephone') {
-                (acc.numbers || []).forEach(num => { html += `<div class="view-meter">📞 ${escapeHtml(num.phoneNumber || '')} ${num.location ? '📍 ' + escapeHtml(num.location) : ''}</div>`; });
+                (acc.numbers || []).forEach(num => { 
+                    html += `<div class="view-meter">📞 ${escapeHtml(num.phoneNumber || '')} ${num.location ? '📍 ' + escapeHtml(num.location) : ''}</div>`; 
+                });
             } else {
-                (acc.meters || []).forEach(m => { html += `<div class="view-meter">🔢 ${escapeHtml(m.meterNumber || '')} ${m.location ? '📍 ' + escapeHtml(m.location) : ''}</div>`; });
+                (acc.meters || []).forEach(m => { 
+                    html += `<div class="view-meter">🔢 ${escapeHtml(m.meterNumber || '')} ${m.location ? '📍 ' + escapeHtml(m.location) : ''}</div>`; 
+                });
             }
             html += `</div>`;
         });
         html += `</div>`;
         return html;
     }
-
-    function escapeHtml(str) { if(!str) return ''; return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
     
-    function getSimpleUtilityTextForPrint(accounts, type) {
-        if (!accounts || accounts.length === 0) return '—';
-        let lines = [];
-        accounts.forEach(acc => {
-            const accNum = acc.accountNumber || acc.account_number || '?';
-            lines.push(`📁 ${accNum}`);
-            if (type === 'telephone') {
-                (acc.numbers || []).forEach(num => { lines.push(`  📞 ${num.phoneNumber || ''}${num.location ? ' ('+num.location+')' : ''}`); });
-            } else {
-                (acc.meters || []).forEach(m => { lines.push(`  🔢 ${m.meterNumber || ''}${m.location ? ' ('+m.location+')' : ''}`); });
-            }
-        });
-        return lines.join('\n');
-    }
-
     function renderSchools() {
         const filtered = getFilteredSchools();
         const tbody = document.getElementById('schoolsTbody');
         tbody.innerHTML = '';
-        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="12" style="text-align:center">No schools</div></tr>'; return; }
+        if(filtered.length === 0) { 
+            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center">No schools</div></tr>'; 
+            return; 
+        }
         
         const clusterMap = new Map();
-        filtered.forEach(s => { let c = s.cluster_number || 'Unassigned'; if(!clusterMap.has(c)) clusterMap.set(c, []); clusterMap.get(c).push(s); });
-        const sortedClusters = Array.from(clusterMap.keys()).sort((a,b) => a==='Unassigned'?1:b==='Unassigned'?-1:(parseInt(a)||0)-(parseInt(b)||0));
+        filtered.forEach(s => { 
+            let c = s.cluster_number || 'Unassigned'; 
+            if(!clusterMap.has(c)) clusterMap.set(c, []); 
+            clusterMap.get(c).push(s); 
+        });
+        const sortedClusters = Array.from(clusterMap.keys()).sort((a,b) => 
+            a==='Unassigned'?1:b==='Unassigned'?-1:(parseInt(a)||0)-(parseInt(b)||0));
         let seq = 1;
         
         for(let cluster of sortedClusters) {
             const schools = clusterMap.get(cluster);
-            const sepRow = document.createElement('tr'); sepRow.className='cluster-separator';
+            const sepRow = document.createElement('tr'); 
+            sepRow.className='cluster-separator';
             sepRow.innerHTML = `<td colspan="12"><div class="cluster-info"><span>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</span><span class="cluster-count">${schools.length} schools</span></div></div>`;
             tbody.appendChild(sepRow);
             
             for(let school of schools) {
-                const isEditing = (currentEditingId === school.id);
+                const waterAccounts = school.water_accounts && typeof school.water_accounts === 'string' ? JSON.parse(school.water_accounts) : (school.water_accounts || []);
+                const electricityAccounts = school.electricity_accounts && typeof school.electricity_accounts === 'string' ? JSON.parse(school.electricity_accounts) : (school.electricity_accounts || []);
+                const telephoneAccounts = school.telephone_accounts && typeof school.telephone_accounts === 'string' ? JSON.parse(school.telephone_accounts) : (school.telephone_accounts || []);
+                
                 const row = document.createElement('tr');
-                if(isEditing) {
-                    row.innerHTML = `<td class="seq-cell"><div class="sequence-info"><span class="sequence-number">${seq}</span><span class="db-id-label">ID: ${school.id}</span></div></div>
-                        <td><input type="text" id="edit-name-${school.id}" class="inline-edit-input" value="${escapeHtml(school.name||'')}"></div>
-                        <td><input type="text" id="edit-cluster-${school.id}" class="inline-edit-input" value="${escapeHtml(school.cluster_number||'')}"></div>
-                        <td><input type="text" id="edit-schno-${school.id}" class="inline-edit-input" value="${escapeHtml(school.school_number||'')}"></div>
-                        <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Use Schools page to edit utilities)</span></div>
-                        <td><input type="text" id="edit-bmoname-${school.id}" class="inline-edit-input" value="${escapeHtml(school.bmo_name||'')}"></div>
-                        <td><input type="text" id="edit-bmophone-${school.id}" class="inline-edit-input" value="${escapeHtml(school.bmo_phone||'')}"></div>
-                        <td><input type="text" id="edit-address-${school.id}" class="inline-edit-input" value="${escapeHtml(school.address||'')}"></div>
-                        <td><input type="text" id="edit-notes-${school.id}" class="inline-edit-input" value="${escapeHtml(school.notes||'')}"></div>
-                        <td><button class="inline-save-btn" data-id="${school.id}">💾 Save</button><button class="inline-cancel-btn" data-id="${school.id}">✖ Cancel</button></div>`;
-                    tbody.appendChild(row);
-                } else {
-                    row.innerHTML = `<td class="seq-cell"><div class="sequence-info"><span class="sequence-number">${seq}</span><span class="db-id-label">ID: ${school.id}</span></div></div>
-                        <td><strong>${escapeHtml(school.name||'')}</strong></div>
-                        <td><span class="badge badge-cluster">${escapeHtml(school.cluster_number||'-')}</span></div>
-                        <td>${escapeHtml(school.school_number||'-')}</div>
-                        <td>${renderViewModeUtility(school.water_accounts, 'water')}</div>
-                        <td>${renderViewModeUtility(school.electricity_accounts, 'electricity')}</div>
-                        <td>${renderViewModeUtility(school.telephone_accounts, 'telephone')}</div>
-                        <td>${escapeHtml(school.bmo_name||'-')}</div>
-                        <td>${escapeHtml(school.bmo_phone||'-')}</div>
-                        <td>${escapeHtml(school.address||'-')}</div>
-                        <td>${escapeHtml(school.notes||'-')}</div>
-                        <td><button class="btn btn-warning btn-sm edit-school-btn" data-id="${school.id}">✏️ Edit</button><button class="btn btn-danger btn-sm delete-school-btn" data-id="${school.id}">🗑️ Del</button></div>`;
-                    tbody.appendChild(row);
-                }
+                row.innerHTML = `
+                    <td class="seq-cell"><div class="sequence-info"><span class="sequence-number">${seq}</span><span class="db-id-label">ID: ${school.id}</span></div></div>
+                    <td><strong>${escapeHtml(school.name || '')}</strong></div>
+                    <td><span class="badge badge-cluster">${escapeHtml(school.cluster_number || '-')}</span></div>
+                    <td>${escapeHtml(school.school_number || '-')}</div>
+                    <td>${renderViewModeUtility(waterAccounts, 'water')}</div>
+                    <td>${renderViewModeUtility(electricityAccounts, 'electricity')}</div>
+                    <td>${renderViewModeUtility(telephoneAccounts, 'telephone')}</div>
+                    <td>${escapeHtml(school.bmo_name || '-')}</div>
+                    <td>${escapeHtml(school.bmo_phone || '-')}</div>
+                    <td>${escapeHtml(school.address || '-')}</div>
+                    <td>${escapeHtml(school.notes || '-')}</div>
+                    <td><button class="btn btn-warning btn-sm edit-school-btn" data-id="${school.id}">✏️ Edit</button>
+                        <button class="btn btn-danger btn-sm delete-school-btn" data-id="${school.id}">🗑️ Delete</button></div>
+                `;
+                tbody.appendChild(row);
                 seq++;
             }
         }
         
-        document.querySelectorAll('.edit-school-btn').forEach(btn => { btn.addEventListener('click', () => { currentEditingId = parseInt(btn.getAttribute('data-id')); renderSchools(); }); });
-        document.querySelectorAll('.delete-school-btn').forEach(btn => { btn.addEventListener('click', async () => { if(confirm('Delete school?')) await deleteSchool(parseInt(btn.getAttribute('data-id'))); }); });
-        document.querySelectorAll('.inline-save-btn').forEach(btn => { btn.addEventListener('click', async () => { const id = parseInt(btn.getAttribute('data-id')); await saveBasicEdit(id); }); });
-        document.querySelectorAll('.inline-cancel-btn').forEach(btn => { btn.addEventListener('click', () => { currentEditingId = null; renderSchools(); }); });
+        document.querySelectorAll('.edit-school-btn').forEach(btn => {
+            btn.addEventListener('click', () => openEditModal(parseInt(btn.getAttribute('data-id'))));
+        });
+        document.querySelectorAll('.delete-school-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if(confirm('Delete this school? This will also delete all associated bills.')) {
+                    await deleteSchool(parseInt(btn.getAttribute('data-id')));
+                }
+            });
+        });
     }
     
-    async function saveBasicEdit(id) {
-        const name = document.getElementById(`edit-name-${id}`)?.value.trim();
-        const cluster = document.getElementById(`edit-cluster-${id}`)?.value.trim();
-        const schoolNo = document.getElementById(`edit-schno-${id}`)?.value.trim();
-        const bmoName = document.getElementById(`edit-bmoname-${id}`)?.value.trim() || '';
-        const bmoPhone = document.getElementById(`edit-bmophone-${id}`)?.value.trim() || '';
-        const address = document.getElementById(`edit-address-${id}`)?.value.trim() || '';
-        const notes = document.getElementById(`edit-notes-${id}`)?.value.trim() || '';
-        if(!name || !cluster || !schoolNo) { showMessage("Name, Cluster, School No required", true); return; }
+    function openEditModal(schoolId) {
+        const school = allSchools.find(s => s.id === schoolId);
+        if (!school) return;
+        currentEditingSchool = { ...school };
+        
+        // Parse accounts if they are strings
+        currentEditingSchool.water_accounts = currentEditingSchool.water_accounts && typeof currentEditingSchool.water_accounts === 'string' 
+            ? JSON.parse(currentEditingSchool.water_accounts) : (currentEditingSchool.water_accounts || []);
+        currentEditingSchool.electricity_accounts = currentEditingSchool.electricity_accounts && typeof currentEditingSchool.electricity_accounts === 'string' 
+            ? JSON.parse(currentEditingSchool.electricity_accounts) : (currentEditingSchool.electricity_accounts || []);
+        currentEditingSchool.telephone_accounts = currentEditingSchool.telephone_accounts && typeof currentEditingSchool.telephone_accounts === 'string' 
+            ? JSON.parse(currentEditingSchool.telephone_accounts) : (currentEditingSchool.telephone_accounts || []);
+        
+        document.getElementById('modalTitle').innerHTML = `✏️ Edit School: ${escapeHtml(school.name)}`;
+        renderEditForm();
+        document.getElementById('editModal').classList.add('active');
+    }
+    
+    function renderEditForm() {
+        const container = document.getElementById('modalBody');
+        
+        // Helper function to render water/electricity accounts
+        const renderUtilityAccounts = (accounts, type, label) => {
+            let html = `<div class="utility-section"><div class="utility-title">${label}</div>`;
+            accounts.forEach((account, accIdx) => {
+                html += `<div class="account-item" data-account-index="${accIdx}" data-type="${type}">
+                    <div class="account-header">
+                        <span>Account ${accIdx + 1}</span>
+                        <button type="button" class="btn-danger btn-sm" onclick="removeAccount(${accIdx}, '${type}')">Remove Account</button>
+                    </div>
+                    <div class="edit-form-group">
+                        <label>Account Number</label>
+                        <input type="text" class="edit-input account-number-input" data-acc-idx="${accIdx}" data-type="${type}" value="${escapeHtml(account.accountNumber || '')}">
+                    </div>`;
+                
+                if (type === 'telephone') {
+                    // Telephone numbers
+                    const numbers = account.numbers || [];
+                    html += `<div class="numbers-list">`;
+                    numbers.forEach((num, numIdx) => {
+                        html += `<div class="meter-item" data-num-idx="${numIdx}">
+                            <input type="text" class="edit-input phone-number-input" data-acc-idx="${accIdx}" data-num-idx="${numIdx}" value="${escapeHtml(num.phoneNumber || '')}" placeholder="Phone Number">
+                            <input type="text" class="edit-input phone-location-input" data-acc-idx="${accIdx}" data-num-idx="${numIdx}" value="${escapeHtml(num.location || '')}" placeholder="Location">
+                            <button type="button" class="remove-btn" onclick="removePhoneNumber(${accIdx}, ${numIdx})">✖</button>
+                        </div>`;
+                    });
+                    html += `<button type="button" class="add-btn" onclick="addPhoneNumber(${accIdx})">+ Add Phone Number</button>`;
+                    html += `</div>`;
+                } else {
+                    // Water/Electricity meters
+                    const meters = account.meters || [];
+                    html += `<div class="meters-list">`;
+                    meters.forEach((meter, meterIdx) => {
+                        html += `<div class="meter-item" data-meter-idx="${meterIdx}">
+                            <input type="text" class="edit-input meter-number-input" data-acc-idx="${accIdx}" data-meter-idx="${meterIdx}" value="${escapeHtml(meter.meterNumber || '')}" placeholder="Meter Number">
+                            <input type="text" class="edit-input meter-location-input" data-acc-idx="${accIdx}" data-meter-idx="${meterIdx}" value="${escapeHtml(meter.location || '')}" placeholder="Location">
+                            <button type="button" class="remove-btn" onclick="removeMeter(${accIdx}, ${meterIdx}, '${type}')">✖</button>
+                        </div>`;
+                    });
+                    html += `<button type="button" class="add-btn" onclick="addMeter(${accIdx}, '${type}')">+ Add Meter</button>`;
+                    html += `</div>`;
+                }
+                
+                html += `</div>`;
+            });
+            html += `<button type="button" class="btn btn-info btn-sm" style="margin-top:10px;" onclick="addAccount('${type}')">+ Add ${label} Account</button>`;
+            html += `</div>`;
+            return html;
+        };
+        
+        let html = `
+            <div class="form-row">
+                <div class="form-group-full">
+                    <label class="form-label">School Name *</label>
+                    <input type="text" id="editSchoolName" class="edit-input" value="${escapeHtml(currentEditingSchool.name || '')}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group-full">
+                    <label class="form-label">Cluster Number *</label>
+                    <input type="text" id="editClusterNumber" class="edit-input" value="${escapeHtml(currentEditingSchool.cluster_number || '')}">
+                </div>
+                <div class="form-group-full">
+                    <label class="form-label">School Number *</label>
+                    <input type="text" id="editSchoolNumber" class="edit-input" value="${escapeHtml(currentEditingSchool.school_number || '')}">
+                </div>
+            </div>
+            
+            ${renderUtilityAccounts(currentEditingSchool.water_accounts, 'water', '💧 Water Accounts')}
+            ${renderUtilityAccounts(currentEditingSchool.electricity_accounts, 'electricity', '⚡ Electricity Accounts')}
+            ${renderUtilityAccounts(currentEditingSchool.telephone_accounts, 'telephone', '📞 Telephone Accounts')}
+            
+            <div class="form-row">
+                <div class="form-group-full">
+                    <label class="form-label">BMO Name</label>
+                    <input type="text" id="editBmoName" class="edit-input" value="${escapeHtml(currentEditingSchool.bmo_name || '')}">
+                </div>
+                <div class="form-group-full">
+                    <label class="form-label">BMO Phone</label>
+                    <input type="text" id="editBmoPhone" class="edit-input" value="${escapeHtml(currentEditingSchool.bmo_phone || '')}">
+                </div>
+            </div>
+            <div class="form-group-full">
+                <label class="form-label">Address</label>
+                <textarea id="editAddress" class="edit-textarea" rows="2">${escapeHtml(currentEditingSchool.address || '')}</textarea>
+            </div>
+            <div class="form-group-full">
+                <label class="form-label">Notes</label>
+                <textarea id="editNotes" class="edit-textarea" rows="2">${escapeHtml(currentEditingSchool.notes || '')}</textarea>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+    }
+    
+    // Global functions for account management
+    window.addAccount = function(type) {
+        if (type === 'water') {
+            currentEditingSchool.water_accounts.push({ accountNumber: '', meters: [] });
+        } else if (type === 'electricity') {
+            currentEditingSchool.electricity_accounts.push({ accountNumber: '', meters: [] });
+        } else if (type === 'telephone') {
+            currentEditingSchool.telephone_accounts.push({ accountNumber: '', numbers: [] });
+        }
+        renderEditForm();
+    };
+    
+    window.removeAccount = function(accountIndex, type) {
+        if (type === 'water') {
+            currentEditingSchool.water_accounts.splice(accountIndex, 1);
+        } else if (type === 'electricity') {
+            currentEditingSchool.electricity_accounts.splice(accountIndex, 1);
+        } else if (type === 'telephone') {
+            currentEditingSchool.telephone_accounts.splice(accountIndex, 1);
+        }
+        renderEditForm();
+    };
+    
+    window.addMeter = function(accountIndex, type) {
+        if (type === 'water') {
+            if (!currentEditingSchool.water_accounts[accountIndex].meters) currentEditingSchool.water_accounts[accountIndex].meters = [];
+            currentEditingSchool.water_accounts[accountIndex].meters.push({ meterNumber: '', location: '' });
+        } else if (type === 'electricity') {
+            if (!currentEditingSchool.electricity_accounts[accountIndex].meters) currentEditingSchool.electricity_accounts[accountIndex].meters = [];
+            currentEditingSchool.electricity_accounts[accountIndex].meters.push({ meterNumber: '', location: '' });
+        }
+        renderEditForm();
+    };
+    
+    window.removeMeter = function(accountIndex, meterIndex, type) {
+        if (type === 'water') {
+            currentEditingSchool.water_accounts[accountIndex].meters.splice(meterIndex, 1);
+        } else if (type === 'electricity') {
+            currentEditingSchool.electricity_accounts[accountIndex].meters.splice(meterIndex, 1);
+        }
+        renderEditForm();
+    };
+    
+    window.addPhoneNumber = function(accountIndex) {
+        if (!currentEditingSchool.telephone_accounts[accountIndex].numbers) currentEditingSchool.telephone_accounts[accountIndex].numbers = [];
+        currentEditingSchool.telephone_accounts[accountIndex].numbers.push({ phoneNumber: '', location: '' });
+        renderEditForm();
+    };
+    
+    window.removePhoneNumber = function(accountIndex, numberIndex) {
+        currentEditingSchool.telephone_accounts[accountIndex].numbers.splice(numberIndex, 1);
+        renderEditForm();
+    };
+    
+    function collectFormData() {
+        // Collect basic info
+        const schoolData = {
+            name: document.getElementById('editSchoolName')?.value || '',
+            clusterNumber: document.getElementById('editClusterNumber')?.value || '',
+            schoolNumber: document.getElementById('editSchoolNumber')?.value || '',
+            bmoName: document.getElementById('editBmoName')?.value || '',
+            bmoPhone: document.getElementById('editBmoPhone')?.value || '',
+            address: document.getElementById('editAddress')?.value || '',
+            notes: document.getElementById('editNotes')?.value || '',
+            waterAccounts: [],
+            electricityAccounts: [],
+            telephoneAccounts: []
+        };
+        
+        // Collect water accounts data from the DOM
+        const waterAccounts = currentEditingSchool.water_accounts;
+        for (let i = 0; i < waterAccounts.length; i++) {
+            const accountNumber = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="water"]`)?.value || '';
+            const meters = [];
+            const meterInputs = document.querySelectorAll(`.meter-number-input[data-acc-idx="${i}"][data-type="water"]`);
+            meterInputs.forEach((input, mIdx) => {
+                const locationInput = document.querySelector(`.meter-location-input[data-acc-idx="${i}"][data-type="water"][data-meter-idx="${mIdx}"]`);
+                meters.push({
+                    meterNumber: input.value,
+                    location: locationInput?.value || ''
+                });
+            });
+            schoolData.waterAccounts.push({ accountNumber, meters });
+        }
+        
+        // Collect electricity accounts data
+        const electricityAccounts = currentEditingSchool.electricity_accounts;
+        for (let i = 0; i < electricityAccounts.length; i++) {
+            const accountNumber = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="electricity"]`)?.value || '';
+            const meters = [];
+            const meterInputs = document.querySelectorAll(`.meter-number-input[data-acc-idx="${i}"][data-type="electricity"]`);
+            meterInputs.forEach((input, mIdx) => {
+                const locationInput = document.querySelector(`.meter-location-input[data-acc-idx="${i}"][data-type="electricity"][data-meter-idx="${mIdx}"]`);
+                meters.push({
+                    meterNumber: input.value,
+                    location: locationInput?.value || ''
+                });
+            });
+            schoolData.electricityAccounts.push({ accountNumber, meters });
+        }
+        
+        // Collect telephone accounts data
+        const telephoneAccounts = currentEditingSchool.telephone_accounts;
+        for (let i = 0; i < telephoneAccounts.length; i++) {
+            const accountNumber = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="telephone"]`)?.value || '';
+            const numbers = [];
+            const phoneInputs = document.querySelectorAll(`.phone-number-input[data-acc-idx="${i}"]`);
+            phoneInputs.forEach((input, pIdx) => {
+                const locationInput = document.querySelector(`.phone-location-input[data-acc-idx="${i}"][data-num-idx="${pIdx}"]`);
+                numbers.push({
+                    phoneNumber: input.value,
+                    location: locationInput?.value || ''
+                });
+            });
+            schoolData.telephoneAccounts.push({ accountNumber, numbers });
+        }
+        
+        return schoolData;
+    }
+    
+    async function saveSchool() {
+        if (!currentEditingSchool) return;
+        
+        const schoolData = collectFormData();
+        
+        if (!schoolData.name || !schoolData.clusterNumber || !schoolData.schoolNumber) {
+            showMessage('Please fill in School Name, Cluster Number, and School Number', true);
+            return;
+        }
+        
+        showLoading(true);
         try {
-            const res = await fetch(`/api/schools/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, clusterNumber: cluster, schoolNumber: schoolNo, bmoName, bmoPhone, address, notes, waterAccounts:[], electricityAccounts:[], telephoneAccounts:[] }) });
-            const result = await res.json();
-            if(res.ok && result.success) { showMessage(`✅ Saved`); currentEditingId = null; await loadSchools(); }
-            else showMessage(result.error || 'Update failed', true);
-        } catch(err) { showMessage('Network error', true); }
+            const response = await fetch(`/api/schools/${currentEditingSchool.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(schoolData)
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                showMessage('School updated successfully');
+                closeEditModal();
+                await loadSchools();
+            } else {
+                showMessage(result.error || 'Failed to update school', true);
+            }
+        } catch (error) {
+            showMessage('Network error', true);
+            console.error(error);
+        } finally {
+            showLoading(false);
+        }
     }
     
     async function deleteSchool(id) {
-        try { const res = await fetch(`/api/schools/${id}`, { method: 'DELETE' }); const data = await res.json(); if(data.success) { showMessage('School deleted'); await loadSchools(); } else showMessage(data.error || 'Cannot delete', true); }
-        catch(e) { showMessage('Delete failed', true); }
-    }
-    
-    let addingMode = false;
-    async function inlineAddSchool() {
-        if(addingMode) return;
-        addingMode = true;
-        const tbody = document.getElementById('schoolsTbody');
-        const addRow = document.createElement('tr'); addRow.className='add-new-row'; addRow.id='inline-add-row';
-        addRow.innerHTML = `<td style="text-align:center">✨</div>
-            <td><input id="new-name" class="inline-edit-input" placeholder="Name *"></div>
-            <td><input id="new-cluster" class="inline-edit-input" placeholder="Cluster *"></div>
-            <td><input id="new-schno" class="inline-edit-input" placeholder="School No *"></div>
-            <td colspan="3"><span style="font-size:0.7rem; color:gray;">(Add utilities after creation)</span></div>
-            <td><input id="new-bmoname" class="inline-edit-input" placeholder="BMO"></div>
-            <td><input id="new-bmophone" class="inline-edit-input" placeholder="Phone"></div>
-            <td><input id="new-address" class="inline-edit-input" placeholder="Address"></div>
-            <td><input id="new-notes" class="inline-edit-input" placeholder="Notes"></div>
-            <td><button id="confirmAddBtn" class="btn btn-success btn-sm">✓ Create</button><button id="cancelAddBtn" class="btn btn-secondary btn-sm">✗ Cancel</button></div>`;
-        const first = tbody.firstChild; if(first) tbody.insertBefore(addRow, first); else tbody.appendChild(addRow);
-        document.getElementById('confirmAddBtn')?.addEventListener('click', async () => {
-            const name = document.getElementById('new-name')?.value.trim(); const cluster = document.getElementById('new-cluster')?.value.trim(); const schno = document.getElementById('new-schno')?.value.trim();
-            if(!name || !cluster || !schno) { showMessage("Required fields", true); return; }
-            const payload = { name, clusterNumber: cluster, schoolNumber: schno, bmoName: document.getElementById('new-bmoname')?.value.trim()||'', bmoPhone: document.getElementById('new-bmophone')?.value.trim()||'', address: document.getElementById('new-address')?.value.trim()||'', notes: document.getElementById('new-notes')?.value.trim()||'', waterAccounts:[], electricityAccounts:[], telephoneAccounts:[] };
-            try {
-                const res = await fetch('/api/schools', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-                const result = await res.json();
-                if(res.ok && result.success) { showMessage(`School "${name}" created`); addingMode=false; await loadSchools(); }
-                else showMessage(result.error||'Creation failed', true);
-            } catch(e) { showMessage('Network error', true); } finally { addingMode=false; renderSchools(); }
-        });
-        document.getElementById('cancelAddBtn')?.addEventListener('click', () => { addingMode=false; renderSchools(); });
-    }
-    
-    // ============ DIRECT PRINT FUNCTIONALITY (No extra tab - just print dialog) ============
-    function openPrintModal() { populateColumnSelector(); document.getElementById('printModal').classList.add('active'); }
-    function closePrintModal() { document.getElementById('printModal').classList.remove('active'); }
-    
-    function populateColumnSelector() {
-        const container = document.getElementById('columnSelector');
-        let html = `<div class="select-all-row column-option"><input type="checkbox" id="selectAllColumns" onchange="toggleAllColumns()"><label><strong>✓ Select All Columns</strong></label></div>`;
-        columns.forEach(col => { const saved = localStorage.getItem(`school_print_col_${col.key}`); const isChecked = saved !== null ? saved === 'true' : col.default;
-            html += `<div class="column-option"><input type="checkbox" class="col-checkbox" id="col_${col.key}" data-col="${col.key}" ${isChecked ? 'checked' : ''}><label>${col.label}</label></div>`;
-        });
-        container.innerHTML = html;
-        document.querySelectorAll('.col-checkbox').forEach(cb => cb.addEventListener('change', () => { updateSelectAllState(); saveColumnSelections(); }));
-        updateSelectAllState();
-    }
-    
-    function updateSelectAllState() { const checkboxes = document.querySelectorAll('.col-checkbox'), selectAll = document.getElementById('selectAllColumns'); if(selectAll) selectAll.checked = Array.from(checkboxes).every(cb => cb.checked); }
-    function toggleAllColumns() { const selectAll = document.getElementById('selectAllColumns'); document.querySelectorAll('.col-checkbox').forEach(cb => cb.checked = selectAll.checked); saveColumnSelections(); }
-    function saveColumnSelections() { columns.forEach(col => { const cb = document.getElementById(`col_${col.key}`); if(cb) localStorage.setItem(`school_print_col_${col.key}`, cb.checked); }); }
-    function getSelectedColumns() { return columns.filter(col => { const saved = localStorage.getItem(`school_print_col_${col.key}`); return saved !== null ? saved === 'true' : col.default; }); }
-    
-    function performPrint() {
-        const selectedCols = getSelectedColumns();
-        const filtered = getFilteredSchools();
-        if(filtered.length === 0) { showMessage('No data to print', true); closePrintModal(); return; }
-        
-        const clusterMap = new Map();
-        filtered.forEach(s => { let c = s.cluster_number || 'Unassigned'; if(!clusterMap.has(c)) clusterMap.set(c, []); clusterMap.get(c).push(s); });
-        const sortedClusters = Array.from(clusterMap.keys()).sort((a,b) => a==='Unassigned'?1:b==='Unassigned'?-1:(parseInt(a)||0)-(parseInt(b)||0));
-        
-        const now = new Date();
-        const dateStr = now.toLocaleDateString();
-        const timeStr = now.toLocaleTimeString();
-        
-        // Build the print HTML content
-        let printHtml = `<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Schools Report - ${dateStr}</title>
-            <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { background: white; font-family: 'Segoe UI', Arial, sans-serif; }
-                @page { margin: 2.5cm 1.5cm 2.5cm 1.5cm; size: A4; }
-                .print-header { text-align: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 2px solid #333; }
-                .print-header h1 { margin: 0 0 10px 0; color: #4361ee; font-size: 24px; }
-                .print-header p { margin: 5px 0; color: #666; font-size: 12px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10pt; }
-                th, td { border: 1px solid #999; padding: 8px 8px; text-align: left; vertical-align: top; }
-                th { background-color: #e8e8e8; font-weight: bold; }
-                .cluster-group { background-color: #e8f0fe; font-weight: bold; }
-                .cluster-group td { background-color: #e8f0fe; font-size: 12pt; font-weight: bold; }
-                .group-count { font-weight: normal; font-size: 10pt; margin-left: 10px; }
-                .utility-text { white-space: pre-line; font-size: 9pt; line-height: 1.3; }
-                .footer { margin-top: 35px; text-align: center; font-size: 10pt; color: #666; border-top: 1px solid #ddd; padding-top: 15px; }
-                tr { break-inside: avoid; page-break-inside: avoid; }
-                .cluster-group { break-inside: avoid; page-break-inside: avoid; }
-            </style>
-        </head>
-        <body>
-        <div class="print-header">
-            <h1>🏫 Schools Management Report</h1>
-            <p>Generated: ${dateStr} at ${timeStr}</p>
-            <p><strong>Total Schools:</strong> ${filtered.length}</p>
-        </div>
-        <table><thead><tr>`;
-        
-        selectedCols.forEach(col => { 
-            if(col.key === 'seq') printHtml += `<th>No.</th>`;
-            else if(col.key === 'schoolName') printHtml += `<th>School Name</th>`;
-            else if(col.key === 'cluster') printHtml += `<th>Cluster</th>`;
-            else if(col.key === 'schoolNo') printHtml += `<th>School No.</th>`;
-            else if(col.key === 'waterAccounts') printHtml += `<th>💧 Water Accounts</th>`;
-            else if(col.key === 'electricityAccounts') printHtml += `<th>⚡ Electricity Accounts</th>`;
-            else if(col.key === 'telephoneAccounts') printHtml += `<th>📞 Telephone Accounts</th>`;
-            else if(col.key === 'bmoName') printHtml += `<th>BMO Name</th>`;
-            else if(col.key === 'bmoPhone') printHtml += `<th>BMO Phone</th>`;
-            else if(col.key === 'address') printHtml += `<th>Address</th>`;
-            else if(col.key === 'notes') printHtml += `<th>Notes</th>`;
-        });
-        printHtml += `</tr></thead><tbody>`;
-        
-        let globalSeq = 1;
-        for(let cluster of sortedClusters) {
-            const schools = clusterMap.get(cluster);
-            printHtml += `<tr class="cluster-group"><td colspan="${selectedCols.length}"><strong>🏫 ${cluster === 'Unassigned' ? 'UNASSIGNED' : `CLUSTER ${cluster}`}</strong> <span class="group-count">(${schools.length} school${schools.length > 1 ? 's' : ''})</span> </div></tr>`;
-            for(let school of schools) {
-                printHtml += `<tr>`;
-                for(let col of selectedCols) {
-                    if(col.key === 'seq') printHtml += `<td style="text-align:center">${globalSeq}</td>`;
-                    else if(col.key === 'schoolName') printHtml += `<td>${escapeHtml(school.name || '-')}</td>`;
-                    else if(col.key === 'cluster') printHtml += `<td>${escapeHtml(school.cluster_number || '-')}</td>`;
-                    else if(col.key === 'schoolNo') printHtml += `<td>${escapeHtml(school.school_number || '-')}</td>`;
-                    else if(col.key === 'waterAccounts') printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.water_accounts, 'water'))}</td>`;
-                    else if(col.key === 'electricityAccounts') printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.electricity_accounts, 'electricity'))}</td>`;
-                    else if(col.key === 'telephoneAccounts') printHtml += `<td class="utility-text">${escapeHtml(getSimpleUtilityTextForPrint(school.telephone_accounts, 'telephone'))}</td>`;
-                    else if(col.key === 'bmoName') printHtml += `<td>${escapeHtml(school.bmo_name || '-')}</td>`;
-                    else if(col.key === 'bmoPhone') printHtml += `<td>${escapeHtml(school.bmo_phone || '-')}</td>`;
-                    else if(col.key === 'address') printHtml += `<td>${escapeHtml(school.address || '-')}</td>`;
-                    else if(col.key === 'notes') printHtml += `<td>${escapeHtml(school.notes || '-')}</td>`;
-                }
-                printHtml += `</tr>`;
-                globalSeq++;
+        showLoading(true);
+        try {
+            const response = await fetch(`/api/schools/${id}`, { method: 'DELETE' });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                showMessage('School deleted successfully');
+                await loadSchools();
+            } else {
+                showMessage(result.error || 'Failed to delete school', true);
             }
+        } catch (error) {
+            showMessage('Network error', true);
+        } finally {
+            showLoading(false);
         }
-        
-        printHtml += `</tbody></table>
-        <div class="footer">
-            <p>UKA Bill Utility System - Official School Listing</p>
-        </div>
-        </body>
-        </html>`;
-        
-        closePrintModal();
-        
-        // Create an iframe for printing (prevents new tab from staying open)
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'absolute';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = 'none';
-        document.body.appendChild(iframe);
-        
-        const iframeDoc = iframe.contentWindow.document;
-        iframeDoc.open();
-        iframeDoc.write(printHtml);
-        iframeDoc.close();
-        
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        
-        // Remove iframe after printing
-        setTimeout(() => {
-            document.body.removeChild(iframe);
-        }, 1000);
     }
     
-    document.getElementById('addNewSchoolBtn').addEventListener('click', () => { if(currentEditingId) showMessage('Finish current edit first', true); else inlineAddSchool(); });
-    document.getElementById('refreshBtn').addEventListener('click', () => loadSchools());
+    async function addNewSchool() {
+        const schoolData = {
+            name: 'New School',
+            clusterNumber: '1',
+            schoolNumber: '001',
+            bmoName: '',
+            bmoPhone: '',
+            address: '',
+            notes: '',
+            waterAccounts: [],
+            electricityAccounts: [],
+            telephoneAccounts: []
+        };
+        
+        showLoading(true);
+        try {
+            const response = await fetch('/api/schools', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(schoolData)
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                showMessage('School created successfully');
+                await loadSchools();
+                // Open edit modal for the new school
+                setTimeout(() => openEditModal(result.school.id), 500);
+            } else {
+                showMessage(result.error || 'Failed to create school', true);
+            }
+        } catch (error) {
+            showMessage('Network error', true);
+        } finally {
+            showLoading(false);
+        }
+    }
+    
+    function closeEditModal() {
+        document.getElementById('editModal').classList.remove('active');
+        currentEditingSchool = null;
+    }
+    
+    document.getElementById('saveSchoolBtn').addEventListener('click', saveSchool);
+    document.getElementById('addNewSchoolBtn').addEventListener('click', addNewSchool);
+    document.getElementById('refreshBtn').addEventListener('click', loadSchools);
     document.getElementById('searchFilter').addEventListener('input', () => renderSchools());
     document.getElementById('clusterFilter').addEventListener('change', () => renderSchools());
-    document.getElementById('sortFilter').addEventListener('change', () => renderSchools());
-    document.getElementById('printBtn').addEventListener('click', openPrintModal);
-    document.getElementById('confirmPrintBtn').addEventListener('click', performPrint);
+    
+    // Initialize
     loadSchools();
 </script>
 </body>
