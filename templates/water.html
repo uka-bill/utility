@@ -126,15 +126,6 @@
             background: #218838;
         }
 
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c82333;
-        }
-
         .period-card {
             background: white;
             border-radius: 10px;
@@ -914,51 +905,6 @@
             }
         }
     }
-    
-    async function deleteEntityBills(entityRow, month, year) {
-        if (isLoading) return;
-        
-        const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
-        if (!confirm(`Delete ALL water bills for ${entityName} for ${month}/${year}?`)) return;
-        
-        let meterRows = [];
-        let nextRow = entityRow.nextElementSibling;
-        while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
-            meterRows.push(nextRow);
-            nextRow = nextRow.nextElementSibling;
-        }
-        
-        const billIdsToDelete = [];
-        for (const row of meterRows) {
-            const billId = row.getAttribute('data-bill-id');
-            if (billId) {
-                billIdsToDelete.push(parseInt(billId));
-            }
-        }
-        
-        if (billIdsToDelete.length === 0) {
-            showToast('No bills to delete', true);
-            return;
-        }
-        
-        isLoading = true;
-        showLoading(true);
-        
-        let successCount = 0;
-        for (const billId of billIdsToDelete) {
-            try {
-                const resp = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
-                if (resp.ok) successCount++;
-            } catch(err) {
-                console.error('Delete error:', err);
-            }
-        }
-        
-        isLoading = false;
-        showLoading(false);
-        showToast(`🗑️ Deleted ${successCount} bill${successCount > 1 ? 's' : ''} successfully`);
-        await renderWaterTable();
-    }
 
     async function renderWaterTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
@@ -1261,7 +1207,6 @@
             <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
-                ${entityHasBills && !isPlaceholder ? '<button class="btn btn-danger btn-sm delete-entity-btn">🗑️ Delete All</button>' : ''}
             </div>
         `;
         tbody.appendChild(entityRow);
@@ -1316,14 +1261,6 @@
                     await saveEntityData(entityRow, currentMonth, currentYear);
                 }
                 return;
-            }
-            
-            const deleteBtn = e.target.closest('.delete-entity-btn');
-            if (deleteBtn) {
-                const entityRow = deleteBtn.closest('tr.entity-row');
-                if (entityRow) {
-                    await deleteEntityBills(entityRow, currentMonth, currentYear);
-                }
             }
         });
     }
