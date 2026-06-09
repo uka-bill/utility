@@ -8,12 +8,12 @@
         :root {
             --primary: #4361ee;
             --secondary: #3f37c9;
-            --success: #4cc9f0;
-            --danger: #f72585;
-            --warning: #f8961e;
-            --info: #4895ef;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --info: #17a2b8;
             --light: #f8f9fa;
-            --dark: #212529;
+            --dark: #343a40;
             --gray: #6c757d;
             --bill-shade: #fff8e1;
             --bill-border: #ff9800;
@@ -119,9 +119,13 @@
             background: var(--secondary);
         }
 
-        .btn-warning {
-            background: var(--warning);
+        .btn-success {
+            background: var(--success);
             color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
         }
 
         .period-card {
@@ -189,12 +193,6 @@
 
         .filter-input {
             min-width: 250px;
-        }
-
-        .search-hint {
-            font-size: 0.7rem;
-            color: #6c757d;
-            margin-top: 4px;
         }
 
         .table-wrapper {
@@ -318,24 +316,6 @@
             padding: 5px 10px;
             font-size: 0.7rem;
             border-radius: 5px;
-        }
-
-        .btn-success {
-            background: var(--success);
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #3aa8c4;
-        }
-
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #e05a8a;
         }
 
         .no-data {
@@ -608,15 +588,6 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
-        .edit-mode-input {
-            width: 100%;
-            padding: 6px 8px;
-            border-radius: 4px;
-            border: 1px solid var(--primary);
-            font-size: 0.75rem;
-            background: #fff;
-        }
 
         .saving-indicator {
             display: inline-block;
@@ -628,6 +599,15 @@
             animation: spin 1s linear infinite;
             margin-right: 8px;
             vertical-align: middle;
+        }
+
+        .edit-mode-input {
+            width: 100%;
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--primary);
+            font-size: 0.75rem;
+            background: #fff;
         }
     </style>
 </head>
@@ -713,7 +693,7 @@
             <tbody id="billsTableBody">
                 <tr><td colspan="10" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
-        </table>
+        <table>
     </div>
 </div>
 
@@ -729,7 +709,6 @@
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
     let isLoading = false;
-    let editingEntityId = null;
     let savingEntities = new Set();
     
     let savedScrollPosition = 0;
@@ -926,7 +905,7 @@
         setTimeout(() => toast.remove(), 4000);
     }
 
-    // Enhanced search function - searches entity name, account number, phone number
+    // Enhanced search function
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
         
@@ -953,79 +932,30 @@
         return false;
     }
 
-    // Update phone number directly on telephone page
-    async function updatePhoneInfo(entityId, accountNumber, oldPhoneNumber, newPhoneNumber, newLocation) {
-        try {
-            const entity = [...allSchools, ...allDepartments].find(e => e.id == entityId);
-            if (!entity) return false;
-            
-            let accounts = [];
-            if (entity.type === 'school') {
-                const school = allSchools.find(s => s.id == entityId);
-                accounts = school.telephone_accounts && typeof school.telephone_accounts === 'string' ? JSON.parse(school.telephone_accounts) : (school.telephone_accounts || []);
-            } else {
-                const dept = allDepartments.find(d => d.id == entityId);
-                accounts = dept.telephone_accounts && typeof dept.telephone_accounts === 'string' ? JSON.parse(dept.telephone_accounts) : (dept.telephone_accounts || []);
-            }
-            
-            let found = false;
-            for (const acc of accounts) {
-                if (acc.accountNumber === accountNumber) {
-                    if (acc.numbers) {
-                        for (const num of acc.numbers) {
-                            if (num.phoneNumber === oldPhoneNumber) {
-                                if (newPhoneNumber && newPhoneNumber !== oldPhoneNumber) {
-                                    num.phoneNumber = newPhoneNumber;
-                                }
-                                if (newLocation !== undefined && newLocation !== num.location) {
-                                    num.location = newLocation;
-                                }
-                                found = true;
-                                break;
-                            }
-                        }
-                    }
-                    break;
-                }
-            }
-            
-            if (found) {
-                const updateData = {
-                    telephoneAccounts: accounts
-                };
-                
-                const url = entity.type === 'school' ? `/api/schools/${entityId}` : `/api/departments/${entityId}`;
-                const resp = await fetch(url, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updateData)
-                });
-                return resp.ok;
-            }
-            return false;
-        } catch(e) {
-            console.error(e);
-            return false;
-        }
-    }
-
-    // Save all data for an entity
-    async function saveEntityBills(entityRow, summaryValues, month, year) {
+    async function saveEntityData(entityRow, summaryValues, month, year) {
         if (isLoading) return;
         
-        const entityType = entityRow.getAttribute('data-entity-type');
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
+        const entityType = entityRow.getAttribute('data-entity-type');
+        const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
+        
+        if (!hasAccounts) {
+            showToast('❌ Cannot save: No telephone account configured for this entity.', true);
+            return;
+        }
         
         if (savingEntities.has(entityId)) {
             showToast('⏳ Already saving...', true);
             return;
         }
         
+        // Get all account rows and phone rows for this entity
         let accountRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('account-header-row')) {
             accountRows.push(nextRow);
             nextRow = nextRow.nextElementSibling;
+            // Skip phone rows until next account header
             while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
                 nextRow = nextRow.nextElementSibling;
             }
@@ -1038,6 +968,7 @@
             const billNumberInput = accountRow.querySelector('.account-bill-number-input');
             const accountBillNumber = billNumberInput?.value || '';
             
+            // Get phone rows for this account
             let phoneRows = [];
             let phoneRow = accountRow.nextElementSibling;
             while (phoneRow && phoneRow.classList && phoneRow.classList.contains('phone-row') && 
@@ -1066,7 +997,7 @@
                     account_number: accountNumber === '—' ? '' : accountNumber,
                     phone_number: phoneNumber === '—' ? '' : phoneNumber,
                     current_charges: currentCharges,
-                    meter_number: accountBillNumber,
+                    meter_number: accountBillNumber,  // Bill No. stored here
                     amount_paid: 0,
                     notes: JSON.stringify({ totalAmount: totalAmount, originalNotes: notes }),
                     month: month,
@@ -1075,7 +1006,11 @@
             }
         }
         
-        const saveBtn = entityRow.querySelector('.save-entity-summary-btn');
+        const summaryContainer = entityRow.nextElementSibling?.querySelector('.summary-container');
+        let saveBtn = null;
+        if (summaryContainer) {
+            saveBtn = summaryContainer.querySelector('.save-entity-btn');
+        }
         const originalBtnText = saveBtn?.innerHTML || '💾 Save All';
         if (saveBtn) {
             saveBtn.innerHTML = '<span class="saving-indicator"></span> Saving...';
@@ -1088,6 +1023,7 @@
             let successCount = 0;
             let errorCount = 0;
             
+            // Save phone records (Bill Amount, Total Amount, Notes)
             if (batchBills.length > 0) {
                 const resp = await fetch('/api/utility-bills/batch-update', {
                     method: 'POST',
@@ -1099,6 +1035,7 @@
                 errorCount = result.error_count || 0;
             }
             
+            // Save summary box data
             if (summaryValues) {
                 const summaryBillData = {
                     utility_type: 'telephone',
@@ -1160,62 +1097,6 @@
         }
     }
 
-    async function deleteEntityBills(entityRow, month, year) {
-        if (isLoading) return;
-        
-        const entityName = entityRow.querySelector('.entity-name')?.innerText || 'this entity';
-        if (!confirm(`Delete ALL telephone bills for ${entityName} for ${month}/${year}?`)) return;
-        
-        let phoneRows = [];
-        let nextRow = entityRow.nextElementSibling;
-        while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
-            if (nextRow.classList.contains('phone-row')) {
-                phoneRows.push(nextRow);
-            }
-            nextRow = nextRow.nextElementSibling;
-        }
-        
-        const billIdsToDelete = [];
-        for (const row of phoneRows) {
-            const billId = row.getAttribute('data-bill-id');
-            if (billId) {
-                billIdsToDelete.push(parseInt(billId));
-            }
-        }
-        
-        const existingSummary = existingBills.find(b => 
-            b.entity_type === entityRow.getAttribute('data-entity-type') && 
-            b.entity_id === parseInt(entityRow.getAttribute('data-entity-id')) && 
-            b.notes?.includes('isSummary')
-        );
-        if (existingSummary && existingSummary.id) {
-            billIdsToDelete.push(existingSummary.id);
-        }
-        
-        if (billIdsToDelete.length === 0) {
-            showToast('No bills to delete', true);
-            return;
-        }
-        
-        isLoading = true;
-        showLoading(true);
-        
-        let successCount = 0;
-        for (const billId of billIdsToDelete) {
-            try {
-                const resp = await fetch(`/api/utility-bills/${billId}`, { method: 'DELETE' });
-                if (resp.ok) successCount++;
-            } catch(err) {
-                console.error('Delete error:', err);
-            }
-        }
-        
-        isLoading = false;
-        showLoading(false);
-        showToast(`🗑️ Deleted ${successCount} bill${successCount > 1 ? 's' : ''} successfully`);
-        await renderTelephoneTable();
-    }
-
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1223,7 +1104,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td><tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></td>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1431,8 +1312,8 @@
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
-        let entityHasPaidBills = false;
-        let isEditing = (editingEntityId === entity.id);
+        let entityHasBills = false;
+        let isPlaceholder = false;
         
         const summaryKey = `${entity.type}_${entity.id}`;
         const existingSummary = existingSummaryData[summaryKey] || {};
@@ -1442,6 +1323,7 @@
         entityRow.setAttribute('data-entity-type', entity.type);
         entityRow.setAttribute('data-entity-id', entity.id);
         entityRow.setAttribute('data-entity-name', entity.name);
+        entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
             <td class="seq-number">${startSerial}</div>
@@ -1455,12 +1337,7 @@
             <td></div>
             <td><span class="status-badge status-pending" id="entity-status-${entity.id}">Pending</span></div>
             <td class="entity-actions">
-                ${isEditing ? `
-                    <button class="btn btn-success btn-sm save-edit-btn">💾 Save Edit</button>
-                    <button class="btn btn-secondary btn-sm cancel-edit-btn">✖ Cancel</button>
-                ` : `
-                    <button class="btn btn-warning btn-sm edit-entity-btn">✏️ Edit Phone</button>
-                `}
+                <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
             </div>
         `;
         tbody.appendChild(entityRow);
@@ -1490,31 +1367,17 @@
             accountRow.setAttribute('data-entity-id', entity.id);
             accountRow.setAttribute('data-account-number', account.accountNumber);
             
-            if (isEditing) {
-                accountRow.innerHTML = `
-                    <td></div>
-                    <td colspan="2">
-                        <input type="text" class="edit-mode-input edit-account-input" value="${escapeHtml(account.accountNumber)}" placeholder="Account Number">
-                    </div>
-                    <td class="bill-number-cell"><input type="text" class="edit-mode-input edit-bill-input" value="${escapeHtml(accountBillNumber)}" placeholder="Bill No."></div>
-                    <td colspan="2"></div>
-                    <td></div>
-                    <td></div>
-                    <td colspan="2"></div>
-                `;
-            } else {
-                accountRow.innerHTML = `
-                    <td></div>
-                    <td colspan="2">
-                        <span class="account-number">📁 ${escapeHtml(account.accountNumber)}</span>
-                    </div>
-                    <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No."></div>
-                    <td colspan="2"></div>
-                    <td></div>
-                    <td></div>
-                    <td colspan="2"></div>
-                `;
-            }
+            accountRow.innerHTML = `
+                <td></div>
+                <td colspan="2">
+                    <span class="account-number">📁 ${escapeHtml(account.accountNumber)}</span>
+                </div>
+                <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No."></div>
+                <td colspan="2"></div>
+                <td></div>
+                <td></div>
+                <td colspan="2"></div>
+            `;
             tbody.appendChild(accountRow);
             
             for (const num of account.numbers) {
@@ -1537,7 +1400,7 @@
                     accountTotalPaid += amountPaid;
                     entityTotalPaid += amountPaid;
                     if (amountPaid > 0) {
-                        entityHasPaidBills = true;
+                        entityHasBills = true;
                     }
                 }
                 
@@ -1547,36 +1410,20 @@
                 phoneRow.className = 'phone-row';
                 phoneRow.setAttribute('data-account-number', account.accountNumber);
                 phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
-                if (num.billId) phoneRow.setAttribute('data-bill-id', num.billId);
+                phoneRow.setAttribute('data-bill-id', num.billId || '');
                 
-                if (isEditing) {
-                    phoneRow.innerHTML = `
-                        <td class="seq-number">${serial}</div>
-                        <td></div>
-                        <td></div>
-                        <td></div>
-                        <td>
-                            <input type="text" class="edit-mode-input edit-phone-input" value="${escapeHtml(num.phoneNumber)}" placeholder="Phone Number">
-                            <input type="text" class="edit-mode-input edit-location-input" style="margin-top:4px;" value="${escapeHtml(num.location)}" placeholder="Location">
-                        </div>
-                        <td colspan="5"></div>
-                        <td></div>
-                        <td></div>
-                    `;
-                } else {
-                    phoneRow.innerHTML = `
-                        <td class="seq-number">${serial}</div>
-                        <td></div>
-                        <td></div>
-                        <td></div>
-                        <td><div class="phone-number">📞 ${escapeHtml(num.phoneNumber)}</div>${locationDisplay}</div>
-                        <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${currentCharges.toFixed(2)}" placeholder="$"></div>
-                        <td><input type="number" step="0.01" class="inline-input total-amount-input" value="${totalAmount.toFixed(2)}" placeholder="$"></div>
-                        <td><input type="text" class="inline-input notes-input" value="${escapeHtml(notes)}" placeholder="Notes..."></div>
-                        <td></div>
-                        <td></div>
-                    `;
-                }
+                phoneRow.innerHTML = `
+                    <td class="seq-number">${serial}</div>
+                    <td></div>
+                    <td></div>
+                    <td></div>
+                    <td><div class="phone-number">📞 ${escapeHtml(num.phoneNumber)}</div>${locationDisplay}</div>
+                    <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${currentCharges.toFixed(2)}" placeholder="$"></div>
+                    <td><input type="number" step="0.01" class="inline-input total-amount-input" value="${totalAmount.toFixed(2)}" placeholder="$"></div>
+                    <td><input type="text" class="inline-input notes-input" value="${escapeHtml(notes)}" placeholder="Notes..."></div>
+                    <td></div>
+                    <td></div>
+                `;
                 tbody.appendChild(phoneRow);
                 serial++;
             }
@@ -1584,8 +1431,8 @@
         
         const entityStatusSpan = document.getElementById(`entity-status-${entity.id}`);
         if (entityStatusSpan) {
-            const entityStatusText = entityHasPaidBills ? 'Paid' : 'Pending';
-            const entityStatusClass = entityHasPaidBills ? 'status-paid' : 'status-pending';
+            const entityStatusText = entityHasBills ? 'Paid' : 'Pending';
+            const entityStatusClass = entityHasBills ? 'status-paid' : 'status-pending';
             entityStatusSpan.innerHTML = entityStatusText;
             entityStatusSpan.className = `status-badge ${entityStatusClass}`;
         }
@@ -1595,98 +1442,101 @@
             entityTotalSpan.innerHTML = `(Total Paid: $${entityTotalPaid.toFixed(2)})`;
         }
         
-        if (!isEditing) {
-            const previousOutstanding = existingSummary.previousOutstanding || 0;
-            const previousPayment = existingSummary.previousPayment || 0;
-            const totalAccountCharges = existingSummary.totalAccountCharges || 0;
-            const amountPaid = existingSummary.amountPaid || 0;
-            
-            // Calculate Total Current Charges = Outstanding + (- Previous Payment) + Total Account Charges
-            const totalCurrentCharges = previousOutstanding + (-previousPayment) + totalAccountCharges;
-            
-            const summaryRow = document.createElement('tr');
-            summaryRow.className = 'summary-row';
-            
-            const summaryCell = document.createElement('td');
-            summaryCell.colSpan = 10;
-            summaryCell.style.padding = '15px 20px';
-            summaryCell.style.backgroundColor = 'transparent';
-            
-            summaryCell.innerHTML = `
-                <div class="summary-container">
-                    <div class="summary-title-box">💰 BILL SUMMARY - ${escapeHtml(entity.name)}</div>
-                    <div class="summary-grid">
-                        <div class="summary-item">
-                            <span class="summary-label">Previous Outstanding ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-previous-outstanding" id="prev_out_${entity.id}" value="${previousOutstanding.toFixed(2)}" placeholder="0.00">
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Previous Payment ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-previous-payment" id="prev_pay_${entity.id}" value="${previousPayment.toFixed(2)}" placeholder="0.00">
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Total Account Charges ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-total-account-charges" id="total_acc_${entity.id}" value="${totalAccountCharges.toFixed(2)}" placeholder="0.00">
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Total Current Charges ($)</span>
-                            <div class="summary-value" id="total_current_charges_${entity.id}">${totalCurrentCharges.toFixed(2)}</div>
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Amount Paid ($)</span>
-                            <input type="number" step="0.01" class="summary-input summary-amount-paid" id="amount_paid_${entity.id}" value="${amountPaid.toFixed(2)}" placeholder="0.00">
-                        </div>
+        const previousOutstanding = existingSummary.previousOutstanding || 0;
+        const previousPayment = existingSummary.previousPayment || 0;
+        const totalAccountCharges = existingSummary.totalAccountCharges || 0;
+        const amountPaid = existingSummary.amountPaid || 0;
+        
+        // Calculate Total Current Charges = Outstanding + (- Previous Payment) + Total Account Charges
+        const totalCurrentCharges = previousOutstanding + (-previousPayment) + totalAccountCharges;
+        
+        const summaryRow = document.createElement('tr');
+        summaryRow.className = 'summary-row';
+        
+        const summaryCell = document.createElement('td');
+        summaryCell.colSpan = 10;
+        summaryCell.style.padding = '15px 20px';
+        summaryCell.style.backgroundColor = 'transparent';
+        
+        summaryCell.innerHTML = `
+            <div class="summary-container">
+                <div class="summary-title-box">💰 BILL SUMMARY - ${escapeHtml(entity.name)}</div>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <span class="summary-label">Previous Outstanding ($)</span>
+                        <input type="number" step="0.01" class="summary-input summary-previous-outstanding" id="prev_out_${entity.id}" value="${previousOutstanding.toFixed(2)}" placeholder="0.00">
                     </div>
-                    <div class="summary-actions">
-                        <button class="btn btn-success save-entity-summary-btn">💾 Save All</button>
-                        ${entityHasPaidBills ? '<button class="btn btn-danger delete-entity-summary-btn" style="margin-left: 10px;">🗑️ Delete All Bills</button>' : ''}
+                    <div class="summary-item">
+                        <span class="summary-label">Previous Payment ($)</span>
+                        <input type="number" step="0.01" class="summary-input summary-previous-payment" id="prev_pay_${entity.id}" value="${previousPayment.toFixed(2)}" placeholder="0.00">
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Account Charges ($)</span>
+                        <input type="number" step="0.01" class="summary-input summary-total-account-charges" id="total_acc_${entity.id}" value="${totalAccountCharges.toFixed(2)}" placeholder="0.00">
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Current Charges ($)</span>
+                        <div class="summary-value" id="total_current_charges_${entity.id}">${totalCurrentCharges.toFixed(2)}</div>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Amount Paid ($)</span>
+                        <input type="number" step="0.01" class="summary-input summary-amount-paid" id="amount_paid_${entity.id}" value="${amountPaid.toFixed(2)}" placeholder="0.00">
                     </div>
                 </div>
-            `;
-            
-            summaryRow.appendChild(summaryCell);
-            tbody.appendChild(summaryRow);
-            
-            // Add event listeners for dynamic calculation
-            const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
-            const prevPayInput = summaryCell.querySelector('.summary-previous-payment');
-            const totalAccInput = summaryCell.querySelector('.summary-total-account-charges');
-            const currentChargesDiv = summaryCell.querySelector('#total_current_charges_' + entity.id);
-            
-            const updateCurrentCharges = () => {
-                const prevOut = parseFloat(prevOutInput?.value) || 0;
-                const prevPay = parseFloat(prevPayInput?.value) || 0;
-                const totalAcc = parseFloat(totalAccInput?.value) || 0;
-                const totalCurrent = prevOut + (-prevPay) + totalAcc;
-                if (currentChargesDiv) {
-                    currentChargesDiv.innerText = totalCurrent.toFixed(2);
-                }
+                <div class="summary-actions">
+                    <button class="btn btn-success save-entity-btn">💾 Save All</button>
+                </div>
+            </div>
+        `;
+        
+        summaryRow.appendChild(summaryCell);
+        tbody.appendChild(summaryRow);
+        
+        // Add event listeners for dynamic calculation
+        const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
+        const prevPayInput = summaryCell.querySelector('.summary-previous-payment');
+        const totalAccInput = summaryCell.querySelector('.summary-total-account-charges');
+        const currentChargesDiv = summaryCell.querySelector('#total_current_charges_' + entity.id);
+        
+        const updateCurrentCharges = () => {
+            const prevOut = parseFloat(prevOutInput?.value) || 0;
+            const prevPay = parseFloat(prevPayInput?.value) || 0;
+            const totalAcc = parseFloat(totalAccInput?.value) || 0;
+            const totalCurrent = prevOut + (-prevPay) + totalAcc;
+            if (currentChargesDiv) {
+                currentChargesDiv.innerText = totalCurrent.toFixed(2);
+            }
+        };
+        
+        if (prevOutInput) prevOutInput.addEventListener('input', updateCurrentCharges);
+        if (prevPayInput) prevPayInput.addEventListener('input', updateCurrentCharges);
+        if (totalAccInput) totalAccInput.addEventListener('input', updateCurrentCharges);
+        
+        const saveBtn = summaryCell.querySelector('.save-entity-btn');
+        if (saveBtn) {
+            saveBtn.onclick = async () => {
+                saveScrollPosition();
+                
+                // Collect bill numbers from account rows
+                const accountBillNumbers = {};
+                const accountRows2 = document.querySelectorAll(`.account-header-row[data-entity-id="${entity.id}"]`);
+                accountRows2.forEach(accountRow => {
+                    const accountNum = accountRow.getAttribute('data-account-number');
+                    const billNoInput = accountRow.querySelector('.account-bill-number-input');
+                    if (billNoInput && accountNum) {
+                        accountBillNumbers[accountNum] = billNoInput.value;
+                    }
+                });
+                
+                const summaryValues = {
+                    previousOutstanding: parseFloat(prevOutInput?.value) || 0,
+                    previousPayment: parseFloat(prevPayInput?.value) || 0,
+                    totalAccountCharges: parseFloat(totalAccInput?.value) || 0,
+                    amountPaid: parseFloat(summaryCell.querySelector('.summary-amount-paid')?.value) || 0,
+                    billNumbers: accountBillNumbers
+                };
+                await saveEntityData(entityRow, summaryValues, month, year);
             };
-            
-            if (prevOutInput) prevOutInput.addEventListener('input', updateCurrentCharges);
-            if (prevPayInput) prevPayInput.addEventListener('input', updateCurrentCharges);
-            if (totalAccInput) totalAccInput.addEventListener('input', updateCurrentCharges);
-            
-            const saveBtn = summaryCell.querySelector('.save-entity-summary-btn');
-            if (saveBtn) {
-                saveBtn.onclick = async () => {
-                    saveScrollPosition();
-                    const summaryValues = {
-                        previousOutstanding: parseFloat(prevOutInput?.value) || 0,
-                        previousPayment: parseFloat(prevPayInput?.value) || 0,
-                        totalAccountCharges: parseFloat(totalAccInput?.value) || 0,
-                        amountPaid: parseFloat(summaryCell.querySelector('.summary-amount-paid')?.value) || 0
-                    };
-                    await saveEntityBills(entityRow, summaryValues, month, year);
-                };
-            }
-            
-            const deleteBtn = summaryCell.querySelector('.delete-entity-summary-btn');
-            if (deleteBtn) {
-                deleteBtn.onclick = async () => {
-                    await deleteEntityBills(entityRow, month, year);
-                };
-            }
         }
         
         return serial;
@@ -1703,72 +1553,38 @@
     }
     
     function attachEventListeners() {
+        // Save button click handling - using event delegation
         document.getElementById('billsTableBody').addEventListener('click', async (e) => {
-            const editBtn = e.target.closest('.edit-entity-btn');
-            if (editBtn) {
-                const entityRow = editBtn.closest('tr.entity-row');
-                if (entityRow) {
-                    saveScrollPosition();
-                    editingEntityId = parseInt(entityRow.getAttribute('data-entity-id'));
-                    await renderTelephoneTable();
+            const saveBtn = e.target.closest('.save-entity-btn');
+            if (saveBtn && !saveBtn.disabled) {
+                // Find the entity row
+                let entityRow = saveBtn.closest('tr.entity-row');
+                if (!entityRow) {
+                    const summaryRow = saveBtn.closest('.summary-row');
+                    if (summaryRow) {
+                        let prev = summaryRow.previousElementSibling;
+                        while (prev && !prev.classList.contains('entity-row')) {
+                            prev = prev.previousElementSibling;
+                        }
+                        entityRow = prev;
+                    }
                 }
-                return;
-            }
-            
-            const cancelBtn = e.target.closest('.cancel-edit-btn');
-            if (cancelBtn) {
-                editingEntityId = null;
-                await renderTelephoneTable();
-                return;
-            }
-            
-            const saveEditBtn = e.target.closest('.save-edit-btn');
-            if (saveEditBtn) {
-                const entityRow = saveEditBtn.closest('tr.entity-row');
-                if (entityRow) {
-                    const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
-                    let accountRows = [];
-                    let nextRow = entityRow.nextElementSibling;
-                    while (nextRow && nextRow.classList && nextRow.classList.contains('account-header-row')) {
-                        accountRows.push(nextRow);
-                        nextRow = nextRow.nextElementSibling;
-                        while (nextRow && nextRow.classList && nextRow.classList.contains('phone-row')) {
-                            nextRow = nextRow.nextElementSibling;
-                        }
-                    }
+                if (entityRow && entityRow.classList.contains('entity-row')) {
+                    saveScrollPosition();
                     
-                    let success = true;
-                    for (const accountRow of accountRows) {
-                        const accountNumber = accountRow.getAttribute('data-account-number');
-                        
-                        let phoneRows = [];
-                        let phoneRow = accountRow.nextElementSibling;
-                        while (phoneRow && phoneRow.classList && phoneRow.classList.contains('phone-row') && 
-                               phoneRow.getAttribute('data-account-number') === accountNumber) {
-                            phoneRows.push(phoneRow);
-                            phoneRow = phoneRow.nextElementSibling;
-                        }
-                        
-                        for (const row of phoneRows) {
-                            const oldPhone = row.getAttribute('data-phone');
-                            const newPhone = row.querySelector('.edit-phone-input')?.value || oldPhone;
-                            const newLocation = row.querySelector('.edit-location-input')?.value || '';
-                            
-                            if (oldPhone !== newPhone || newLocation) {
-                                const result = await updatePhoneInfo(entityId, accountNumber, oldPhone, newPhone, newLocation);
-                                if (!result) success = false;
-                            }
-                        }
-                    }
+                    const entityId = entityRow.getAttribute('data-entity-id');
+                    const prevOutInput = document.querySelector(`#prev_out_${entityId}`);
+                    const prevPayInput = document.querySelector(`#prev_pay_${entityId}`);
+                    const totalAccInput = document.querySelector(`#total_acc_${entityId}`);
+                    const amountPaidInput = document.querySelector(`#amount_paid_${entityId}`);
                     
-                    if (success) {
-                        showToast('✅ Phone information updated successfully');
-                        editingEntityId = null;
-                        await loadAllEntities();
-                        await renderTelephoneTable();
-                    } else {
-                        showToast('⚠️ Some updates failed. Please try again.', true);
-                    }
+                    const summaryValues = {
+                        previousOutstanding: parseFloat(prevOutInput?.value) || 0,
+                        previousPayment: parseFloat(prevPayInput?.value) || 0,
+                        totalAccountCharges: parseFloat(totalAccInput?.value) || 0,
+                        amountPaid: parseFloat(amountPaidInput?.value) || 0
+                    };
+                    await saveEntityData(entityRow, summaryValues, currentMonth, currentYear);
                 }
                 return;
             }
