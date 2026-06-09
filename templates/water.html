@@ -768,30 +768,18 @@
         setTimeout(() => toast.remove(), 4000);
     }
 
-    // Enhanced search function
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
-        
         const term = searchTerm.toLowerCase();
-        
         if (entity.name.toLowerCase().includes(term)) return true;
-        
         for (const account of entity.accountGroups) {
-            if (account.accountNumber && account.accountNumber !== '—' && 
-                account.accountNumber.toLowerCase().includes(term)) {
-                return true;
-            }
-            
+            if (account.accountNumber && account.accountNumber !== '—' && account.accountNumber.toLowerCase().includes(term)) return true;
             if (account.meters) {
                 for (const meter of account.meters) {
-                    if (meter.meterNumber && meter.meterNumber !== '—' && 
-                        meter.meterNumber.toLowerCase().includes(term)) {
-                        return true;
-                    }
+                    if (meter.meterNumber && meter.meterNumber !== '—' && meter.meterNumber.toLowerCase().includes(term)) return true;
                 }
             }
         }
-        
         return false;
     }
 
@@ -839,20 +827,25 @@
             
             const consumption = parseFloat(consumptionInput?.value) || 0;
             const currentCharges = parseFloat(currentInput?.value) || 0;
-            const outstandingCharges = parseFloat(outstandingInput?.value) || 0;
-            const previousPaymentReceived = parseFloat(previousPaidInput?.value) || 0;
+            const unsettledCharges = parseFloat(outstandingInput?.value) || 0;
+            const previousPayment = parseFloat(previousPaidInput?.value) || 0;
             const amountPaid = parseFloat(amountPaidInput?.value) || 0;
             const notes = notesInput?.value || '';
             
             batchBills.push({
                 id: existingBillId,
-                accountNumber: accountNumber === '—' ? '' : accountNumber,
-                meterNumber: meterNumber === '—' ? '' : meterNumber,
-                consumption: consumption,
-                currentCharges: currentCharges,
-                outstandingCharges: outstandingCharges,
-                amountPaid: amountPaid,
-                notes: JSON.stringify({ previousPayment: previousPaymentReceived, originalNotes: notes })
+                account_number: accountNumber === '—' ? '' : accountNumber,
+                meter_number: meterNumber === '—' ? '' : meterNumber,
+                consumption_m3: consumption,
+                current_charges: currentCharges,
+                unsettled_charges: unsettledCharges,
+                amount_paid: amountPaid,
+                notes: JSON.stringify({ previousPayment: previousPayment, originalNotes: notes }),
+                month: month,
+                year: year,
+                entity_type: entityType,
+                entity_id: entityId,
+                utility_type: 'water'
             });
         }
         
@@ -869,21 +862,7 @@
             const resp = await fetch('/api/utility-bills/batch-update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bills: batchBills.map(bill => ({
-                    utility_type: 'water',
-                    entity_type: entityType,
-                    entity_id: entityId,
-                    account_number: bill.accountNumber,
-                    meter_number: bill.meterNumber,
-                    consumption_m3: bill.consumption,
-                    current_charges: bill.currentCharges,
-                    unsettled_charges: bill.outstandingCharges,
-                    amount_paid: bill.amountPaid,
-                    notes: bill.notes,
-                    month: month,
-                    year: year,
-                    id: bill.id
-                })) })
+                body: JSON.stringify({ bills: batchBills })
             });
             
             const result = await resp.json();
