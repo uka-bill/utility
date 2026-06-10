@@ -980,7 +980,7 @@ def format_file_size(size):
         size /= 1024.0
     return f"{size:.1f} TB"
 
-# ============ BATCH UPDATE API (WORKING - NO UPSERT) ============
+# ============ BATCH UPDATE API (FIXED FOR TELEPHONE) ============
 
 @app.route('/api/utility-bills/batch-update', methods=['POST'])
 def batch_update_utility_bills():
@@ -1029,6 +1029,9 @@ def batch_update_utility_bills():
                         if dept_resp.data:
                             entity_name = dept_resp.data[0].get('unit_name', '')
                     
+                    month_val = int(bill_data.get('month'))
+                    year_val = int(bill_data.get('year'))
+                    
                     if existing.data and len(existing.data) > 0:
                         # Update existing bill
                         bill_id = existing.data[0]['id']
@@ -1046,7 +1049,7 @@ def batch_update_utility_bills():
                         else:
                             error_count += 1
                     else:
-                        # Create new bill
+                        # Create new bill - include ALL required fields including bill_month and bill_year
                         new_bill = {
                             "utility_type": utility_type,
                             "entity_type": bill_data.get('entity_type'),
@@ -1057,8 +1060,10 @@ def batch_update_utility_bills():
                             "meter_number": bill_data.get('meter_number', ''),
                             "current_charges": float(bill_data.get('current_charges', 0)),
                             "amount_paid": float(bill_data.get('amount_paid', 0)),
-                            "month": int(bill_data.get('month')),
-                            "year": int(bill_data.get('year')),
+                            "month": month_val,
+                            "year": year_val,
+                            "bill_month": month_val,
+                            "bill_year": year_val,
                             "notes": bill_data.get('notes', ''),
                             "created_at": datetime.now().isoformat()
                         }
@@ -1091,6 +1096,9 @@ def batch_update_utility_bills():
                         if dept_resp.data:
                             entity_name = dept_resp.data[0].get('unit_name', '')
                     
+                    month_val = int(bill_data.get('month'))
+                    year_val = int(bill_data.get('year'))
+                    
                     if existing.data and len(existing.data) > 0:
                         bill_id = existing.data[0]['id']
                         update_data = {
@@ -1117,8 +1125,10 @@ def batch_update_utility_bills():
                             "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
                             "amount_paid": float(bill_data.get('amount_paid', 0)),
                             "consumption_m3": float(bill_data.get('consumption_m3', 0)),
-                            "month": int(bill_data.get('month')),
-                            "year": int(bill_data.get('year')),
+                            "month": month_val,
+                            "year": year_val,
+                            "bill_month": month_val,
+                            "bill_year": year_val,
                             "notes": bill_data.get('notes', ''),
                             "created_at": datetime.now().isoformat()
                         }
@@ -1150,6 +1160,9 @@ def batch_update_utility_bills():
                         if dept_resp.data:
                             entity_name = dept_resp.data[0].get('unit_name', '')
                     
+                    month_val = int(bill_data.get('month'))
+                    year_val = int(bill_data.get('year'))
+                    
                     if existing.data and len(existing.data) > 0:
                         bill_id = existing.data[0]['id']
                         update_data = {
@@ -1176,8 +1189,10 @@ def batch_update_utility_bills():
                             "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
                             "amount_paid": float(bill_data.get('amount_paid', 0)),
                             "consumption_kwh": float(bill_data.get('consumption_kwh', 0)),
-                            "month": int(bill_data.get('month')),
-                            "year": int(bill_data.get('year')),
+                            "month": month_val,
+                            "year": year_val,
+                            "bill_month": month_val,
+                            "bill_year": year_val,
                             "notes": bill_data.get('notes', ''),
                             "created_at": datetime.now().isoformat()
                         }
