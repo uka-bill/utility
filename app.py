@@ -981,11 +981,11 @@ def format_file_size(size):
         size /= 1024.0
     return f"{size:.1f} TB"
 
-# ============ BATCH UPDATE API (OPTIMIZED - FAST) ============
+# ============ BATCH UPDATE API (FAST - USING UPSERT) ============
 
 @app.route('/api/utility-bills/batch-update', methods=['POST'])
 def batch_update_utility_bills():
-    """Update multiple utility bills using optimized processing"""
+    """Update multiple utility bills using UPSERT (one operation per bill)"""
     try:
         print("💡 POST /api/utility-bills/batch-update called")
         
@@ -998,13 +998,13 @@ def batch_update_utility_bills():
         if not bills:
             return jsonify({'error': 'No bills provided'}), 400
         
-        print(f"📦 Batch updating {len(bills)} bills")
+        print(f"📦 Batch updating {len(bills)} bills using UPSERT")
         
         start_time = time.time()
         success_count = 0
         error_count = 0
         
-        # Pre-fetch all entity names in ONE go to avoid repeated API calls
+        # Pre-fetch entity names in ONE go
         school_ids = set()
         dept_ids = set()
         for bill in bills:
@@ -1013,7 +1013,6 @@ def batch_update_utility_bills():
             elif bill.get('entity_type') == 'department':
                 dept_ids.add(int(bill.get('entity_id')))
         
-        # Fetch all school names in one query
         school_names = {}
         if school_ids:
             school_resp = supabase.table("schools").select("id, name").in_("id", list(school_ids)).execute()
@@ -1021,7 +1020,6 @@ def batch_update_utility_bills():
                 for school in school_resp.data:
                     school_names[school['id']] = school['name']
         
-        # Fetch all department names in one query
         dept_names = {}
         if dept_ids:
             dept_resp = supabase.table("departments").select("id, unit_name").in_("id", list(dept_ids)).execute()
@@ -1029,9 +1027,7 @@ def batch_update_utility_bills():
                 for dept in dept_resp.data:
                     dept_names[dept['id']] = dept.get('unit_name', '')
         
-        print(f"📦 Pre-fetched {len(school_names)} schools, {len(dept_names)} departments")
-        
-        # Process each bill
+        # Process each bill with UPSERT
         for bill_data in bills:
             try:
                 utility_type = bill_data.get('utility_type')
@@ -1040,7 +1036,6 @@ def batch_update_utility_bills():
                 month_val = int(bill_data.get('month'))
                 year_val = int(bill_data.get('year'))
                 
-                # Get entity name from pre-fetched data
                 entity_name = ""
                 if entity_type == 'school':
                     entity_name = school_names.get(entity_id, '')
@@ -1048,25 +1043,13 @@ def batch_update_utility_bills():
                     entity_name = dept_names.get(entity_id, '')
                 
                 if utility_type == 'telephone':
-                    phone_number = bill_data.get('phone_number', '')
-                    
-                    # Check if exists
-                    existing = supabase.table("utility_bills").select("id")\
-                        .eq("utility_type", "telephone")\
-                        .eq("entity_type", entity_type)\
-                        .eq("entity_id", entity_id)\
-                        .eq("month", month_val)\
-                        .eq("year", year_val)\
-                        .eq("phone_number", phone_number)\
-                        .execute()
-                    
                     record = {
                         "utility_type": "telephone",
                         "entity_type": entity_type,
                         "entity_id": entity_id,
                         "entity_name": entity_name,
                         "account_number": bill_data.get('account_number', ''),
-                        "phone_number": phone_number,
+                        "phone_number": bill_data.get('phone_number', ''),
                         "meter_number": bill_data.get('meter_number', ''),
                         "current_charges": float(bill_data.get('current_charges', 0)),
                         "amount_paid": float(bill_data.get('amount_paid', 0)),
@@ -1078,26 +1061,17 @@ def batch_update_utility_bills():
                         "updated_at": datetime.now().isoformat()
                     }
                     
-                    if existing.data and len(existing.data) > 0:
-                        supabase.table("utility_bills").update(record).eq("id", existing.data[0]['id']).execute()
-                    else:
-                        record["created_at"] = datetime.now().isoformat()
-                        supabase.table("utility_bills").insert(record).execute()
+                    result = supabase.table("utility_bills").upsert(
+                        record,
+                        on_conflict="phone_number,month,year,entity_id,entity_type"
+                    ).execute()
                     
-                    success_count += 1
+                    if result.data:
+                        success_count += 1
+                    else:
+                        error_count += 1
                 
                 elif utility_type == 'water':
-                    # Check if exists
-                    existing = supabase.table("utility_bills").select("id")\
-                        .eq("utility_type", "water")\
-                        .eq("entity_type", entity_type)\
-                        .eq("entity_id", entity_id)\
-                        .eq("month", month_val)\
-                        .eq("year", year_val)\
-                        .eq("account_number", bill_data.get('account_number', ''))\
-                        .eq("meter_number", bill_data.get('meter_number', ''))\
-                        .execute()
-                    
                     record = {
                         "utility_type": "water",
                         "entity_type": entity_type,
@@ -1117,26 +1091,17 @@ def batch_update_utility_bills():
                         "updated_at": datetime.now().isoformat()
                     }
                     
-                    if existing.data and len(existing.data) > 0:
-                        supabase.table("utility_bills").update(record).eq("id", existing.data[0]['id']).execute()
-                    else:
-                        record["created_at"] = datetime.now().isoformat()
-                        supabase.table("utility_bills").insert(record).execute()
+                    result = supabase.table("utility_bills").upsert(
+                        record,
+                        on_conflict="account_number,meter_number,month,year,entity_id,entity_type"
+                    ).execute()
                     
-                    success_count += 1
+                    if result.data:
+                        success_count += 1
+                    else:
+                        error_count += 1
                 
                 elif utility_type == 'electricity':
-                    # Check if exists
-                    existing = supabase.table("utility_bills").select("id")\
-                        .eq("utility_type", "electricity")\
-                        .eq("entity_type", entity_type)\
-                        .eq("entity_id", entity_id)\
-                        .eq("month", month_val)\
-                        .eq("year", year_val)\
-                        .eq("account_number", bill_data.get('account_number', ''))\
-                        .eq("meter_number", bill_data.get('meter_number', ''))\
-                        .execute()
-                    
                     record = {
                         "utility_type": "electricity",
                         "entity_type": entity_type,
@@ -1156,24 +1121,25 @@ def batch_update_utility_bills():
                         "updated_at": datetime.now().isoformat()
                     }
                     
-                    if existing.data and len(existing.data) > 0:
-                        supabase.table("utility_bills").update(record).eq("id", existing.data[0]['id']).execute()
-                    else:
-                        record["created_at"] = datetime.now().isoformat()
-                        supabase.table("utility_bills").insert(record).execute()
+                    result = supabase.table("utility_bills").upsert(
+                        record,
+                        on_conflict="account_number,meter_number,month,year,entity_id,entity_type"
+                    ).execute()
                     
-                    success_count += 1
+                    if result.data:
+                        success_count += 1
+                    else:
+                        error_count += 1
                 
                 else:
                     error_count += 1
-                    print(f"❌ Unknown utility type: {utility_type}")
                         
             except Exception as e:
                 error_count += 1
                 print(f"Error processing bill: {e}")
         
         elapsed_ms = (time.time() - start_time) * 1000
-        print(f"📊 Batch update result: {success_count} success, {error_count} failed in {elapsed_ms:.0f}ms")
+        print(f"📊 UPSERT batch result: {success_count} success, {error_count} failed in {elapsed_ms:.0f}ms")
         
         return jsonify({
             'success': error_count == 0,
