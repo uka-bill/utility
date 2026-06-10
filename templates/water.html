@@ -519,26 +519,17 @@
             cursor: not-allowed;
         }
         
-        .amount-paid-input {
-            width: 100px;
+        /* Style for disabled amount paid input on non-first rows */
+        .amount-paid-disabled {
+            width: 100%;
+            min-width: 70px;
             padding: 6px 8px;
             border-radius: 5px;
-            border: 1px solid #ddd;
+            border: 1px solid #eee;
+            background-color: #f5f5f5;
             font-size: 0.8rem;
             text-align: right;
-        }
-        
-        .entity-action-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            white-space: nowrap;
-        }
-        
-        .amount-paid-label {
-            font-size: 0.7rem;
-            font-weight: 600;
-            color: var(--gray);
+            color: #999;
         }
     </style>
 </head>
@@ -617,13 +608,14 @@
                     <th>Bill Amount ($)</th>
                     <th>Outstanding ($)</th>
                     <th>Previous Payment ($)</th>
+                    <th>Amount Paid ($)</th>
                     <th>Notes</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="11" class="no-data">Loading schools & departments...<\/td></tr>
+                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -1051,7 +1043,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="11" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td></td>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1069,7 +1061,7 @@
         });
         
         if (filteredEntities.length === 0) {
-            tbody.innerHTML = '<tr class="no-data-row"><td colspan="11" class="no-data">No matching entities found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr class="no-data-row"><td colspan="12" class="no-data">No matching entities found.<\/td><\/tr>';
             restoreScrollPosition();
             isLoading = false;
             return;
@@ -1145,7 +1137,7 @@
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
-                    <td colspan="11">
+                    <td colspan="12">
                         <div class="cluster-info">
                             <span>🏫 ${cluster}</span>
                             <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
@@ -1230,7 +1222,7 @@
                 const deptSeparator = document.createElement('tr');
                 deptSeparator.className = 'department-group-separator';
                 deptSeparator.innerHTML = `
-                    <td colspan="11">
+                    <td colspan="12">
                         <div class="dept-group-info">
                             <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
                             <span class="dept-group-count">${visibleGroupEntities.length} unit${visibleGroupEntities.length > 1 ? 's' : ''}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
@@ -1252,6 +1244,7 @@
     
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
+        let isFirstMeter = true;
         let isPlaceholder = false;
         
         const summaryKey = `${entity.type}_${entity.id}`;
@@ -1272,16 +1265,12 @@
                 <span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${amountPaid.toFixed(2)})</span>
              </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
-            <td colspan="5"></div>
+            <td colspan="6"></div>
             <td></div>
             <td></div>
             <td><span class="status-badge ${amountPaid > 0 ? 'status-paid' : 'status-pending'}" id="entity-status-${entity.id}">${amountPaid > 0 ? 'Paid' : 'Pending'}</span></div>
             <td class="entity-actions">
-                <div class="entity-action-group">
-                    <span class="amount-paid-label">Amount Paid ($)</span>
-                    <input type="number" step="0.01" class="amount-paid-input" id="amount_paid_${entity.id}" value="${amountPaid.toFixed(2)}" placeholder="0.00">
-                    <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
-                </div>
+                <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
             </div>
         `;
         tbody.appendChild(entityRow);
@@ -1314,8 +1303,18 @@
                 meterRow.setAttribute('data-account', escapeHtml(account.accountNumber));
                 meterRow.setAttribute('data-meter', escapeHtml(meter.meterNumber));
                 if (meter.billId) meterRow.setAttribute('data-bill-id', meter.billId);
+                meterRow.setAttribute('data-is-first-meter', isFirstMeter ? 'true' : 'false');
                 
-                // REMOVED: Amount Paid column - no longer displayed per meter
+                // For first meter row - show Amount Paid input
+                // For subsequent meter rows - show disabled/empty placeholder
+                let amountPaidHtml = '';
+                if (isFirstMeter) {
+                    amountPaidHtml = `<input type="number" step="0.01" class="inline-input amount-paid-input" id="amount_paid_${entity.id}" value="${amountPaid.toFixed(2)}" placeholder="0.00">`;
+                    isFirstMeter = false;
+                } else {
+                    amountPaidHtml = `<div class="amount-paid-disabled">—</div>`;
+                }
+                
                 meterRow.innerHTML = `
                     <td class="seq-number">${isFirstMeterForAccount ? serial : ''}</div>
                     <td></div>
@@ -1328,7 +1327,8 @@
                     <td><input type="number" step="0.01" class="inline-input current-charge-input ${placeholderClass}" value="${currentCharges.toFixed(2)}" placeholder="$" ${disabledAttr}></div>
                     <td><input type="number" step="0.01" class="inline-input outstanding-input ${placeholderClass}" value="${outstandingCharges.toFixed(2)}" placeholder="$" ${disabledAttr}></div>
                     <td><input type="number" step="0.01" class="inline-input previous-paid-input ${placeholderClass}" value="${previousPayment.toFixed(2)}" placeholder="$" ${disabledAttr}></div>
-                    <td><input type="text" class="inline-input notes-input ${placeholderClass}" value="${escapeHtml(notes)}" placeholder="Notes..." ${disabledAttr}></div>
+                    <td class="amount-paid-cell">${amountPaidHtml}</div>
+                    <td class="notes-cell"><input type="text" class="inline-input notes-input ${placeholderClass}" value="${escapeHtml(notes)}" placeholder="Notes..." ${disabledAttr}></div>
                     <td></div>
                     <td></div>
                 `;
