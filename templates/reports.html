@@ -1,1465 +1,794 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reports & Print - Utility Bills Management</title>
-    <style>
-        :root {
-            --primary: #4361ee;
-            --secondary: #3f37c9;
-            --success: #28a745;
-            --danger: #dc3545;
-            --warning: #ffc107;
-            --info: #17a2b8;
-            --light: #f8f9fa;
-            --dark: #343a40;
-            --gray: #6c757d;
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .filter-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .report-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        transition: all 0.2s;
+        cursor: pointer;
+        border-left: 4px solid var(--primary-color);
+    }
+    .report-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .report-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+    }
+    .report-type-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .type-water { background-color: #e3f2fd; color: #1976d2; }
+    .type-electricity { background-color: #fff3e0; color: #f57c00; }
+    .type-telephone { background-color: #e8f5e9; color: #388e3c; }
+    .priority-badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    .priority-high { background-color: #f8d7da; color: #721c24; }
+    .priority-medium { background-color: #fff3cd; color: #856404; }
+    .priority-low { background-color: #d4edda; color: #155724; }
+    .status-badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    .status-pending { background-color: #fff3cd; color: #856404; }
+    .status-acknowledged { background-color: #d4edda; color: #155724; }
+    .checked-badge {
+        background-color: #17a2b8;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 10px;
+        display: inline-block;
+    }
+    .filter-select {
+        width: 100%;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+    }
+    .stats-badge {
+        background-color: var(--primary-color);
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+    }
+    .empty-reports {
+        text-align: center;
+        padding: 60px 20px;
+        background: white;
+        border-radius: 12px;
+    }
+    .empty-reports i {
+        font-size: 64px;
+        color: #ccc;
+        margin-bottom: 20px;
+    }
+    .image-preview {
+        width: 100px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    .comment-section {
+        background-color: #f8f5fc;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 15px;
+        border-left: 3px solid var(--primary-color);
+    }
+    .comment-item {
+        background: white;
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        border: 1px solid #eee;
+    }
+    .comment-author {
+        font-weight: bold;
+        color: var(--primary-dark);
+        font-size: 12px;
+    }
+    .comment-date {
+        font-size: 10px;
+        color: #999;
+        margin-left: 10px;
+    }
+    .btn-add-comment {
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 5px 15px;
+        border-radius: 5px;
+        font-size: 12px;
+    }
+    .btn-acknowledge {
+        background-color: #28a745;
+        color: white;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 5px;
+    }
+    
+    @media print {
+        .no-print, .navbar, footer, .filter-card, .stats-badge, 
+        .btn, .btn-primary, .btn-warning, .btn-danger, .btn-secondary,
+        .modal-footer button, .modal-header .btn-close {
+            display: none !important;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #f5f7fb; color: var(--dark); }
-        .navbar { background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 0 20px; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; display: flex; justify-content: space-between; align-items: center; height: 70px; }
-        .logo { display: flex; align-items: center; font-weight: 700; font-size: 1.5rem; color: var(--primary); }
-        .logo span { margin-left: 10px; }
-        .nav-tabs { display: flex; list-style: none; flex-wrap: wrap; }
-        .nav-tabs li { margin: 0 5px; }
-        .nav-tabs a { text-decoration: none; color: var(--gray); padding: 10px 20px; border-radius: 5px; transition: all 0.3s ease; font-weight: 500; }
-        .nav-tabs a:hover, .nav-tabs a.active { background: var(--primary); color: white; }
-        .container { margin-top: 90px; padding: 20px; }
-        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px; }
-        .page-title { color: var(--dark); font-size: 1.8rem; }
-        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 500; transition: all 0.3s ease; font-size: 1rem; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--secondary); }
-        .btn-bill-payment { background: #2196f3; color: white; }
-        .btn-bill-payment:hover { background: #1976d2; }
-        .btn-print { background: #4caf50; color: white; }
-        .btn-print:hover { background: #45a049; }
-        .action-buttons { display: flex; gap: 15px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
-        .form-group { margin-bottom: 15px; }
-        .form-label { display: block; margin-bottom: 8px; font-weight: 500; color: var(--dark); }
-        .form-control { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 1rem; background: white; }
-        .form-control-search { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 0.9rem; }
-        .bill-payment-section { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 20px; margin-bottom: 25px; border-radius: 8px; }
-        .bill-payment-section h3 { margin-bottom: 20px; color: #1565c0; }
-        .selection-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 20px; }
-        .utility-options, .entity-type-options { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 15px; }
-        .utility-option, .entity-type-option { display: flex; align-items: center; gap: 8px; }
-        .utility-option input, .entity-type-option input { width: 18px; height: 18px; cursor: pointer; }
-        
-        /* Column selection styles */
-        .column-selection-section {
+        body {
             background: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 15px 0;
+            padding: 0;
+            margin: 0;
         }
-        .column-selection-title {
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: #1565c0;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .column-selection-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 10px;
-            padding: 10px 0;
-            border-top: 1px solid #eee;
-            margin-top: 10px;
-        }
-        .column-print-option {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.85rem;
-        }
-        .column-print-option input {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-        }
-        .column-print-option label {
-            cursor: pointer;
-            color: var(--dark);
-        }
-        .select-all-col-btn {
-            padding: 5px 12px;
-            font-size: 0.75rem;
-            background: #e0e0e0;
+        .card, .report-card, .modal-content {
+            box-shadow: none;
             border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 10px;
+            padding: 0;
+            margin: 0;
         }
-        .select-all-col-btn:hover {
-            background: #ccc;
-        }
-        
-        .checkbox-list { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px; background: white; }
-        .checkbox-item { display: flex; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
-        .checkbox-item input { margin-right: 10px; }
-        .checkbox-item label { cursor: pointer; flex: 1; }
-        .select-all-btn { margin-bottom: 10px; padding: 5px 10px; font-size: 0.8rem; background: #e0e0e0; border: none; border-radius: 3px; cursor: pointer; }
-        .select-all-btn:hover { background: #ccc; }
-        .loading { display: none; text-align: center; padding: 40px; color: var(--primary); font-size: 1.2rem; }
-        .report-controls { background: white; border-radius: 10px; padding: 25px; margin-bottom: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-        .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
-        .selection-options { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
-        .selection-option { display: inline-block; margin-right: 20px; }
-        .entity-selection { display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 5px; border: 1px solid #dee2e6; }
-        .entity-selection.active { display: block; }
-        .entity-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .report-results { background: white; border-radius: 10px; padding: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-        .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #eee; }
-        .data-table-container { max-height: 600px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px; }
-        .data-table { width: 100%; border-collapse: collapse; min-width: 800px; font-size: 0.85rem; }
-        .data-table th { background: var(--primary); color: white; padding: 15px; text-align: left; position: sticky; top: 0; font-weight: 600; }
-        .data-table td { padding: 12px 15px; border-bottom: 1px solid #eee; }
-        .badge { padding: 5px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: 600; display: inline-block; }
-        .badge-school { background: #e3f2fd; color: var(--info); }
-        .badge-department { background: #f3e5f5; color: #7b1fa2; }
-        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .summary-card { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef; }
-        .summary-value { font-size: 1.8rem; font-weight: 700; color: var(--primary); margin-bottom: 5px; }
-        .scroll-hint { text-align: right; padding: 10px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px; font-size: 0.8rem; color: var(--gray); }
-        .search-box { margin-bottom: 15px; }
-        .cluster-options { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px; }
-        .cluster-option { display: flex; align-items: center; gap: 5px; }
-        .cluster-option input { margin-right: 5px; }
-        
-        /* Modal Styles */
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s ease; }
-        .modal-overlay.active { opacity: 1; visibility: visible; }
-        .print-modal { background: white; border-radius: 24px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
-        .modal-header { padding: 20px 24px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
-        .modal-header h3 { font-size: 1.3rem; color: var(--dark); }
-        .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--gray); }
-        .modal-body { padding: 20px 24px; }
-        .column-selector { display: flex; flex-direction: column; gap: 12px; }
-        .column-option-modal { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #f8f9fa; border-radius: 12px; cursor: pointer; }
-        .column-option-modal input { width: 18px; height: 18px; cursor: pointer; }
-        .column-option-modal label { flex: 1; cursor: pointer; font-weight: 500; }
-        .select-all-row { border-bottom: 1px solid #ddd; padding-bottom: 12px; margin-bottom: 12px; }
-        .modal-footer { padding: 16px 24px; border-top: 1px solid #ddd; display: flex; gap: 12px; justify-content: flex-end; }
-        .btn-print-modal { background: var(--primary); color: white; }
-        .btn-cancel-modal { background: var(--gray); color: white; }
-    </style>
-</head>
-<body>
-<nav class="navbar">
-    <div class="logo"><span>Utility Bills Management</span></div>
-    <ul class="nav-tabs">
-        <li><a href="/dashboard">Dashboard</a></li>
-        <li><a href="/departments">Departments</a></li>
-        <li><a href="/schools">Schools</a></li>
-        <li><a href="/water">Water</a></li>
-        <li><a href="/electricity">Electricity</a></li>
-        <li><a href="/telephone">Telephone</a></li>
-        <li><a href="/reports" class="active">Reports & Print</a></li>
-        <li><a href="/backup">Backup & Restore</a></li>
-    </ul>
-</nav>
+    }
+</style>
 
-<div class="container">
-    <div class="page-header"><h1 class="page-title">📊 Reports & Print Center</h1></div>
-
-    <!-- Print for Bill Payment Section -->
-    <div class="bill-payment-section">
-        <h3>🖨️ Print for Bill Payment</h3>
-        
-        <div class="form-group">
-            <label class="form-label">⚡ Select Utilities</label>
-            <div class="utility-options">
-                <div class="utility-option"><input type="checkbox" id="utilWater" value="water"><label for="utilWater">💧 Water</label></div>
-                <div class="utility-option"><input type="checkbox" id="utilElectricity" value="electricity"><label for="utilElectricity">⚡ Electricity</label></div>
-                <div class="utility-option"><input type="checkbox" id="utilTelephone" value="telephone"><label for="utilTelephone">📞 Telephone</label></div>
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label class="form-label">🏢 Select Entity Types</label>
-            <div class="entity-type-options">
-                <div class="entity-type-option"><input type="checkbox" id="entitySchools" value="school"><label for="entitySchools">🏫 Schools</label></div>
-                <div class="entity-type-option"><input type="checkbox" id="entityDepartments" value="department"><label for="entityDepartments">🏛️ Departments</label></div>
-            </div>
-        </div>
-
-        <div class="search-box">
-            <input type="text" id="entitySearchInput" class="form-control-search" placeholder="🔍 Search schools or departments by name...">
-        </div>
-
-        <div id="clusterFilterContainer" style="display: none;">
-            <label class="form-label">🏷️ Filter by Cluster</label>
-            <div class="cluster-options" id="clusterOptions"></div>
-        </div>
-
-        <!-- Dynamic Column Selection based on selected utilities -->
-        <div id="columnSelectionContainer" class="column-selection-section" style="display: none;">
-            <div class="column-selection-title" onclick="toggleColumnSelection()">
-                <span>📋 Select Columns to Print</span>
-                <span id="columnToggleIcon">▼</span>
-            </div>
-            <div id="billPaymentColumnGrid" class="column-selection-grid"></div>
-            <div style="margin-top: 10px;">
-                <button type="button" class="select-all-col-btn" onclick="selectAllColumns()">Select All</button>
-                <button type="button" class="select-all-col-btn" onclick="deselectAllColumns()">Deselect All</button>
-                <button type="button" class="select-all-col-btn" onclick="resetToDefaultColumns()">Reset to Default</button>
-            </div>
-        </div>
-
-        <div class="selection-grid">
-            <div id="schoolsContainer" style="display: none;">
-                <label class="form-label">🏫 Select Schools</label>
-                <div><button type="button" class="select-all-btn" onclick="selectAllSchools()">Select All Schools</button>
-                <button type="button" class="select-all-btn" onclick="deselectAllSchools()">Deselect All Schools</button></div>
-                <div class="checkbox-list" id="schoolsCheckboxList"><div>Loading schools...</div></div>
-            </div>
-            <div id="departmentsContainer" style="display: none;">
-                <label class="form-label">🏛️ Select Departments</label>
-                <div><button type="button" class="select-all-btn" onclick="selectAllDepartments()">Select All Departments</button>
-                <button type="button" class="select-all-btn" onclick="deselectAllDepartments()">Deselect All Departments</button></div>
-                <div class="checkbox-list" id="departmentsCheckboxList"><div>Loading departments...</div></div>
-            </div>
-            <div>
-                <div class="form-group"><label class="form-label">📅 Month</label>
-                    <select class="form-control" id="paymentMonth">
-                        <option value="1">January</option><option value="2">February</option><option value="3">March</option>
-                        <option value="4">April</option><option value="5">May</option><option value="6">June</option>
-                        <option value="7">July</option><option value="8">August</option><option value="9">September</option>
-                        <option value="10">October</option><option value="11">November</option><option value="12">December</option>
-                    </select>
-                </div>
-                <div class="form-group"><label class="form-label">🗓️ Year</label>
-                    <select class="form-control" id="paymentYear"></select>
-                </div>
-            </div>
-        </div>
-        
-        <div class="action-buttons">
-            <button class="btn btn-bill-payment" id="printBillPaymentBtn">🖨️ Print Bill Payment</button>
-        </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-archive"></i> All Technical Reports</h2>
+    <div class="stats-badge">
+        <i class="bi bi-file-text"></i> Total: <span id="totalCount">0</span>
     </div>
+</div>
 
-    <!-- Generate Report Section -->
-    <div class="report-controls">
-        <h3 style="margin-bottom: 20px; color: var(--primary);">📋 Generate Report</h3>
-        
-        <div class="selection-options">
-            <div class="selection-option"><input type="radio" id="entityTypeSelection" name="selectionType" value="entityType" checked><label for="entityTypeSelection">📋 By Entity Type</label></div>
-            <div class="selection-option"><input type="radio" id="specificEntitiesSelection" name="selectionType" value="specificEntities"><label for="specificEntitiesSelection">🎯 By Specific Entities</label></div>
+<div class="filter-card">
+    <div class="row">
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Report Type</label>
+            <select class="filter-select" id="filterType" onchange="loadReports()">
+                <option value="all">All Types</option>
+                <option value="water">💧 Water</option>
+                <option value="electricity">⚡ Electricity</option>
+                <option value="telephone">📞 Telephone</option>
+            </select>
         </div>
-        
-        <div class="search-box">
-            <input type="text" id="reportSearchInput" class="form-control-search" placeholder="🔍 Search school or department name...">
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Status</label>
+            <select class="filter-select" id="filterStatus" onchange="loadReports()">
+                <option value="all">All Status</option>
+                <option value="pending">⏳ Pending</option>
+                <option value="acknowledged">✓ Acknowledged</option>
+            </select>
         </div>
-        
-        <div class="controls-grid">
-            <div class="form-group"><label class="form-label">🏷️ Entity Type</label><select class="form-control" id="entityType"><option value="all">All Entities</option><option value="school">🏫 Schools Only</option><option value="department">🏛️ Departments Only</option></select></div>
-            <div class="form-group"><label class="form-label">⚡ Utility Type</label><select class="form-control" id="utilityType"><option value="all">All Utilities</option><option value="water">💧 Water Only</option><option value="electricity">🔌 Electricity Only</option><option value="telephone">📞 Telephone Only</option></select></div>
-            <div class="form-group"><label class="form-label">📅 Month</label><select class="form-control" id="month"><option value="all">All Months</option><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select></div>
-            <div class="form-group"><label class="form-label">🗓️ Year</label><input type="number" class="form-control" id="year" min="2020" max="2035" placeholder="Enter year"></div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Technician</label>
+            <select class="filter-select" id="filterTechnician" onchange="loadReports()">
+                <option value="all">All Technicians</option>
+            </select>
         </div>
-        
-        <div class="entity-selection" id="specificEntitiesSection">
-            <h4>🎯 Select Specific Entities</h4>
-            <div class="entity-columns">
-                <div class="form-group"><label class="form-label">🏫 Schools</label><select class="form-control" id="schoolsSelect" multiple size="6"><option value="">Loading schools...</option></select></div>
-                <div class="form-group"><label class="form-label">🏛️ Departments</label><select class="form-control" id="departmentsSelect" multiple size="6"><option value="">Loading departments...</option></select></div>
-            </div>
-        </div>
-        
-        <div class="action-buttons">
-            <button class="btn btn-primary" id="generateReportBtn">🔍 Generate Report</button>
-            <button class="btn btn-print" id="printReportBtn" style="display: none;">🖨️ Print Report</button>
-        </div>
-    </div>
-    
-    <div class="loading" id="loadingIndicator"><div>⏳ Generating report, please wait...</div></div>
-    
-    <div class="report-results" id="reportResults" style="display: none;">
-        <div class="results-header"><h3 class="results-title" id="reportTitle">Report Results</h3></div>
-        <div class="summary-cards" id="summaryCards"></div>
-        <div class="scroll-hint"><i>↔️</i> Scroll horizontally to see all columns</div>
-        <div class="data-table-container">
-            <table class="data-table" id="reportTable">
-                <thead id="reportTableHead"></thead>
-                <tbody id="reportData"></tbody>
-            </table>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">&nbsp;</label>
+            <button class="btn btn-primary w-100" onclick="loadReports()">
+                <i class="bi bi-search"></i> Refresh
+            </button>
         </div>
     </div>
 </div>
 
-<!-- Print Column Selection Modal (for Generate Report) -->
-<div id="printModal" class="modal-overlay">
-    <div class="print-modal">
-        <div class="modal-header">
-            <h3>📄 Select Columns to Print</h3>
-            <button class="close-modal" onclick="closePrintModal()">&times;</button>
+<div id="reportsContainer">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2">Loading reports...</p>
+    </div>
+</div>
+
+<!-- Hidden iframe for printing -->
+<iframe id="printIframe" style="position:absolute;width:0;height:0;border:0;visibility:hidden"></iframe>
+
+<!-- Report Detail Modal -->
+<div class="modal fade" id="reportModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Report Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalBody">Loading...</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="printReport()">
+                    <i class="bi bi-printer"></i> Print
+                </button>
+                <button type="button" class="btn btn-warning" onclick="editReport()" id="editBtn">Edit</button>
+                <button type="button" class="btn btn-danger" onclick="deleteReport()" id="deleteBtn">Delete</button>
+                <button type="button" class="btn btn-success" id="acknowledgeBtn" onclick="showAcknowledgeModal()" style="display: none;">Acknowledge</button>
+            </div>
         </div>
-        <div class="modal-body">
-            <div class="column-selector" id="printColumnSelector"></div>
+    </div>
+</div>
+
+<!-- Acknowledge Modal -->
+<div class="modal fade" id="acknowledgeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-check2-square"></i> Acknowledge Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <textarea class="form-control" id="acknowledgeComment" rows="5" placeholder="Enter your review comments..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="submitAcknowledge()">Acknowledge</button>
+            </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-cancel-modal" onclick="closePrintModal()">Cancel</button>
-            <button class="btn btn-print-modal" id="confirmPrintModalBtn">🖨️ Print</button>
+    </div>
+</div>
+
+<!-- Add Comment Modal -->
+<div class="modal fade" id="commentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Comment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <textarea class="form-control" id="newComment" rows="4" placeholder="Enter your comment..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitComment()">Add Comment</button>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
-    const currentYear = new Date().getFullYear();
-    document.getElementById('year').value = currentYear;
-    document.getElementById('year').max = 2035;
+    let currentReport = null;
+    let currentReportId = null;
+    let isTeamLeader = false;
+    let currentUser = null;
+    let currentTechnicianId = null;
     
-    let allSchoolsData = [], allDepartmentsData = [];
-    let allClusters = [];
-    let currentReportData = [];
-    let currentReportColumns = [];
-    
-    // Column definitions for each utility
-    const waterColumns = [
-        { key: 'no', label: 'No.' },
-        { key: 'entityName', label: 'Entity Name' },
-        { key: 'accountMeter', label: 'Account / Meter' },
-        { key: 'consumption', label: 'Consumption (m³)' },
-        { key: 'billAmount', label: 'Bill Amount ($)' },
-        { key: 'outstanding', label: 'Outstanding ($)' },
-        { key: 'previousPayment', label: 'Previous Payment ($)' },
-        { key: 'amountPaid', label: 'Amount Paid ($)' },
-        { key: 'notes', label: 'Notes' }
-    ];
-    
-    const electricityColumns = [
-        { key: 'no', label: 'No.' },
-        { key: 'entityName', label: 'Entity Name' },
-        { key: 'accountMeter', label: 'Account / Meter' },
-        { key: 'consumption', label: 'Consumption (kWh)' },
-        { key: 'billAmount', label: 'Bill Amount ($)' },
-        { key: 'outstanding', label: 'Outstanding ($)' },
-        { key: 'previousPayment', label: 'Previous Payment ($)' },
-        { key: 'amountPaid', label: 'Amount Paid ($)' },
-        { key: 'notes', label: 'Notes' }
-    ];
-    
-    const telephoneColumns = [
-        { key: 'no', label: 'No.' },
-        { key: 'entityName', label: 'Entity Name' },
-        { key: 'billNo', label: 'Bill No.' },
-        { key: 'accountPhone', label: 'Account / Phone' },
-        { key: 'billAmount', label: 'Bill Amount ($)' },
-        { key: 'totalAmount', label: 'Total Amount ($)' },
-        { key: 'previousOutstanding', label: 'Previous Outstanding ($)' },
-        { key: 'previousPayment', label: 'Previous Payment ($)' },
-        { key: 'totalAccountCharges', label: 'Total Account Charges ($)' },
-        { key: 'totalCurrentCharges', label: 'Total Current Charges ($)' },
-        { key: 'amountPaid', label: 'Amount Paid ($)' },
-        { key: 'notes', label: 'Notes' }
-    ];
-    
-    let currentSelectedColumns = [...waterColumns]; // Default to water
-    
-    function toggleColumnSelection() {
-        const grid = document.getElementById('billPaymentColumnGrid');
-        const icon = document.getElementById('columnToggleIcon');
-        if (grid.style.display === 'none') {
-            grid.style.display = 'grid';
-            icon.innerHTML = '▼';
-        } else {
-            grid.style.display = 'none';
-            icon.innerHTML = '▶';
-        }
+    function formatDate(dateString) {
+        if (!dateString) return '-';
+        const date = new Date(dateString);
+        date.setHours(date.getHours() + 8);
+        return date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     }
     
-    function updateColumnSelection() {
-        const container = document.getElementById('billPaymentColumnGrid');
-        const isWater = document.getElementById('utilWater').checked;
-        const isElectricity = document.getElementById('utilElectricity').checked;
-        const isTelephone = document.getElementById('utilTelephone').checked;
-        
-        let selectedCount = 0;
-        if (isWater) selectedCount++;
-        if (isElectricity) selectedCount++;
-        if (isTelephone) selectedCount++;
-        
-        if (selectedCount === 0) {
-            document.getElementById('columnSelectionContainer').style.display = 'none';
-            return;
-        }
-        
-        document.getElementById('columnSelectionContainer').style.display = 'block';
-        
-        // Determine which columns to show based on selected utilities
-        if (selectedCount === 1) {
-            if (isWater) currentSelectedColumns = [...waterColumns];
-            else if (isElectricity) currentSelectedColumns = [...electricityColumns];
-            else if (isTelephone) currentSelectedColumns = [...telephoneColumns];
-        } else {
-            // If multiple utilities selected, show all columns combined
-            const allKeys = new Set();
-            const combined = [];
-            if (isWater) waterColumns.forEach(c => { if (!allKeys.has(c.key)) { allKeys.add(c.key); combined.push({ ...c }); } });
-            if (isElectricity) electricityColumns.forEach(c => { if (!allKeys.has(c.key)) { allKeys.add(c.key); combined.push({ ...c }); } });
-            if (isTelephone) telephoneColumns.forEach(c => { if (!allKeys.has(c.key)) { allKeys.add(c.key); combined.push({ ...c }); } });
-            currentSelectedColumns = combined;
-        }
-        
-        // Render column checkboxes
-        let html = '';
-        currentSelectedColumns.forEach(col => {
-            html += `
-                <div class="column-print-option">
-                    <input type="checkbox" class="print-col-checkbox" data-col="${col.key}" id="print_col_${col.key}" checked>
-                    <label for="print_col_${col.key}">${col.label}</label>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
+    function formatDateOnly(dateString) {
+        if (!dateString) return '-';
+        const date = new Date(dateString);
+        date.setHours(date.getHours() + 8);
+        return date.toLocaleDateString('en-GB');
     }
     
-    function selectAllColumns() {
-        document.querySelectorAll('.print-col-checkbox').forEach(cb => cb.checked = true);
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
     
-    function deselectAllColumns() {
-        document.querySelectorAll('.print-col-checkbox').forEach(cb => cb.checked = false);
+    function checkUserRole() {
+        currentUser = window.getCurrentUser();
+        isTeamLeader = currentUser && currentUser.isAuthorized === true;
+        currentTechnicianId = currentUser ? currentUser.id : null;
     }
     
-    function resetToDefaultColumns() {
-        document.querySelectorAll('.print-col-checkbox').forEach(cb => cb.checked = true);
+    function getImageUrl(imgPath) {
+        if (!imgPath) return '';
+        if (imgPath.startsWith('http')) return imgPath;
+        return window.location.origin + (imgPath.startsWith('/') ? imgPath : '/' + imgPath);
     }
     
-    function getSelectedColumns() {
-        const selected = [];
-        document.querySelectorAll('.print-col-checkbox:checked').forEach(cb => {
-            const colKey = cb.getAttribute('data-col');
-            const col = currentSelectedColumns.find(c => c.key === colKey);
-            if (col) selected.push(col);
-        });
-        return selected;
-    }
-    
-    // Add event listeners to utility checkboxes
-    document.getElementById('utilWater').addEventListener('change', updateColumnSelection);
-    document.getElementById('utilElectricity').addEventListener('change', updateColumnSelection);
-    document.getElementById('utilTelephone').addEventListener('change', updateColumnSelection);
-    
-    function populatePaymentYears() {
-        const yearSelect = document.getElementById('paymentYear');
-        yearSelect.innerHTML = '';
-        for (let y = 2020; y <= 2035; y++) {
-            const opt = document.createElement('option');
-            opt.value = y;
-            opt.textContent = y;
-            if (y === currentYear) opt.selected = true;
-            yearSelect.appendChild(opt);
-        }
-    }
-    
-    const reportColumns = [
-        { key: 'seq', label: 'No.', group: 'basic' },
-        { key: 'entityName', label: 'Entity Name', group: 'basic' },
-        { key: 'entityType', label: 'Type', group: 'basic' },
-        { key: 'utilityType', label: 'Utility', group: 'basic' },
-        { key: 'accountNumber', label: 'Account Number', group: 'utility' },
-        { key: 'meterNumber', label: 'Meter Number', group: 'utility' },
-        { key: 'phoneNumber', label: 'Phone Number', group: 'utility' },
-        { key: 'billNumber', label: 'Bill Number', group: 'utility' },
-        { key: 'consumption', label: 'Consumption', group: 'utility' },
-        { key: 'currentCharges', label: 'Current Charges ($)', group: 'financial' },
-        { key: 'lateCharges', label: 'Late Charges ($)', group: 'financial' },
-        { key: 'outstandingCharges', label: 'Outstanding Charges ($)', group: 'financial' },
-        { key: 'amountPaid', label: 'Amount Paid ($)', group: 'financial' },
-        { key: 'totalAmount', label: 'Total Amount ($)', group: 'financial' },
-        { key: 'period', label: 'Period (Month/Year)', group: 'basic' },
-        { key: 'cluster', label: 'Cluster', group: 'entity' },
-        { key: 'schoolNumber', label: 'School Number', group: 'entity' },
-        { key: 'bmoName', label: 'BMO Name', group: 'entity' },
-        { key: 'bmoPhone', label: 'BMO Phone', group: 'entity' },
-        { key: 'address', label: 'Address', group: 'entity' },
-        { key: 'departmentName', label: 'Department Name', group: 'entity' },
-        { key: 'divisionName', label: 'Division Name', group: 'entity' },
-        { key: 'unitName', label: 'Unit Name', group: 'entity' },
-        { key: 'hotlineNumbers', label: 'Hotline Numbers', group: 'entity' },
-        { key: 'notes', label: 'Notes', group: 'entity' }
-    ];
-    
-    async function loadAllData() {
+    async function loadTechniciansForFilter() {
         try {
-            const [schoolsRes, deptsRes] = await Promise.all([
-                fetch('/api/schools'),
-                fetch('/api/departments')
-            ]);
-            if (schoolsRes.ok) {
-                allSchoolsData = await schoolsRes.json();
-                allSchoolsData.sort((a,b)=>a.id-b.id);
-                
-                const clustersSet = new Set();
-                allSchoolsData.forEach(school => {
-                    if (school.cluster_number) clustersSet.add(school.cluster_number);
-                });
-                allClusters = Array.from(clustersSet).sort((a,b) => {
-                    const numA = parseInt(a), numB = parseInt(b);
-                    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-                    return String(a).localeCompare(String(b));
-                });
-                renderClusterOptions();
-                renderSchoolsCheckboxList();
-            }
-            if (deptsRes.ok) {
-                allDepartmentsData = await deptsRes.json();
-                allDepartmentsData.sort((a,b)=>a.id-b.id);
-                renderDepartmentsCheckboxList();
-            }
-            loadEntitiesForSelection();
-        } catch(error) { console.error(error); }
-    }
-    
-    function renderClusterOptions() {
-        const container = document.getElementById('clusterOptions');
-        if (!container) return;
-        container.innerHTML = '<div class="cluster-option"><input type="checkbox" id="cluster_all" checked><label>All Clusters</label></div>';
-        allClusters.forEach(cluster => {
-            const div = document.createElement('div');
-            div.className = 'cluster-option';
-            div.innerHTML = `<input type="checkbox" class="cluster-checkbox" value="${cluster}" id="cluster_${cluster}"><label>Cluster ${cluster}</label>`;
-            container.appendChild(div);
-        });
-        
-        const allCheckbox = document.getElementById('cluster_all');
-        if (allCheckbox) {
-            allCheckbox.addEventListener('change', function() {
-                const isChecked = this.checked;
-                document.querySelectorAll('.cluster-checkbox').forEach(cb => cb.checked = isChecked);
-                filterSchoolsBySearchAndCluster();
+            const response = await fetch('/api/technicians');
+            const techs = await response.json();
+            const select = document.getElementById('filterTechnician');
+            let options = '<option value="all">All Technicians</option>';
+            techs.forEach(tech => {
+                options += `<option value="${tech.id}">${tech.role === 'senior_technician' ? '⭐' : '👤'} ${escapeHtml(tech.name)}</option>`;
             });
+            select.innerHTML = options;
+        } catch (error) {
+            console.error('Error loading technicians:', error);
         }
-        
-        document.querySelectorAll('.cluster-checkbox').forEach(cb => {
-            cb.addEventListener('change', function() {
-                const allCheck = document.getElementById('cluster_all');
-                if (allCheck) allCheck.checked = false;
-                filterSchoolsBySearchAndCluster();
-            });
-        });
     }
     
-    function filterSchoolsBySearchAndCluster() {
-        const searchTerm = document.getElementById('entitySearchInput').value.toLowerCase();
-        let filteredSchools = [...allSchoolsData];
+    async function loadReports() {
+        const type = document.getElementById('filterType').value;
+        const status = document.getElementById('filterStatus').value;
+        const technicianId = document.getElementById('filterTechnician').value;
         
-        if (searchTerm) {
-            filteredSchools = filteredSchools.filter(school => 
-                school.name.toLowerCase().includes(searchTerm)
-            );
-        }
+        const container = document.getElementById('reportsContainer');
+        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p>Loading reports...</p></div>';
         
-        const selectedClusters = Array.from(document.querySelectorAll('.cluster-checkbox:checked')).map(cb => cb.value);
-        if (selectedClusters.length > 0 && !document.getElementById('cluster_all')?.checked) {
-            filteredSchools = filteredSchools.filter(school => 
-                selectedClusters.includes(String(school.cluster_number))
-            );
-        }
-        
-        renderFilteredSchoolsList(filteredSchools);
-    }
-    
-    function renderFilteredSchoolsList(filteredSchools) {
-        const container = document.getElementById('schoolsCheckboxList');
-        if (!filteredSchools.length) {
-            container.innerHTML = '<div>No schools match your search/cluster filter</div>';
-            return;
-        }
-        container.innerHTML = '';
-        filteredSchools.forEach(school => {
-            const div = document.createElement('div');
-            div.className = 'checkbox-item';
-            div.innerHTML = `<input type="checkbox" class="school-checkbox" value="${school.id}" id="school_${school.id}"><label for="school_${school.id}">${escapeHtml(school.name)} ${school.cluster_number ? `(Cluster ${school.cluster_number})` : ''}</label>`;
-            container.appendChild(div);
-        });
-    }
-    
-    function renderSchoolsCheckboxList() {
-        filterSchoolsBySearchAndCluster();
-    }
-    
-    function renderDepartmentsCheckboxList() {
-        const container = document.getElementById('departmentsCheckboxList');
-        const searchTerm = document.getElementById('entitySearchInput').value.toLowerCase();
-        let filteredDepartments = [...allDepartmentsData];
-        
-        if (searchTerm) {
-            filteredDepartments = filteredDepartments.filter(dept => {
-                const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-                return displayName.toLowerCase().includes(searchTerm);
-            });
-        }
-        
-        if (!filteredDepartments.length) {
-            container.innerHTML = '<div>No departments match your search</div>';
-            return;
-        }
-        container.innerHTML = '';
-        filteredDepartments.forEach(dept => {
-            const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-            const div = document.createElement('div');
-            div.className = 'checkbox-item';
-            div.innerHTML = `<input type="checkbox" class="department-checkbox" value="${dept.id}" id="dept_${dept.id}"><label for="dept_${dept.id}">${escapeHtml(displayName)} ${dept.department_name ? `(${dept.department_name})` : ''}</label>`;
-            container.appendChild(div);
-        });
-    }
-    
-    document.getElementById('entitySearchInput').addEventListener('input', function() {
-        filterSchoolsBySearchAndCluster();
-        renderDepartmentsCheckboxList();
-    });
-    
-    function toggleEntityContainers() {
-        const showSchools = document.getElementById('entitySchools').checked;
-        const showDepartments = document.getElementById('entityDepartments').checked;
-        
-        document.getElementById('schoolsContainer').style.display = showSchools ? 'block' : 'none';
-        document.getElementById('departmentsContainer').style.display = showDepartments ? 'block' : 'none';
-        document.getElementById('clusterFilterContainer').style.display = showSchools ? 'block' : 'none';
-    }
-    
-    document.getElementById('entitySchools').addEventListener('change', toggleEntityContainers);
-    document.getElementById('entityDepartments').addEventListener('change', toggleEntityContainers);
-    
-    function selectAllSchools() { document.querySelectorAll('.school-checkbox').forEach(cb => cb.checked = true); }
-    function deselectAllSchools() { document.querySelectorAll('.school-checkbox').forEach(cb => cb.checked = false); }
-    function selectAllDepartments() { document.querySelectorAll('.department-checkbox').forEach(cb => cb.checked = true); }
-    function deselectAllDepartments() { document.querySelectorAll('.department-checkbox').forEach(cb => cb.checked = false); }
-    
-    function getSelectedSchoolIds() { const ids = []; document.querySelectorAll('.school-checkbox:checked').forEach(cb => ids.push(parseInt(cb.value))); return ids; }
-    function getSelectedDepartmentIds() { const ids = []; document.querySelectorAll('.department-checkbox:checked').forEach(cb => ids.push(parseInt(cb.value))); return ids; }
-    function getSelectedUtilities() { const u=[]; if(document.getElementById('utilWater').checked) u.push('water'); if(document.getElementById('utilElectricity').checked) u.push('electricity'); if(document.getElementById('utilTelephone').checked) u.push('telephone'); return u; }
-    
-    async function getEntityDetails(entityType, entityId) {
         try {
-            const url = entityType === 'school' ? '/api/schools' : '/api/departments';
-            const resp = await fetch(url);
-            if (resp.ok) {
-                const entities = await resp.json();
-                const entity = entities.find(e => e.id === entityId);
-                if (entity) {
-                    return {
-                        address: entity.address || '',
-                        bmoName: entity.bmo_name || '',
-                        bmoPhone: entity.bmo_phone || '',
-                        cluster: entity.cluster_number || '',
-                        schoolNumber: entity.school_number || '',
-                        departmentName: entity.department_name || '',
-                        divisionName: entity.division_name || '',
-                        unitName: entity.unit_name || '',
-                        hotlineNumbers: entity.hotline_numbers || '',
-                        notes: entity.notes || ''
-                    };
-                }
+            let url = '/api/technical-reports';
+            if (type !== 'all') url += `?type=${type}`;
+            
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        } catch(e) { console.error(e); }
-        return { address: '', bmoName: '', bmoPhone: '', cluster: '', schoolNumber: '', departmentName: '', divisionName: '', unitName: '', hotlineNumbers: '', notes: '' };
-    }
-    
-    document.getElementById('generateReportBtn').addEventListener('click', async function() {
-        const selectionType = document.querySelector('input[name="selectionType"]:checked').value;
-        const entityType = document.getElementById('entityType').value;
-        const utilityType = document.getElementById('utilityType').value;
-        const month = document.getElementById('month').value;
-        const year = document.getElementById('year').value;
-        
-        let schoolIds = [], departmentIds = [];
-        if (selectionType === 'specificEntities') {
-            const schoolsSelect = document.getElementById('schoolsSelect');
-            const departmentsSelect = document.getElementById('departmentsSelect');
-            for (let i = 0; i < schoolsSelect.options.length; i++) {
-                if (schoolsSelect.options[i].selected && schoolsSelect.options[i].value) {
-                    schoolIds.push(schoolsSelect.options[i].value);
-                }
+            
+            let reports = await response.json();
+            if (!reports) reports = [];
+            
+            if (technicianId !== 'all') {
+                reports = reports.filter(r => r.technician_id == technicianId);
             }
-            for (let i = 0; i < departmentsSelect.options.length; i++) {
-                if (departmentsSelect.options[i].selected && departmentsSelect.options[i].value) {
-                    departmentIds.push(departmentsSelect.options[i].value);
-                }
+            if (status !== 'all') {
+                if (status === 'pending') reports = reports.filter(r => !r.team_leader_acknowledged);
+                if (status === 'acknowledged') reports = reports.filter(r => r.team_leader_acknowledged);
             }
-            if (schoolIds.length === 0 && departmentIds.length === 0) {
-                alert('⚠️ Please select at least one school or department.');
+            
+            document.getElementById('totalCount').textContent = reports.length;
+            
+            if (reports.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-reports">
+                        <i class="bi bi-inbox"></i>
+                        <h4>No Reports Found</h4>
+                        <p class="text-muted">There are no reports matching your filters.</p>
+                        <a href="/new-report" class="btn btn-primary mt-2">Create New Report</a>
+                    </div>
+                `;
                 return;
             }
+            
+            displayReports(reports);
+        } catch (error) {
+            console.error('Error loading reports:', error);
+            container.innerHTML = `
+                <div class="text-center py-5 text-danger">
+                    <i class="bi bi-exclamation-triangle" style="font-size: 48px;"></i>
+                    <p>Error loading reports: ${error.message}</p>
+                    <button class="btn btn-primary mt-2" onclick="loadReports()">Try Again</button>
+                </div>
+            `;
         }
+    }
+    
+    function displayReports(reports) {
+        const container = document.getElementById('reportsContainer');
         
-        const generateBtn = document.getElementById('generateReportBtn');
-        const loadingIndicator = document.getElementById('loadingIndicator');
-        generateBtn.textContent = '⏳ Generating...';
-        generateBtn.disabled = true;
-        loadingIndicator.style.display = 'block';
-        
-        const requestData = {
-            selection_type: selectionType,
-            utility_type: utilityType,
-            month: month,
-            year: year ? parseInt(year) : null
-        };
-        if (selectionType === 'entityType') {
-            requestData.entity_type = entityType;
-        } else {
-            requestData.school_ids = schoolIds;
-            requestData.department_ids = departmentIds;
-        }
-        
+        container.innerHTML = reports.map(report => {
+            const typeClass = `type-${report.report_type}`;
+            const typeIcon = report.report_type === 'water' ? '💧' : report.report_type === 'electricity' ? '⚡' : '📞';
+            const priorityClass = `priority-${report.priority}`;
+            const isAcknowledged = report.team_leader_acknowledged;
+            const statusText = isAcknowledged ? '✓ Acknowledged' : '⏳ Pending';
+            const statusClass = isAcknowledged ? 'status-acknowledged' : 'status-pending';
+            const isChecked = report.checked_by_assistant === true;
+            
+            return `
+                <div class="report-card" onclick="openReportDetail(${report.id})">
+                    <div class="report-header">
+                        <div>
+                            <span class="report-type-badge ${typeClass}">${typeIcon} ${report.report_type.toUpperCase()}</span>
+                            <span class="priority-badge ${priorityClass} ms-2">${report.priority.toUpperCase()}</span>
+                            ${report.priority_with_tender ? '<span class="badge bg-danger ms-2">🔴 TENDER</span>' : ''}
+                            ${isChecked ? `<span class="checked-badge ms-2"><i class="bi bi-eye"></i> Checked</span>` : ''}
+                        </div>
+                        <div>
+                            <span class="status-badge ${statusClass}">${statusText}</span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-8">
+                            <strong>${escapeHtml(report.entity_name || report.entity_type)}</strong>
+                            <div class="text-muted small">Report #${report.utility_number || report.id}</div>
+                            <div class="mt-2">${escapeHtml(report.problem_type || 'No problem type')}</div>
+                            <div class="text-muted small mt-1">${escapeHtml((report.complaint_details || '').substring(0, 100))}${(report.complaint_details || '').length > 100 ? '...' : ''}</div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div><i class="bi bi-person"></i> ${escapeHtml(report.technician_name || 'Unknown')}</div>
+                            <div class="small text-muted"><i class="bi bi-calendar"></i> ${formatDateOnly(report.created_at)}</div>
+                            ${report.action_taken ? `<div class="small text-success"><i class="bi bi-check-circle"></i> Action taken</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    async function openReportDetail(id) {
+        currentReportId = id;
         try {
-            const response = await fetch('/api/generate-report', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestData)
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            
-            const enrichedData = [];
-            const entityDetailsCache = new Map();
-            
-            for (const bill of data) {
-                const cacheKey = `${bill.entity_type}_${bill.entity_id}`;
-                if (!entityDetailsCache.has(cacheKey)) {
-                    const details = await getEntityDetails(bill.entity_type, bill.entity_id);
-                    entityDetailsCache.set(cacheKey, details);
-                }
-                const details = entityDetailsCache.get(cacheKey);
+            const response = await fetch('/api/technical-reports');
+            const reports = await response.json();
+            currentReport = reports.find(r => r.id === id);
+            if (currentReport) {
+                displayReportModal();
                 
-                enrichedData.push({
-                    ...bill,
-                    address: details.address,
-                    bmoName: details.bmoName,
-                    bmoPhone: details.bmoPhone,
-                    cluster: details.cluster,
-                    schoolNumber: details.schoolNumber,
-                    departmentName: details.departmentName,
-                    divisionName: details.divisionName,
-                    unitName: details.unitName,
-                    hotlineNumbers: details.hotlineNumbers,
-                    notes: details.notes
-                });
-            }
-            
-            currentReportData = enrichedData;
-            displayReportResults(enrichedData);
-            
-        } catch(error) {
-            console.error(error);
-            alert('❌ Error generating report: ' + error.message);
-        } finally {
-            generateBtn.textContent = '🔍 Generate Report';
-            generateBtn.disabled = false;
-            loadingIndicator.style.display = 'none';
-        }
-    });
-    
-    function displayReportResults(data) {
-        const resultsDiv = document.getElementById('reportResults');
-        const reportTitle = document.getElementById('reportTitle');
-        const summaryCards = document.getElementById('summaryCards');
-        const printBtn = document.getElementById('printReportBtn');
-        
-        reportTitle.textContent = `📊 Utility Bills Report - ${data.length} records`;
-        
-        const totalCurrent = data.reduce((s, b) => s + (b.current_charges || 0), 0);
-        const totalLate = data.reduce((s, b) => s + (b.late_charges || 0), 0);
-        const totalUnsettled = data.reduce((s, b) => s + (b.unsettled_charges || 0), 0);
-        const totalPaid = data.reduce((s, b) => s + (b.amount_paid || 0), 0);
-        
-        summaryCards.innerHTML = `
-            <div class="summary-card"><div class="summary-value">${data.length}</div><div class="summary-label">Total Bills</div></div>
-            <div class="summary-card"><div class="summary-value">$${totalCurrent.toFixed(2)}</div><div class="summary-label">Total Current Charges</div></div>
-            <div class="summary-card"><div class="summary-value">$${totalLate.toFixed(2)}</div><div class="summary-label">Total Late Charges</div></div>
-            <div class="summary-card"><div class="summary-value">$${totalUnsettled.toFixed(2)}</div><div class="summary-label">Total Unsettled</div></div>
-            <div class="summary-card"><div class="summary-value">$${totalPaid.toFixed(2)}</div><div class="summary-label">Total Paid</div></div>
-        `;
-        
-        currentReportData = data;
-        currentReportColumns = [...reportColumns];
-        renderReportTable(data, reportColumns);
-        
-        resultsDiv.style.display = 'block';
-        printBtn.style.display = 'inline-block';
-        resultsDiv.scrollIntoView({ behavior: 'smooth' });
-    }
-    
-    function renderReportTable(data, columns) {
-        const thead = document.getElementById('reportTableHead');
-        const tbody = document.getElementById('reportData');
-        
-        thead.innerHTML = '<tr>';
-        columns.forEach(col => {
-            thead.innerHTML += `<th>${col.label}</th>`;
-        });
-        thead.innerHTML += `</tr>`;
-        
-        tbody.innerHTML = '';
-        let seq = 1;
-        data.forEach(row => {
-            const tr = document.createElement('tr');
-            columns.forEach(col => {
-                let value = '';
-                if (col.key === 'seq') {
-                    value = seq;
-                } else if (col.key === 'entityName') {
-                    value = row.entity_name || 'Unknown';
-                } else if (col.key === 'entityType') {
-                    value = row.entity_type === 'school' ? 'School' : 'Department';
-                } else if (col.key === 'utilityType') {
-                    value = row.utility_type === 'water' ? '💧 Water' : (row.utility_type === 'electricity' ? '⚡ Electricity' : '📞 Telephone');
-                } else if (col.key === 'accountNumber') {
-                    value = row.account_number || '—';
-                } else if (col.key === 'meterNumber') {
-                    value = row.meter_number || '—';
-                } else if (col.key === 'phoneNumber') {
-                    value = row.phone_number || '—';
-                } else if (col.key === 'billNumber') {
-                    value = row.meter_number || '—';
-                } else if (col.key === 'consumption') {
-                    value = row.utility_type === 'water' ? (row.consumption_m3 || 0) + ' m³' : (row.consumption_kwh || 0) + ' kWh';
-                } else if (col.key === 'currentCharges') {
-                    value = '$' + (row.current_charges || 0).toFixed(2);
-                } else if (col.key === 'lateCharges') {
-                    value = '$' + (row.late_charges || 0).toFixed(2);
-                } else if (col.key === 'outstandingCharges') {
-                    value = '$' + (row.unsettled_charges || 0).toFixed(2);
-                } else if (col.key === 'amountPaid') {
-                    value = '$' + (row.amount_paid || 0).toFixed(2);
-                } else if (col.key === 'totalAmount') {
-                    value = '$' + (row.current_charges || 0).toFixed(2);
-                } else if (col.key === 'period') {
-                    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                    value = `${months[(row.month || 1)-1]} ${row.year}`;
-                } else if (col.key === 'cluster') {
-                    value = row.cluster || '';
-                } else if (col.key === 'schoolNumber') {
-                    value = row.schoolNumber || '';
-                } else if (col.key === 'bmoName') {
-                    value = row.bmoName || '';
-                } else if (col.key === 'bmoPhone') {
-                    value = row.bmoPhone || '';
-                } else if (col.key === 'address') {
-                    value = row.address || '';
-                } else if (col.key === 'departmentName') {
-                    value = row.departmentName || '';
-                } else if (col.key === 'divisionName') {
-                    value = row.divisionName || '';
-                } else if (col.key === 'unitName') {
-                    value = row.unitName || '';
-                } else if (col.key === 'hotlineNumbers') {
-                    value = row.hotlineNumbers || '';
-                } else if (col.key === 'notes') {
-                    value = row.notes || '';
+                // Show/hide buttons based on permissions
+                const editBtn = document.getElementById('editBtn');
+                const deleteBtn = document.getElementById('deleteBtn');
+                const acknowledgeBtn = document.getElementById('acknowledgeBtn');
+                
+                // Only report creator can edit/delete (and only if not acknowledged)
+                const isCreator = currentReport.technician_id == currentTechnicianId;
+                const canEditDelete = isCreator && !currentReport.team_leader_acknowledged;
+                
+                if (editBtn) editBtn.style.display = canEditDelete ? 'inline-block' : 'none';
+                if (deleteBtn) deleteBtn.style.display = canEditDelete ? 'inline-block' : 'none';
+                
+                // Only Team Leader can acknowledge (and only if not acknowledged)
+                if (acknowledgeBtn) {
+                    acknowledgeBtn.style.display = (isTeamLeader && !currentReport.team_leader_acknowledged) ? 'inline-block' : 'none';
                 }
-                const td = document.createElement('td');
-                td.innerHTML = value;
-                tr.appendChild(td);
-            });
-            tbody.appendChild(tr);
-            seq++;
-        });
+                
+                new bootstrap.Modal(document.getElementById('reportModal')).show();
+            }
+        } catch (error) {
+            window.showToast('Error loading report', 'error');
+        }
     }
     
-    function openPrintModalForReport() {
-        const modal = document.getElementById('printModal');
-        populatePrintColumnSelector();
-        modal.classList.add('active');
-    }
-    
-    function closePrintModal() {
-        const modal = document.getElementById('printModal');
-        modal.classList.remove('active');
-    }
-    
-    function populatePrintColumnSelector() {
-        const container = document.getElementById('printColumnSelector');
-        let html = `
-            <div class="select-all-row column-option-modal">
-                <input type="checkbox" id="selectAllPrintColumns" onchange="toggleAllPrintColumns()">
-                <label for="selectAllPrintColumns"><strong>✓ Select All Columns</strong></label>
+    function displayReportModal() {
+        const report = currentReport;
+        const typeIcon = report.report_type === 'water' ? '💧' : report.report_type === 'electricity' ? '⚡' : '📞';
+        const typeName = report.report_type === 'water' ? 'Water' : report.report_type === 'electricity' ? 'Electricity' : 'Telephone';
+        const priorityClass = `priority-${report.priority}`;
+        const isAcknowledged = report.team_leader_acknowledged;
+        const isChecked = report.checked_by_assistant === true;
+        
+        let imagesHtml = '';
+        if (report.images && report.images.length > 0) {
+            imagesHtml = `<div class="mt-3"><strong>Attached Images:</strong><div class="d-flex flex-wrap gap-2 mt-2">${report.images.map(img => `<img src="${getImageUrl(img)}" class="image-preview" onclick="window.open('${getImageUrl(img)}')" onerror="this.style.display='none'">`).join('')}</div></div>`;
+        }
+        
+        let commentsHtml = '';
+        if (report.comments && report.comments.length > 0) {
+            commentsHtml = `<div class="comment-section"><h6><i class="bi bi-chat-dots"></i> Comments</h6>${report.comments.map(c => `<div class="comment-item"><strong class="comment-author">${escapeHtml(c.author)}</strong> <span class="comment-date">${formatDate(c.created_at)}</span><div class="mt-1">${escapeHtml(c.text)}</div></div>`).join('')}</div>`;
+        }
+        
+        let acknowledgmentHtml = '';
+        if (isAcknowledged) {
+            acknowledgmentHtml = `<div class="alert alert-success mt-3"><i class="bi bi-check-circle"></i> <strong>Acknowledged</strong><br>By: ${escapeHtml(report.team_leader_name || 'Team Leader')}<br>Date: ${formatDate(report.team_leader_acknowledged_at)}<br>Comments: ${escapeHtml(report.team_leader_notes || 'No notes')}</div>`;
+        } else if (isTeamLeader) {
+            acknowledgmentHtml = `<div class="alert alert-warning mt-3"><button class="btn btn-success w-100" onclick="showAcknowledgeModal()"><i class="bi bi-check2-square"></i> Acknowledge Report</button></div>`;
+        }
+        
+        let assistantCheckHtml = '';
+        if (isChecked) {
+            assistantCheckHtml = `<div class="alert alert-info mt-2"><i class="bi bi-eye"></i> <strong>Checked by Assistant Team Leader</strong><br>By: ${escapeHtml(report.checked_by_assistant_name)}<br>Date: ${formatDate(report.checked_by_assistant_at)}</div>`;
+        }
+        
+        const html = `
+            <div>
+                <div class="alert alert-info">
+                    <strong>Report #${report.id}</strong> | ${typeName} ${typeIcon}<br>
+                    Submitted: ${formatDate(report.created_at)} | Status: ${isAcknowledged ? 'Acknowledged' : 'Pending Review'}
+                </div>
+                <div class="row mb-2"><div class="col-4 fw-bold">Entity:</div><div class="col-8">${escapeHtml(report.entity_name || report.entity_type)} (${report.entity_type})</div></div>
+                ${report.account_number ? `<div class="row mb-2"><div class="col-4 fw-bold">Account Number:</div><div class="col-8">${escapeHtml(report.account_number)}</div></div>` : ''}
+                ${report.meter_number ? `<div class="row mb-2"><div class="col-4 fw-bold">Meter Number:</div><div class="col-8">${escapeHtml(report.meter_number)}</div></div>` : ''}
+                ${report.phone_number ? `<div class="row mb-2"><div class="col-4 fw-bold">Phone Number:</div><div class="col-8">${escapeHtml(report.phone_number)}</div></div>` : ''}
+                ${report.reference_number ? `<div class="row mb-2"><div class="col-4 fw-bold">Reference:</div><div class="col-8">${escapeHtml(report.reference_type ? report.reference_type.toUpperCase() + ': ' : '')}${escapeHtml(report.reference_number)}${report.reference_date ? ' (' + report.reference_date + ')' : ''}</div></div>` : ''}
+                <div class="row mb-2"><div class="col-4 fw-bold">Problem Type:</div><div class="col-8">${escapeHtml(report.problem_type)}</div></div>
+                <div class="row mb-2"><div class="col-4 fw-bold">Priority:</div><div class="col-8"><span class="status-badge ${priorityClass}">${report.priority.toUpperCase()}</span> ${report.priority_with_tender ? '<span class="badge bg-danger ms-2">TENDER</span>' : ''}</div></div>
+                <div class="row mb-2"><div class="col-4 fw-bold">Complaint Details:</div><div class="col-8">${escapeHtml(report.complaint_details)}</div></div>
+                ${report.action_taken ? `<div class="row mb-2"><div class="col-4 fw-bold">Action Taken:</div><div class="col-8">${escapeHtml(report.action_taken)}</div></div>` : ''}
+                ${report.technician_notes ? `<div class="row mb-2"><div class="col-4 fw-bold">Technician Notes:</div><div class="col-8">${escapeHtml(report.technician_notes)}</div></div>` : ''}
+                <div class="row mb-2"><div class="col-4 fw-bold">Submitted By:</div><div class="col-8">${escapeHtml(report.technician_name || 'Unknown')}</div></div>
+                ${assistantCheckHtml}
+                ${acknowledgmentHtml}
+                ${imagesHtml}
+                ${commentsHtml}
+                <div class="mt-3"><button class="btn btn-sm btn-secondary" onclick="showAddCommentModal()"><i class="bi bi-chat-dots"></i> Add Comment</button></div>
             </div>
         `;
-        
-        const basicCols = reportColumns.filter(c => c.group === 'basic');
-        const utilityCols = reportColumns.filter(c => c.group === 'utility');
-        const financialCols = reportColumns.filter(c => c.group === 'financial');
-        const entityCols = reportColumns.filter(c => c.group === 'entity');
-        
-        html += `<div class="section-title">📋 Basic Information</div>`;
-        basicCols.forEach(col => {
-            html += `
-                <div class="column-option-modal">
-                    <input type="checkbox" class="print-col-checkbox" data-col="${col.key}" id="print_col_${col.key}" checked>
-                    <label for="print_col_${col.key}">${col.label}</label>
-                </div>
-            `;
-        });
-        
-        html += `<div class="section-title">🔧 Utility Details</div>`;
-        utilityCols.forEach(col => {
-            html += `
-                <div class="column-option-modal">
-                    <input type="checkbox" class="print-col-checkbox" data-col="${col.key}" id="print_col_${col.key}" checked>
-                    <label for="print_col_${col.key}">${col.label}</label>
-                </div>
-            `;
-        });
-        
-        html += `<div class="section-title">💰 Financial Details</div>`;
-        financialCols.forEach(col => {
-            html += `
-                <div class="column-option-modal">
-                    <input type="checkbox" class="print-col-checkbox" data-col="${col.key}" id="print_col_${col.key}" checked>
-                    <label for="print_col_${col.key}">${col.label}</label>
-                </div>
-            `;
-        });
-        
-        html += `<div class="section-title">🏢 Entity Details</div>`;
-        entityCols.forEach(col => {
-            html += `
-                <div class="column-option-modal">
-                    <input type="checkbox" class="print-col-checkbox" data-col="${col.key}" id="print_col_${col.key}" checked>
-                    <label for="print_col_${col.key}">${col.label}</label>
-                </div>
-            `;
-        });
-        
-        container.innerHTML = html;
-        
-        document.querySelectorAll('.print-col-checkbox').forEach(cb => {
-            cb.addEventListener('change', updatePrintSelectAllState);
-        });
-        updatePrintSelectAllState();
+        document.getElementById('modalBody').innerHTML = html;
     }
     
-    function updatePrintSelectAllState() {
-        const checkboxes = document.querySelectorAll('.print-col-checkbox');
-        const selectAll = document.getElementById('selectAllPrintColumns');
-        if (selectAll) {
-            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-            selectAll.checked = allChecked;
-        }
+    function showAddCommentModal() { 
+        document.getElementById('newComment').value = ''; 
+        new bootstrap.Modal(document.getElementById('commentModal')).show(); 
     }
     
-    function toggleAllPrintColumns() {
-        const selectAll = document.getElementById('selectAllPrintColumns');
-        const checkboxes = document.querySelectorAll('.print-col-checkbox');
-        checkboxes.forEach(cb => {
-            cb.checked = selectAll.checked;
-        });
-    }
-    
-    function getSelectedPrintColumns() {
-        const selected = [];
-        document.querySelectorAll('.print-col-checkbox:checked').forEach(cb => {
-            const colKey = cb.getAttribute('data-col');
-            const col = reportColumns.find(c => c.key === colKey);
-            if (col) selected.push(col);
-        });
-        return selected;
-    }
-    
-    function performPrintReport() {
-        const selectedColumns = getSelectedPrintColumns();
-        if (selectedColumns.length === 0) {
-            alert('Please select at least one column to print.');
-            return;
-        }
-        
-        if (!currentReportData || currentReportData.length === 0) {
-            alert('No data to print. Please generate a report first.');
-            closePrintModal();
-            return;
-        }
-        
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        const currentDate = new Date();
-        
-        let printHtml = `<!DOCTYPE html><html><head><title>Utility Bills Report - ${currentDate.toLocaleDateString()}</title><style>
-            *{font-family:'Segoe UI',Arial,sans-serif;}body{padding:20px;margin:0;}
-            .print-header{text-align:center;margin-bottom:30px;border-bottom:2px solid #333;padding-bottom:10px;}
-            .print-header h1{margin:0;color:#4361ee;}
-            table{width:100%;border-collapse:collapse;margin-top:20px;font-size:11px;}
-            th,td{border:1px solid #ddd;padding:8px 6px;text-align:left;vertical-align:top;}
-            th{background-color:#f2f2f2;font-weight:bold;}
-            .footer{margin-top:30px;text-align:center;font-size:10px;color:#666;border-top:1px solid #ddd;padding-top:10px;}
-            @media print{body{padding:0;margin:0.5in}}
-        </style></head><body>
-        <div class="print-header"><h1>🏛️ MINISTRY OF EDUCATION BRUNEI</h1><h2>Utility Bills Report</h2>
-        <p>Generated on: ${currentDate.toLocaleString()}</p><p>Total Records: ${currentReportData.length}</p></div>
-        <table><thead><tr>`;
-        
-        selectedColumns.forEach(col => { printHtml += `<th>${col.label}</th>`; });
-        printHtml += `</tr></thead><tbody>`;
-        
-        let seq = 1;
-        for (const row of currentReportData) {
-            printHtml += `<tr>`;
-            for (const col of selectedColumns) {
-                let value = '';
-                if (col.key === 'seq') value = seq;
-                else if (col.key === 'entityName') value = row.entity_name || 'Unknown';
-                else if (col.key === 'entityType') value = row.entity_type === 'school' ? 'School' : 'Department';
-                else if (col.key === 'utilityType') value = row.utility_type === 'water' ? 'Water' : (row.utility_type === 'electricity' ? 'Electricity' : 'Telephone');
-                else if (col.key === 'accountNumber') value = row.account_number || '—';
-                else if (col.key === 'meterNumber') value = row.meter_number || '—';
-                else if (col.key === 'phoneNumber') value = row.phone_number || '—';
-                else if (col.key === 'billNumber') value = row.meter_number || '—';
-                else if (col.key === 'consumption') value = row.utility_type === 'water' ? (row.consumption_m3 || 0) + ' m³' : (row.consumption_kwh || 0) + ' kWh';
-                else if (col.key === 'currentCharges') value = '$' + (row.current_charges || 0).toFixed(2);
-                else if (col.key === 'lateCharges') value = '$' + (row.late_charges || 0).toFixed(2);
-                else if (col.key === 'outstandingCharges') value = '$' + (row.unsettled_charges || 0).toFixed(2);
-                else if (col.key === 'amountPaid') value = '$' + (row.amount_paid || 0).toFixed(2);
-                else if (col.key === 'totalAmount') value = '$' + (row.current_charges || 0).toFixed(2);
-                else if (col.key === 'period') value = `${monthNames[(row.month || 1)-1]} ${row.year}`;
-                else if (col.key === 'cluster') value = row.cluster || '';
-                else if (col.key === 'schoolNumber') value = row.schoolNumber || '';
-                else if (col.key === 'bmoName') value = row.bmoName || '';
-                else if (col.key === 'bmoPhone') value = row.bmoPhone || '';
-                else if (col.key === 'address') value = row.address || '';
-                else if (col.key === 'departmentName') value = row.departmentName || '';
-                else if (col.key === 'divisionName') value = row.divisionName || '';
-                else if (col.key === 'unitName') value = row.unitName || '';
-                else if (col.key === 'hotlineNumbers') value = row.hotlineNumbers || '';
-                else if (col.key === 'notes') value = row.notes || '';
-                printHtml += `<td>${escapeHtml(String(value))}</td>`;
-            }
-            printHtml += `</tr>`;
-            seq++;
-        }
-        
-        const totalCurrent = currentReportData.reduce((s, b) => s + (b.current_charges || 0), 0);
-        const totalUnsettled = currentReportData.reduce((s, b) => s + (b.unsettled_charges || 0), 0);
-        
-        printHtml += `</tbody></table><div class="footer"><p><strong>Summary:</strong> Total Current Charges: $${totalCurrent.toFixed(2)} | Total Unsettled: $${totalUnsettled.toFixed(2)}</p>
-        <p>UKA Bill Utility System - Official Report</p></div></body></html>`;
-        
-        closePrintModal();
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(printHtml);
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-    }
-    
-    async function loadEntitiesForSelection() {
+    async function submitComment() {
+        const comment = document.getElementById('newComment').value;
+        const userName = localStorage.getItem('userName') || (isTeamLeader ? 'Team Leader' : 'Technician');
+        if (!comment.trim()) return window.showToast('Enter a comment', 'error');
         try {
-            const schoolsRes = await fetch('/api/entities?type=school');
-            if (schoolsRes.ok) {
-                const schools = await schoolsRes.json();
-                const schoolsSelect = document.getElementById('schoolsSelect');
-                schoolsSelect.innerHTML = '';
-                if (schools.length === 0) schoolsSelect.innerHTML = '<option value="">No schools found</option>';
-                else {
-                    schools.forEach(school => {
-                        const opt = document.createElement('option');
-                        opt.value = school.id;
-                        opt.textContent = school.name + (school.cluster ? ` (Cluster ${school.cluster})` : '');
-                        schoolsSelect.appendChild(opt);
-                    });
-                }
+            let comments = currentReport.comments || [];
+            comments.push({ author: userName, text: comment, created_at: new Date().toISOString() });
+            const response = await fetch(`/api/technical-reports/${currentReportId}`, { 
+                method: 'PUT', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ comments: comments }) 
+            });
+            const data = await response.json();
+            if (data.success) { 
+                window.showToast('Comment added'); 
+                bootstrap.Modal.getInstance(document.getElementById('commentModal')).hide(); 
+                openReportDetail(currentReportId); 
             }
-            const deptsRes = await fetch('/api/entities?type=department');
-            if (deptsRes.ok) {
-                const departments = await deptsRes.json();
-                const departmentsSelect = document.getElementById('departmentsSelect');
-                departmentsSelect.innerHTML = '';
-                if (departments.length === 0) departmentsSelect.innerHTML = '<option value="">No departments found</option>';
-                else {
-                    departments.forEach(dept => {
-                        const opt = document.createElement('option');
-                        opt.value = dept.id;
-                        opt.textContent = dept.name;
-                        departmentsSelect.appendChild(opt);
-                    });
-                }
-            }
-        } catch(error) { console.error(error); }
+        } catch (error) { 
+            window.showToast('Error', 'error'); 
+        }
     }
     
-    document.querySelectorAll('input[name="selectionType"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            const section = document.getElementById('specificEntitiesSection');
-            if (this.value === 'specificEntities') {
-                section.classList.add('active');
-                if (document.getElementById('schoolsSelect').children.length <= 1) loadEntitiesForSelection();
+    function showAcknowledgeModal() { 
+        if (!isTeamLeader) {
+            window.showToast('Only Team Leaders can acknowledge reports', 'error');
+            return;
+        }
+        document.getElementById('acknowledgeComment').value = ''; 
+        new bootstrap.Modal(document.getElementById('acknowledgeModal')).show(); 
+    }
+    
+    async function submitAcknowledge() {
+        const comment = document.getElementById('acknowledgeComment').value;
+        const userId = localStorage.getItem('userId');
+        try {
+            const response = await fetch(`/api/technical-reports/${currentReportId}/acknowledge`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ team_leader_id: parseInt(userId), team_leader_notes: comment }) 
+            });
+            const data = await response.json();
+            if (data.success) { 
+                window.showToast('Report acknowledged'); 
+                bootstrap.Modal.getInstance(document.getElementById('acknowledgeModal')).hide(); 
+                loadReports(); 
+                openReportDetail(currentReportId); 
             } else {
-                section.classList.remove('active');
+                window.showToast(data.error || 'Failed to acknowledge', 'error');
             }
-        });
-    });
-    
-    document.getElementById('reportSearchInput').addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
-        if (document.getElementById('specificEntitiesSection').classList.contains('active')) {
-            const schoolsSelect = document.getElementById('schoolsSelect');
-            for (let i = 0; i < schoolsSelect.options.length; i++) {
-                const option = schoolsSelect.options[i];
-                const text = option.textContent.toLowerCase();
-                option.style.display = (searchTerm === '' || text.includes(searchTerm)) ? '' : 'none';
-            }
-            const deptsSelect = document.getElementById('departmentsSelect');
-            for (let i = 0; i < deptsSelect.options.length; i++) {
-                const option = deptsSelect.options[i];
-                const text = option.textContent.toLowerCase();
-                option.style.display = (searchTerm === '' || text.includes(searchTerm)) ? '' : 'none';
-            }
+        } catch (error) { 
+            window.showToast('Error', 'error'); 
         }
-    });
+    }
     
-    document.getElementById('printReportBtn').addEventListener('click', openPrintModalForReport);
-    document.getElementById('confirmPrintModalBtn').addEventListener('click', performPrintReport);
+    function editReport() { 
+        if (currentReportId) {
+            // Check if user is the creator
+            if (currentReport && currentReport.technician_id != currentTechnicianId) {
+                window.showToast('You can only edit your own reports', 'error');
+                return;
+            }
+            if (currentReport && currentReport.team_leader_acknowledged) {
+                window.showToast('This report has already been acknowledged and cannot be edited', 'error');
+                return;
+            }
+            window.location.href = `/new-report?id=${currentReportId}`;
+        } else {
+            window.showToast('No report selected', 'error');
+        }
+    }
     
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str).replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
+    async function deleteReport() {
+        if (!currentReportId) return;
+        
+        // Check if user is the creator
+        if (currentReport && currentReport.technician_id != currentTechnicianId) {
+            window.showToast('You can only delete your own reports', 'error');
+            return;
+        }
+        
+        if (!confirm('Are you sure you want to delete this report? This action cannot be undone.')) return;
+        try {
+            const response = await fetch(`/api/technical-reports/${currentReportId}`, { method: 'DELETE' });
+            const data = await response.json();
+            if (data.success) { 
+                window.showToast('Report deleted'); 
+                bootstrap.Modal.getInstance(document.getElementById('reportModal'))?.hide(); 
+                loadReports(); 
+            } else { 
+                window.showToast(data.error || 'Cannot delete', 'error'); 
+            }
+        } catch (error) { 
+            window.showToast('Error deleting', 'error'); 
+        }
+    }
+    
+    function cleanText(text) {
+        if (!text) return '';
+        let cleaned = String(text);
+        cleaned = cleaned.replace(/NonNullable/gi, '');
+        cleaned = cleaned.replace(/Non-Nullable/gi, '');
+        cleaned = cleaned.replace(/null/gi, '');
+        return cleaned.trim();
+    }
+    
+    function printReport() {
+        if (!currentReport && currentReportId) {
+            window.showToast('No report to print', 'error');
+            return;
+        }
+        
+        const report = currentReport;
+        
+        fetch(`/api/technical-reports/${report.id}/track-print`, { method: 'POST' }).catch(e => console.log(e));
+        
+        const printHtml = getPrintHTML(report);
+        
+        const iframe = document.getElementById('printIframe');
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(printHtml);
+        iframeDoc.close();
+        
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+    }
+    
+    function getPrintHTML(report) {
+        const reportTypeIcon = report.report_type === 'water' ? '💧' : report.report_type === 'electricity' ? '⚡' : '📞';
+        const reportTypeName = report.report_type === 'water' ? 'Water' : report.report_type === 'electricity' ? 'Electricity' : 'Telephone';
+        const currentDate = new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        
+        let complaintDetails = cleanText(report.complaint_details || '-');
+        let actionTaken = cleanText(report.action_taken || '-');
+        let technicianNotes = cleanText(report.technician_notes || '');
+        let teamLeaderNotes = cleanText(report.team_leader_notes || '');
+        let accountNumber = cleanText(report.account_number || '');
+        let meterNumber = cleanText(report.meter_number || '');
+        let phoneNumber = cleanText(report.phone_number || '');
+        let referenceNumber = cleanText(report.reference_number || '');
+        let referenceType = cleanText(report.reference_type || '');
+        let problemType = cleanText(report.problem_type || '-');
+        let entityName = cleanText(report.entity_name || report.entity_type || '');
+        let technicianName = cleanText(report.technician_name || 'Unknown');
+        let teamLeaderName = cleanText(report.team_leader_name || 'Team Leader');
+        
+        if (complaintDetails.includes('\n')) {
+            complaintDetails = complaintDetails.split('\n').map(line => `• ${line.trim()}`).join('<br>');
+        }
+        if (actionTaken.includes('\n')) {
+            actionTaken = actionTaken.split('\n').map(line => `• ${line.trim()}`).join('<br>');
+        }
+        
+        let imagesHtml = '';
+        if (report.images && report.images.length > 0) {
+            imagesHtml = '<div style="margin-top:20px;"><strong>Attached Images:</strong><div style="display:flex; flex-wrap:wrap; gap:15px; margin-top:10px;">';
+            report.images.forEach(img => {
+                imagesHtml += `<img src="${img}" style="max-width:180px; max-height:120px; border:1px solid #ccc; border-radius:4px;">`;
+            });
+            imagesHtml += '</div></div>';
+        }
+        
+        let commentsHtml = '';
+        if (report.comments && report.comments.length > 0) {
+            commentsHtml = '<div style="margin-top:20px;"><strong>Comments History:</strong><div style="margin-top:10px;">';
+            report.comments.forEach(c => {
+                let commentText = cleanText(c.text);
+                commentsHtml += `<div style="border:1px solid #e0e0e0; padding:12px; margin-bottom:10px; border-radius:6px; background:#fafafa;"><strong>${escapeHtml(c.author)}</strong> <small style="color:#888;">${formatDate(c.created_at)}</small><p style="margin-top:8px;">${escapeHtml(commentText)}</p></div>`;
+            });
+            commentsHtml += '</div></div>';
+        }
+        
+        return `<!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"><title>${reportTypeName} Technical Report #${report.id}</title>
+        <style>
+            *{margin:0;padding:0;box-sizing:border-box}
+            body{font-family:'Times New Roman',Arial,serif;background:white;padding:0;margin:0;font-size:11pt;line-height:1.5}
+            @page{size:A4;margin:2.2cm 2.2cm}
+            .report-container{max-width:100%;margin:0 auto}
+            .header{text-align:center;margin-bottom:25px}
+            .header h2{font-size:12pt;font-weight:normal;margin:0}
+            .header h1{font-size:16pt;font-weight:bold;margin:8px 0;text-transform:uppercase}
+            .divider{border-top:2px solid #000;margin:15px 0 5px}
+            .sub-divider{border-top:1px solid #000;margin:5px 0}
+            .report-id{background:#f5f5f5;padding:10px 15px;margin-bottom:25px;display:flex;justify-content:space-between;flex-wrap:wrap;border:1px solid #ddd;border-radius:5px}
+            table{width:100%;border-collapse:collapse;margin:15px 0}
+            th,td{padding:10px 12px;border:1px solid #aaa;text-align:left;vertical-align:top}
+            th{background:#f0f0f0;width:30%;font-weight:bold}
+            .priority-high{color:#dc3545;font-weight:bold}
+            .priority-medium{color:#d4a000;font-weight:bold}
+            .priority-low{color:#28a745;font-weight:bold}
+            .bg-danger{background:#dc3545;color:white;padding:2px 8px;border-radius:4px;display:inline-block}
+            .signatures{display:flex;justify-content:space-between;margin-top:50px;margin-bottom:30px}
+            .signature-box{text-align:center;width:45%}
+            .signature-line{border-top:1px solid #000;margin-top:40px;padding-top:8px;width:100%}
+            .footer{text-align:center;margin-top:40px;font-size:9pt;color:#666;border-top:1px solid #ddd;padding-top:12px}
+            @media print{body{padding:0;margin:0}table{page-break-inside:avoid}}
+        </style>
+        </head>
+        <body>
+            <div class="report-container">
+                <div class="header">
+                    <h2>Unit Kemudahan Asas</h2>
+                    <h2>Department of Administration and Services</h2>
+                    <h1>Ministry of Education</h1>
+                    <div class="divider"></div><div class="sub-divider"></div>
+                    <h3 style="margin-top:12px;font-size:13pt;">Technical Report System - ${reportTypeName}</h3>
+                </div>
+                
+                <div class="report-id">
+                    <div><strong>Report ID:</strong> #${report.id}</div>
+                    <div><strong>Date:</strong> ${formatDate(report.created_at)}</div>
+                    <div><strong>Type:</strong> ${reportTypeName} ${reportTypeIcon}</div>
+                    <div><strong>Status:</strong> ${report.team_leader_acknowledged ? 'Acknowledged' : 'Pending Review'}</div>
+                </div>
+                
+                <table>
+                    <tr><th>Entity Type</th><td>${report.entity_type === 'school' ? 'School' : 'Department'}</td>
+                    </tr>
+                    <tr><th>Entity Name</th><td>${escapeHtml(entityName)}</td>
+                    </tr>
+                    ${accountNumber ? `<tr><th>Account Number</th><td>${escapeHtml(accountNumber)}</td>` : ''}
+                    ${meterNumber ? `<tr><th>Meter Number</th><td>${escapeHtml(meterNumber)}</td>` : ''}
+                    ${phoneNumber ? `<tr><th>Phone Number</th><td>${escapeHtml(phoneNumber)}</td>` : ''}
+                    ${referenceNumber ? `<tr><th>Reference</th><td>${referenceType ? referenceType.toUpperCase() + ': ' : ''}${escapeHtml(referenceNumber)}${report.reference_date ? ' (' + report.reference_date + ')' : ''}</td>` : ''}
+                    <tr><th>Problem Type</th><td>${escapeHtml(problemType)}</td>
+                    <tr><th>Priority</th><td class="priority-${report.priority}">${report.priority.toUpperCase()} ${report.priority_with_tender ? '<span class="bg-danger">TENDER</span>' : ''}</td>
+                    <tr><th>Complaint Details</th><td style="white-space:pre-wrap;">${complaintDetails}</td>
+                    ${technicianNotes ? `<tr><th>Technician's Notes</th><td style="white-space:pre-wrap;">${escapeHtml(technicianNotes)}</td>` : ''}
+                    ${actionTaken && actionTaken !== '-' ? `<tr><th>Action Taken</th><td style="white-space:pre-wrap;">${actionTaken}</td>` : ''}
+                    <tr><th>Submitted By</th><td>${escapeHtml(technicianName)}</td>
+                    ${report.checked_by_assistant ? `<tr><th>Assistant Checked By</th><td>${escapeHtml(report.checked_by_assistant_name)} on ${formatDate(report.checked_by_assistant_at)}</td>` : ''}
+                    ${report.team_leader_acknowledged ? `<tr><th>Acknowledged By</th><td>${escapeHtml(teamLeaderName)} on ${formatDate(report.team_leader_acknowledged_at)}</td>` : ''}
+                    ${teamLeaderNotes ? `<tr><th>Team Leader Notes</th><td style="white-space:pre-wrap;">${escapeHtml(teamLeaderNotes)}</td>` : ''}
+                </table>
+                
+                ${imagesHtml}
+                ${commentsHtml}
+                
+                <div class="signatures">
+                    <div class="signature-box">
+                        <div class="signature-line"></div>
+                        <div><strong>Technician's Signature</strong></div>
+                        <div>Name: ${escapeHtml(technicianName)}</div>
+                        <div>Date: ${formatDateOnly(new Date())}</div>
+                    </div>
+                    <div class="signature-box">
+                        <div class="signature-line"></div>
+                        <div><strong>Team Leader's Signature</strong></div>
+                        <div>Name: ${report.team_leader_acknowledged ? escapeHtml(teamLeaderName) : '_________________'}</div>
+                        <div>Date: ${report.team_leader_acknowledged ? formatDateOnly(report.team_leader_acknowledged_at) : '_________________'}</div>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p>This is an official technical report from Unit Kemudahan Asas, Ministry of Education, Brunei Darussalam.</p>
+                    <p>Printed on: ${currentDate}</p>
+                </div>
+            </div>
+            <script>
+                window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 1000); };
+            <\/script>
+        </body>
+        </html>`;
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        checkUserRole();
+        loadTechniciansForFilter().then(() => {
+            loadReports();
         });
-    }
-    
-    async function getSummaryData(entityType, entityId, month, year) {
-        try {
-            const resp = await fetch(`/api/utility-bills?utility_type=telephone&entity_type=${entityType}&entity_id=${entityId}&month=${month}&year=${year}`);
-            if (resp.ok) {
-                const bills = await resp.json();
-                const summaryBill = bills.find(b => b.notes && b.notes.includes('isSummary'));
-                if (summaryBill && summaryBill.notes) {
-                    try { return JSON.parse(summaryBill.notes); } catch(e) {}
-                }
-            }
-        } catch(e) {}
-        return {};
-    }
-    
-    document.getElementById('printBillPaymentBtn').addEventListener('click', async function() {
-        const selectedUtilities = getSelectedUtilities();
-        const showSchools = document.getElementById('entitySchools').checked;
-        const showDepartments = document.getElementById('entityDepartments').checked;
-        const schoolIds = showSchools ? getSelectedSchoolIds() : [];
-        const departmentIds = showDepartments ? getSelectedDepartmentIds() : [];
-        const month = parseInt(document.getElementById('paymentMonth').value);
-        const year = parseInt(document.getElementById('paymentYear').value);
-        const selectedColumns = getSelectedColumns();
-        
-        if (selectedUtilities.length === 0) { alert('⚠️ Please select at least one utility.'); return; }
-        if (!showSchools && !showDepartments) { alert('⚠️ Please select at least Schools or Departments.'); return; }
-        if (selectedColumns.length === 0) { alert('⚠️ Please select at least one column to print.'); return; }
-        
-        document.getElementById('loadingIndicator').style.display = 'block';
-        
-        try {
-            const allBills = [];
-            for (const utility of selectedUtilities) {
-                for (const schoolId of schoolIds) {
-                    const resp = await fetch(`/api/utility-bills?utility_type=${utility}&entity_type=school&entity_id=${schoolId}&month=${month}&year=${year}`);
-                    if (resp.ok) { 
-                        const bills = await resp.json(); 
-                        allBills.push(...bills.filter(b=>!b.notes?.includes('isSummary'))); 
-                    }
-                }
-                for (const deptId of departmentIds) {
-                    const resp = await fetch(`/api/utility-bills?utility_type=${utility}&entity_type=department&entity_id=${deptId}&month=${month}&year=${year}`);
-                    if (resp.ok) { 
-                        const bills = await resp.json(); 
-                        allBills.push(...bills.filter(b=>!b.notes?.includes('isSummary'))); 
-                    }
-                }
-            }
-            
-            if (allBills.length === 0) { alert('⚠️ No bills found'); document.getElementById('loadingIndicator').style.display='none'; return; }
-            
-            const summaryCache = new Map();
-            for (const bill of allBills) {
-                if (bill.utility_type === 'telephone') {
-                    const cacheKey = `${bill.entity_type}_${bill.entity_id}`;
-                    if (!summaryCache.has(cacheKey)) {
-                        const summary = await getSummaryData(bill.entity_type, bill.entity_id, month, year);
-                        summaryCache.set(cacheKey, summary);
-                    }
-                }
-            }
-            
-            const waterBills = allBills.filter(b => b.utility_type === 'water');
-            const electricityBills = allBills.filter(b => b.utility_type === 'electricity');
-            const telephoneBills = allBills.filter(b => b.utility_type === 'telephone');
-            
-            const printData = [];
-            
-            let waterSerial = 1;
-            for (const bill of waterBills) {
-                let parsedNotes = {};
-                if (bill.notes && bill.notes.startsWith('{')) {
-                    try { parsedNotes = JSON.parse(bill.notes); } catch(e) {}
-                }
-                printData.push({
-                    utility: 'water',
-                    serial: waterSerial++,
-                    entityName: bill.entity_name || 'Unknown',
-                    accountMeter: bill.account_number || '—',
-                    consumption: (bill.consumption_m3 || 0) + ' m³',
-                    billAmount: bill.current_charges || 0,
-                    outstanding: bill.unsettled_charges || 0,
-                    previousPayment: parsedNotes.previousPayment || 0,
-                    amountPaid: bill.amount_paid || 0,
-                    notes: parsedNotes.originalNotes || ''
-                });
-            }
-            
-            let electricitySerial = 1;
-            for (const bill of electricityBills) {
-                let parsedNotes = {};
-                if (bill.notes && bill.notes.startsWith('{')) {
-                    try { parsedNotes = JSON.parse(bill.notes); } catch(e) {}
-                }
-                printData.push({
-                    utility: 'electricity',
-                    serial: electricitySerial++,
-                    entityName: bill.entity_name || 'Unknown',
-                    accountMeter: bill.account_number || '—',
-                    consumption: (bill.consumption_kwh || 0) + ' kWh',
-                    billAmount: bill.current_charges || 0,
-                    outstanding: bill.unsettled_charges || 0,
-                    previousPayment: parsedNotes.previousPayment || 0,
-                    amountPaid: bill.amount_paid || 0,
-                    notes: parsedNotes.originalNotes || ''
-                });
-            }
-            
-            let telephoneSerial = 1;
-            for (const bill of telephoneBills) {
-                let parsedNotes = {};
-                if (bill.notes && bill.notes.startsWith('{')) {
-                    try { parsedNotes = JSON.parse(bill.notes); } catch(e) {}
-                }
-                const summaryData = summaryCache.get(`${bill.entity_type}_${bill.entity_id}`) || {};
-                printData.push({
-                    utility: 'telephone',
-                    serial: telephoneSerial++,
-                    entityName: bill.entity_name || 'Unknown',
-                    billNo: bill.meter_number || '—',
-                    accountPhone: bill.phone_number || '—',
-                    billAmount: bill.current_charges || 0,
-                    totalAmount: parsedNotes.totalAmount || 0,
-                    previousOutstanding: summaryData.previousOutstanding || 0,
-                    previousPayment: summaryData.previousPayment || 0,
-                    totalAccountCharges: summaryData.totalAccountCharges || 0,
-                    totalCurrentCharges: (summaryData.previousOutstanding || 0) + (-(summaryData.previousPayment || 0)) + (summaryData.totalAccountCharges || 0),
-                    amountPaid: summaryData.amountPaid || 0,
-                    notes: parsedNotes.originalNotes || ''
-                });
-            }
-            
-            const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-            const monthName = monthNames[month-1];
-            const itemsPerPage = 10;
-            
-            const waterData = printData.filter(d => d.utility === 'water');
-            const electricityData = printData.filter(d => d.utility === 'electricity');
-            const telephoneData = printData.filter(d => d.utility === 'telephone');
-            
-            let printHtml = `<!DOCTYPE html><html><head><title>Bill Payment - ${monthName} ${year}</title><meta charset="UTF-8"><style>
-                *{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:20px;background:white}
-                .print-page{page-break-after:always;margin-bottom:30px;background:white}
-                .attachment-header{text-align:right;font-size:12px;margin-bottom:20px;font-weight:bold}
-                .print-header{text-align:center;margin-bottom:30px}
-                .print-header h2{color:#2e7d32;margin:5px 0}
-                .payment-table{width:100%;border-collapse:collapse;margin-top:20px;font-size:12px}
-                .payment-table th{background:#2196f3;color:white;padding:10px;border:1px solid #ddd;text-align:left}
-                .payment-table td{padding:8px 10px;border:1px solid #ddd;background:white;vertical-align:top}
-                .page-number{text-align:center;margin-top:30px;font-size:10px;color:#666}
-                .utility-title{background:#ff9800;color:white;padding:8px 15px;margin:20px 0 10px 0;border-radius:5px;font-weight:bold}
-                @media print{body{padding:0;margin:0.5in}}
-            </style></head><body>`;
-            
-            let attachmentCounter = 1;
-            let totalPages = Math.ceil(waterData.length / itemsPerPage) + Math.ceil(electricityData.length / itemsPerPage) + Math.ceil(telephoneData.length / itemsPerPage);
-            let currentPage = 1;
-            
-            // Print Water Bills
-            if (waterData.length > 0) {
-                const totalPagesWater = Math.ceil(waterData.length / itemsPerPage);
-                for (let page = 1; page <= totalPagesWater; page++) {
-                    const startIdx = (page-1)*itemsPerPage;
-                    const pageData = waterData.slice(startIdx, startIdx+itemsPerPage);
-                    printHtml += `<div class="print-page"><div class="attachment-header">Attachment ${attachmentCounter++}</div>
-                        <div class="print-header"><h2>🏛️ MINISTRY OF EDUCATION BRUNEI</h2>
-                        <h3>💧 Water Bill Payment List</h3><p>${monthName} ${year}</p></div>
-                        <table class="payment-table"><thead><tr>`;
-                    
-                    selectedColumns.forEach(col => {
-                        if (col.key === 'no') printHtml += `<th>No.</th>`;
-                        else if (col.key === 'entityName') printHtml += `<th>Entity Name</th>`;
-                        else if (col.key === 'accountMeter') printHtml += `<th>Account / Meter</th>`;
-                        else if (col.key === 'consumption') printHtml += `<th>Consumption (m³)</th>`;
-                        else if (col.key === 'billAmount') printHtml += `<th>Bill Amount (BND)</th>`;
-                        else if (col.key === 'outstanding') printHtml += `<th>Outstanding (BND)</th>`;
-                        else if (col.key === 'previousPayment') printHtml += `<th>Previous Payment (BND)</th>`;
-                        else if (col.key === 'amountPaid') printHtml += `<th>Amount Paid (BND)</th>`;
-                        else if (col.key === 'notes') printHtml += `<th>Notes</th>`;
-                    });
-                    printHtml += `</thead><tbody>`;
-                    
-                    for (const item of pageData) {
-                        printHtml += `</tr>`;
-                        selectedColumns.forEach(col => {
-                            let value = '';
-                            if (col.key === 'no') value = item.serial;
-                            else if (col.key === 'entityName') value = escapeHtml(item.entityName);
-                            else if (col.key === 'accountMeter') value = escapeHtml(item.accountMeter);
-                            else if (col.key === 'consumption') value = item.consumption;
-                            else if (col.key === 'billAmount') value = item.billAmount.toFixed(2);
-                            else if (col.key === 'outstanding') value = item.outstanding.toFixed(2);
-                            else if (col.key === 'previousPayment') value = item.previousPayment.toFixed(2);
-                            else if (col.key === 'amountPaid') value = item.amountPaid.toFixed(2);
-                            else if (col.key === 'notes') value = escapeHtml(item.notes);
-                            printHtml += `<td style="text-align:right">${value}</td>`;
-                        });
-                        printHtml += `</tr>`;
-                    }
-                    
-                    const emptyRows = itemsPerPage - pageData.length;
-                    for (let i = 0; i < emptyRows; i++) {
-                        printHtml += `<tr>`;
-                        selectedColumns.forEach(() => { printHtml += `<td>&nbsp;<td>`; });
-                        printHtml += `</tr>`;
-                    }
-                    printHtml += `</tbody></table><div class="page-number">Page ${currentPage++} of ${totalPages}</div></div>`;
-                }
-            }
-            
-            // Print Electricity Bills
-            if (electricityData.length > 0) {
-                const totalPagesElectricity = Math.ceil(electricityData.length / itemsPerPage);
-                for (let page = 1; page <= totalPagesElectricity; page++) {
-                    const startIdx = (page-1)*itemsPerPage;
-                    const pageData = electricityData.slice(startIdx, startIdx+itemsPerPage);
-                    printHtml += `<div class="print-page"><div class="attachment-header">Attachment ${attachmentCounter++}</div>
-                        <div class="print-header"><h2>🏛️ MINISTRY OF EDUCATION BRUNEI</h2>
-                        <h3>⚡ Electricity Bill Payment List</h3><p>${monthName} ${year}</p></div>
-                        <table class="payment-table"><thead><tr>`;
-                    
-                    selectedColumns.forEach(col => {
-                        if (col.key === 'no') printHtml += `<th>No.</th>`;
-                        else if (col.key === 'entityName') printHtml += `<th>Entity Name</th>`;
-                        else if (col.key === 'accountMeter') printHtml += `<th>Account / Meter</th>`;
-                        else if (col.key === 'consumption') printHtml += `<th>Consumption (kWh)</th>`;
-                        else if (col.key === 'billAmount') printHtml += `<th>Bill Amount (BND)</th>`;
-                        else if (col.key === 'outstanding') printHtml += `<th>Outstanding (BND)</th>`;
-                        else if (col.key === 'previousPayment') printHtml += `<th>Previous Payment (BND)</th>`;
-                        else if (col.key === 'amountPaid') printHtml += `<th>Amount Paid (BND)</th>`;
-                        else if (col.key === 'notes') printHtml += `<th>Notes</th>`;
-                    });
-                    printHtml += `</thead><tbody>`;
-                    
-                    for (const item of pageData) {
-                        printHtml += `<tr>`;
-                        selectedColumns.forEach(col => {
-                            let value = '';
-                            if (col.key === 'no') value = item.serial;
-                            else if (col.key === 'entityName') value = escapeHtml(item.entityName);
-                            else if (col.key === 'accountMeter') value = escapeHtml(item.accountMeter);
-                            else if (col.key === 'consumption') value = item.consumption;
-                            else if (col.key === 'billAmount') value = item.billAmount.toFixed(2);
-                            else if (col.key === 'outstanding') value = item.outstanding.toFixed(2);
-                            else if (col.key === 'previousPayment') value = item.previousPayment.toFixed(2);
-                            else if (col.key === 'amountPaid') value = item.amountPaid.toFixed(2);
-                            else if (col.key === 'notes') value = escapeHtml(item.notes);
-                            printHtml += `<td style="text-align:right">${value}</td>`;
-                        });
-                        printHtml += `</tr>`;
-                    }
-                    
-                    const emptyRows = itemsPerPage - pageData.length;
-                    for (let i = 0; i < emptyRows; i++) {
-                        printHtml += `<tr>`;
-                        selectedColumns.forEach(() => { printHtml += `<td>&nbsp;</td>`; });
-                        printHtml += `</tr>`;
-                    }
-                    printHtml += `</tbody></table><div class="page-number">Page ${currentPage++} of ${totalPages}</div></div>`;
-                }
-            }
-            
-            // Print Telephone Bills
-            if (telephoneData.length > 0) {
-                const totalPagesTelephone = Math.ceil(telephoneData.length / itemsPerPage);
-                for (let page = 1; page <= totalPagesTelephone; page++) {
-                    const startIdx = (page-1)*itemsPerPage;
-                    const pageData = telephoneData.slice(startIdx, startIdx+itemsPerPage);
-                    printHtml += `<div class="print-page"><div class="attachment-header">Attachment ${attachmentCounter++}</div>
-                        <div class="print-header"><h2>🏛️ MINISTRY OF EDUCATION BRUNEI</h2>
-                        <h3>📞 Telephone Bill Payment List</h3><p>${monthName} ${year}</p></div>
-                        <table class="payment-table"><thead><tr>`;
-                    
-                    selectedColumns.forEach(col => {
-                        if (col.key === 'no') printHtml += `<th>No.</th>`;
-                        else if (col.key === 'entityName') printHtml += `<th>Entity Name</th>`;
-                        else if (col.key === 'billNo') printHtml += `<th>Bill No.</th>`;
-                        else if (col.key === 'accountPhone') printHtml += `<th>Account / Phone</th>`;
-                        else if (col.key === 'billAmount') printHtml += `<th>Bill Amount (BND)</th>`;
-                        else if (col.key === 'totalAmount') printHtml += `<th>Total Amount (BND)</th>`;
-                        else if (col.key === 'previousOutstanding') printHtml += `<th>Previous Outstanding (BND)</th>`;
-                        else if (col.key === 'previousPayment') printHtml += `<th>Previous Payment (BND)</th>`;
-                        else if (col.key === 'totalAccountCharges') printHtml += `<th>Total Account Charges (BND)</th>`;
-                        else if (col.key === 'totalCurrentCharges') printHtml += `<th>Total Current Charges (BND)</th>`;
-                        else if (col.key === 'amountPaid') printHtml += `<th>Amount Paid (BND)</th>`;
-                        else if (col.key === 'notes') printHtml += `<th>Notes</th>`;
-                    });
-                    printHtml += `</thead><tbody>`;
-                    
-                    for (const item of pageData) {
-                        printHtml += `<tr>`;
-                        selectedColumns.forEach(col => {
-                            let value = '';
-                            if (col.key === 'no') value = item.serial;
-                            else if (col.key === 'entityName') value = escapeHtml(item.entityName);
-                            else if (col.key === 'billNo') value = escapeHtml(item.billNo);
-                            else if (col.key === 'accountPhone') value = escapeHtml(item.accountPhone);
-                            else if (col.key === 'billAmount') value = item.billAmount.toFixed(2);
-                            else if (col.key === 'totalAmount') value = item.totalAmount.toFixed(2);
-                            else if (col.key === 'previousOutstanding') value = item.previousOutstanding.toFixed(2);
-                            else if (col.key === 'previousPayment') value = item.previousPayment.toFixed(2);
-                            else if (col.key === 'totalAccountCharges') value = item.totalAccountCharges.toFixed(2);
-                            else if (col.key === 'totalCurrentCharges') value = item.totalCurrentCharges.toFixed(2);
-                            else if (col.key === 'amountPaid') value = item.amountPaid.toFixed(2);
-                            else if (col.key === 'notes') value = escapeHtml(item.notes);
-                            printHtml += `<td style="text-align:right">${value}</td>`;
-                        });
-                        printHtml += `</tr>`;
-                    }
-                    
-                    const emptyRows = itemsPerPage - pageData.length;
-                    for (let i = 0; i < emptyRows; i++) {
-                        printHtml += `<tr>`;
-                        selectedColumns.forEach(() => { printHtml += `<td>&nbsp;</td>`; });
-                        printHtml += `</tr>`;
-                    }
-                    printHtml += `</tbody></table><div class="page-number">Page ${currentPage++} of ${totalPages}</div></div>`;
-                }
-            }
-            
-            printHtml += `<script>window.onload=function(){setTimeout(function(){window.print();setTimeout(function(){window.close();},5000);},500);};<\/script></body></html>`;
-            
-            const printWindow = window.open('', '_blank');
-            if (printWindow) { printWindow.document.write(printHtml); printWindow.document.close(); }
-            else alert('Please allow pop-ups for this site to print.');
-        } catch(error) { console.error(error); alert('❌ Error: ' + error.message); }
-        finally { document.getElementById('loadingIndicator').style.display = 'none'; }
     });
-    
-    populatePaymentYears();
-    loadAllData();
-    toggleEntityContainers();
-    updateColumnSelection();
 </script>
-</body>
-</html>
+{% endblock %}
