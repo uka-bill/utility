@@ -347,10 +347,40 @@
             animation: fadeOut 4s ease forwards;
         }
 
+        .saving-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #ff9800;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .saving-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid white;
+            border-top: 2px solid #ff9800;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
         @keyframes fadeOut {
             0% { opacity: 1; transform: translateY(0); }
             80% { opacity: 1; }
             100% { opacity: 0; visibility: hidden; transform: translateY(20px); }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         
         .seq-number {
@@ -471,11 +501,6 @@
             padding: 10px;
             border-radius: 50%;
         }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
 
         .saving-indicator {
             display: inline-block;
@@ -487,6 +512,11 @@
             animation: spin 1s linear infinite;
             margin-right: 8px;
             vertical-align: middle;
+        }
+        
+        .btn-success:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
     </style>
 </head>
@@ -590,6 +620,7 @@
     let currentYear = new Date().getFullYear();
     let isLoading = false;
     let savingEntities = new Set();
+    let activeSavingToast = null;
     
     let savedScrollPosition = 0;
 
@@ -611,6 +642,33 @@
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
+    }
+
+    function showSavingToast(entityName) {
+        if (activeSavingToast) {
+            activeSavingToast.remove();
+        }
+        const toast = document.createElement('div');
+        toast.className = 'saving-toast';
+        toast.innerHTML = `<span class="saving-spinner"></span> Saving ${entityName}... Please wait`;
+        document.body.appendChild(toast);
+        activeSavingToast = toast;
+        return toast;
+    }
+
+    function hideSavingToast() {
+        if (activeSavingToast) {
+            activeSavingToast.remove();
+            activeSavingToast = null;
+        }
+    }
+
+    function showToast(message, isError = false) {
+        const toast = document.createElement('div');
+        toast.className = isError ? 'error-toast' : 'success-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
     }
 
     function populateYears() {
@@ -760,14 +818,6 @@
         );
     }
 
-    function showToast(message, isError = false) {
-        const toast = document.createElement('div');
-        toast.className = isError ? 'error-toast' : 'success-toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 4000);
-    }
-
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
@@ -783,11 +833,15 @@
         return false;
     }
 
-    async function saveEntityData(entityRow, month, year) {
+    async function saveEntityDataBackground(entityRow, month, year) {
+        const startTime = performance.now();
+        console.log('⏱️ START BACKGROUND SAVE');
+        
         if (isLoading) return;
         
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         const entityType = entityRow.getAttribute('data-entity-type');
+        const entityName = entityRow.getAttribute('data-entity-name');
         const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
         
         if (!hasAccounts) {
@@ -800,6 +854,8 @@
             return;
         }
         
+        showSavingToast(entityName);
+        
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
@@ -809,7 +865,15 @@
         
         if (meterRows.length === 0) {
             showToast('No data to save', true);
+            hideSavingToast();
             return;
+        }
+        
+        const saveBtn = entityRow.querySelector('.save-entity-btn');
+        const originalBtnText = saveBtn?.innerHTML || '💾 Save All';
+        if (saveBtn) {
+            saveBtn.innerHTML = '<span class="saving-indicator"></span> Saving...';
+            saveBtn.disabled = true;
         }
         
         const batchBills = [];
@@ -849,13 +913,6 @@
             });
         }
         
-        const saveBtn = entityRow.querySelector('.save-entity-btn');
-        const originalBtnText = saveBtn?.innerHTML || '💾 Save All';
-        if (saveBtn) {
-            saveBtn.innerHTML = '<span class="saving-indicator"></span> Saving...';
-            saveBtn.disabled = true;
-        }
-        
         savingEntities.add(entityId);
         
         try {
@@ -866,21 +923,50 @@
             });
             
             const result = await resp.json();
+            const endTime = performance.now();
+            const totalTime = (endTime - startTime).toFixed(0);
+            
+            hideSavingToast();
             
             if (result.success) {
-                showToast(`✅ Saved ${result.success_count} record${result.success_count > 1 ? 's' : ''} successfully`);
-                await renderElectricityTable();
+                showToast(`✅ ${entityName}: Saved ${result.success_count} record(s) successfully (${totalTime}ms)`);
+                updateEntityTotalDisplay(entityId, batchBills);
             } else {
-                showToast(`⚠️ Saved ${result.success_count} records, ${result.error_count} failed`, true);
+                showToast(`⚠️ ${entityName}: Saved ${result.success_count} records, ${result.error_count} failed`, true);
             }
         } catch (err) {
             console.error('Save error:', err);
+            hideSavingToast();
             showToast('Network error. Please try again.', true);
         } finally {
             savingEntities.delete(entityId);
             if (saveBtn) {
                 saveBtn.innerHTML = originalBtnText;
                 saveBtn.disabled = false;
+            }
+            isLoading = false;
+        }
+    }
+    
+    function updateEntityTotalDisplay(entityId, batchBills) {
+        let totalPaid = 0;
+        for (const bill of batchBills) {
+            totalPaid += bill.amount_paid || 0;
+        }
+        
+        const entityTotalSpan = document.getElementById(`entity-total-${entityId}`);
+        if (entityTotalSpan) {
+            entityTotalSpan.innerHTML = `(Total Paid: $${totalPaid.toFixed(2)})`;
+        }
+        
+        const entityStatusSpan = document.getElementById(`entity-status-${entityId}`);
+        if (entityStatusSpan) {
+            if (totalPaid > 0) {
+                entityStatusSpan.innerHTML = 'Paid';
+                entityStatusSpan.className = 'status-badge status-paid';
+            } else {
+                entityStatusSpan.innerHTML = 'Pending';
+                entityStatusSpan.className = 'status-badge status-pending';
             }
         }
     }
@@ -1178,12 +1264,12 @@
             <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No electricity account configured)</span>'}
+                ${!isPlaceholder ? `<span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No electricity account configured)</span>'}
              </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
             <td colspan="6"></div>
             <td></div>
-            <td><span class="status-badge ${entityStatusClass}">${entityStatusText}</span></div>
+            <td><span class="status-badge ${entityStatusClass}" id="entity-status-${entity.id}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
             </div>
@@ -1236,8 +1322,7 @@
             if (saveBtn && !saveBtn.disabled) {
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
-                    saveScrollPosition();
-                    await saveEntityData(entityRow, currentMonth, currentYear);
+                    await saveEntityDataBackground(entityRow, currentMonth, currentYear);
                 }
                 return;
             }
