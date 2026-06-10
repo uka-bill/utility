@@ -1063,7 +1063,7 @@ def batch_update_utility_bills():
                     
                     result = supabase.table("utility_bills").upsert(
                         record,
-                        on_conflict="phone_number,month,year,entity_id,entity_type"
+                        on_conflict="phone_number, month, year, entity_id, entity_type"
                     ).execute()
                     
                     if result.data:
@@ -1093,7 +1093,7 @@ def batch_update_utility_bills():
                     
                     result = supabase.table("utility_bills").upsert(
                         record,
-                        on_conflict="account_number,meter_number,month,year,entity_id,entity_type"
+                        on_conflict="account_number, meter_number, month, year, entity_id, entity_type"
                     ).execute()
                     
                     if result.data:
@@ -1123,7 +1123,7 @@ def batch_update_utility_bills():
                     
                     result = supabase.table("utility_bills").upsert(
                         record,
-                        on_conflict="account_number,meter_number,month,year,entity_id,entity_type"
+                        on_conflict="account_number, meter_number, month, year, entity_id, entity_type"
                     ).execute()
                     
                     if result.data:
