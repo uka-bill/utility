@@ -207,8 +207,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
-            table-layout: auto;
-            min-width: 1400px;
+            table-layout: fixed;
         }
 
         .data-table thead {
@@ -229,10 +228,25 @@
             white-space: nowrap;
         }
 
+        /* Fixed column widths */
+        .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 50px; text-align: center; }
+        .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 200px; }
+        .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 100px; }
+        .data-table th:nth-child(4), .data-table td:nth-child(4) { width: 180px; }
+        .data-table th:nth-child(5), .data-table td:nth-child(5) { width: 100px; }
+        .data-table th:nth-child(6), .data-table td:nth-child(6) { width: 100px; }
+        .data-table th:nth-child(7), .data-table td:nth-child(7) { width: 100px; }
+        .data-table th:nth-child(8), .data-table td:nth-child(8) { width: 100px; }
+        .data-table th:nth-child(9), .data-table td:nth-child(9) { width: 150px; }
+        .data-table th:nth-child(10), .data-table td:nth-child(10) { width: 80px; }
+        .data-table th:nth-child(11), .data-table td:nth-child(11) { width: 260px; }
+
         .data-table td {
             padding: 10px;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .badge {
@@ -520,7 +534,7 @@
         }
         
         .amount-paid-input {
-            width: 120px;
+            width: 100px;
             padding: 6px 8px;
             border-radius: 5px;
             border: 1px solid #ddd;
@@ -539,6 +553,11 @@
             font-size: 0.7rem;
             font-weight: 600;
             color: var(--gray);
+        }
+        
+        /* Make separator row span all columns */
+        .cluster-separator td, .department-group-separator td {
+            text-align: left;
         }
     </style>
 </head>
@@ -731,7 +750,6 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
-                // Build summary data map from summary bills
                 for (const bill of existingBills) {
                     if (bill.notes && bill.notes.startsWith('{')) {
                         try {
@@ -951,7 +969,6 @@
         savingEntities.add(entityId);
         
         try {
-            // Save meter bills
             let successCount = 0;
             let errorCount = 0;
             
@@ -966,7 +983,6 @@
                 errorCount = result.error_count || 0;
             }
             
-            // Save summary data (Amount Paid for the entity)
             const summaryBillData = {
                 utility_type: 'water',
                 entity_type: entityType,
@@ -1341,7 +1357,6 @@
             }
         }
         
-        // Attach save button event
         const saveBtn = entityRow.querySelector('.save-entity-btn');
         if (saveBtn) {
             saveBtn.onclick = async () => {
@@ -1362,10 +1377,6 @@
             if (m === '>') return '&gt;';
             return m;
         });
-    }
-    
-    function attachEventListeners() {
-        // No need for extra listener - save button onclick is set in renderEntity
     }
     
     document.addEventListener('DOMContentLoaded', async () => {
