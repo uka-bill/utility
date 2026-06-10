@@ -15,8 +15,6 @@
             --light: #f8f9fa;
             --dark: #343a40;
             --gray: #6c757d;
-            --bill-shade: #e8f4fd;
-            --bill-border: #4361ee;
         }
 
         * {
@@ -446,9 +444,8 @@
         
         .total-due {
             font-size: 0.7rem;
-            color: #2e7d32;
+            color: #666;
             margin-left: 10px;
-            font-weight: normal;
         }
         
         .consumption-unit {
@@ -516,84 +513,32 @@
             margin-right: 8px;
             vertical-align: middle;
         }
-
+        
         .btn-success:disabled {
             opacity: 0.6;
             cursor: not-allowed;
         }
-
-        /* Summary container styles */
-        .summary-container {
-            background-color: var(--bill-shade);
-            border: 2px solid var(--bill-border);
-            border-radius: 10px;
-            margin: 15px 0 10px 0;
-            padding: 15px;
-            width: 100%;
-        }
         
-        .summary-title-box {
-            background-color: var(--bill-border);
-            color: white;
-            padding: 8px 15px;
-            border-radius: 8px;
-            display: inline-block;
-            margin-bottom: 15px;
-            font-weight: bold;
-            font-size: 0.9rem;
-        }
-        
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(1, 1fr);
-            gap: 15px;
-            align-items: end;
-        }
-        
-        .summary-item {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        
-        .summary-label {
-            font-size: 0.7rem;
-            font-weight: 600;
-            color: var(--primary);
-        }
-        
-        .summary-input {
-            width: 100%;
+        .amount-paid-input {
+            width: 120px;
             padding: 6px 8px;
             border-radius: 5px;
-            border: 1px solid #b8d4ff;
-            background: white;
+            border: 1px solid #ddd;
             font-size: 0.8rem;
             text-align: right;
-            box-sizing: border-box;
         }
         
-        .summary-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
-        }
-        
-        .summary-actions {
+        .entity-action-group {
             display: flex;
-            justify-content: flex-end;
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #b8d4ff;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         
-        .summary-row td {
-            padding: 15px 20px;
-            background-color: transparent;
-        }
-        
-        .summary-row {
-            background-color: transparent;
+        .amount-paid-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--gray);
         }
     </style>
 </head>
@@ -786,7 +731,7 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
-                // Build summary data map
+                // Build summary data map from summary bills
                 for (const bill of existingBills) {
                     if (bill.notes && bill.notes.startsWith('{')) {
                         try {
@@ -925,7 +870,7 @@
         return false;
     }
 
-    async function saveEntityDataBackground(entityRow, summaryValues, month, year) {
+    async function saveEntityDataBackground(entityRow, amountPaidValue, month, year) {
         const startTime = performance.now();
         console.log('⏱️ START BACKGROUND SAVE');
         
@@ -993,7 +938,7 @@
                 consumption_m3: consumption,
                 current_charges: currentCharges,
                 unsettled_charges: unsettledCharges,
-                amount_paid: 0,  // No individual amount paid - use summary
+                amount_paid: 0,
                 notes: JSON.stringify({ previousPayment: previousPayment, originalNotes: notes }),
                 month: month,
                 year: year,
@@ -1022,43 +967,41 @@
             }
             
             // Save summary data (Amount Paid for the entity)
-            if (summaryValues) {
-                const summaryBillData = {
-                    utility_type: 'water',
-                    entity_type: entityType,
-                    entity_id: entityId,
-                    account_number: '',
-                    meter_number: '',
-                    current_charges: 0,
-                    unsettled_charges: 0,
-                    amount_paid: summaryValues.amountPaid || 0,
-                    notes: JSON.stringify({
-                        isSummary: true,
-                        amountPaid: summaryValues.amountPaid || 0
-                    }),
-                    month: month,
-                    year: year
-                };
-                
-                const existingSummary = existingBills.find(b => 
-                    b.entity_type === entityType && 
-                    b.entity_id === entityId && 
-                    b.notes?.includes('isSummary')
-                );
-                
-                if (existingSummary && existingSummary.id) {
-                    await fetch(`/api/utility-bills/${existingSummary.id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(summaryBillData)
-                    });
-                } else {
-                    await fetch('/api/utility-bills', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(summaryBillData)
-                    });
-                }
+            const summaryBillData = {
+                utility_type: 'water',
+                entity_type: entityType,
+                entity_id: entityId,
+                account_number: '',
+                meter_number: '',
+                current_charges: 0,
+                unsettled_charges: 0,
+                amount_paid: amountPaidValue || 0,
+                notes: JSON.stringify({
+                    isSummary: true,
+                    amountPaid: amountPaidValue || 0
+                }),
+                month: month,
+                year: year
+            };
+            
+            const existingSummary = existingBills.find(b => 
+                b.entity_type === entityType && 
+                b.entity_id === entityId && 
+                b.notes?.includes('isSummary')
+            );
+            
+            if (existingSummary && existingSummary.id) {
+                await fetch(`/api/utility-bills/${existingSummary.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(summaryBillData)
+                });
+            } else {
+                await fetch('/api/utility-bills', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(summaryBillData)
+                });
             }
             
             const endTime = performance.now();
@@ -1068,10 +1011,7 @@
             
             if (errorCount === 0) {
                 showToast(`✅ ${entityName}: Saved ${successCount} record(s) successfully (${totalTime}ms)`);
-                // Update the entity's total paid display
-                if (summaryValues) {
-                    updateEntityTotalDisplay(entityId, summaryValues.amountPaid || 0);
-                }
+                updateEntityTotalDisplay(entityId, amountPaidValue || 0);
             } else {
                 showToast(`⚠️ ${entityName}: Saved ${successCount} records, ${errorCount} failed`, true);
             }
@@ -1315,7 +1255,6 @@
     
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
-        let entityTotalPaid = 0;
         let isPlaceholder = false;
         
         const summaryKey = `${entity.type}_${entity.id}`;
@@ -1341,7 +1280,11 @@
             <td></div>
             <td><span class="status-badge ${amountPaid > 0 ? 'status-paid' : 'status-pending'}" id="entity-status-${entity.id}">${amountPaid > 0 ? 'Paid' : 'Pending'}</span></div>
             <td class="entity-actions">
-                <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
+                <div class="entity-action-group">
+                    <span class="amount-paid-label">Amount Paid ($)</span>
+                    <input type="number" step="0.01" class="amount-paid-input" id="amount_paid_${entity.id}" value="${amountPaid.toFixed(2)}" placeholder="0.00">
+                    <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
+                </div>
             </div>
         `;
         tbody.appendChild(entityRow);
@@ -1398,41 +1341,13 @@
             }
         }
         
-        // Summary section with Amount Paid (only one per entity)
-        const summaryRow = document.createElement('tr');
-        summaryRow.className = 'summary-row';
-        
-        const summaryCell = document.createElement('td');
-        summaryCell.colSpan = 11;
-        summaryCell.style.padding = '15px 20px';
-        summaryCell.style.backgroundColor = 'transparent';
-        
-        summaryCell.innerHTML = `
-            <div class="summary-container">
-                <div class="summary-title-box">💰 BILL SUMMARY - ${escapeHtml(entity.name)}</div>
-                <div class="summary-grid">
-                    <div class="summary-item">
-                        <span class="summary-label">Amount Paid ($)</span>
-                        <input type="number" step="0.01" class="summary-input summary-amount-paid" id="amount_paid_${entity.id}" value="${amountPaid.toFixed(2)}" placeholder="0.00">
-                    </div>
-                </div>
-                <div class="summary-actions">
-                    <button class="btn btn-success save-entity-btn">💾 Save All</button>
-                </div>
-            </div>
-        `;
-        
-        summaryRow.appendChild(summaryCell);
-        tbody.appendChild(summaryRow);
-        
-        const saveBtn = summaryCell.querySelector('.save-entity-btn');
+        // Attach save button event
+        const saveBtn = entityRow.querySelector('.save-entity-btn');
         if (saveBtn) {
             saveBtn.onclick = async () => {
-                const amountPaidInput = summaryCell.querySelector('.summary-amount-paid');
-                const summaryValues = {
-                    amountPaid: parseFloat(amountPaidInput?.value) || 0
-                };
-                await saveEntityDataBackground(entityRow, summaryValues, month, year);
+                const amountPaidInput = document.getElementById(`amount_paid_${entity.id}`);
+                const amountPaidValue = parseFloat(amountPaidInput?.value) || 0;
+                await saveEntityDataBackground(entityRow, amountPaidValue, month, year);
             };
         }
         
@@ -1450,32 +1365,7 @@
     }
     
     function attachEventListeners() {
-        document.getElementById('billsTableBody').addEventListener('click', async (e) => {
-            const saveBtn = e.target.closest('.save-entity-btn');
-            if (saveBtn && !saveBtn.disabled) {
-                let entityRow = saveBtn.closest('tr.entity-row');
-                if (!entityRow) {
-                    const summaryRow = saveBtn.closest('.summary-row');
-                    if (summaryRow) {
-                        let prev = summaryRow.previousElementSibling;
-                        while (prev && !prev.classList.contains('entity-row')) {
-                            prev = prev.previousElementSibling;
-                        }
-                        entityRow = prev;
-                    }
-                }
-                if (entityRow && entityRow.classList.contains('entity-row')) {
-                    const entityId = entityRow.getAttribute('data-entity-id');
-                    const amountPaidInput = document.querySelector(`#amount_paid_${entityId}`);
-                    
-                    const summaryValues = {
-                        amountPaid: parseFloat(amountPaidInput?.value) || 0
-                    };
-                    await saveEntityDataBackground(entityRow, summaryValues, currentMonth, currentYear);
-                }
-                return;
-            }
-        });
+        // No need for extra listener - save button onclick is set in renderEntity
     }
     
     document.addEventListener('DOMContentLoaded', async () => {
@@ -1485,7 +1375,6 @@
         document.getElementById('globalMonth').value = now.getMonth() + 1;
         document.getElementById('globalYear').value = now.getFullYear();
         
-        attachEventListeners();
         await renderWaterTable();
         
         document.getElementById('refreshTableBtn').addEventListener('click', async () => {
