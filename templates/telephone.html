@@ -915,17 +915,13 @@
         return false;
     }
 
+    // ============ OPTIMIZED SAVE ENTITY DATA FUNCTION (BATCH SAVE - ONE API CALL) ============
     async function saveEntityData(entityRow, summaryValues, month, year) {
         if (isLoading) return;
         
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         const entityType = entityRow.getAttribute('data-entity-type');
         const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
-        
-        console.log('=== SAVING TELEPHONE BILLS ===');
-        console.log('Entity ID:', entityId);
-        console.log('Entity Type:', entityType);
-        console.log('Month/Year:', month, year);
         
         if (!hasAccounts) {
             showToast('❌ Cannot save: No telephone account configured for this entity.', true);
@@ -948,8 +944,6 @@
             }
         }
         
-        console.log('Found account rows:', accountRows.length);
-        
         // Build a map of account number to Bill No.
         const billNoMap = {};
         for (const accRow of accountRows) {
@@ -957,7 +951,6 @@
             const billNoInput = accRow.querySelector('.account-bill-number-input');
             if (accNumber && billNoInput) {
                 billNoMap[accNumber] = billNoInput.value;
-                console.log(`Account ${accNumber} -> Bill No: ${billNoInput.value}`);
             }
         }
         
@@ -971,13 +964,7 @@
             nextRow = nextRow.nextElementSibling;
         }
         
-        console.log('Found phone rows:', phoneRows.length);
-        
-        if (phoneRows.length === 0) {
-            showToast('No phone records to save', true);
-            return;
-        }
-        
+        // COLLECT ALL BILLS INTO ONE ARRAY (KEY OPTIMIZATION - BATCH SAVE)
         const batchBills = [];
         
         for (const row of phoneRows) {
@@ -993,9 +980,6 @@
             const totalAmount = parseFloat(totalAmountInput?.value) || 0;
             const notes = notesInput?.value || '';
             
-            console.log(`Phone: ${phoneNumber}, Bill No: ${billNo}, Bill Amount: ${currentCharges}, Total Amount: ${totalAmount}`);
-            
-            // Only add if phone number is valid
             if (phoneNumber && phoneNumber !== '—') {
                 batchBills.push({
                     account_number: accountNumber === '—' ? '' : accountNumber,
@@ -1010,16 +994,7 @@
                     entity_id: entityId,
                     utility_type: 'telephone'
                 });
-            } else {
-                console.warn(`Skipping phone row with invalid phone number: ${phoneNumber}`);
             }
-        }
-        
-        console.log('Bills to save:', batchBills);
-        
-        if (batchBills.length === 0) {
-            showToast('No valid phone records to save', true);
-            return;
         }
         
         // Find save button
@@ -1040,30 +1015,19 @@
         savingEntities.add(entityId);
         
         try {
-            let totalSuccess = 0;
-            let totalError = 0;
+            let successCount = 0;
+            let errorCount = 0;
             
-            // Save each bill individually
-            for (const billData of batchBills) {
-                try {
-                    console.log('Sending bill:', billData);
-                    const resp = await fetch('/api/utility-bills/batch-update', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ bills: [billData] })
-                    });
-                    const result = await resp.json();
-                    console.log('Response:', result);
-                    if (result.success_count > 0) {
-                        totalSuccess++;
-                    } else {
-                        totalError++;
-                        console.error('Failed for phone:', billData.phone_number, result);
-                    }
-                } catch (err) {
-                    totalError++;
-                    console.error('Error saving bill:', err);
-                }
+            // ONE API CALL FOR ALL PHONE BILLS (FAST! Same as water/electricity)
+            if (batchBills.length > 0) {
+                const resp = await fetch('/api/utility-bills/batch-update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bills: batchBills })
+                });
+                const result = await resp.json();
+                successCount = result.success_count || 0;
+                errorCount = result.error_count || 0;
             }
             
             // Save summary data
@@ -1108,11 +1072,11 @@
                 }
             }
             
-            if (totalError === 0) {
-                showToast(`✅ Saved ${totalSuccess} record${totalSuccess > 1 ? 's' : ''} successfully`);
+            if (errorCount === 0) {
+                showToast(`✅ Saved ${successCount} record${successCount > 1 ? 's' : ''} successfully`);
                 await renderTelephoneTable();
             } else {
-                showToast(`⚠️ Saved ${totalSuccess} records, ${totalError} failed`, true);
+                showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed`, true);
             }
         } catch (err) {
             console.error('Save error:', err);
@@ -1127,6 +1091,7 @@
             showLoading(false);
         }
     }
+    // ============ END OPTIMIZED SAVE ENTITY DATA FUNCTION ============
 
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
