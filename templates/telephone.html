@@ -682,7 +682,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="10" class="no-data">Loading schools & departments...<\/td></table>
+                <tr><td colspan="10" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -915,8 +915,13 @@
         return false;
     }
 
-    // ============ OPTIMIZED SAVE FUNCTION - BATCH ALL PHONES IN ONE API CALL ============
+    // ============ DEBUG SAVE FUNCTION WITH TIMING ============
     async function saveEntityData(entityRow, summaryValues, month, year) {
+        const startTime = performance.now();
+        console.log('⏱️ ========================================');
+        console.log('⏱️ START SAVE at:', new Date().toLocaleTimeString());
+        console.log('⏱️ ========================================');
+        
         if (isLoading) return;
         
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
@@ -964,7 +969,9 @@
             nextRow = nextRow.nextElementSibling;
         }
         
-        // COLLECT ALL BILLS INTO ONE ARRAY (BATCH SAVE - SAME AS WATER/ELECTRICITY)
+        console.log(`📞 Found ${phoneRows.length} phone rows for this entity`);
+        
+        // COLLECT ALL BILLS INTO ONE ARRAY
         const batchBills = [];
         
         for (const row of phoneRows) {
@@ -997,6 +1004,8 @@
             }
         }
         
+        console.log(`📦 Sending ${batchBills.length} bills in ONE API call to /batch-update`);
+        
         // Find save button
         let summaryContainer = entityRow.nextElementSibling;
         while (summaryContainer && !summaryContainer.querySelector('.summary-container')) {
@@ -1018,8 +1027,11 @@
             let successCount = 0;
             let errorCount = 0;
             
-            // ONE API CALL FOR ALL PHONE BILLS (FAST - Same as water/electricity)
+            const apiStartTime = performance.now();
+            
+            // ONE API CALL FOR ALL PHONE BILLS
             if (batchBills.length > 0) {
+                console.log(`🔄 Sending request to server...`);
                 const resp = await fetch('/api/utility-bills/batch-update', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1028,9 +1040,14 @@
                 const result = await resp.json();
                 successCount = result.success_count || 0;
                 errorCount = result.error_count || 0;
+                
+                const apiEndTime = performance.now();
+                console.log(`⏱️ API call duration: ${(apiEndTime - apiStartTime).toFixed(0)}ms`);
+                console.log(`📊 Server response: ${successCount} success, ${errorCount} failed`);
             }
             
             // Save summary data
+            const summaryStartTime = performance.now();
             if (summaryValues) {
                 const summaryBillData = {
                     utility_type: 'telephone',
@@ -1071,15 +1088,23 @@
                     });
                 }
             }
+            const summaryEndTime = performance.now();
+            console.log(`⏱️ Summary save duration: ${(summaryEndTime - summaryStartTime).toFixed(0)}ms`);
+            
+            const endTime = performance.now();
+            const totalTime = (endTime - startTime).toFixed(0);
+            console.log(`⏱️ ========================================`);
+            console.log(`⏱️ TOTAL SAVE TIME: ${totalTime}ms`);
+            console.log(`⏱️ ========================================`);
             
             if (errorCount === 0) {
-                showToast(`✅ Saved ${successCount} record${successCount > 1 ? 's' : ''} successfully`);
+                showToast(`✅ Saved ${successCount} record${successCount > 1 ? 's' : ''} successfully (${totalTime}ms)`);
                 await renderTelephoneTable();
             } else {
                 showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed`, true);
             }
         } catch (err) {
-            console.error('Save error:', err);
+            console.error('❌ Save error:', err);
             showToast('Network error. Please try again.', true);
         } finally {
             savingEntities.delete(entityId);
@@ -1091,7 +1116,7 @@
             showLoading(false);
         }
     }
-    // ============ END OPTIMIZED SAVE FUNCTION ============
+    // ============ END DEBUG SAVE FUNCTION ============
 
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
