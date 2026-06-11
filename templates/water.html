@@ -201,15 +201,14 @@
             max-height: calc(100vh - 300px);
             overflow-y: auto;
             position: relative;
-            width: 100%;
         }
 
         .data-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
-            table-layout: fixed;
-            min-width: 1200px;
+            table-layout: auto;
+            min-width: 1400px;
         }
 
         .data-table thead {
@@ -221,54 +220,26 @@
         .data-table th {
             background: var(--primary);
             color: white;
-            padding: 12px 8px;
+            padding: 12px 10px;
             text-align: left;
             position: sticky;
             top: 0;
             z-index: 20;
             border-bottom: 2px solid white;
-            white-space: normal;
-            word-break: break-word;
-            line-height: 1.3;
+            white-space: nowrap;
         }
 
         .data-table td {
-            padding: 10px 8px;
+            padding: 10px;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
         }
-
-        /* Column widths - balanced */
-        .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 4%; }  /* No. */
-        .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 14%; word-break: break-word; white-space: normal; } /* Entity Name */
-        .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 6%; }  /* Type */
-        .data-table th:nth-child(4), .data-table td:nth-child(4) { width: 12%; word-break: break-word; white-space: normal; } /* Account / Meter */
-        .data-table th:nth-child(5), .data-table td:nth-child(5) { width: 7%; }  /* Consumption */
-        .data-table th:nth-child(6), .data-table td:nth-child(6) { width: 7%; }  /* Bill Amount */
-        .data-table th:nth-child(7), .data-table td:nth-child(7) { width: 7%; }  /* Outstanding */
-        .data-table th:nth-child(8), .data-table td:nth-child(8) { width: 7%; }  /* Previous Payment */
-        .data-table th:nth-child(9), .data-table td:nth-child(9) { width: 7%; }  /* Amount Paid */
-        .data-table th:nth-child(10), .data-table td:nth-child(10) { width: 12%; word-break: break-word; white-space: normal; } /* Notes */
-        .data-table th:nth-child(11), .data-table td:nth-child(11) { width: 5%; }  /* Status */
-        .data-table th:nth-child(12), .data-table td:nth-child(12) { width: 12%; } /* Actions */
-
-        /* Allow text wrap for specific columns */
-        .data-table td:nth-child(2), .data-table td:nth-child(4), .data-table td:nth-child(10) {
-            white-space: normal;
-            word-break: break-word;
-        }
-
-        /* Header text for columns that need full spelling */
-        .data-table th:nth-child(5) { white-space: normal; }
-        .data-table th:nth-child(8) { white-space: normal; }
-        .data-table th:nth-child(9) { white-space: normal; }
 
         .badge {
             padding: 5px 10px;
             border-radius: 15px;
             font-size: 0.8rem;
             font-weight: 600;
-            display: inline-block;
         }
 
         .badge-school {
@@ -283,7 +254,7 @@
 
         .inline-input {
             width: 100%;
-            min-width: 60px;
+            min-width: 70px;
             padding: 6px 8px;
             border-radius: 5px;
             border: 1px solid #ddd;
@@ -469,7 +440,6 @@
             gap: 8px;
             align-items: center;
             white-space: nowrap;
-            justify-content: flex-start;
         }
         
         .total-due {
@@ -499,7 +469,7 @@
         }
         
         .notes-cell {
-            min-width: 100px;
+            min-width: 150px;
         }
         
         .loading-overlay {
@@ -549,10 +519,9 @@
             cursor: not-allowed;
         }
         
-        /* Disabled amount paid style for non-first meter rows */
         .amount-paid-disabled {
             width: 100%;
-            min-width: 60px;
+            min-width: 70px;
             padding: 6px 8px;
             border-radius: 5px;
             border: 1px solid #eee;
@@ -560,7 +529,6 @@
             font-size: 0.8rem;
             text-align: center;
             color: #999;
-            pointer-events: none;
         }
     </style>
 </head>
@@ -920,14 +888,6 @@
             saveBtn.disabled = true;
         }
         
-        // Get Amount Paid from the first meter row only
-        let entityAmountPaid = 0;
-        if (meterRows.length > 0) {
-            const firstRow = meterRows[0];
-            const amountPaidInput = firstRow.querySelector('.amount-paid-input');
-            entityAmountPaid = parseFloat(amountPaidInput?.value) || 0;
-        }
-        
         const batchBills = [];
         for (const row of meterRows) {
             const accountNumber = row.getAttribute('data-account');
@@ -938,12 +898,14 @@
             const currentInput = row.querySelector('.current-charge-input');
             const outstandingInput = row.querySelector('.outstanding-input');
             const previousPaidInput = row.querySelector('.previous-paid-input');
+            const amountPaidInput = row.querySelector('.amount-paid-input');
             const notesInput = row.querySelector('.notes-input');
             
             const consumption = parseFloat(consumptionInput?.value) || 0;
             const currentCharges = parseFloat(currentInput?.value) || 0;
             const unsettledCharges = parseFloat(outstandingInput?.value) || 0;
             const previousPayment = parseFloat(previousPaidInput?.value) || 0;
+            const amountPaid = parseFloat(amountPaidInput?.value) || 0;
             const notes = notesInput?.value || '';
             
             batchBills.push({
@@ -953,7 +915,7 @@
                 consumption_m3: consumption,
                 current_charges: currentCharges,
                 unsettled_charges: unsettledCharges,
-                amount_paid: 0,
+                amount_paid: amountPaid,
                 notes: JSON.stringify({ previousPayment: previousPayment, originalNotes: notes }),
                 month: month,
                 year: year,
@@ -966,69 +928,24 @@
         savingEntities.add(entityId);
         
         try {
-            // Save meter bills
-            let successCount = 0;
-            let errorCount = 0;
+            const resp = await fetch('/api/utility-bills/batch-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bills: batchBills })
+            });
             
-            if (batchBills.length > 0) {
-                const resp = await fetch('/api/utility-bills/batch-update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ bills: batchBills })
-                });
-                const result = await resp.json();
-                successCount = result.success_count || 0;
-                errorCount = result.error_count || 0;
-            }
-            
-            // Save summary data (Amount Paid for the entity - from first row only)
-            const summaryBillData = {
-                utility_type: 'water',
-                entity_type: entityType,
-                entity_id: entityId,
-                account_number: '',
-                meter_number: '',
-                current_charges: 0,
-                unsettled_charges: 0,
-                amount_paid: entityAmountPaid,
-                notes: JSON.stringify({
-                    isSummary: true,
-                    amountPaid: entityAmountPaid
-                }),
-                month: month,
-                year: year
-            };
-            
-            const existingSummary = existingBills.find(b => 
-                b.entity_type === entityType && 
-                b.entity_id === entityId && 
-                b.notes?.includes('isSummary')
-            );
-            
-            if (existingSummary && existingSummary.id) {
-                await fetch(`/api/utility-bills/${existingSummary.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(summaryBillData)
-                });
-            } else {
-                await fetch('/api/utility-bills', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(summaryBillData)
-                });
-            }
-            
+            const result = await resp.json();
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
             
             hideSavingToast();
             
-            if (errorCount === 0) {
-                showToast(`✅ ${entityName}: Saved ${successCount} record(s) successfully (${totalTime}ms)`);
-                updateEntityTotalDisplay(entityId, entityAmountPaid);
+            if (result.success) {
+                showToast(`✅ ${entityName}: Saved ${result.success_count} record(s) successfully (${totalTime}ms)`);
+                // Update the entity's total paid display
+                updateEntityTotalDisplay(entityId, batchBills);
             } else {
-                showToast(`⚠️ ${entityName}: Saved ${successCount} records, ${errorCount} failed`, true);
+                showToast(`⚠️ ${entityName}: Saved ${result.success_count} records, ${result.error_count} failed`, true);
             }
         } catch (err) {
             console.error('Save error:', err);
@@ -1044,15 +961,20 @@
         }
     }
     
-    function updateEntityTotalDisplay(entityId, amountPaid) {
+    function updateEntityTotalDisplay(entityId, batchBills) {
+        let totalPaid = 0;
+        for (const bill of batchBills) {
+            totalPaid += bill.amount_paid || 0;
+        }
+        
         const entityTotalSpan = document.getElementById(`entity-total-${entityId}`);
         if (entityTotalSpan) {
-            entityTotalSpan.innerHTML = `(Total Paid: $${amountPaid.toFixed(2)})`;
+            entityTotalSpan.innerHTML = `(Total Paid: $${totalPaid.toFixed(2)})`;
         }
         
         const entityStatusSpan = document.getElementById(`entity-status-${entityId}`);
         if (entityStatusSpan) {
-            if (amountPaid > 0) {
+            if (totalPaid > 0) {
                 entityStatusSpan.innerHTML = 'Paid';
                 entityStatusSpan.className = 'status-badge status-paid';
             } else {
@@ -1069,7 +991,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td><tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1180,7 +1102,7 @@
         
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
-            const deptName = dept.department_name || 'Other';
+            const deptName = dept.departmentName || 'Other';
             if (!deptByDepartmentName.has(deptName)) {
                 deptByDepartmentName.set(deptName, []);
             }
@@ -1189,7 +1111,7 @@
         
         const deptNamesInOrder = [];
         for (const dept of departmentsList) {
-            const deptName = dept.department_name || 'Other';
+            const deptName = dept.departmentName || 'Other';
             if (!deptNamesInOrder.includes(deptName)) {
                 deptNamesInOrder.push(deptName);
             }
@@ -1273,6 +1195,7 @@
         let entityTotalPaid = 0;
         let entityHasBills = false;
         let isPlaceholder = false;
+        let isFirstMeter = true;
         
         let meterRowsData = [];
         
@@ -1344,18 +1267,6 @@
             entityStatusText = 'No account';
         }
         
-        // Get existing amount paid from summary bill
-        let existingAmountPaid = 0;
-        for (const bill of existingBills) {
-            if (bill.entity_type === entity.type && bill.entity_id === entity.id && bill.notes && bill.notes.includes('isSummary')) {
-                try {
-                    const summaryData = JSON.parse(bill.notes);
-                    existingAmountPaid = summaryData.amountPaid || 0;
-                } catch(e) {}
-                break;
-            }
-        }
-        
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
@@ -1367,20 +1278,17 @@
             <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${existingAmountPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
+                ${!isPlaceholder ? `<span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
              </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
             <td colspan="6"></div>
             <td></div>
-            <td></div>
-            <td><span class="status-badge ${existingAmountPaid > 0 ? 'status-paid' : 'status-pending'}" id="entity-status-${entity.id}">${existingAmountPaid > 0 ? 'Paid' : 'Pending'}</span></div>
+            <td><span class="status-badge ${entityStatusClass}" id="entity-status-${entity.id}">${entityStatusText}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
             </div>
         `;
         tbody.appendChild(entityRow);
-        
-        let isFirstMeterOverall = true;
         
         for (const meterData of meterRowsData) {
             const meterRow = document.createElement('tr');
@@ -1389,11 +1297,11 @@
             meterRow.setAttribute('data-meter', escapeHtml(meterData.meterNumber));
             if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
             
-            // Only show Amount Paid input on the first meter row of the entire entity
+            // Amount Paid column - only show input on first meter row
             let amountPaidHtml = '';
-            if (isFirstMeterOverall && !meterData.isPlaceholder) {
-                amountPaidHtml = `<input type="number" step="0.01" class="inline-input amount-paid-input" value="${existingAmountPaid.toFixed(2)}" placeholder="$">`;
-                isFirstMeterOverall = false;
+            if (isFirstMeter) {
+                amountPaidHtml = `<input type="number" step="0.01" class="inline-input amount-paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}>`;
+                isFirstMeter = false;
             } else {
                 amountPaidHtml = `<div class="amount-paid-disabled">—</div>`;
             }
