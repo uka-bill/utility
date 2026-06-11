@@ -519,7 +519,7 @@
             cursor: not-allowed;
         }
         
-        /* Style for disabled amount paid input on non-first rows */
+        /* Style for disabled amount paid on non-first rows */
         .amount-paid-disabled {
             width: 100%;
             min-width: 70px;
@@ -827,7 +827,8 @@
             (bill.account_number || '—') === (accountNumber || '—') &&
             (bill.meter_number || '—') === (meterNumber || '—') &&
             bill.month == month && 
-            bill.year == year
+            bill.year == year &&
+            !bill.notes?.includes('isSummary')
         );
     }
 
@@ -1038,7 +1039,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td><tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1241,6 +1242,8 @@
         let serial = startSerial;
         let isFirstMeter = true;
         let isPlaceholder = false;
+        let entityTotalPaid = 0;
+        let entityHasBills = false;
         
         // Get existing amount paid from summary bill
         let existingAmountPaid = 0;
@@ -1294,6 +1297,12 @@
                 let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
                 let previousPayment = parsedNotes.previousPayment || 0;
                 let notes = parsedNotes.originalNotes || meter.notes || '';
+                let amountPaid = 0;
+                
+                if (existing && !isPlaceholder) {
+                    entityTotalPaid += amountPaid;
+                    if (amountPaid > 0) entityHasBills = true;
+                }
                 
                 const isPlaceholderAccount = account.isPlaceholder || meter.isPlaceholder;
                 const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
@@ -1319,8 +1328,8 @@
                 
                 meterRow.innerHTML = `
                     <td class="seq-number">${isFirstMeterForAccount ? serial : ''}</div>
-                    <tr></div>
-                    <tr></div>
+                    <td></div>
+                    <td></div>
                     <td>${isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(account.accountNumber)}</span>` : ''}
                         <div class="meter-number">🔢 Meter: ${escapeHtml(meter.meterNumber)}</div>
                         ${locationDisplay}
