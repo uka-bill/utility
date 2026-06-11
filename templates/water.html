@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -519,20 +519,18 @@
             cursor: not-allowed;
         }
         
-        /* Style for disabled amount paid on non-first rows - matches input box exactly */
+        /* Disabled amount paid style for non-first meter rows */
         .amount-paid-disabled {
             width: 100%;
             min-width: 70px;
             padding: 6px 8px;
             border-radius: 5px;
-            border: 1px solid #ddd;
+            border: 1px solid #eee;
             background-color: #f5f5f5;
             font-size: 0.8rem;
             text-align: center;
             color: #999;
-            box-sizing: border-box;
-            height: 31px;
-            line-height: 1.2;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -892,6 +890,14 @@
             saveBtn.disabled = true;
         }
         
+        // Get Amount Paid from the first meter row only
+        let entityAmountPaid = 0;
+        if (meterRows.length > 0) {
+            const firstRow = meterRows[0];
+            const amountPaidInput = firstRow.querySelector('.amount-paid-input');
+            entityAmountPaid = parseFloat(amountPaidInput?.value) || 0;
+        }
+        
         const batchBills = [];
         for (const row of meterRows) {
             const accountNumber = row.getAttribute('data-account');
@@ -902,14 +908,12 @@
             const currentInput = row.querySelector('.current-charge-input');
             const outstandingInput = row.querySelector('.outstanding-input');
             const previousPaidInput = row.querySelector('.previous-paid-input');
-            const amountPaidInput = row.querySelector('.amount-paid-input');
             const notesInput = row.querySelector('.notes-input');
             
             const consumption = parseFloat(consumptionInput?.value) || 0;
             const currentCharges = parseFloat(currentInput?.value) || 0;
             const unsettledCharges = parseFloat(outstandingInput?.value) || 0;
             const previousPayment = parseFloat(previousPaidInput?.value) || 0;
-            const amountPaid = parseFloat(amountPaidInput?.value) || 0;
             const notes = notesInput?.value || '';
             
             batchBills.push({
@@ -919,7 +923,7 @@
                 consumption_m3: consumption,
                 current_charges: currentCharges,
                 unsettled_charges: unsettledCharges,
-                amount_paid: amountPaid,
+                amount_paid: 0,
                 notes: JSON.stringify({ previousPayment: previousPayment, originalNotes: notes }),
                 month: month,
                 year: year,
@@ -932,24 +936,69 @@
         savingEntities.add(entityId);
         
         try {
-            const resp = await fetch('/api/utility-bills/batch-update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bills: batchBills })
-            });
+            // Save meter bills
+            let successCount = 0;
+            let errorCount = 0;
             
-            const result = await resp.json();
+            if (batchBills.length > 0) {
+                const resp = await fetch('/api/utility-bills/batch-update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bills: batchBills })
+                });
+                const result = await resp.json();
+                successCount = result.success_count || 0;
+                errorCount = result.error_count || 0;
+            }
+            
+            // Save summary data (Amount Paid for the entity - from first row only)
+            const summaryBillData = {
+                utility_type: 'water',
+                entity_type: entityType,
+                entity_id: entityId,
+                account_number: '',
+                meter_number: '',
+                current_charges: 0,
+                unsettled_charges: 0,
+                amount_paid: entityAmountPaid,
+                notes: JSON.stringify({
+                    isSummary: true,
+                    amountPaid: entityAmountPaid
+                }),
+                month: month,
+                year: year
+            };
+            
+            const existingSummary = existingBills.find(b => 
+                b.entity_type === entityType && 
+                b.entity_id === entityId && 
+                b.notes?.includes('isSummary')
+            );
+            
+            if (existingSummary && existingSummary.id) {
+                await fetch(`/api/utility-bills/${existingSummary.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(summaryBillData)
+                });
+            } else {
+                await fetch('/api/utility-bills', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(summaryBillData)
+                });
+            }
+            
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
             
             hideSavingToast();
             
-            if (result.success) {
-                showToast(`✅ ${entityName}: Saved ${result.success_count} record(s) successfully (${totalTime}ms)`);
-                // Update the entity's total paid display
-                updateEntityTotalDisplay(entityId, batchBills);
+            if (errorCount === 0) {
+                showToast(`✅ ${entityName}: Saved ${successCount} record(s) successfully (${totalTime}ms)`);
+                updateEntityTotalDisplay(entityId, entityAmountPaid);
             } else {
-                showToast(`⚠️ ${entityName}: Saved ${result.success_count} records, ${result.error_count} failed`, true);
+                showToast(`⚠️ ${entityName}: Saved ${successCount} records, ${errorCount} failed`, true);
             }
         } catch (err) {
             console.error('Save error:', err);
@@ -965,20 +1014,15 @@
         }
     }
     
-    function updateEntityTotalDisplay(entityId, batchBills) {
-        let totalPaid = 0;
-        for (const bill of batchBills) {
-            totalPaid += bill.amount_paid || 0;
-        }
-        
+    function updateEntityTotalDisplay(entityId, amountPaid) {
         const entityTotalSpan = document.getElementById(`entity-total-${entityId}`);
         if (entityTotalSpan) {
-            entityTotalSpan.innerHTML = `(Total Paid: $${totalPaid.toFixed(2)})`;
+            entityTotalSpan.innerHTML = `(Total Paid: $${amountPaid.toFixed(2)})`;
         }
         
         const entityStatusSpan = document.getElementById(`entity-status-${entityId}`);
         if (entityStatusSpan) {
-            if (totalPaid > 0) {
+            if (amountPaid > 0) {
                 entityStatusSpan.innerHTML = 'Paid';
                 entityStatusSpan.className = 'status-badge status-paid';
             } else {
@@ -1199,7 +1243,6 @@
         let entityTotalPaid = 0;
         let entityHasBills = false;
         let isPlaceholder = false;
-        let isFirstMeter = true;  // Track first meter row for Amount Paid
         
         let meterRowsData = [];
         
@@ -1271,6 +1314,18 @@
             entityStatusText = 'No account';
         }
         
+        // Get existing amount paid from summary bill
+        let existingAmountPaid = 0;
+        for (const bill of existingBills) {
+            if (bill.entity_type === entity.type && bill.entity_id === entity.id && bill.notes && bill.notes.includes('isSummary')) {
+                try {
+                    const summaryData = JSON.parse(bill.notes);
+                    existingAmountPaid = summaryData.amountPaid || 0;
+                } catch(e) {}
+                break;
+            }
+        }
+        
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
@@ -1282,17 +1337,19 @@
             <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
+                ${!isPlaceholder ? `<span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${existingAmountPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
              </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
             <td colspan="6"></div>
             <td></div>
-            <td><span class="status-badge ${entityStatusClass}" id="entity-status-${entity.id}">${entityStatusText}</span></div>
+            <td><span class="status-badge ${existingAmountPaid > 0 ? 'status-paid' : 'status-pending'}" id="entity-status-${entity.id}">${existingAmountPaid > 0 ? 'Paid' : 'Pending'}</span></div>
             <td class="entity-actions">
                 <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
             </div>
         `;
         tbody.appendChild(entityRow);
+        
+        let isFirstMeterOverall = true;
         
         for (const meterData of meterRowsData) {
             const meterRow = document.createElement('tr');
@@ -1301,11 +1358,11 @@
             meterRow.setAttribute('data-meter', escapeHtml(meterData.meterNumber));
             if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
             
-            // Amount Paid column - only show input on first meter row
+            // Only show Amount Paid input on the first meter row of the entire entity
             let amountPaidHtml = '';
-            if (isFirstMeter) {
-                amountPaidHtml = `<input type="number" step="0.01" class="inline-input amount-paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}>`;
-                isFirstMeter = false;
+            if (isFirstMeterOverall && !meterData.isPlaceholder) {
+                amountPaidHtml = `<input type="number" step="0.01" class="inline-input amount-paid-input" value="${existingAmountPaid.toFixed(2)}" placeholder="$">`;
+                isFirstMeterOverall = false;
             } else {
                 amountPaidHtml = `<div class="amount-paid-disabled">—</div>`;
             }
@@ -1313,7 +1370,7 @@
             meterRow.innerHTML = `
                 <td class="seq-number">${meterData.isFirstMeterForAccount ? meterData.serial : ''}</div>
                 <tr></div>
-                <tr></div>
+                <td></div>
                 <td>${meterData.isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span>` : ''}
                     <div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>
                     ${meterData.locationDisplay}
