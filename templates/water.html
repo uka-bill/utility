@@ -518,18 +518,6 @@
             opacity: 0.6;
             cursor: not-allowed;
         }
-        
-        .amount-paid-disabled {
-            width: 100%;
-            min-width: 70px;
-            padding: 6px 8px;
-            border-radius: 5px;
-            border: 1px solid #eee;
-            background-color: #f5f5f5;
-            font-size: 0.8rem;
-            text-align: center;
-            color: #999;
-        }
     </style>
 </head>
 <body>
@@ -628,7 +616,6 @@
     let allSchools = [];
     let allDepartments = [];
     let existingBills = [];
-    let existingSummaryData = {};
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
     let isLoading = false;
@@ -722,19 +709,6 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
-                for (const bill of existingBills) {
-                    if (bill.notes && bill.notes.startsWith('{')) {
-                        try {
-                            const summaryData = JSON.parse(bill.notes);
-                            if (summaryData.isSummary) {
-                                const key = `${bill.entity_type}_${bill.entity_id}`;
-                                existingSummaryData[key] = {
-                                    amountPaid: summaryData.amountPaid || 0
-                                };
-                            }
-                        } catch(e) {}
-                    }
-                }
             } else {
                 existingBills = [];
             }
@@ -840,8 +814,7 @@
             (bill.account_number || '—') === (accountNumber || '—') &&
             (bill.meter_number || '—') === (meterNumber || '—') &&
             bill.month == month && 
-            bill.year == year &&
-            !bill.notes?.includes('isSummary')
+            bill.year == year
         );
     }
 
@@ -860,7 +833,7 @@
         return false;
     }
 
-    async function saveEntityDataBackground(entityRow, amountPaidValue, month, year) {
+    async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         console.log('⏱️ START BACKGROUND SAVE');
         
@@ -913,12 +886,14 @@
             const currentInput = row.querySelector('.current-charge-input');
             const outstandingInput = row.querySelector('.outstanding-input');
             const previousPaidInput = row.querySelector('.previous-paid-input');
+            const amountPaidInput = row.querySelector('.amount-paid-input');
             const notesInput = row.querySelector('.notes-input');
             
             const consumption = parseFloat(consumptionInput?.value) || 0;
             const currentCharges = parseFloat(currentInput?.value) || 0;
             const unsettledCharges = parseFloat(outstandingInput?.value) || 0;
             const previousPayment = parseFloat(previousPaidInput?.value) || 0;
+            const amountPaid = parseFloat(amountPaidInput?.value) || 0;
             const notes = notesInput?.value || '';
             
             batchBills.push({
@@ -928,7 +903,7 @@
                 consumption_m3: consumption,
                 current_charges: currentCharges,
                 unsettled_charges: unsettledCharges,
-                amount_paid: 0,
+                amount_paid: amountPaid,
                 notes: JSON.stringify({ previousPayment: previousPayment, originalNotes: notes }),
                 month: month,
                 year: year,
@@ -941,67 +916,24 @@
         savingEntities.add(entityId);
         
         try {
-            let successCount = 0;
-            let errorCount = 0;
+            const resp = await fetch('/api/utility-bills/batch-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bills: batchBills })
+            });
             
-            if (batchBills.length > 0) {
-                const resp = await fetch('/api/utility-bills/batch-update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ bills: batchBills })
-                });
-                const result = await resp.json();
-                successCount = result.success_count || 0;
-                errorCount = result.error_count || 0;
-            }
-            
-            const summaryBillData = {
-                utility_type: 'water',
-                entity_type: entityType,
-                entity_id: entityId,
-                account_number: '',
-                meter_number: '',
-                current_charges: 0,
-                unsettled_charges: 0,
-                amount_paid: amountPaidValue || 0,
-                notes: JSON.stringify({
-                    isSummary: true,
-                    amountPaid: amountPaidValue || 0
-                }),
-                month: month,
-                year: year
-            };
-            
-            const existingSummary = existingBills.find(b => 
-                b.entity_type === entityType && 
-                b.entity_id === entityId && 
-                b.notes?.includes('isSummary')
-            );
-            
-            if (existingSummary && existingSummary.id) {
-                await fetch(`/api/utility-bills/${existingSummary.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(summaryBillData)
-                });
-            } else {
-                await fetch('/api/utility-bills', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(summaryBillData)
-                });
-            }
-            
+            const result = await resp.json();
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
             
             hideSavingToast();
             
-            if (errorCount === 0) {
-                showToast(`✅ ${entityName}: Saved ${successCount} record(s) successfully (${totalTime}ms)`);
-                updateEntityTotalDisplay(entityId, amountPaidValue || 0);
+            if (result.success) {
+                showToast(`✅ ${entityName}: Saved ${result.success_count} record(s) successfully (${totalTime}ms)`);
+                // Update the entity's total paid display
+                updateEntityTotalDisplay(entityId, batchBills);
             } else {
-                showToast(`⚠️ ${entityName}: Saved ${successCount} records, ${errorCount} failed`, true);
+                showToast(`⚠️ ${entityName}: Saved ${result.success_count} records, ${result.error_count} failed`, true);
             }
         } catch (err) {
             console.error('Save error:', err);
@@ -1017,15 +949,20 @@
         }
     }
     
-    function updateEntityTotalDisplay(entityId, amountPaid) {
+    function updateEntityTotalDisplay(entityId, batchBills) {
+        let totalPaid = 0;
+        for (const bill of batchBills) {
+            totalPaid += bill.amount_paid || 0;
+        }
+        
         const entityTotalSpan = document.getElementById(`entity-total-${entityId}`);
         if (entityTotalSpan) {
-            entityTotalSpan.innerHTML = `(Total Paid: $${amountPaid.toFixed(2)})`;
+            entityTotalSpan.innerHTML = `(Total Paid: $${totalPaid.toFixed(2)})`;
         }
         
         const entityStatusSpan = document.getElementById(`entity-status-${entityId}`);
         if (entityStatusSpan) {
-            if (amountPaid > 0) {
+            if (totalPaid > 0) {
                 entityStatusSpan.innerHTML = 'Paid';
                 entityStatusSpan.className = 'status-badge status-paid';
             } else {
@@ -1153,7 +1090,7 @@
         
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
-            const deptName = dept.department_name || 'Other';
+            const deptName = dept.departmentName || 'Other';
             if (!deptByDepartmentName.has(deptName)) {
                 deptByDepartmentName.set(deptName, []);
             }
@@ -1162,7 +1099,7 @@
         
         const deptNamesInOrder = [];
         for (const dept of departmentsList) {
-            const deptName = dept.department_name || 'Other';
+            const deptName = dept.departmentName || 'Other';
             if (!deptNamesInOrder.includes(deptName)) {
                 deptNamesInOrder.push(deptName);
             }
@@ -1243,36 +1180,11 @@
     
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
-        let isFirstMeter = true;
+        let entityTotalPaid = 0;
+        let entityHasBills = false;
         let isPlaceholder = false;
         
-        const summaryKey = `${entity.type}_${entity.id}`;
-        const existingSummary = existingSummaryData[summaryKey] || {};
-        const amountPaid = existingSummary.amountPaid || 0;
-        
-        const entityRow = document.createElement('tr');
-        entityRow.className = 'entity-row';
-        entityRow.setAttribute('data-entity-type', entity.type);
-        entityRow.setAttribute('data-entity-id', entity.id);
-        entityRow.setAttribute('data-entity-name', entity.name);
-        entityRow.setAttribute('data-has-accounts', !isPlaceholder);
-        
-        entityRow.innerHTML = `
-            <td class="seq-number">${startSerial}</div>
-            <td class="entity-header">
-                <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${amountPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
-             </div>
-            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
-            <td colspan="6"></div>
-            <td></div>
-            <td></div>
-            <td><span class="status-badge ${amountPaid > 0 ? 'status-paid' : 'status-pending'}" id="entity-status-${entity.id}">${amountPaid > 0 ? 'Paid' : 'Pending'}</span></div>
-            <td class="entity-actions">
-                <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
-            </div>
-        `;
-        tbody.appendChild(entityRow);
+        let meterRowsData = [];
         
         for (const account of entity.accountGroups) {
             let isFirstMeterForAccount = true;
@@ -1289,61 +1201,107 @@
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
                 let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
                 let previousPayment = parsedNotes.previousPayment || 0;
+                let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 let notes = parsedNotes.originalNotes || meter.notes || '';
                 
                 const isPlaceholderAccount = account.isPlaceholder || meter.isPlaceholder;
                 const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
                 const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
                 
-                const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
-                
-                const meterRow = document.createElement('tr');
-                meterRow.className = 'meter-row';
-                meterRow.setAttribute('data-account', escapeHtml(account.accountNumber));
-                meterRow.setAttribute('data-meter', escapeHtml(meter.meterNumber));
-                if (meter.billId) meterRow.setAttribute('data-bill-id', meter.billId);
-                
-                // Only show Amount Paid input on the first meter row
-                let amountPaidHtml = '';
-                if (isFirstMeter) {
-                    amountPaidHtml = `<input type="number" step="0.01" class="inline-input" id="amount_paid_${entity.id}" value="${amountPaid.toFixed(2)}" placeholder="0.00">`;
-                    isFirstMeter = false;
-                } else {
-                    amountPaidHtml = `<div class="amount-paid-disabled">—</div>`;
+                if (!isPlaceholderAccount) {
+                    entityTotalPaid += amountPaid;
+                    if (existing && amountPaid > 0) entityHasBills = true;
                 }
                 
-                meterRow.innerHTML = `
-                    <td class="seq-number">${isFirstMeterForAccount ? serial : ''}</div>
-                    <td></div>
-                    <td></div>
-                    <td>${isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(account.accountNumber)}</span>` : ''}
-                        <div class="meter-number">🔢 Meter: ${escapeHtml(meter.meterNumber)}</div>
-                        ${locationDisplay}
-                    </div>
-                    <td><input type="number" step="0.01" class="inline-input consumption-input ${placeholderClass}" value="${consumption.toFixed(2)}" placeholder="m³" ${disabledAttr}><span class="consumption-unit">m³</span></div>
-                    <td><input type="number" step="0.01" class="inline-input current-charge-input ${placeholderClass}" value="${currentCharges.toFixed(2)}" placeholder="$" ${disabledAttr}></div>
-                    <td><input type="number" step="0.01" class="inline-input outstanding-input ${placeholderClass}" value="${outstandingCharges.toFixed(2)}" placeholder="$" ${disabledAttr}></div>
-                    <td><input type="number" step="0.01" class="inline-input previous-paid-input ${placeholderClass}" value="${previousPayment.toFixed(2)}" placeholder="$" ${disabledAttr}></div>
-                    <td class="amount-paid-cell">${amountPaidHtml}</div>
-                    <td class="notes-cell"><input type="text" class="inline-input notes-input ${placeholderClass}" value="${escapeHtml(notes)}" placeholder="Notes..." ${disabledAttr}></div>
-                    <td></div>
-                    <td></div>
-                `;
-                tbody.appendChild(meterRow);
+                const locationDisplay = meter.location ? `<div style="font-size:0.7rem; color:#666;">📍 ${escapeHtml(meter.location)}</div>` : '';
+                
+                meterRowsData.push({
+                    serial: serial,
+                    accountNumber: account.accountNumber,
+                    meterNumber: meter.meterNumber,
+                    locationDisplay: locationDisplay,
+                    consumption: consumption,
+                    currentCharges: currentCharges,
+                    outstandingCharges: outstandingCharges,
+                    previousPayment: previousPayment,
+                    amountPaid: amountPaid,
+                    notes: notes,
+                    billId: meter.billId,
+                    isFirstMeterForAccount: isFirstMeterForAccount,
+                    isPlaceholder: isPlaceholderAccount,
+                    disabledAttr: disabledAttr,
+                    placeholderClass: placeholderClass
+                });
                 
                 isFirstMeterForAccount = false;
                 serial++;
             }
         }
         
-        // Attach save button event
-        const saveBtn = entityRow.querySelector('.save-entity-btn');
-        if (saveBtn) {
-            saveBtn.onclick = async () => {
-                const amountPaidInput = document.getElementById(`amount_paid_${entity.id}`);
-                const amountPaidValue = parseFloat(amountPaidInput?.value) || 0;
-                await saveEntityDataBackground(entityRow, amountPaidValue, month, year);
-            };
+        let entityStatusClass = 'status-pending';
+        let entityStatusText = 'Pending';
+        if (!isPlaceholder) {
+            if (entityHasBills) {
+                entityStatusText = 'Paid';
+                entityStatusClass = 'status-paid';
+            } else if (entityTotalPaid === 0) {
+                entityStatusText = 'Not entered';
+            } else {
+                entityStatusText = 'Partially Paid';
+                entityStatusClass = 'status-partial';
+            }
+        } else {
+            entityStatusText = 'No account';
+        }
+        
+        const entityRow = document.createElement('tr');
+        entityRow.className = 'entity-row';
+        entityRow.setAttribute('data-entity-type', entity.type);
+        entityRow.setAttribute('data-entity-id', entity.id);
+        entityRow.setAttribute('data-entity-name', entity.name);
+        entityRow.setAttribute('data-has-accounts', !isPlaceholder);
+        
+        entityRow.innerHTML = `
+            <td class="seq-number">${startSerial}</div>
+            <td class="entity-header">
+                <span class="entity-name">${escapeHtml(entity.name)}</span>
+                ${!isPlaceholder ? `<span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
+             </div>
+            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
+            <td colspan="6"></div>
+            <td></div>
+            <td><span class="status-badge ${entityStatusClass}" id="entity-status-${entity.id}">${entityStatusText}</span></div>
+            <td class="entity-actions">
+                <button class="btn btn-success btn-sm save-entity-btn">💾 Save All</button>
+            </div>
+        `;
+        tbody.appendChild(entityRow);
+        
+        for (const meterData of meterRowsData) {
+            const meterRow = document.createElement('tr');
+            meterRow.className = 'meter-row';
+            meterRow.setAttribute('data-account', escapeHtml(meterData.accountNumber));
+            meterRow.setAttribute('data-meter', escapeHtml(meterData.meterNumber));
+            if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
+            
+            meterRow.innerHTML = `
+                <td class="seq-number">${meterData.isFirstMeterForAccount ? meterData.serial : ''}</div>
+                <td></div>
+                <td></div>
+                <td>${meterData.isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span>` : ''}
+                    <div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>
+                    ${meterData.locationDisplay}
+                </div>
+                <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="m³" ${meterData.disabledAttr}><span class="consumption-unit">m³</span></div>
+                <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="number" step="0.01" class="inline-input outstanding-input ${meterData.placeholderClass}" value="${meterData.outstandingCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="number" step="0.01" class="inline-input previous-paid-input ${meterData.placeholderClass}" value="${meterData.previousPayment.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td><input type="number" step="0.01" class="inline-input amount-paid-input ${meterData.placeholderClass}" value="${meterData.amountPaid.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
+                <td class="notes-cell"><input type="text" class="inline-input notes-input ${meterData.placeholderClass}" value="${escapeHtml(meterData.notes)}" placeholder="Notes..." ${meterData.disabledAttr}></div>
+                <td></div>
+                <td></div>
+            `;
+            tbody.appendChild(meterRow);
         }
         
         return serial;
@@ -1359,6 +1317,19 @@
         });
     }
     
+    function attachEventListeners() {
+        document.getElementById('billsTableBody').addEventListener('click', async (e) => {
+            const saveBtn = e.target.closest('.save-entity-btn');
+            if (saveBtn && !saveBtn.disabled) {
+                const entityRow = saveBtn.closest('tr.entity-row');
+                if (entityRow) {
+                    await saveEntityDataBackground(entityRow, currentMonth, currentYear);
+                }
+                return;
+            }
+        });
+    }
+    
     document.addEventListener('DOMContentLoaded', async () => {
         populateYears();
         
@@ -1366,6 +1337,7 @@
         document.getElementById('globalMonth').value = now.getMonth() + 1;
         document.getElementById('globalYear').value = now.getFullYear();
         
+        attachEventListeners();
         await renderWaterTable();
         
         document.getElementById('refreshTableBtn').addEventListener('click', async () => {
