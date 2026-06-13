@@ -966,7 +966,7 @@
         return false;
     }
 
-    // COMPLETELY FIXED SAVE FUNCTION - Saves Bill No. properly
+    // FIXED SAVE FUNCTION - Ensures first phone row saves correctly
     async function saveEntityDataBackground(entityRow, summaryValues, month, year) {
         const startTime = performance.now();
         console.log('⏱️ START BACKGROUND SAVE');
@@ -1025,27 +1025,40 @@
             }
         }
         
-        // Get all phone rows
+        // Get all phone rows - CRITICAL: Make sure we get ALL rows including first
         let phoneRows = [];
         let nextRow = entityRow.nextElementSibling;
-        while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
-            if (nextRow.classList.contains('phone-row')) {
+        while (nextRow) {
+            if (nextRow.classList && nextRow.classList.contains('phone-row')) {
                 phoneRows.push(nextRow);
+                console.log(`📞 Found phone row with phone: ${nextRow.getAttribute('data-phone')}`);
+            } else if (nextRow.classList && nextRow.classList.contains('account-header-row')) {
+                // Skip account header rows, continue to next
+                nextRow = nextRow.nextElementSibling;
+                continue;
+            } else if (nextRow.classList && nextRow.classList.contains('summary-row')) {
+                break;
             }
             nextRow = nextRow.nextElementSibling;
         }
         
         console.log(`📞 Found ${phoneRows.length} phone rows for entity: ${entityName}`);
         
-        // Collect all bills into batch array
+        // COLLECT ALL BILLS - Make sure we collect data from ALL rows
         const batchBills = [];
         for (let i = 0; i < phoneRows.length; i++) {
             const row = phoneRows[i];
             const accountNumber = row.getAttribute('data-account-number');
             const phoneNumber = row.getAttribute('data-phone');
-            // IMPORTANT: Get Bill No. from the map (from input field)
             const billNo = billNoMap[accountNumber] || '';
-            const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
+            
+            // CRITICAL: Get existing bill ID from attribute
+            let existingBillId = row.getAttribute('data-bill-id');
+            if (existingBillId && existingBillId !== 'null' && existingBillId !== 'undefined') {
+                existingBillId = parseInt(existingBillId);
+            } else {
+                existingBillId = null;
+            }
             
             const currentInput = row.querySelector('.current-charge-input');
             const totalAmountInput = row.querySelector('.total-amount-input');
@@ -1055,14 +1068,14 @@
             const totalAmount = parseFloat(totalAmountInput?.value) || 0;
             const notes = notesInput?.value || '';
             
-            console.log(`📞 Row ${i+1}: Phone=${phoneNumber}, Bill Amount=$${currentCharges}, Total Amount=$${totalAmount}, Bill No=${billNo}, Has ID: ${existingBillId || 'NO'}`);
+            console.log(`📞 Row ${i+1}: Phone=${phoneNumber}, Bill Amount=$${currentCharges}, Total Amount=$${totalAmount}, Bill No=${billNo}, Existing ID=${existingBillId}`);
             
             if (phoneNumber && phoneNumber !== '—') {
                 batchBills.push({
                     id: existingBillId,
                     account_number: accountNumber === '—' ? '' : accountNumber,
                     phone_number: phoneNumber,
-                    meter_number: billNo,  // Bill No. saved here
+                    meter_number: billNo,
                     current_charges: currentCharges,
                     amount_paid: 0,
                     notes: JSON.stringify({ 
@@ -1098,11 +1111,11 @@
                 errorCount = result.error_count || 0;
                 console.log(`📊 Server response: ${successCount} success, ${errorCount} failed`);
                 
-                // CRITICAL: Refresh existing bills after save
+                // CRITICAL: Refresh existing bills after successful save
                 if (successCount > 0) {
                     await loadExistingBills(month, year);
                     
-                    // Update data-bill-id attributes and sync Bill No. from database
+                    // Update data-bill-id attributes and sync values
                     for (let i = 0; i < phoneRows.length; i++) {
                         const row = phoneRows[i];
                         const phoneNumber = row.getAttribute('data-phone');
@@ -1119,6 +1132,7 @@
                         
                         if (matchingBill && matchingBill.id) {
                             row.setAttribute('data-bill-id', matchingBill.id);
+                            console.log(`✅ Updated bill ID for phone ${phoneNumber}: ${matchingBill.id}`);
                             
                             // Sync Bill Amount and Total Amount from database
                             const currentInput = row.querySelector('.current-charge-input');
@@ -1132,7 +1146,6 @@
                                     if (notesData.totalAmount !== undefined) {
                                         totalAmountInput.value = notesData.totalAmount.toFixed(2);
                                     }
-                                    // Also update the Bill No. input field in the account header
                                     if (notesData.billNumber) {
                                         for (const accRow of accountRows) {
                                             const accNumber = accRow.getAttribute('data-account-number');
@@ -1247,7 +1260,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></td>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1414,7 +1427,7 @@
                         hasAnyVisible = true;
                         visibleAccounts.push({
                             accountNumber: account.accountNumber,
-                            numbers: visibleAccounts,
+                            numbers: visibleNumbers,
                             isPlaceholder: account.isPlaceholder
                         });
                     }
@@ -1452,7 +1465,7 @@
         showLoading(false);
     }
     
-    // FIXED renderEntity - Gets Bill No. from ANY phone number's existing record
+    // FIXED renderEntity - Sets data-bill-id correctly for ALL phone rows including first
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1470,18 +1483,18 @@
         entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
-            <td class="seq-number">${startSerial}</div>
+            <td class="seq-number">${startSerial}</td>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
                 <span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${(existingSummary.amountPaid || 0).toFixed(2)})</span>
-            </div>
-            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
-            <td colspan="3"></div>
-            <td></div>
-            <td></div>
-            <td><span class="status-badge ${(existingSummary.amountPaid || 0) > 0 ? 'status-paid' : 'status-pending'}" id="entity-status-${entity.id}">${(existingSummary.amountPaid || 0) > 0 ? 'Paid' : 'Pending'}</span></div>
+            </td>
+            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></td>
+            <td colspan="3"></td>
+            <td></td>
+            <td></td>
+            <td><span class="status-badge ${(existingSummary.amountPaid || 0) > 0 ? 'status-paid' : 'status-pending'}" id="entity-status-${entity.id}">${(existingSummary.amountPaid || 0) > 0 ? 'Paid' : 'Pending'}</span></td>
             <td class="entity-actions">
-            </div>
+            </td>
         `;
         tbody.appendChild(entityRow);
         
@@ -1490,13 +1503,12 @@
             
             let accountBillNumber = '';
             
-            // FIX: Look through ALL phone numbers in this account to find a Bill No.
-            // This ensures if the first phone number's bill is empty but others have it, we still show it
+            // Find Bill No. from ANY phone number in this account
             for (const num of account.numbers) {
                 const existing = num.existing;
                 if (existing && existing.meter_number && existing.meter_number !== '') {
                     accountBillNumber = existing.meter_number;
-                    break; // Found a Bill No., stop looking
+                    break;
                 }
                 if (existing && existing.notes) {
                     try {
@@ -1516,15 +1528,15 @@
             accountRow.setAttribute('data-account-number', account.accountNumber);
             
             accountRow.innerHTML = `
-                <td></div>
+                <td></td>
                 <td colspan="2">
                     <span class="account-number">📁 ${escapeHtml(account.accountNumber)}</span>
-                </div>
-                <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No."></div>
-                <td colspan="2"></div>
-                <td></div>
-                <td></div>
-                <td colspan="2"></div>
+                </td>
+                <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No."></td>
+                <td colspan="2"></td>
+                <td></td>
+                <td></td>
+                <td colspan="2"></td>
             `;
             tbody.appendChild(accountRow);
             
@@ -1557,21 +1569,25 @@
                 phoneRow.className = 'phone-row';
                 phoneRow.setAttribute('data-account-number', account.accountNumber);
                 phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
-                if (num.billId) {
-                    phoneRow.setAttribute('data-bill-id', num.billId);
+                // CRITICAL: Set data-bill-id for EVERY phone row including first
+                if (existing && existing.id) {
+                    phoneRow.setAttribute('data-bill-id', existing.id);
+                    console.log(`🔑 Set data-bill-id for phone ${num.phoneNumber}: ${existing.id}`);
+                } else {
+                    phoneRow.setAttribute('data-bill-id', '');
                 }
                 
                 phoneRow.innerHTML = `
-                    <td class="seq-number">${serial}</div>
-                    <td></div>
-                    <td></div>
-                    <td></div>
-                    <td><div class="phone-number">📞 ${escapeHtml(num.phoneNumber)}</div>${locationDisplay}</div>
-                    <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${currentCharges.toFixed(2)}" placeholder="$"></div>
-                    <td><input type="number" step="0.01" class="inline-input total-amount-input" value="${totalAmount.toFixed(2)}" placeholder="$"></div>
-                    <td><input type="text" class="inline-input notes-input" value="${escapeHtml(notes)}" placeholder="Notes..."></div>
-                    <td></div>
-                    <td></div>
+                    <td class="seq-number">${serial}</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td><div class="phone-number">📞 ${escapeHtml(num.phoneNumber)}</div>${locationDisplay}</td>
+                    <td><input type="number" step="0.01" class="inline-input current-charge-input" value="${currentCharges.toFixed(2)}" placeholder="$"></td>
+                    <td><input type="number" step="0.01" class="inline-input total-amount-input" value="${totalAmount.toFixed(2)}" placeholder="$"></td>
+                    <td><input type="text" class="inline-input notes-input" value="${escapeHtml(notes)}" placeholder="Notes..."></td>
+                    <td></td>
+                    <td></td>
                 `;
                 tbody.appendChild(phoneRow);
                 serial++;
