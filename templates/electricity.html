@@ -705,9 +705,11 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
+                console.log('Schools loaded:', allSchools.map(s => ({id: s.id, name: s.name, cluster: s.cluster_number})));
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
+                console.log('Departments loaded:', allDepartments.map(d => ({id: d.id, name: d.unit_name, dept: d.department_name, order: d.display_order})));
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) {
@@ -757,17 +759,10 @@
     function buildEntityList() {
         const entities = [];
         
-        // Sort schools by cluster_number (numeric), then by id (same as Schools tab)
-        const sortedSchools = [...allSchools];
-        sortedSchools.sort((a, b) => {
-            const clusterA = a.cluster_number ? parseInt(a.cluster_number) : 999;
-            const clusterB = b.cluster_number ? parseInt(b.cluster_number) : 999;
-            if (clusterA !== clusterB) return clusterA - clusterB;
-            return (a.id || 0) - (b.id || 0);
-        });
-        
-        for (let idx = 0; idx < sortedSchools.length; idx++) {
-            const school = sortedSchools[idx];
+        // CRITICAL FIX: Use the EXACT order from the API - do NOT re-sort!
+        // The Schools API already returns schools sorted by cluster_number then id
+        for (let idx = 0; idx < allSchools.length; idx++) {
+            const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
             
             let accountGroups = accounts;
@@ -790,26 +785,17 @@
                 typeLabel: '🏫 School',
                 clusterNumber: cluster,
                 departmentName: null,
-                displayOrder: idx,
+                displayOrder: school.display_order || idx,
+                originalIndex: idx,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
         }
         
-        // Sort departments by display_order, then department_name, then id (same as Departments tab)
-        const sortedDepartments = [...allDepartments];
-        sortedDepartments.sort((a, b) => {
-            const orderA = a.display_order || 0;
-            const orderB = b.display_order || 0;
-            if (orderA !== orderB) return orderA - orderB;
-            const deptA = a.department_name || '';
-            const deptB = b.department_name || '';
-            if (deptA !== deptB) return deptA.localeCompare(deptB);
-            return (a.id || 0) - (b.id || 0);
-        });
-        
-        for (let idx = 0; idx < sortedDepartments.length; idx++) {
-            const dept = sortedDepartments[idx];
+        // CRITICAL FIX: Use the EXACT order from the API - do NOT re-sort!
+        // The Departments API already returns departments sorted by display_order, then department_name, then id
+        for (let idx = 0; idx < allDepartments.length; idx++) {
+            const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
             
             let accountGroups = accounts;
@@ -831,7 +817,8 @@
                 typeLabel: '🏛️ Department',
                 clusterNumber: null,
                 departmentName: dept.department_name || 'Other',
-                displayOrder: idx,
+                displayOrder: dept.display_order || idx,
+                originalIndex: allSchools.length + idx,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -1022,7 +1009,7 @@
         const searchTerm = document.getElementById('searchFilter').value;
         const statusFilter = document.getElementById('statusFilter').value;
         
-        // Apply basic filters
+        // Apply filters
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
             if (searchTerm && !matchesSearch(entity, searchTerm)) return false;
@@ -1039,183 +1026,138 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        // Separate schools and departments
+        // Separate schools and departments (preserving API order)
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // ============ GROUP SCHOOLS BY CLUSTER (SAME AS WATER.HTML) ============
-        const schoolsByCluster = new Map();
-        for (const school of schoolsList) {
-            const cluster = school.clusterNumber || 'Unassigned';
-            if (!schoolsByCluster.has(cluster)) {
-                schoolsByCluster.set(cluster, []);
-            }
-            schoolsByCluster.get(cluster).push(school);
-        }
-        
-        // Define cluster order (same as water.html)
-        const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
-        
-        // Render schools by cluster
-        for (const cluster of clusterOrder) {
-            const clusterSchools = schoolsByCluster.get(cluster);
-            if (!clusterSchools || clusterSchools.length === 0) continue;
-            
-            // Apply status filter to each school in this cluster
-            let hasVisibleInCluster = false;
-            const visibleClusterEntities = [];
-            
-            for (const entity of clusterSchools) {
-                const visibleAccounts = [];
-                let hasAnyVisible = false;
+        // ============ RENDER SCHOOLS IN API ORDER (SAME AS SCHOOLS TAB) ============
+        let currentCluster = '';
+        for (const entity of schoolsList) {
+            // Add cluster separator when cluster changes
+            if (entity.clusterNumber !== currentCluster) {
+                currentCluster = entity.clusterNumber;
                 
-                for (const account of entity.accountGroups) {
-                    const meters = account.meters || [];
-                    const visibleMeters = [];
-                    for (const meter of meters) {
-                        const meterNum = meter.meterNumber || '—';
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
-                        
-                        if (statusFilter === 'all' || 
-                            (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                            (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                            visibleMeters.push({
-                                meterNumber: meterNum,
-                                location: meter.location || '',
-                                notes: meter.notes || '',
-                                existing: existing,
-                                billId: existing?.id,
-                                isPlaceholder: account.isPlaceholder
-                            });
-                        }
-                    }
-                    if (visibleMeters.length > 0) {
-                        hasAnyVisible = true;
-                        visibleAccounts.push({
-                            accountNumber: account.accountNumber,
-                            meters: visibleMeters,
-                            isPlaceholder: account.isPlaceholder
-                        });
-                    }
-                }
-                if (hasAnyVisible) {
-                    hasVisibleInCluster = true;
-                    visibleClusterEntities.push({...entity, accountGroups: visibleAccounts});
-                }
-            }
-            
-            if (hasVisibleInCluster && visibleClusterEntities.length > 0) {
-                const totalMeters = visibleClusterEntities.reduce((sum, e) => 
+                // Count total schools and meters in this cluster for the separator
+                const schoolsInCluster = schoolsList.filter(s => s.clusterNumber === currentCluster);
+                const totalMeters = schoolsInCluster.reduce((sum, e) => 
                     sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
                 
-                // Add cluster separator row (same as water.html)
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
                     <td colspan="12">
                         <div class="cluster-info">
-                            <span>🏫 ${cluster}</span>
-                            <span class="cluster-count">${visibleClusterEntities.length} entit${visibleClusterEntities.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
+                            <span>🏫 ${currentCluster}</span>
+                            <span class="cluster-count">${schoolsInCluster.length} entit${schoolsInCluster.length > 1 ? 'ies' : 'y'}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
                         </div>
                      </div>
                 `;
                 tbody.appendChild(separatorRow);
-                
-                // Render each school in this cluster
-                for (const entity of visibleClusterEntities) {
-                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
-                }
             }
-        }
-        
-        // ============ GROUP DEPARTMENTS BY DEPARTMENT NAME (SAME AS WATER.HTML) ============
-        const deptByDepartmentName = new Map();
-        for (const dept of departmentsList) {
-            const deptName = dept.departmentName || 'Other';
-            if (!deptByDepartmentName.has(deptName)) {
-                deptByDepartmentName.set(deptName, []);
-            }
-            deptByDepartmentName.get(deptName).push(dept);
-        }
-        
-        // Preserve order of department names as they appear in the original sorted list
-        const deptNamesInOrder = [];
-        for (const dept of departmentsList) {
-            const deptName = dept.departmentName || 'Other';
-            if (!deptNamesInOrder.includes(deptName)) {
-                deptNamesInOrder.push(deptName);
-            }
-        }
-        
-        // Render departments by department name group (same as water.html)
-        for (const deptName of deptNamesInOrder) {
-            const deptsInGroup = deptByDepartmentName.get(deptName);
-            if (!deptsInGroup || deptsInGroup.length === 0) continue;
             
-            // Apply status filter to each department in this group
-            let hasVisibleInGroup = false;
-            const visibleGroupEntities = [];
+            // Apply status filter to this entity
+            const visibleAccounts = [];
+            let hasAnyVisible = false;
             
-            for (const entity of deptsInGroup) {
-                const visibleAccounts = [];
-                let hasAnyVisible = false;
-                
-                for (const account of entity.accountGroups) {
-                    const meters = account.meters || [];
-                    const visibleMeters = [];
-                    for (const meter of meters) {
-                        const meterNum = meter.meterNumber || '—';
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
-                        
-                        if (statusFilter === 'all' || 
-                            (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                            (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                            visibleMeters.push({
-                                meterNumber: meterNum,
-                                location: meter.location || '',
-                                notes: meter.notes || '',
-                                existing: existing,
-                                billId: existing?.id,
-                                isPlaceholder: account.isPlaceholder
-                            });
-                        }
-                    }
-                    if (visibleMeters.length > 0) {
-                        hasAnyVisible = true;
-                        visibleAccounts.push({
-                            accountNumber: account.accountNumber,
-                            meters: visibleMeters,
+            for (const account of entity.accountGroups) {
+                const meters = account.meters || [];
+                const visibleMeters = [];
+                for (const meter of meters) {
+                    const meterNum = meter.meterNumber || '—';
+                    const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
+                    
+                    if (statusFilter === 'all' || 
+                        (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
+                        (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
+                        visibleMeters.push({
+                            meterNumber: meterNum,
+                            location: meter.location || '',
+                            notes: meter.notes || '',
+                            existing: existing,
+                            billId: existing?.id,
                             isPlaceholder: account.isPlaceholder
                         });
                     }
                 }
-                if (hasAnyVisible) {
-                    hasVisibleInGroup = true;
-                    visibleGroupEntities.push({...entity, accountGroups: visibleAccounts});
+                if (visibleMeters.length > 0) {
+                    hasAnyVisible = true;
+                    visibleAccounts.push({
+                        accountNumber: account.accountNumber,
+                        meters: visibleMeters,
+                        isPlaceholder: account.isPlaceholder
+                    });
                 }
             }
             
-            if (hasVisibleInGroup && visibleGroupEntities.length > 0) {
-                const totalMeters = visibleGroupEntities.reduce((sum, e) => 
+            if (hasAnyVisible) {
+                const entityWithVisible = {...entity, accountGroups: visibleAccounts};
+                globalSerial = await renderEntity(tbody, entityWithVisible, month, year, globalSerial);
+            }
+        }
+        
+        // ============ RENDER DEPARTMENTS IN API ORDER (SAME AS DEPARTMENTS TAB) ============
+        let currentDeptName = '';
+        for (const entity of departmentsList) {
+            // Add department separator when department name changes
+            const deptName = entity.departmentName || 'Other';
+            if (deptName !== currentDeptName) {
+                currentDeptName = deptName;
+                
+                // Count total units and meters in this department group
+                const deptsInGroup = departmentsList.filter(d => (d.departmentName || 'Other') === currentDeptName);
+                const totalMeters = deptsInGroup.reduce((sum, e) => 
                     sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
                 
-                // Add department group separator row (same as water.html)
                 const deptSeparator = document.createElement('tr');
                 deptSeparator.className = 'department-group-separator';
                 deptSeparator.innerHTML = `
                     <td colspan="12">
                         <div class="dept-group-info">
-                            <span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span>
-                            <span class="dept-group-count">${visibleGroupEntities.length} unit${visibleGroupEntities.length > 1 ? 's' : ''}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
+                            <span class="department-name-badge">🏢 ${escapeHtml(currentDeptName)}</span>
+                            <span class="dept-group-count">${deptsInGroup.length} unit${deptsInGroup.length > 1 ? 's' : ''}, ${totalMeters} meter${totalMeters > 1 ? 's' : ''}</span>
                         </div>
                      </div>
                 `;
                 tbody.appendChild(deptSeparator);
-                
-                // Render each department in this group
-                for (const entity of visibleGroupEntities) {
-                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
+            }
+            
+            // Apply status filter to this entity
+            const visibleAccounts = [];
+            let hasAnyVisible = false;
+            
+            for (const account of entity.accountGroups) {
+                const meters = account.meters || [];
+                const visibleMeters = [];
+                for (const meter of meters) {
+                    const meterNum = meter.meterNumber || '—';
+                    const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
+                    
+                    if (statusFilter === 'all' || 
+                        (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
+                        (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
+                        visibleMeters.push({
+                            meterNumber: meterNum,
+                            location: meter.location || '',
+                            notes: meter.notes || '',
+                            existing: existing,
+                            billId: existing?.id,
+                            isPlaceholder: account.isPlaceholder
+                        });
+                    }
                 }
+                if (visibleMeters.length > 0) {
+                    hasAnyVisible = true;
+                    visibleAccounts.push({
+                        accountNumber: account.accountNumber,
+                        meters: visibleMeters,
+                        isPlaceholder: account.isPlaceholder
+                    });
+                }
+            }
+            
+            if (hasAnyVisible) {
+                const entityWithVisible = {...entity, accountGroups: visibleAccounts};
+                globalSerial = await renderEntity(tbody, entityWithVisible, month, year, globalSerial);
             }
         }
         
