@@ -757,8 +757,17 @@
     function buildEntityList() {
         const entities = [];
         
-        for (let idx = 0; idx < allSchools.length; idx++) {
-            const school = allSchools[idx];
+        // Sort schools by cluster_number (numeric), then by id
+        const sortedSchools = [...allSchools];
+        sortedSchools.sort((a, b) => {
+            const clusterA = a.cluster_number ? parseInt(a.cluster_number) : 999;
+            const clusterB = b.cluster_number ? parseInt(b.cluster_number) : 999;
+            if (clusterA !== clusterB) return clusterA - clusterB;
+            return (a.id || 0) - (b.id || 0);
+        });
+        
+        for (let idx = 0; idx < sortedSchools.length; idx++) {
+            const school = sortedSchools[idx];
             const accounts = extractElectricityAccounts(school);
             
             let accountGroups = accounts;
@@ -787,8 +796,20 @@
             });
         }
         
-        for (let idx = 0; idx < allDepartments.length; idx++) {
-            const dept = allDepartments[idx];
+        // Sort departments by display_order, then department_name, then id
+        const sortedDepartments = [...allDepartments];
+        sortedDepartments.sort((a, b) => {
+            const orderA = a.display_order || 0;
+            const orderB = b.display_order || 0;
+            if (orderA !== orderB) return orderA - orderB;
+            const deptA = a.department_name || '';
+            const deptB = b.department_name || '';
+            if (deptA !== deptB) return deptA.localeCompare(deptB);
+            return (a.id || 0) - (b.id || 0);
+        });
+        
+        for (let idx = 0; idx < sortedDepartments.length; idx++) {
+            const dept = sortedDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
             
             let accountGroups = accounts;
@@ -810,7 +831,7 @@
                 typeLabel: '🏛️ Department',
                 clusterNumber: null,
                 departmentName: dept.department_name || 'Other',
-                displayOrder: allSchools.length + idx,
+                displayOrder: idx,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -1001,6 +1022,7 @@
         const searchTerm = document.getElementById('searchFilter').value;
         const statusFilter = document.getElementById('statusFilter').value;
         
+        // Apply filters
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
             if (searchTerm && !matchesSearch(entity, searchTerm)) return false;
@@ -1017,9 +1039,11 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
+        // Separate schools and departments
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
+        // Group schools by cluster
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -1029,12 +1053,15 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
+        // Define cluster order
         const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
         
+        // Render schools by cluster
         for (const cluster of clusterOrder) {
             const clusterSchools = schoolsByCluster.get(cluster);
             if (!clusterSchools || clusterSchools.length === 0) continue;
             
+            // Apply status filter to each entity before rendering
             let hasVisibleInCluster = false;
             const visibleClusterEntities = [];
             
@@ -1099,6 +1126,7 @@
             }
         }
         
+        // Group departments by department_name
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1108,6 +1136,7 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
+        // Preserve order of department names as they appear in the sorted list
         const deptNamesInOrder = [];
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1116,10 +1145,12 @@
             }
         }
         
+        // Render departments by department name group
         for (const deptName of deptNamesInOrder) {
             const deptsInGroup = deptByDepartmentName.get(deptName);
             if (!deptsInGroup || deptsInGroup.length === 0) continue;
             
+            // Apply status filter to each entity before rendering
             let hasVisibleInGroup = false;
             const visibleGroupEntities = [];
             
