@@ -757,7 +757,7 @@
     function buildEntityList() {
         const entities = [];
         
-        // Sort schools by cluster_number (numeric), then by id
+        // Sort schools by cluster_number (numeric), then by id (same as Schools tab)
         const sortedSchools = [...allSchools];
         sortedSchools.sort((a, b) => {
             const clusterA = a.cluster_number ? parseInt(a.cluster_number) : 999;
@@ -796,7 +796,7 @@
             });
         }
         
-        // Sort departments by display_order, then department_name, then id
+        // Sort departments by display_order, then department_name, then id (same as Departments tab)
         const sortedDepartments = [...allDepartments];
         sortedDepartments.sort((a, b) => {
             const orderA = a.display_order || 0;
@@ -1022,7 +1022,7 @@
         const searchTerm = document.getElementById('searchFilter').value;
         const statusFilter = document.getElementById('statusFilter').value;
         
-        // Apply filters
+        // Apply basic filters
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
             if (searchTerm && !matchesSearch(entity, searchTerm)) return false;
@@ -1043,7 +1043,7 @@
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // Group schools by cluster
+        // ============ GROUP SCHOOLS BY CLUSTER (SAME AS WATER.HTML) ============
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
             const cluster = school.clusterNumber || 'Unassigned';
@@ -1053,7 +1053,7 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
-        // Define cluster order
+        // Define cluster order (same as water.html)
         const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
         
         // Render schools by cluster
@@ -1061,7 +1061,7 @@
             const clusterSchools = schoolsByCluster.get(cluster);
             if (!clusterSchools || clusterSchools.length === 0) continue;
             
-            // Apply status filter to each entity before rendering
+            // Apply status filter to each school in this cluster
             let hasVisibleInCluster = false;
             const visibleClusterEntities = [];
             
@@ -1108,6 +1108,7 @@
                 const totalMeters = visibleClusterEntities.reduce((sum, e) => 
                     sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
                 
+                // Add cluster separator row (same as water.html)
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = `
@@ -1120,13 +1121,14 @@
                 `;
                 tbody.appendChild(separatorRow);
                 
+                // Render each school in this cluster
                 for (const entity of visibleClusterEntities) {
                     globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
                 }
             }
         }
         
-        // Group departments by department_name
+        // ============ GROUP DEPARTMENTS BY DEPARTMENT NAME (SAME AS WATER.HTML) ============
         const deptByDepartmentName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1136,7 +1138,7 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        // Preserve order of department names as they appear in the sorted list
+        // Preserve order of department names as they appear in the original sorted list
         const deptNamesInOrder = [];
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1145,12 +1147,12 @@
             }
         }
         
-        // Render departments by department name group
+        // Render departments by department name group (same as water.html)
         for (const deptName of deptNamesInOrder) {
             const deptsInGroup = deptByDepartmentName.get(deptName);
             if (!deptsInGroup || deptsInGroup.length === 0) continue;
             
-            // Apply status filter to each entity before rendering
+            // Apply status filter to each department in this group
             let hasVisibleInGroup = false;
             const visibleGroupEntities = [];
             
@@ -1197,6 +1199,7 @@
                 const totalMeters = visibleGroupEntities.reduce((sum, e) => 
                     sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
                 
+                // Add department group separator row (same as water.html)
                 const deptSeparator = document.createElement('tr');
                 deptSeparator.className = 'department-group-separator';
                 deptSeparator.innerHTML = `
@@ -1209,6 +1212,7 @@
                 `;
                 tbody.appendChild(deptSeparator);
                 
+                // Render each department in this group
                 for (const entity of visibleGroupEntities) {
                     globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
                 }
