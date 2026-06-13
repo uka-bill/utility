@@ -626,7 +626,6 @@
             vertical-align: middle;
         }
         
-        /* Disabled button style */
         .btn-success:disabled {
             opacity: 0.6;
             cursor: not-allowed;
@@ -967,7 +966,7 @@
         return false;
     }
 
-    // FIXED: BACKGROUND SAVE FUNCTION - Properly preserves first row data
+    // COMPLETELY FIXED SAVE FUNCTION - Saves Bill No. properly
     async function saveEntityDataBackground(entityRow, summaryValues, month, year) {
         const startTime = performance.now();
         console.log('⏱️ START BACKGROUND SAVE');
@@ -1022,6 +1021,7 @@
             const billNoInput = accRow.querySelector('.account-bill-number-input');
             if (accNumber && billNoInput) {
                 billNoMap[accNumber] = billNoInput.value;
+                console.log(`📝 Captured Bill No. for account ${accNumber}: "${billNoInput.value}"`);
             }
         }
         
@@ -1043,6 +1043,7 @@
             const row = phoneRows[i];
             const accountNumber = row.getAttribute('data-account-number');
             const phoneNumber = row.getAttribute('data-phone');
+            // IMPORTANT: Get Bill No. from the map (from input field)
             const billNo = billNoMap[accountNumber] || '';
             const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
             
@@ -1054,14 +1055,14 @@
             const totalAmount = parseFloat(totalAmountInput?.value) || 0;
             const notes = notesInput?.value || '';
             
-            console.log(`📞 Row ${i+1}: Phone=${phoneNumber}, Bill Amount=$${currentCharges}, Total Amount=$${totalAmount}, Has ID: ${existingBillId || 'NO'}`);
+            console.log(`📞 Row ${i+1}: Phone=${phoneNumber}, Bill Amount=$${currentCharges}, Total Amount=$${totalAmount}, Bill No=${billNo}, Has ID: ${existingBillId || 'NO'}`);
             
             if (phoneNumber && phoneNumber !== '—') {
                 batchBills.push({
                     id: existingBillId,
                     account_number: accountNumber === '—' ? '' : accountNumber,
                     phone_number: phoneNumber,
-                    meter_number: billNo,
+                    meter_number: billNo,  // Bill No. saved here
                     current_charges: currentCharges,
                     amount_paid: 0,
                     notes: JSON.stringify({ 
@@ -1097,13 +1098,11 @@
                 errorCount = result.error_count || 0;
                 console.log(`📊 Server response: ${successCount} success, ${errorCount} failed`);
                 
-                // CRITICAL FIX: Refresh existing bills after successful save
+                // CRITICAL: Refresh existing bills after save
                 if (successCount > 0) {
-                    console.log(`🔄 Refreshing existing bills from database...`);
                     await loadExistingBills(month, year);
-                    console.log(`✅ Refreshed ${existingBills.length} bills`);
                     
-                    // Update data-bill-id attributes and sync values from database
+                    // Update data-bill-id attributes and sync Bill No. from database
                     for (let i = 0; i < phoneRows.length; i++) {
                         const row = phoneRows[i];
                         const phoneNumber = row.getAttribute('data-phone');
@@ -1120,9 +1119,8 @@
                         
                         if (matchingBill && matchingBill.id) {
                             row.setAttribute('data-bill-id', matchingBill.id);
-                            console.log(`✅ Updated bill ID for phone ${phoneNumber}: ${matchingBill.id}`);
                             
-                            // Sync values from database back to inputs
+                            // Sync Bill Amount and Total Amount from database
                             const currentInput = row.querySelector('.current-charge-input');
                             const totalAmountInput = row.querySelector('.total-amount-input');
                             if (currentInput && matchingBill.current_charges !== undefined) {
@@ -1133,6 +1131,20 @@
                                     const notesData = JSON.parse(matchingBill.notes);
                                     if (notesData.totalAmount !== undefined) {
                                         totalAmountInput.value = notesData.totalAmount.toFixed(2);
+                                    }
+                                    // Also update the Bill No. input field in the account header
+                                    if (notesData.billNumber) {
+                                        for (const accRow of accountRows) {
+                                            const accNumber = accRow.getAttribute('data-account-number');
+                                            if (accNumber === accountNumber) {
+                                                const billNoInput = accRow.querySelector('.account-bill-number-input');
+                                                if (billNoInput && billNoInput.value !== notesData.billNumber) {
+                                                    billNoInput.value = notesData.billNumber;
+                                                    console.log(`🔄 Synced Bill No. for account ${accountNumber}: ${notesData.billNumber}`);
+                                                }
+                                                break;
+                                            }
+                                        }
                                     }
                                 } catch(e) {}
                             }
@@ -1402,7 +1414,7 @@
                         hasAnyVisible = true;
                         visibleAccounts.push({
                             accountNumber: account.accountNumber,
-                            numbers: visibleNumbers,
+                            numbers: visibleAccounts,
                             isPlaceholder: account.isPlaceholder
                         });
                     }
@@ -1440,6 +1452,7 @@
         showLoading(false);
     }
     
+    // FIXED renderEntity - Gets Bill No. from ANY phone number's existing record
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1476,15 +1489,23 @@
             if (account.isPlaceholder) continue;
             
             let accountBillNumber = '';
-            let accountTotalPaid = 0;
             
-            if (account.numbers.length > 0) {
-                const firstNum = account.numbers[0];
-                const existing = firstNum.existing;
-                if (existing && existing.meter_number) {
+            // FIX: Look through ALL phone numbers in this account to find a Bill No.
+            // This ensures if the first phone number's bill is empty but others have it, we still show it
+            for (const num of account.numbers) {
+                const existing = num.existing;
+                if (existing && existing.meter_number && existing.meter_number !== '') {
                     accountBillNumber = existing.meter_number;
-                } else if (firstNum.billNumber) {
-                    accountBillNumber = firstNum.billNumber;
+                    break; // Found a Bill No., stop looking
+                }
+                if (existing && existing.notes) {
+                    try {
+                        const parsed = JSON.parse(existing.notes);
+                        if (parsed.billNumber && parsed.billNumber !== '') {
+                            accountBillNumber = parsed.billNumber;
+                            break;
+                        }
+                    } catch(e) {}
                 }
             }
             
@@ -1524,7 +1545,6 @@
                 }
                 
                 if (!account.isPlaceholder) {
-                    accountTotalPaid += amountPaid;
                     entityTotalPaid += amountPaid;
                     if (amountPaid > 0) {
                         entityHasBills = true;
