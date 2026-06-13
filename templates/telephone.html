@@ -757,7 +757,6 @@
     }
 
     function showSavingToast(entityName) {
-        // Remove existing saving toast
         if (activeSavingToast) {
             activeSavingToast.remove();
         }
@@ -826,6 +825,7 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
+                existingSummaryData = {};
                 for (const bill of existingBills) {
                     if (bill.notes && bill.notes.startsWith('{')) {
                         try {
@@ -967,7 +967,7 @@
         return false;
     }
 
-    // BACKGROUND SAVE FUNCTION - DOES NOT REFRESH TABLE
+    // FIXED: BACKGROUND SAVE FUNCTION - Properly preserves first row data
     async function saveEntityDataBackground(entityRow, summaryValues, month, year) {
         const startTime = performance.now();
         console.log('⏱️ START BACKGROUND SAVE');
@@ -989,10 +989,8 @@
             return;
         }
         
-        // Show saving toast
         showSavingToast(entityName);
         
-        // Disable save button
         let summaryContainer = entityRow.nextElementSibling;
         while (summaryContainer && !summaryContainer.querySelector('.summary-container')) {
             summaryContainer = summaryContainer.nextElementSibling;
@@ -1007,7 +1005,7 @@
             saveBtn.disabled = true;
         }
         
-        // Get all account rows to get Bill No.
+        // Get all account rows and build Bill No. map
         let accountRows = [];
         let accountRow = entityRow.nextElementSibling;
         while (accountRow && accountRow.classList && accountRow.classList.contains('account-header-row')) {
@@ -1018,7 +1016,6 @@
             }
         }
         
-        // Build a map of account number to Bill No.
         const billNoMap = {};
         for (const accRow of accountRows) {
             const accNumber = accRow.getAttribute('data-account-number');
@@ -1038,15 +1035,16 @@
             nextRow = nextRow.nextElementSibling;
         }
         
-        console.log(`📞 Found ${phoneRows.length} phone rows for this entity`);
+        console.log(`📞 Found ${phoneRows.length} phone rows for entity: ${entityName}`);
         
-        // COLLECT ALL BILLS INTO ONE ARRAY
+        // Collect all bills into batch array
         const batchBills = [];
-        
-        for (const row of phoneRows) {
+        for (let i = 0; i < phoneRows.length; i++) {
+            const row = phoneRows[i];
             const accountNumber = row.getAttribute('data-account-number');
             const phoneNumber = row.getAttribute('data-phone');
             const billNo = billNoMap[accountNumber] || '';
+            const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
             
             const currentInput = row.querySelector('.current-charge-input');
             const totalAmountInput = row.querySelector('.total-amount-input');
@@ -1056,14 +1054,21 @@
             const totalAmount = parseFloat(totalAmountInput?.value) || 0;
             const notes = notesInput?.value || '';
             
+            console.log(`📞 Row ${i+1}: Phone=${phoneNumber}, Bill Amount=$${currentCharges}, Total Amount=$${totalAmount}, Has ID: ${existingBillId || 'NO'}`);
+            
             if (phoneNumber && phoneNumber !== '—') {
                 batchBills.push({
+                    id: existingBillId,
                     account_number: accountNumber === '—' ? '' : accountNumber,
                     phone_number: phoneNumber,
                     meter_number: billNo,
                     current_charges: currentCharges,
                     amount_paid: 0,
-                    notes: JSON.stringify({ totalAmount: totalAmount, originalNotes: notes }),
+                    notes: JSON.stringify({ 
+                        totalAmount: totalAmount, 
+                        originalNotes: notes, 
+                        billNumber: billNo 
+                    }),
                     month: month,
                     year: year,
                     entity_type: entityType,
@@ -1073,7 +1078,7 @@
             }
         }
         
-        console.log(`📦 Sending ${batchBills.length} bills in ONE API call`);
+        console.log(`📦 Sending ${batchBills.length} bills to server`);
         
         savingEntities.add(entityId);
         
@@ -1082,7 +1087,6 @@
             let errorCount = 0;
             
             if (batchBills.length > 0) {
-                console.log(`🔄 Sending request to server...`);
                 const resp = await fetch('/api/utility-bills/batch-update', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1092,6 +1096,49 @@
                 successCount = result.success_count || 0;
                 errorCount = result.error_count || 0;
                 console.log(`📊 Server response: ${successCount} success, ${errorCount} failed`);
+                
+                // CRITICAL FIX: Refresh existing bills after successful save
+                if (successCount > 0) {
+                    console.log(`🔄 Refreshing existing bills from database...`);
+                    await loadExistingBills(month, year);
+                    console.log(`✅ Refreshed ${existingBills.length} bills`);
+                    
+                    // Update data-bill-id attributes and sync values from database
+                    for (let i = 0; i < phoneRows.length; i++) {
+                        const row = phoneRows[i];
+                        const phoneNumber = row.getAttribute('data-phone');
+                        const accountNumber = row.getAttribute('data-account-number');
+                        
+                        const matchingBill = existingBills.find(bill => 
+                            bill.entity_id === entityId &&
+                            bill.entity_type === entityType &&
+                            bill.phone_number === phoneNumber &&
+                            bill.account_number === accountNumber &&
+                            bill.month === month &&
+                            bill.year === year
+                        );
+                        
+                        if (matchingBill && matchingBill.id) {
+                            row.setAttribute('data-bill-id', matchingBill.id);
+                            console.log(`✅ Updated bill ID for phone ${phoneNumber}: ${matchingBill.id}`);
+                            
+                            // Sync values from database back to inputs
+                            const currentInput = row.querySelector('.current-charge-input');
+                            const totalAmountInput = row.querySelector('.total-amount-input');
+                            if (currentInput && matchingBill.current_charges !== undefined) {
+                                currentInput.value = matchingBill.current_charges.toFixed(2);
+                            }
+                            if (totalAmountInput && matchingBill.notes) {
+                                try {
+                                    const notesData = JSON.parse(matchingBill.notes);
+                                    if (notesData.totalAmount !== undefined) {
+                                        totalAmountInput.value = notesData.totalAmount.toFixed(2);
+                                    }
+                                } catch(e) {}
+                            }
+                        }
+                    }
+                }
             }
             
             // Save summary data
@@ -1138,13 +1185,11 @@
             
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
-            console.log(`⏱️ TOTAL SAVE TIME: ${totalTime}ms`);
             
             hideSavingToast();
             
             if (errorCount === 0) {
                 showToast(`✅ ${entityName}: Saved ${successCount} record(s) successfully (${totalTime}ms)`);
-                // Update the entity's total paid display without full refresh
                 updateEntityTotalDisplay(entityId, summaryValues);
             } else {
                 showToast(`⚠️ ${entityName}: Saved ${successCount} records, ${errorCount} failed`, true);
@@ -1164,14 +1209,12 @@
     }
     
     function updateEntityTotalDisplay(entityId, summaryValues) {
-        // Update the total paid display without refreshing the whole table
         const entityTotalSpan = document.getElementById(`entity-total-${entityId}`);
         if (entityTotalSpan && summaryValues) {
             const amountPaid = summaryValues.amountPaid || 0;
             entityTotalSpan.innerHTML = `(Total Paid: $${amountPaid.toFixed(2)})`;
         }
         
-        // Update status badge
         const entityStatusSpan = document.getElementById(`entity-status-${entityId}`);
         if (entityStatusSpan) {
             const amountPaid = summaryValues?.amountPaid || 0;
@@ -1440,11 +1483,8 @@
                 const existing = firstNum.existing;
                 if (existing && existing.meter_number) {
                     accountBillNumber = existing.meter_number;
-                } else if (existing && existing.notes) {
-                    try {
-                        const parsed = JSON.parse(existing.notes);
-                        accountBillNumber = parsed.billNumber || '';
-                    } catch(e) {}
+                } else if (firstNum.billNumber) {
+                    accountBillNumber = firstNum.billNumber;
                 }
             }
             
@@ -1497,7 +1537,9 @@
                 phoneRow.className = 'phone-row';
                 phoneRow.setAttribute('data-account-number', account.accountNumber);
                 phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
-                phoneRow.setAttribute('data-bill-id', num.billId || '');
+                if (num.billId) {
+                    phoneRow.setAttribute('data-bill-id', num.billId);
+                }
                 
                 phoneRow.innerHTML = `
                     <td class="seq-number">${serial}</div>
@@ -1602,7 +1644,6 @@
                     totalAccountCharges: parseFloat(totalAccInput?.value) || 0,
                     amountPaid: parseFloat(summaryCell.querySelector('.summary-amount-paid')?.value) || 0
                 };
-                // Use BACKGROUND SAVE - no table refresh
                 await saveEntityDataBackground(entityRow, summaryValues, month, year);
             };
         }
@@ -1648,7 +1689,6 @@
                         totalAccountCharges: parseFloat(totalAccInput?.value) || 0,
                         amountPaid: parseFloat(amountPaidInput?.value) || 0
                     };
-                    // Use BACKGROUND SAVE - no table refresh
                     await saveEntityDataBackground(entityRow, summaryValues, currentMonth, currentYear);
                 }
                 return;
