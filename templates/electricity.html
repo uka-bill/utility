@@ -705,11 +705,11 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                console.log('Schools loaded:', allSchools.map(s => ({id: s.id, name: s.name, cluster: s.cluster_number, electricity_account: s.electricity_account})));
+                console.log('Schools loaded:', allSchools.map(s => ({id: s.id, name: s.name, cluster: s.cluster_number, electricity_account: s.electricity_account, electricity_meter: s.electricity_meter})));
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                console.log('Departments loaded:', allDepartments.map(d => ({id: d.id, name: d.unit_name, dept: d.department_name, electricity_account: d.electricity_account})));
+                console.log('Departments loaded:', allDepartments.map(d => ({id: d.id, name: d.unit_name, dept: d.department_name, electricity_account: d.electricity_account, electricity_meter: d.electricity_meter})));
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) {
@@ -733,37 +733,38 @@
         }
     }
 
+    // FIXED: Properly extract electricity accounts from both JSON array and single field formats
     function extractElectricityAccounts(entity) {
         let accounts = [];
-        try {
-            if (entity.electricity_accounts && typeof entity.electricity_accounts === 'string') {
-                const parsed = JSON.parse(entity.electricity_accounts);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    accounts = parsed;
+        
+        // First, try to get from electricity_accounts JSON array
+        if (entity.electricity_accounts) {
+            try {
+                if (typeof entity.electricity_accounts === 'string') {
+                    const parsed = JSON.parse(entity.electricity_accounts);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        accounts = parsed;
+                    }
+                } else if (Array.isArray(entity.electricity_accounts)) {
+                    accounts = entity.electricity_accounts;
                 }
-            } else if (entity.electricity_accounts && Array.isArray(entity.electricity_accounts)) {
-                accounts = entity.electricity_accounts;
-            } else if (entity.electricity_account) {
-                // This is the legacy single account format
-                const meters = [];
-                if (entity.electricity_meter) {
-                    meters.push({ meterNumber: entity.electricity_meter, location: '', notes: '' });
-                } else {
-                    // If no meter number, still create a meter entry with placeholder
-                    meters.push({ meterNumber: '—', location: '', notes: '' });
-                }
-                accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
+            } catch(e) {
+                console.error("Error parsing electricity_accounts:", e);
             }
-        } catch(e) {
-            console.error("Error parsing electricity accounts:", e);
         }
         
-        // If still no accounts found but entity has electricity_account field, add it
+        // If no accounts found from JSON array, check single account fields
         if (accounts.length === 0 && entity.electricity_account) {
-            accounts = [{
-                accountNumber: entity.electricity_account,
-                meters: [{ meterNumber: entity.electricity_meter || '—', location: '', notes: '' }]
-            }];
+            // Handle single account format (like water.html does)
+            const meters = [];
+            if (entity.electricity_meter && entity.electricity_meter !== '—') {
+                meters.push({ meterNumber: entity.electricity_meter, location: '', notes: '' });
+            } else {
+                // Still create a meter entry even if no meter number
+                meters.push({ meterNumber: '—', location: '', notes: '' });
+            }
+            accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
+            console.log(`Using single account format for ${entity.name}: ${entity.electricity_account} / ${entity.electricity_meter}`);
         }
         
         return accounts;
@@ -778,7 +779,16 @@
             const accounts = extractElectricityAccounts(school);
             
             let accountGroups = accounts;
-            let hasAccounts = accounts.length > 0 && accounts[0].accountNumber !== '—';
+            let hasAccounts = accounts.length > 0 && accounts[0].accountNumber && accounts[0].accountNumber !== '—';
+            
+            // If still no accounts but the school has electricity_account field, create one
+            if (!hasAccounts && school.electricity_account && school.electricity_account !== '—') {
+                accountGroups = [{
+                    accountNumber: school.electricity_account,
+                    meters: [{ meterNumber: school.electricity_meter || '—', location: '', notes: '' }]
+                }];
+                hasAccounts = true;
+            }
             
             if (!hasAccounts) {
                 accountGroups = [{
@@ -810,7 +820,16 @@
             const accounts = extractElectricityAccounts(dept);
             
             let accountGroups = accounts;
-            let hasAccounts = accounts.length > 0 && accounts[0].accountNumber !== '—';
+            let hasAccounts = accounts.length > 0 && accounts[0].accountNumber && accounts[0].accountNumber !== '—';
+            
+            // If still no accounts but the department has electricity_account field, create one
+            if (!hasAccounts && dept.electricity_account && dept.electricity_account !== '—') {
+                accountGroups = [{
+                    accountNumber: dept.electricity_account,
+                    meters: [{ meterNumber: dept.electricity_meter || '—', location: '', notes: '' }]
+                }];
+                hasAccounts = true;
+            }
             
             if (!hasAccounts) {
                 accountGroups = [{
