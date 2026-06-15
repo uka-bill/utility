@@ -166,7 +166,8 @@
             flex-wrap: wrap;
             gap: 15px;
             align-items: flex-end;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--border);
         }
 
         .filter-group {
@@ -760,7 +761,6 @@
     function buildEntityList() {
         const entities = [];
         
-        // Process schools - preserve EXACT order from API
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractWaterAccounts(school);
@@ -790,7 +790,6 @@
             });
         }
         
-        // Process departments - preserve EXACT order from API (already sorted by display_order, department_name, id)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept);
@@ -1033,7 +1032,6 @@
         const schoolsList = filteredEntities.filter(function(e) { return e.type === 'school'; });
         const departmentsList = filteredEntities.filter(function(e) { return e.type === 'department'; });
         
-        // Group schools by cluster
         const schoolsByCluster = new Map();
         for (let i = 0; i < schoolsList.length; i++) {
             const school = schoolsList[i];
@@ -1133,8 +1131,7 @@
             }
         }
         
-        // ============ FIXED: RENDER DEPARTMENTS BY DISPLAY_ORDER ============
-        // Group departments by department name
+        // ============ RENDER DEPARTMENTS - ALWAYS SHOW ALL ============
         const deptByDepartmentName = new Map();
         for (let i = 0; i < departmentsList.length; i++) {
             const dept = departmentsList[i];
@@ -1145,8 +1142,6 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        // Sort department groups by the minimum display_order in each group
-        // This ensures groups appear in the same order as the Departments tab
         const sortedDeptGroups = Array.from(deptByDepartmentName.entries()).sort((a, b) => {
             const minOrderA = Math.min(...a[1].map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
             const minOrderB = Math.min(...b[1].map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
@@ -1156,20 +1151,17 @@
         for (let d = 0; d < sortedDeptGroups.length; d++) {
             const [deptName, deptsInGroup] = sortedDeptGroups[d];
             
-            // Sort departments within group by display_order
             deptsInGroup.sort((a, b) => {
                 const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
                 const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
                 return orderA - orderB;
             });
             
-            let hasVisibleInGroup = false;
             const visibleGroupEntities = [];
             
             for (let i = 0; i < deptsInGroup.length; i++) {
                 const entity = deptsInGroup[i];
                 const visibleAccounts = [];
-                let hasAnyVisible = false;
                 
                 for (let a = 0; a < entity.accountGroups.length; a++) {
                     const account = entity.accountGroups[a];
@@ -1208,24 +1200,19 @@
                         }
                     }
                     
-                    if (visibleMeters.length > 0) {
-                        hasAnyVisible = true;
-                        visibleAccounts.push({
-                            accountNumber: account.accountNumber,
-                            meters: visibleMeters,
-                            isPlaceholder: account.isPlaceholder
-                        });
-                    }
+                    visibleAccounts.push({
+                        accountNumber: account.accountNumber,
+                        meters: visibleMeters,
+                        isPlaceholder: account.isPlaceholder || (meters.length === 0 && visibleMeters.length === 0)
+                    });
                 }
-                if (hasAnyVisible) {
-                    hasVisibleInGroup = true;
-                    const entityCopy = JSON.parse(JSON.stringify(entity));
-                    entityCopy.accountGroups = visibleAccounts;
-                    visibleGroupEntities.push(entityCopy);
-                }
+                
+                const entityCopy = JSON.parse(JSON.stringify(entity));
+                entityCopy.accountGroups = visibleAccounts;
+                visibleGroupEntities.push(entityCopy);
             }
             
-            if (hasVisibleInGroup && visibleGroupEntities.length > 0) {
+            if (visibleGroupEntities.length > 0) {
                 let totalMeters = 0;
                 for (let i = 0; i < visibleGroupEntities.length; i++) {
                     const e = visibleGroupEntities[i];
