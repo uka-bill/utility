@@ -733,24 +733,24 @@
         }
     }
 
-    // CRITICAL FIX: Extract electricity accounts from JSON array format (matches schools.html)
+    // Extract electricity accounts from JSON array format (matches schools.html)
     function extractElectricityAccounts(entity) {
         let accounts = [];
         try {
-            // Check if electricity_accounts is a JSON string (from schools.html save)
+            // Check if electricity_accounts is a JSON string
             if (entity.electricity_accounts && typeof entity.electricity_accounts === 'string') {
                 const parsed = JSON.parse(entity.electricity_accounts);
                 if (Array.isArray(parsed) && parsed.length > 0) {
                     accounts = parsed;
-                    console.log('Parsed electricity accounts for ' + entity.name + ':', accounts);
+                    console.log('Parsed electricity accounts for ' + entity.name + ':', accounts.map(a => ({accountNumber: a.accountNumber, meterCount: a.meters ? a.meters.length : 0})));
                 }
             } 
             // Check if it's already an array
             else if (entity.electricity_accounts && Array.isArray(entity.electricity_accounts)) {
                 accounts = entity.electricity_accounts;
-                console.log('Found electricity accounts array for ' + entity.name + ':', accounts);
+                console.log('Found electricity accounts array for ' + entity.name + ':', accounts.length);
             }
-            // Fallback to single account field (legacy)
+            // Fallback to single account field
             else if (entity.electricity_account && entity.electricity_account !== '—') {
                 const meters = [];
                 if (entity.electricity_meter && entity.electricity_meter !== '—') {
@@ -762,7 +762,7 @@
                 console.log('Using single account for ' + entity.name + ':', entity.electricity_account);
             }
         } catch(e) {
-            console.error('Error parsing electricity accounts:', e);
+            console.error('Error parsing electricity accounts for ' + entity.name + ':', e);
         }
         return accounts;
     }
@@ -778,6 +778,7 @@
             let accountGroups = accounts;
             let hasAccounts = accounts.length > 0;
             
+            // If no accounts, create placeholder
             if (!hasAccounts) {
                 accountGroups = [{
                     accountNumber: '—',
@@ -1238,6 +1239,9 @@
             let isFirstMeterForAccount = true;
             if (account.isPlaceholder) isPlaceholder = true;
             
+            // Log account number for debugging
+            console.log('Rendering account for ' + entity.name + ':', account.accountNumber, 'Meters:', account.meters.length);
+            
             for (let m = 0; m < account.meters.length; m++) {
                 const meter = account.meters[m];
                 const existing = meter.existing;
@@ -1310,7 +1314,7 @@
         entityRow.setAttribute('data-entity-name', entity.name);
         entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
-        entityRow.innerHTML = '<td class="seq-number">' + startSerial + '</td>' +
+        entityRow.innerHTML = '<td class="seq-number">' + startSerial + '</div>' +
             '<td class="entity-header"><span class="entity-name">' + escapeHtml(entity.name) + '</span>' +
             (!isPlaceholder ? '<span class="total-due" id="entity-total-' + entity.id + '">(Total Paid: $' + entityTotalPaid.toFixed(2) + ')</span>' : '<span class="total-due placeholder-text">(No electricity account configured)</span>') +
             '</div>' +
@@ -1337,10 +1341,20 @@
                 amountPaidHtml = '<div class="amount-paid-disabled">—</div>';
             }
             
+            // Build the account number display - ensure it shows even if empty
+            let accountDisplayHtml = '';
+            if (meterData.isFirstMeterForAccount) {
+                if (meterData.accountNumber && meterData.accountNumber !== '—') {
+                    accountDisplayHtml = '<div><span class="account-number">📋 ' + escapeHtml(meterData.accountNumber) + '</span></div>';
+                } else {
+                    accountDisplayHtml = '<div><span class="account-number placeholder-text">📋 No account number</span></div>';
+                }
+            }
+            
             meterRow.innerHTML = '<td class="seq-number">' + (meterData.isFirstMeterForAccount ? meterData.serial : '') + '</div>' +
                 '<td></div>' +
                 '<td></div>' +
-                '<td>' + (meterData.isFirstMeterForAccount ? '<span class="account-number">📋 ' + escapeHtml(meterData.accountNumber) + '</span>' : '') +
+                '<td>' + accountDisplayHtml +
                     '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.meterNumber) + '</div>' +
                     meterData.locationDisplay +
                 '</div>' +
