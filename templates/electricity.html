@@ -733,62 +733,47 @@
         }
     }
 
-    // FIXED: Properly extract electricity accounts from both JSON array and single field formats
+    // COMPLETELY REWRITTEN - Same as water.html extractWaterAccounts
     function extractElectricityAccounts(entity) {
         let accounts = [];
-        
-        // First, try to get from electricity_accounts JSON array
-        if (entity.electricity_accounts) {
-            try {
-                if (typeof entity.electricity_accounts === 'string') {
-                    const parsed = JSON.parse(entity.electricity_accounts);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        accounts = parsed;
-                    }
-                } else if (Array.isArray(entity.electricity_accounts)) {
-                    accounts = entity.electricity_accounts;
+        try {
+            // First, try to parse electricity_accounts JSON (for multiple accounts)
+            if (entity.electricity_accounts && typeof entity.electricity_accounts === 'string') {
+                const parsed = JSON.parse(entity.electricity_accounts);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    accounts = parsed;
                 }
-            } catch(e) {
-                console.error("Error parsing electricity_accounts:", e);
+            } else if (entity.electricity_accounts && Array.isArray(entity.electricity_accounts)) {
+                accounts = entity.electricity_accounts;
+            } 
+            // Fallback to single account fields (legacy format - same as water.html)
+            else if (entity.electricity_account) {
+                const meters = [];
+                if (entity.electricity_meter && entity.electricity_meter !== '—') {
+                    meters.push({ meterNumber: entity.electricity_meter, location: '', notes: '' });
+                } else {
+                    // Still create a meter entry even if no meter number (just show placeholder)
+                    meters.push({ meterNumber: '—', location: '', notes: '' });
+                }
+                accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
+                console.log(`Using single account format for ${entity.name}: Account=${entity.electricity_account}, Meter=${entity.electricity_meter || '—'}`);
             }
+        } catch(e) {
+            console.error("Error parsing electricity accounts:", e);
         }
-        
-        // If no accounts found from JSON array, check single account fields
-        if (accounts.length === 0 && entity.electricity_account) {
-            // Handle single account format (like water.html does)
-            const meters = [];
-            if (entity.electricity_meter && entity.electricity_meter !== '—') {
-                meters.push({ meterNumber: entity.electricity_meter, location: '', notes: '' });
-            } else {
-                // Still create a meter entry even if no meter number
-                meters.push({ meterNumber: '—', location: '', notes: '' });
-            }
-            accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
-            console.log(`Using single account format for ${entity.name}: ${entity.electricity_account} / ${entity.electricity_meter}`);
-        }
-        
         return accounts;
     }
 
     function buildEntityList() {
         const entities = [];
         
-        // Use the EXACT order from the API - do NOT re-sort!
+        // Use EXACT order from API (already sorted by cluster_number then id)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
             
             let accountGroups = accounts;
             let hasAccounts = accounts.length > 0 && accounts[0].accountNumber && accounts[0].accountNumber !== '—';
-            
-            // If still no accounts but the school has electricity_account field, create one
-            if (!hasAccounts && school.electricity_account && school.electricity_account !== '—') {
-                accountGroups = [{
-                    accountNumber: school.electricity_account,
-                    meters: [{ meterNumber: school.electricity_meter || '—', location: '', notes: '' }]
-                }];
-                hasAccounts = true;
-            }
             
             if (!hasAccounts) {
                 accountGroups = [{
@@ -814,22 +799,13 @@
             });
         }
         
-        // Use the EXACT order from the API - do NOT re-sort!
+        // Use EXACT order from API (already sorted by display_order, department_name, id)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
             
             let accountGroups = accounts;
             let hasAccounts = accounts.length > 0 && accounts[0].accountNumber && accounts[0].accountNumber !== '—';
-            
-            // If still no accounts but the department has electricity_account field, create one
-            if (!hasAccounts && dept.electricity_account && dept.electricity_account !== '—') {
-                accountGroups = [{
-                    accountNumber: dept.electricity_account,
-                    meters: [{ meterNumber: dept.electricity_meter || '—', location: '', notes: '' }]
-                }];
-                hasAccounts = true;
-            }
             
             if (!hasAccounts) {
                 accountGroups = [{
@@ -1174,7 +1150,9 @@
             if (account.isPlaceholder) isPlaceholder = true;
             
             for (const meter of account.meters) {
-                const existing = meter.existing;
+                // Find existing bill for this specific account and meter
+                const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meter.meterNumber, month, year);
+                
                 let parsedNotes = {};
                 if (existing && existing.notes && existing.notes.startsWith('{')) {
                     try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
@@ -1187,7 +1165,7 @@
                 let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 let notes = parsedNotes.originalNotes || meter.notes || '';
                 
-                const isPlaceholderAccount = account.isPlaceholder || meter.isPlaceholder;
+                const isPlaceholderAccount = account.isPlaceholder || (meter.meterNumber === '—');
                 const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
                 const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
                 
@@ -1209,7 +1187,7 @@
                     previousPayment: previousPayment,
                     amountPaid: amountPaid,
                     notes: notes,
-                    billId: meter.billId,
+                    billId: existing?.id,
                     isFirstMeterForAccount: isFirstMeterForAccount,
                     isPlaceholder: isPlaceholderAccount,
                     disabledAttr: disabledAttr,
@@ -1276,7 +1254,7 @@
                 amountPaidHtml = `<div class="amount-paid-disabled">—</div>`;
             }
             
-            // Display account number and meter number together (like water.html)
+            // Display account number and meter number (like water.html)
             const accountDisplay = meterData.isFirstMeterForAccount ? 
                 `<div><span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span></div>` : '';
             const meterDisplay = `<div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>`;
