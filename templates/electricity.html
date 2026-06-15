@@ -759,7 +759,7 @@
     function buildEntityList() {
         const entities = [];
         
-        // CRITICAL FIX: Use the EXACT order from the API - do NOT re-sort!
+        // Use the EXACT order from the API - do NOT re-sort!
         // The Schools API already returns schools sorted by cluster_number then id
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
@@ -792,7 +792,7 @@
             });
         }
         
-        // CRITICAL FIX: Use the EXACT order from the API - do NOT re-sort!
+        // Use the EXACT order from the API - do NOT re-sort!
         // The Departments API already returns departments sorted by display_order, then department_name, then id
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
@@ -1009,7 +1009,7 @@
         const searchTerm = document.getElementById('searchFilter').value;
         const statusFilter = document.getElementById('statusFilter').value;
         
-        // Apply filters
+        // Apply basic filters (entity type and search term only)
         let filteredEntities = allEntities.filter(entity => {
             if (entityFilter !== 'all' && entity.type !== entityFilter) return false;
             if (searchTerm && !matchesSearch(entity, searchTerm)) return false;
@@ -1026,7 +1026,7 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        // Separate schools and departments (preserving API order)
+        // Separate schools and departments
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
@@ -1037,7 +1037,7 @@
             if (entity.clusterNumber !== currentCluster) {
                 currentCluster = entity.clusterNumber;
                 
-                // Count total schools and meters in this cluster for the separator
+                // Count total schools in this cluster (including those with no accounts)
                 const schoolsInCluster = schoolsList.filter(s => s.clusterNumber === currentCluster);
                 const totalMeters = schoolsInCluster.reduce((sum, e) => 
                     sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
@@ -1055,44 +1055,26 @@
                 tbody.appendChild(separatorRow);
             }
             
-            // Apply status filter to this entity
-            const visibleAccounts = [];
-            let hasAnyVisible = false;
-            
+            // Check for status filter at entity level
+            let entityHasPaidBills = false;
             for (const account of entity.accountGroups) {
-                const meters = account.meters || [];
-                const visibleMeters = [];
-                for (const meter of meters) {
+                for (const meter of account.meters) {
                     const meterNum = meter.meterNumber || '—';
                     const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
-                    
-                    if (statusFilter === 'all' || 
-                        (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                        (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                        visibleMeters.push({
-                            meterNumber: meterNum,
-                            location: meter.location || '',
-                            notes: meter.notes || '',
-                            existing: existing,
-                            billId: existing?.id,
-                            isPlaceholder: account.isPlaceholder
-                        });
+                    if (existing && (existing.amount_paid || 0) > 0) {
+                        entityHasPaidBills = true;
+                        break;
                     }
                 }
-                if (visibleMeters.length > 0) {
-                    hasAnyVisible = true;
-                    visibleAccounts.push({
-                        accountNumber: account.accountNumber,
-                        meters: visibleMeters,
-                        isPlaceholder: account.isPlaceholder
-                    });
-                }
+                if (entityHasPaidBills) break;
             }
             
-            if (hasAnyVisible) {
-                const entityWithVisible = {...entity, accountGroups: visibleAccounts};
-                globalSerial = await renderEntity(tbody, entityWithVisible, month, year, globalSerial);
-            }
+            // Apply status filter
+            if (statusFilter === 'paid' && !entityHasPaidBills) continue;
+            if (statusFilter === 'pending' && entityHasPaidBills) continue;
+            
+            // Render the entity (always render, even with no accounts)
+            globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
         }
         
         // ============ RENDER DEPARTMENTS IN API ORDER (SAME AS DEPARTMENTS TAB) ============
@@ -1103,7 +1085,7 @@
             if (deptName !== currentDeptName) {
                 currentDeptName = deptName;
                 
-                // Count total units and meters in this department group
+                // Count total units in this department group
                 const deptsInGroup = departmentsList.filter(d => (d.departmentName || 'Other') === currentDeptName);
                 const totalMeters = deptsInGroup.reduce((sum, e) => 
                     sum + e.accountGroups.reduce((s, a) => s + a.meters.length, 0), 0);
@@ -1121,44 +1103,26 @@
                 tbody.appendChild(deptSeparator);
             }
             
-            // Apply status filter to this entity
-            const visibleAccounts = [];
-            let hasAnyVisible = false;
-            
+            // Check for status filter at entity level
+            let entityHasPaidBills = false;
             for (const account of entity.accountGroups) {
-                const meters = account.meters || [];
-                const visibleMeters = [];
-                for (const meter of meters) {
+                for (const meter of account.meters) {
                     const meterNum = meter.meterNumber || '—';
                     const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
-                    
-                    if (statusFilter === 'all' || 
-                        (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                        (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                        visibleMeters.push({
-                            meterNumber: meterNum,
-                            location: meter.location || '',
-                            notes: meter.notes || '',
-                            existing: existing,
-                            billId: existing?.id,
-                            isPlaceholder: account.isPlaceholder
-                        });
+                    if (existing && (existing.amount_paid || 0) > 0) {
+                        entityHasPaidBills = true;
+                        break;
                     }
                 }
-                if (visibleMeters.length > 0) {
-                    hasAnyVisible = true;
-                    visibleAccounts.push({
-                        accountNumber: account.accountNumber,
-                        meters: visibleMeters,
-                        isPlaceholder: account.isPlaceholder
-                    });
-                }
+                if (entityHasPaidBills) break;
             }
             
-            if (hasAnyVisible) {
-                const entityWithVisible = {...entity, accountGroups: visibleAccounts};
-                globalSerial = await renderEntity(tbody, entityWithVisible, month, year, globalSerial);
-            }
+            // Apply status filter
+            if (statusFilter === 'paid' && !entityHasPaidBills) continue;
+            if (statusFilter === 'pending' && entityHasPaidBills) continue;
+            
+            // Render the entity
+            globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
         }
         
         restoreScrollPosition();
