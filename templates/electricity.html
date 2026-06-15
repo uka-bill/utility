@@ -705,11 +705,11 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
-                console.log('Schools loaded:', allSchools.map(s => ({id: s.id, name: s.name, cluster: s.cluster_number})));
+                console.log('Schools loaded:', allSchools.map(s => ({id: s.id, name: s.name, cluster: s.cluster_number, electricity_account: s.electricity_account})));
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                console.log('Departments loaded:', allDepartments.map(d => ({id: d.id, name: d.unit_name, dept: d.department_name, order: d.display_order})));
+                console.log('Departments loaded:', allDepartments.map(d => ({id: d.id, name: d.unit_name, dept: d.department_name, electricity_account: d.electricity_account})));
             }
             console.log(`Loaded ${allSchools.length} schools, ${allDepartments.length} departments`);
         } catch(e) {
@@ -744,15 +744,28 @@
             } else if (entity.electricity_accounts && Array.isArray(entity.electricity_accounts)) {
                 accounts = entity.electricity_accounts;
             } else if (entity.electricity_account) {
+                // This is the legacy single account format
                 const meters = [];
                 if (entity.electricity_meter) {
                     meters.push({ meterNumber: entity.electricity_meter, location: '', notes: '' });
+                } else {
+                    // If no meter number, still create a meter entry with placeholder
+                    meters.push({ meterNumber: '—', location: '', notes: '' });
                 }
                 accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
             }
         } catch(e) {
             console.error("Error parsing electricity accounts:", e);
         }
+        
+        // If still no accounts found but entity has electricity_account field, add it
+        if (accounts.length === 0 && entity.electricity_account) {
+            accounts = [{
+                accountNumber: entity.electricity_account,
+                meters: [{ meterNumber: entity.electricity_meter || '—', location: '', notes: '' }]
+            }];
+        }
+        
         return accounts;
     }
 
@@ -760,13 +773,12 @@
         const entities = [];
         
         // Use the EXACT order from the API - do NOT re-sort!
-        // The Schools API already returns schools sorted by cluster_number then id
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
             
             let accountGroups = accounts;
-            let hasAccounts = accounts.length > 0;
+            let hasAccounts = accounts.length > 0 && accounts[0].accountNumber !== '—';
             
             if (!hasAccounts) {
                 accountGroups = [{
@@ -793,13 +805,12 @@
         }
         
         // Use the EXACT order from the API - do NOT re-sort!
-        // The Departments API already returns departments sorted by display_order, then department_name, then id
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
             
             let accountGroups = accounts;
-            let hasAccounts = accounts.length > 0;
+            let hasAccounts = accounts.length > 0 && accounts[0].accountNumber !== '—';
             
             if (!hasAccounts) {
                 accountGroups = [{
@@ -1030,7 +1041,7 @@
         const schoolsList = filteredEntities.filter(e => e.type === 'school');
         const departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // ============ RENDER SCHOOLS IN API ORDER (SAME AS SCHOOLS TAB) ============
+        // ============ RENDER SCHOOLS IN API ORDER ============
         let currentCluster = '';
         for (const entity of schoolsList) {
             // Add cluster separator when cluster changes
@@ -1073,11 +1084,11 @@
             if (statusFilter === 'paid' && !entityHasPaidBills) continue;
             if (statusFilter === 'pending' && entityHasPaidBills) continue;
             
-            // Render the entity (always render, even with no accounts)
+            // Render the entity
             globalSerial = await renderEntity(tbody, entity, month, year, globalSerial);
         }
         
-        // ============ RENDER DEPARTMENTS IN API ORDER (SAME AS DEPARTMENTS TAB) ============
+        // ============ RENDER DEPARTMENTS IN API ORDER ============
         let currentDeptName = '';
         for (const entity of departmentsList) {
             // Add department separator when department name changes
@@ -1246,14 +1257,16 @@
                 amountPaidHtml = `<div class="amount-paid-disabled">—</div>`;
             }
             
+            // Display account number and meter number together (like water.html)
+            const accountDisplay = meterData.isFirstMeterForAccount ? 
+                `<div><span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span></div>` : '';
+            const meterDisplay = `<div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>`;
+            
             meterRow.innerHTML = `
                 <td class="seq-number">${meterData.isFirstMeterForAccount ? meterData.serial : ''}</div>
                 <td></div>
                 <td></div>
-                <td>${meterData.isFirstMeterForAccount ? `<span class="account-number">📋 ${escapeHtml(meterData.accountNumber)}</span>` : ''}
-                    <div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>
-                    ${meterData.locationDisplay}
-                </div>
+                <td>${accountDisplay}${meterDisplay}${meterData.locationDisplay}</div>
                 <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="kWh" ${meterData.disabledAttr}><span class="consumption-unit">kWh</span></div>
                 <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
                 <td><input type="number" step="0.01" class="inline-input outstanding-input ${meterData.placeholderClass}" value="${meterData.outstandingCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
