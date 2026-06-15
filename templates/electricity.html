@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Electricity Utility - Direct Bill Entry</title>
+    <title>Water Utility - Direct Bill Entry</title>
     <style>
         :root {
             --primary: #4361ee;
@@ -541,8 +541,8 @@
         <li><a href="/dashboard">Dashboard</a></li>
         <li><a href="/departments">Departments</a></li>
         <li><a href="/schools">Schools</a></li>
-        <li><a href="/water">Water</a></li>
-        <li><a href="/electricity" class="active">Electricity</a></li>
+        <li><a href="/water" class="active">Water</a></li>
+        <li><a href="/electricity">Electricity</a></li>
         <li><a href="/telephone">Telephone</a></li>
         <li><a href="/sut-office">SUT Office</a></li>
         <li><a href="/reports">Reports & Print</a></li>
@@ -552,7 +552,7 @@
 
 <div class="container">
     <div class="page-header">
-        <h1 class="page-title">⚡ Electricity Utility Bills</h1>
+        <h1 class="page-title">💧 Water Utility Bills</h1>
         <div class="period-card">
             <div class="period-field">
                 <label>📅 Month</label>
@@ -603,7 +603,7 @@
                     <th>Entity Name</th>
                     <th>Type</th>
                     <th>Account / Meter</th>
-                    <th>Consumption (kWh)</th>
+                    <th>Consumption (m³)</th>
                     <th>Bill Amount ($)</th>
                     <th>Outstanding ($)</th>
                     <th>Previous Payment ($)</th>
@@ -614,7 +614,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="12" style="text-align:center">Loading schools & departments...<\/td></tr>
+                <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -717,39 +717,39 @@
 
     async function loadExistingBills(month, year) {
         try {
-            const url = `/api/utility-bills?utility_type=electricity&month=${month}&year=${year}`;
+            const url = `/api/utility-bills?utility_type=water&month=${month}&year=${year}`;
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
             } else {
                 existingBills = [];
             }
-            console.log(`Loaded ${existingBills.length} existing electricity bills for ${month}/${year}`);
+            console.log(`Loaded ${existingBills.length} existing water bills for ${month}/${year}`);
         } catch(e) {
             console.error(e);
             existingBills = [];
         }
     }
 
-    function extractElectricityAccounts(entity) {
+    function extractWaterAccounts(entity) {
         let accounts = [];
         try {
-            if (entity.electricity_accounts && typeof entity.electricity_accounts === 'string') {
-                const parsed = JSON.parse(entity.electricity_accounts);
+            if (entity.water_accounts && typeof entity.water_accounts === 'string') {
+                const parsed = JSON.parse(entity.water_accounts);
                 if (Array.isArray(parsed) && parsed.length > 0) {
                     accounts = parsed;
                 }
-            } else if (entity.electricity_accounts && Array.isArray(entity.electricity_accounts)) {
-                accounts = entity.electricity_accounts;
-            } else if (entity.electricity_account) {
+            } else if (entity.water_accounts && Array.isArray(entity.water_accounts)) {
+                accounts = entity.water_accounts;
+            } else if (entity.water_account) {
                 const meters = [];
-                if (entity.electricity_meter) {
-                    meters.push({ meterNumber: entity.electricity_meter, location: '', notes: '' });
+                if (entity.water_meter) {
+                    meters.push({ meterNumber: entity.water_meter, location: '', notes: '' });
                 }
-                accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
+                accounts = [{ accountNumber: entity.water_account, meters: meters }];
             }
         } catch(e) {
-            console.error("Error parsing electricity accounts:", e);
+            console.error("Error parsing water accounts:", e);
         }
         return accounts;
     }
@@ -759,7 +759,7 @@
         
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
-            const accounts = extractElectricityAccounts(school);
+            const accounts = extractWaterAccounts(school);
             
             let accountGroups = accounts;
             let hasAccounts = accounts.length > 0;
@@ -789,7 +789,7 @@
         
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
-            const accounts = extractElectricityAccounts(dept);
+            const accounts = extractWaterAccounts(dept);
             
             let accountGroups = accounts;
             let hasAccounts = accounts.length > 0;
@@ -857,7 +857,7 @@
         const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
         
         if (!hasAccounts) {
-            showToast('❌ Cannot save: No electricity account configured for this entity.', true);
+            showToast('❌ Cannot save: No water account configured for this entity.', true);
             return;
         }
         
@@ -912,7 +912,7 @@
                 id: existingBillId,
                 account_number: accountNumber === '—' ? '' : accountNumber,
                 meter_number: meterNumber === '—' ? '' : meterNumber,
-                consumption_kwh: consumption,
+                consumption_m3: consumption,
                 current_charges: currentCharges,
                 unsettled_charges: unsettledCharges,
                 amount_paid: amountPaid,
@@ -921,7 +921,7 @@
                 year: year,
                 entity_type: entityType,
                 entity_id: entityId,
-                utility_type: 'electricity'
+                utility_type: 'water'
             });
         }
         
@@ -942,6 +942,7 @@
             
             if (result.success) {
                 showToast(`✅ ${entityName}: Saved ${result.success_count} record(s) successfully (${totalTime}ms)`);
+                // Update the entity's total paid display
                 updateEntityTotalDisplay(entityId, batchBills);
             } else {
                 showToast(`⚠️ ${entityName}: Saved ${result.success_count} records, ${result.error_count} failed`, true);
@@ -983,14 +984,14 @@
         }
     }
 
-    async function renderElectricityTable() {
+    async function renderWaterTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
         currentMonth = month;
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td><tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1209,7 +1210,7 @@
                     try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
                 }
                 
-                let consumption = existing ? (existing.consumption_kwh || 0) : 0;
+                let consumption = existing ? (existing.consumption_m3 || 0) : 0;
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
                 let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
                 let previousPayment = parsedNotes.previousPayment || 0;
@@ -1277,7 +1278,7 @@
             <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                ${!isPlaceholder ? `<span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No electricity account configured)</span>'}
+                ${!isPlaceholder ? `<span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${entityTotalPaid.toFixed(2)})</span>` : '<span class="total-due placeholder-text">(No water account configured)</span>'}
              </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
             <td colspan="6"></div>
@@ -1313,7 +1314,7 @@
                     <div class="meter-number">🔢 Meter: ${escapeHtml(meterData.meterNumber)}</div>
                     ${meterData.locationDisplay}
                 </div>
-                <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="kWh" ${meterData.disabledAttr}><span class="consumption-unit">kWh</span></div>
+                <td><input type="number" step="0.01" class="inline-input consumption-input ${meterData.placeholderClass}" value="${meterData.consumption.toFixed(2)}" placeholder="m³" ${meterData.disabledAttr}><span class="consumption-unit">m³</span></div>
                 <td><input type="number" step="0.01" class="inline-input current-charge-input ${meterData.placeholderClass}" value="${meterData.currentCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
                 <td><input type="number" step="0.01" class="inline-input outstanding-input ${meterData.placeholderClass}" value="${meterData.outstandingCharges.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
                 <td><input type="number" step="0.01" class="inline-input previous-paid-input ${meterData.placeholderClass}" value="${meterData.previousPayment.toFixed(2)}" placeholder="$" ${meterData.disabledAttr}></div>
@@ -1359,14 +1360,14 @@
         document.getElementById('globalYear').value = now.getFullYear();
         
         attachEventListeners();
-        await renderElectricityTable();
+        await renderWaterTable();
         
         document.getElementById('refreshTableBtn').addEventListener('click', async () => {
-            await renderElectricityTable();
+            await renderWaterTable();
         });
         
         document.getElementById('applyFiltersBtn').addEventListener('click', async () => {
-            await renderElectricityTable();
+            await renderWaterTable();
         });
     });
 </script>
