@@ -616,7 +616,7 @@
             <tbody id="billsTableBody">
                 <tr><td colspan="12" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
-        <tr>
+        </table>
     </div>
 </div>
 
@@ -706,9 +706,11 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
+                console.log('Schools loaded in order:', allSchools.map(s => ({id: s.id, name: s.name, cluster: s.cluster_number})));
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
+                console.log('Departments loaded in order:', allDepartments.map(d => ({id: d.id, name: d.unit_name, dept: d.department_name, order: d.display_order})));
             }
             console.log('Loaded ' + allSchools.length + ' schools, ' + allDepartments.length + ' departments');
         } catch(e) {
@@ -732,6 +734,7 @@
         }
     }
 
+    // Extract water accounts - preserves the exact structure from schools/departments
     function extractWaterAccounts(entity) {
         let accounts = [];
         try {
@@ -742,10 +745,12 @@
                 }
             } else if (entity.water_accounts && Array.isArray(entity.water_accounts)) {
                 accounts = entity.water_accounts;
-            } else if (entity.water_account) {
+            } else if (entity.water_account && entity.water_account !== '—') {
                 const meters = [];
-                if (entity.water_meter) {
+                if (entity.water_meter && entity.water_meter !== '—') {
                     meters.push({ meterNumber: entity.water_meter, location: '', notes: '' });
+                } else {
+                    meters.push({ meterNumber: '—', location: '', notes: '' });
                 }
                 accounts = [{ accountNumber: entity.water_account, meters: meters }];
             }
@@ -755,9 +760,11 @@
         return accounts;
     }
 
+    // IMPORTANT: Preserve the EXACT order from the API - do NOT re-sort!
     function buildEntityList() {
         const entities = [];
         
+        // Process schools in the EXACT order from API (already sorted by cluster then id)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractWaterAccounts(school);
@@ -782,12 +789,14 @@
                 typeLabel: '🏫 School',
                 clusterNumber: cluster,
                 departmentName: null,
-                displayOrder: idx,
+                displayOrder: school.display_order || idx,
+                originalIndex: idx,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
         }
         
+        // Process departments in the EXACT order from API (already sorted by display_order, department_name, id)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept);
@@ -811,7 +820,8 @@
                 typeLabel: '🏛️ Department',
                 clusterNumber: null,
                 departmentName: dept.department_name || 'Other',
-                displayOrder: allSchools.length + idx,
+                displayOrder: dept.display_order || idx,
+                originalIndex: allSchools.length + idx,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -1009,6 +1019,7 @@
         const searchTerm = document.getElementById('searchFilter').value;
         const statusFilter = document.getElementById('statusFilter').value;
         
+        // Apply basic filters (entity type and search term only)
         let filteredEntities = [];
         for (let i = 0; i < allEntities.length; i++) {
             const entity = allEntities[i];
@@ -1027,9 +1038,11 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
+        // Separate schools and departments
         const schoolsList = filteredEntities.filter(function(e) { return e.type === 'school'; });
         const departmentsList = filteredEntities.filter(function(e) { return e.type === 'department'; });
         
+        // Group schools by cluster (preserving order within each cluster)
         const schoolsByCluster = new Map();
         for (let i = 0; i < schoolsList.length; i++) {
             const school = schoolsList[i];
@@ -1040,8 +1053,10 @@
             schoolsByCluster.get(cluster).push(school);
         }
         
+        // Define cluster order (same as Schools tab)
         const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
         
+        // Render schools by cluster in the defined order
         for (let c = 0; c < clusterOrder.length; c++) {
             const cluster = clusterOrder[c];
             const clusterSchools = schoolsByCluster.get(cluster);
@@ -1060,7 +1075,7 @@
                     const meters = account.meters || [];
                     const visibleMeters = [];
                     
-                    // FIX: Handle accounts with NO meters - create a placeholder meter
+                    // Handle accounts with NO meters - create a placeholder meter
                     if (meters.length === 0) {
                         const meterNum = '—';
                         const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
@@ -1135,6 +1150,7 @@
             }
         }
         
+        // Group departments by department name (preserving order from API)
         const deptByDepartmentName = new Map();
         for (let i = 0; i < departmentsList.length; i++) {
             const dept = departmentsList[i];
@@ -1145,6 +1161,7 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
+        // Preserve order of department names as they appear in the original sorted list
         const deptNamesInOrder = [];
         for (let i = 0; i < departmentsList.length; i++) {
             const dept = departmentsList[i];
@@ -1154,6 +1171,7 @@
             }
         }
         
+        // Render departments by department name group
         for (let d = 0; d < deptNamesInOrder.length; d++) {
             const deptName = deptNamesInOrder[d];
             const deptsInGroup = deptByDepartmentName.get(deptName);
@@ -1172,7 +1190,7 @@
                     const meters = account.meters || [];
                     const visibleMeters = [];
                     
-                    // FIX: Handle accounts with NO meters
+                    // Handle accounts with NO meters
                     if (meters.length === 0) {
                         const meterNum = '—';
                         const existing = findExistingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
