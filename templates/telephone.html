@@ -712,7 +712,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="10" class="no-data">Loading schools & departments...<\/td></tr>
+                <td><td colspan="10" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -941,22 +941,27 @@
         return entities;
     }
 
+    // FIXED findExistingBill with detailed debugging
     function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
         // Normalize phone number for matching
         const normalizePhone = (phone) => {
             if (!phone || phone === '—') return '';
-            let normalized = String(phone).replace(/[\s\-]/g, '');
+            let normalized = String(phone).replace(/[\s\-\(\)]/g, '');
             if (normalized.startsWith('+673')) {
                 normalized = normalized.substring(4);
             }
             if (normalized.startsWith('673')) {
                 normalized = normalized.substring(3);
             }
+            while (normalized.startsWith('0')) {
+                normalized = normalized.substring(1);
+            }
             return normalized;
         };
         
         const normalizedInputPhone = normalizePhone(phoneNumber);
         
+        // Find matching bill by phone number only (ignore account number)
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
@@ -1026,7 +1031,6 @@
             saveBtn.disabled = true;
         }
         
-        // Get all account rows and build Bill No. map
         let accountRows = [];
         let accountRow = entityRow.nextElementSibling;
         while (accountRow && accountRow.classList && accountRow.classList.contains('account-header-row')) {
@@ -1046,7 +1050,6 @@
             }
         }
         
-        // Get all phone rows
         let phoneRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
@@ -1058,7 +1061,6 @@
         
         console.log(`📞 Found ${phoneRows.length} phone rows for entity: ${entityName}`);
         
-        // Collect all bills - FIX: Use amount_paid from summaryValues, not 0
         const batchBills = [];
         for (let i = 0; i < phoneRows.length; i++) {
             const row = phoneRows[i];
@@ -1121,7 +1123,6 @@
                 if (successCount > 0) {
                     await loadExistingBills(month, year);
                     
-                    // Update data-bill-id attributes
                     for (let i = 0; i < phoneRows.length; i++) {
                         const row = phoneRows[i];
                         const phoneNumber = row.getAttribute('data-phone');
@@ -1161,7 +1162,6 @@
                 }
             }
             
-            // Save summary data
             if (summaryValues) {
                 const summaryBillData = {
                     utility_type: 'telephone',
@@ -1255,7 +1255,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '</table><td colspan="10" class="no-data">Loading data...<\/td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
