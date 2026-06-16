@@ -959,10 +959,8 @@
         
         const normalizedInputPhone = normalizePhone(phoneNumber);
         
-        // ONLY match by phone number - skip summary bills
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
-            // CRITICAL: Skip summary bills
             if (bill.notes && bill.notes.includes('isSummary')) {
                 continue;
             }
@@ -1172,7 +1170,6 @@
                 }
             }
             
-            // SAVE SUMMARY BILL - CRITICAL: phone_number MUST be empty string
             if (summaryValues) {
                 let existingSummary = null;
                 for (let i = 0; i < existingBills.length; i++) {
@@ -1190,7 +1187,7 @@
                     entity_type: entityType,
                     entity_id: entityId,
                     account_number: '',
-                    phone_number: '',  // CRITICAL: MUST be empty string
+                    phone_number: '',
                     current_charges: 0,
                     amount_paid: summaryValues.amountPaid || 0,
                     notes: JSON.stringify({
@@ -1545,11 +1542,13 @@
             if (account.isPlaceholder) continue;
             
             let accountBillNumber = '';
+            let accountHasBills = false;
             
             for (const num of account.numbers) {
                 const existing = num.existing;
                 if (existing && existing.meter_number && existing.meter_number !== '') {
                     accountBillNumber = existing.meter_number;
+                    accountHasBills = true;
                     break;
                 }
                 if (existing && existing.notes) {
@@ -1557,6 +1556,7 @@
                         const parsed = JSON.parse(existing.notes);
                         if (parsed.billNumber && parsed.billNumber !== '') {
                             accountBillNumber = parsed.billNumber;
+                            accountHasBills = true;
                             break;
                         }
                     } catch(e) {}
@@ -1624,7 +1624,7 @@
                 phoneRow.className = 'phone-row';
                 phoneRow.setAttribute('data-account-number', account.accountNumber);
                 phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
-                // ALWAYS set data-bill-id, even if null
+                // ALWAYS set data-bill-id
                 phoneRow.setAttribute('data-bill-id', existing && existing.id ? existing.id : '');
                 
                 phoneRow.innerHTML = `
