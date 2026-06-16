@@ -712,7 +712,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr><td colspan="10" class="no-data">Loading schools & departments...<\/td><tr>
+                <tr><td colspan="10" class="no-data">Loading schools & departments...<\/td></tr>
             </tbody>
         </table>
     </div>
@@ -959,6 +959,7 @@
         
         const normalizedInputPhone = normalizePhone(phoneNumber);
         
+        // First try matching by phone number
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
@@ -969,10 +970,29 @@
                 
                 const billPhone = normalizePhone(bill.phone_number);
                 if (billPhone === normalizedInputPhone) {
+                    console.log(`✅ Found bill by phone: ${phoneNumber} -> ID ${bill.id}`);
                     return bill;
                 }
             }
         }
+        
+        // Try matching by phone number in the notes
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            if (bill.entity_type === entityType &&
+                bill.entity_id == entityId &&
+                bill.month == month && 
+                bill.year == year &&
+                !(bill.notes && bill.notes.includes('isSummary'))) {
+                
+                if (bill.notes && bill.notes.includes(phoneNumber)) {
+                    console.log(`✅ Found bill by phone in notes: ${phoneNumber} -> ID ${bill.id}`);
+                    return bill;
+                }
+            }
+        }
+        
+        console.log(`❌ No bill found for phone ${phoneNumber}`);
         return null;
     }
 
@@ -1144,6 +1164,8 @@
                             
                             const currentInput = row.querySelector('.current-charge-input');
                             const totalAmountInput = row.querySelector('.total-amount-input');
+                            const notesInput = row.querySelector('.notes-input');
+                            
                             if (currentInput && matchingBill.current_charges !== undefined) {
                                 currentInput.value = matchingBill.current_charges.toFixed(2);
                             }
@@ -1153,6 +1175,9 @@
                                     if (notesData.totalAmount !== undefined) {
                                         totalAmountInput.value = notesData.totalAmount.toFixed(2);
                                     }
+                                    if (notesData.originalNotes !== undefined) {
+                                        notesInput.value = notesData.originalNotes;
+                                    }
                                 } catch(e) {}
                             }
                         }
@@ -1160,6 +1185,7 @@
                 }
             }
             
+            // Save summary data
             if (summaryValues) {
                 const existingSummary = existingBills.find(b => 
                     b.entity_type === entityType && 
@@ -1584,6 +1610,9 @@
                             }
                             if (parsed.amountPaid !== undefined) {
                                 amountPaid = parsed.amountPaid;
+                            }
+                            if (parsed.billNumber !== undefined && parsed.billNumber !== '') {
+                                // Update account bill number from notes if not set
                             }
                         } else if (typeof existing.notes === 'string' && existing.notes !== '') {
                             notes = existing.notes;
