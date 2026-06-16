@@ -707,9 +707,11 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
+                console.log('Schools loaded:', allSchools.map(s => ({id: s.id, name: s.name, cluster: s.cluster_number, displayOrder: s.display_order})));
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
+                console.log('Departments loaded:', allDepartments.map(d => ({id: d.id, name: d.unit_name, dept: d.department_name, displayOrder: d.display_order})));
             }
             console.log('Loaded ' + allSchools.length + ' schools, ' + allDepartments.length + ' departments');
         } catch(e) {
@@ -761,6 +763,7 @@
     function buildEntityList() {
         const entities = [];
         
+        // Process schools - preserve order from API (sorted by cluster_number, then display_order, then id)
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractWaterAccounts(school);
@@ -785,11 +788,14 @@
                 typeLabel: '🏫 School',
                 clusterNumber: cluster,
                 departmentName: null,
+                displayOrder: school.display_order || 999,
+                originalId: school.id,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
         }
         
+        // Process departments - preserve order from API (sorted by display_order, then department_name, then id)
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept);
@@ -815,7 +821,6 @@
                 departmentName: dept.department_name || 'Other',
                 displayOrder: dept.display_order || 999,
                 originalId: dept.id,
-                originalIndex: allSchools.length + idx,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -1002,7 +1007,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td><tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1031,11 +1036,27 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        const schoolsList = filteredEntities.filter(function(e) { return e.type === 'school'; });
+        // Separate schools and departments
+        let schoolsList = filteredEntities.filter(function(e) { return e.type === 'school'; });
         let departmentsList = filteredEntities.filter(function(e) { return e.type === 'department'; });
         
-        // FIX: Sort departments exactly like the Departments tab
-        // Sort by display_order, then by department_name, then by id
+        // Sort schools by cluster_number, then by display_order, then by id (same as Schools tab)
+        schoolsList.sort((a, b) => {
+            // First by cluster number
+            const clusterA = a.clusterNumber ? parseInt(a.clusterNumber.replace('CLUSTER ', '')) : 999;
+            const clusterB = b.clusterNumber ? parseInt(b.clusterNumber.replace('CLUSTER ', '')) : 999;
+            if (clusterA !== clusterB) return clusterA - clusterB;
+            
+            // Then by display_order
+            const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
+            const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
+            if (orderA !== orderB) return orderA - orderB;
+            
+            // Then by id
+            return (a.originalId || a.id) - (b.originalId || b.id);
+        });
+        
+        // Sort departments by display_order, then by department_name, then by id (same as Departments tab)
         departmentsList.sort((a, b) => {
             const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
             const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
@@ -1048,6 +1069,7 @@
             return (a.originalId || a.id) - (b.originalId || b.id);
         });
         
+        // Group schools by cluster
         const schoolsByCluster = new Map();
         for (let i = 0; i < schoolsList.length; i++) {
             const school = schoolsList[i];
@@ -1060,6 +1082,7 @@
         
         const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
         
+        // Render schools by cluster
         for (let c = 0; c < clusterOrder.length; c++) {
             const cluster = clusterOrder[c];
             const clusterSchools = schoolsByCluster.get(cluster);
