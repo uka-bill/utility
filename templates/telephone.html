@@ -941,7 +941,6 @@
         return entities;
     }
 
-    // FIXED: findExistingBill - SKIPS summary bills
     function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
         const normalizePhone = (phone) => {
             if (!phone || phone === '—') return '';
@@ -960,10 +959,8 @@
         
         const normalizedInputPhone = normalizePhone(phoneNumber);
         
-        // CRITICAL: Skip summary bills - they are for the summary box only
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
-            // Skip summary bills
             if (bill.notes && bill.notes.includes('isSummary')) {
                 continue;
             }
@@ -971,16 +968,12 @@
                 bill.entity_id == entityId &&
                 bill.month == month && 
                 bill.year == year) {
-                
                 const billPhone = normalizePhone(bill.phone_number);
                 if (billPhone === normalizedInputPhone) {
-                    console.log(`✅ Found phone bill for ${phoneNumber}: ID ${bill.id}, charges: ${bill.current_charges}`);
                     return bill;
                 }
             }
         }
-        
-        console.log(`❌ No phone bill found for ${phoneNumber}`);
         return null;
     }
 
@@ -1135,7 +1128,6 @@
                         let matchingBill = null;
                         for (let j = 0; j < existingBills.length; j++) {
                             const bill = existingBills[j];
-                            // Skip summary bills
                             if (bill.notes && bill.notes.includes('isSummary')) {
                                 continue;
                             }
@@ -1176,9 +1168,7 @@
                 }
             }
             
-            // Save summary data (the bottom summary box)
             if (summaryValues) {
-                // First, check if there's an existing summary bill
                 let existingSummary = null;
                 for (let i = 0; i < existingBills.length; i++) {
                     const bill = existingBills[i];
@@ -1629,9 +1619,8 @@
                 phoneRow.className = 'phone-row';
                 phoneRow.setAttribute('data-account-number', account.accountNumber);
                 phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
-                if (existing && existing.id) {
-                    phoneRow.setAttribute('data-bill-id', existing.id);
-                }
+                // CRITICAL FIX: ALWAYS set data-bill-id, even if null
+                phoneRow.setAttribute('data-bill-id', existing && existing.id ? existing.id : '');
                 
                 phoneRow.innerHTML = `
                     <td class="seq-number">${serial}</div>
