@@ -761,7 +761,7 @@
         }
         const toast = document.createElement('div');
         toast.className = 'saving-toast';
-        toast.innerHTML = `<span class="saving-spinner"></span> Saving ${entityName}... Please wait`;
+        toast.innerHTML = '<span class="saving-spinner"></span> Saving ' + entityName + '... Please wait';
         document.body.appendChild(toast);
         activeSavingToast = toast;
         return toast;
@@ -901,7 +901,8 @@
                 typeLabel: '🏫 School',
                 clusterNumber: cluster,
                 departmentName: null,
-                displayOrder: idx,
+                displayOrder: school.display_order || 999,
+                originalId: school.id,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -930,7 +931,8 @@
                 typeLabel: '🏛️ Department',
                 clusterNumber: null,
                 departmentName: dept.department_name || 'Other',
-                displayOrder: allSchools.length + idx,
+                displayOrder: dept.display_order || 999,
+                originalId: dept.id,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -939,57 +941,16 @@
         return entities;
     }
 
-    // FIXED: More robust findExistingBill function with phone number normalization
     function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
-        // Normalize phone number by removing common prefixes and special characters
-        const normalizePhone = (phone) => {
-            if (!phone || phone === '—') return '';
-            let normalized = String(phone).replace(/[\s\-]/g, '');
-            if (normalized.startsWith('+673')) {
-                normalized = normalized.substring(4);
-            }
-            if (normalized.startsWith('673')) {
-                normalized = normalized.substring(3);
-            }
-            return normalized;
-        };
-        
-        const normalizedInputPhone = normalizePhone(phoneNumber);
-        
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            if (bill.entity_type === entityType &&
-                bill.entity_id == entityId &&
-                (bill.account_number || '—') === (accountNumber || '—') &&
-                bill.month == month && 
-                bill.year == year &&
-                !(bill.notes && bill.notes.includes('isSummary'))) {
-                
-                const billPhone = normalizePhone(bill.phone_number);
-                if (billPhone === normalizedInputPhone || bill.phone_number === phoneNumber) {
-                    return bill;
-                }
-            }
-        }
-        
-        // Try matching by phone number only (account might be different)
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            if (bill.entity_type === entityType &&
-                bill.entity_id == entityId &&
-                bill.month == month && 
-                bill.year == year &&
-                !(bill.notes && bill.notes.includes('isSummary'))) {
-                
-                const billPhone = normalizePhone(bill.phone_number);
-                if (billPhone === normalizedInputPhone) {
-                    console.log(`Found bill by normalized phone: ${phoneNumber} -> ${bill.phone_number}`);
-                    return bill;
-                }
-            }
-        }
-        
-        return null;
+        return existingBills.find(bill => 
+            bill.entity_type === entityType &&
+            bill.entity_id == entityId &&
+            (bill.account_number || '—') === (accountNumber || '—') &&
+            (bill.phone_number || '—') === (phoneNumber || '—') &&
+            bill.month == month && 
+            bill.year == year &&
+            !bill.notes?.includes('isSummary')
+        );
     }
 
     function matchesSearch(entity, searchTerm) {
@@ -1007,7 +968,6 @@
         return false;
     }
 
-    // FIXED SAVE FUNCTION
     async function saveEntityDataBackground(entityRow, summaryValues, month, year) {
         const startTime = performance.now();
         console.log('⏱️ START BACKGROUND SAVE');
@@ -1062,24 +1022,22 @@
             const billNoInput = accRow.querySelector('.account-bill-number-input');
             if (accNumber && billNoInput) {
                 billNoMap[accNumber] = billNoInput.value;
-                console.log(`📝 Captured Bill No. for account ${accNumber}: "${billNoInput.value}"`);
             }
         }
         
         // Get all phone rows
         let phoneRows = [];
         let nextRow = entityRow.nextElementSibling;
-        while (nextRow) {
-            if (nextRow.classList && nextRow.classList.contains('phone-row')) {
+        while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
+            if (nextRow.classList.contains('phone-row')) {
                 phoneRows.push(nextRow);
-            } else if (nextRow.classList && nextRow.classList.contains('summary-row')) {
-                break;
             }
             nextRow = nextRow.nextElementSibling;
         }
         
         console.log(`📞 Found ${phoneRows.length} phone rows for entity: ${entityName}`);
         
+        // Collect all bills
         const batchBills = [];
         for (let i = 0; i < phoneRows.length; i++) {
             const row = phoneRows[i];
@@ -1095,8 +1053,6 @@
             const currentCharges = parseFloat(currentInput?.value) || 0;
             const totalAmount = parseFloat(totalAmountInput?.value) || 0;
             const notes = notesInput?.value || '';
-            
-            console.log(`📞 Row ${i+1}: Phone=${phoneNumber}, Bill Amount=$${currentCharges}, Total Amount=$${totalAmount}, Bill No=${billNo}, Existing ID=${existingBillId || 'NO'}`);
             
             if (phoneNumber && phoneNumber !== '—') {
                 batchBills.push({
@@ -1120,8 +1076,6 @@
             }
         }
         
-        console.log(`📦 Sending ${batchBills.length} bills to server`);
-        
         savingEntities.add(entityId);
         
         try {
@@ -1137,7 +1091,6 @@
                 const result = await resp.json();
                 successCount = result.success_count || 0;
                 errorCount = result.error_count || 0;
-                console.log(`📊 Server response: ${successCount} success, ${errorCount} failed`);
                 
                 if (successCount > 0) {
                     await loadExistingBills(month, year);
@@ -1147,23 +1100,17 @@
                         const phoneNumber = row.getAttribute('data-phone');
                         const accountNumber = row.getAttribute('data-account-number');
                         
-                        let matchingBill = null;
-                        for (let j = 0; j < existingBills.length; j++) {
-                            const bill = existingBills[j];
-                            if (bill.entity_id === entityId &&
-                                bill.entity_type === entityType &&
-                                bill.phone_number === phoneNumber &&
-                                bill.account_number === accountNumber &&
-                                bill.month === month &&
-                                bill.year === year) {
-                                matchingBill = bill;
-                                break;
-                            }
-                        }
+                        const matchingBill = existingBills.find(bill => 
+                            bill.entity_id === entityId &&
+                            bill.entity_type === entityType &&
+                            bill.phone_number === phoneNumber &&
+                            bill.account_number === accountNumber &&
+                            bill.month === month &&
+                            bill.year === year
+                        );
                         
                         if (matchingBill && matchingBill.id) {
                             row.setAttribute('data-bill-id', matchingBill.id);
-                            console.log(`✅ Updated bill ID for phone ${phoneNumber}: ${matchingBill.id}`);
                             
                             const currentInput = row.querySelector('.current-charge-input');
                             const totalAmountInput = row.querySelector('.total-amount-input');
@@ -1216,14 +1163,11 @@
                     year: year
                 };
                 
-                let existingSummary = null;
-                for (let i = 0; i < existingBills.length; i++) {
-                    const b = existingBills[i];
-                    if (b.entity_type === entityType && b.entity_id === entityId && b.notes && b.notes.includes('isSummary')) {
-                        existingSummary = b;
-                        break;
-                    }
-                }
+                const existingSummary = existingBills.find(b => 
+                    b.entity_type === entityType && 
+                    b.entity_id === entityId && 
+                    b.notes?.includes('isSummary')
+                );
                 
                 if (existingSummary && existingSummary.id) {
                     await fetch(`/api/utility-bills/${existingSummary.id}`, {
@@ -1319,8 +1263,60 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        const schoolsList = filteredEntities.filter(e => e.type === 'school');
-        const departmentsList = filteredEntities.filter(e => e.type === 'department');
+        // Separate schools and departments
+        let schoolsList = filteredEntities.filter(e => e.type === 'school');
+        let departmentsList = filteredEntities.filter(e => e.type === 'department');
+        
+        // ============ FIX: Sort schools exactly like Schools tab ============
+        schoolsList.sort((a, b) => {
+            // First by cluster number
+            const clusterA = a.clusterNumber ? parseInt(a.clusterNumber.replace('CLUSTER ', '')) : 999;
+            const clusterB = b.clusterNumber ? parseInt(b.clusterNumber.replace('CLUSTER ', '')) : 999;
+            if (clusterA !== clusterB) return clusterA - clusterB;
+            
+            // Then by display_order
+            const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
+            const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
+            if (orderA !== orderB) return orderA - orderB;
+            
+            // Then by id
+            return (a.originalId || a.id) - (b.originalId || b.id);
+        });
+        
+        // ============ FIX: Sort departments exactly like Departments tab ============
+        // Group departments by department name
+        const deptByDepartmentName = new Map();
+        for (let i = 0; i < departmentsList.length; i++) {
+            const dept = departmentsList[i];
+            const deptName = dept.departmentName || 'Other';
+            if (!deptByDepartmentName.has(deptName)) {
+                deptByDepartmentName.set(deptName, []);
+            }
+            deptByDepartmentName.get(deptName).push(dept);
+        }
+        
+        // Sort department groups by the minimum id in each group (oldest first)
+        const sortedDeptGroups = Array.from(deptByDepartmentName.entries()).sort((a, b) => {
+            const minIdA = Math.min(...a[1].map(d => d.originalId || d.id));
+            const minIdB = Math.min(...b[1].map(d => d.originalId || d.id));
+            return minIdA - minIdB;
+        });
+        
+        // Within each group, sort by id (oldest first, newest last)
+        for (let d = 0; d < sortedDeptGroups.length; d++) {
+            const [deptName, deptsInGroup] = sortedDeptGroups[d];
+            deptsInGroup.sort((a, b) => {
+                return (a.originalId || a.id) - (b.originalId || b.id);
+            });
+        }
+        
+        // Rebuild departmentsList in the correct sorted order
+        const sortedDepartmentsList = [];
+        for (let d = 0; d < sortedDeptGroups.length; d++) {
+            const [deptName, deptsInGroup] = sortedDeptGroups[d];
+            sortedDepartmentsList.push(...deptsInGroup);
+        }
+        departmentsList = sortedDepartmentsList;
         
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
@@ -1404,26 +1400,20 @@
             }
         }
         
-        const deptByDepartmentName = new Map();
+        // ============ RENDER DEPARTMENTS IN SORTED ORDER ============
+        // Group departments by department name for rendering
+        const deptByDeptName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
-            if (!deptByDepartmentName.has(deptName)) {
-                deptByDepartmentName.set(deptName, []);
+            if (!deptByDeptName.has(deptName)) {
+                deptByDeptName.set(deptName, []);
             }
-            deptByDepartmentName.get(deptName).push(dept);
+            deptByDeptName.get(deptName).push(dept);
         }
         
-        const deptNamesInOrder = [];
-        for (const dept of departmentsList) {
-            const deptName = dept.departmentName || 'Other';
-            if (!deptNamesInOrder.includes(deptName)) {
-                deptNamesInOrder.push(deptName);
-            }
-        }
-        
-        for (const deptName of deptNamesInOrder) {
-            const deptsInGroup = deptByDepartmentName.get(deptName);
-            if (!deptsInGroup || deptsInGroup.length === 0) continue;
+        // Render each department group in the order from sortedDeptGroups
+        for (let d = 0; d < sortedDeptGroups.length; d++) {
+            const [deptName, deptsInGroup] = sortedDeptGroups[d];
             
             let hasVisibleInGroup = false;
             const visibleGroupEntities = [];
@@ -1514,16 +1504,16 @@
         entityRow.setAttribute('data-has-accounts', !isPlaceholder);
         
         entityRow.innerHTML = `
-            <td class="seq-number">${startSerial}</td>
+            <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
                 <span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${(existingSummary.amountPaid || 0).toFixed(2)})</span>
-             </div>
-            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></td>
-            <td colspan="3"></td>
+            </div>
+            <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
+            <td colspan="3"></div>
             <td></div>
             <td></div>
-            <td><span class="status-badge ${(existingSummary.amountPaid || 0) > 0 ? 'status-paid' : 'status-pending'}" id="entity-status-${entity.id}">${(existingSummary.amountPaid || 0) > 0 ? 'Paid' : 'Pending'}</span></td>
+            <td><span class="status-badge ${(existingSummary.amountPaid || 0) > 0 ? 'status-paid' : 'status-pending'}" id="entity-status-${entity.id}">${(existingSummary.amountPaid || 0) > 0 ? 'Paid' : 'Pending'}</span></div>
             <td class="entity-actions">
             </div>
         `;
@@ -1604,8 +1594,8 @@
                 }
                 
                 phoneRow.innerHTML = `
-                    <td class="seq-number">${serial}</td>
-                    <tr></div>
+                    <td class="seq-number">${serial}</div>
+                    <td></div>
                     <td></div>
                     <td></div>
                     <td><div class="phone-number">📞 ${escapeHtml(num.phoneNumber)}</div>${locationDisplay}</div>
