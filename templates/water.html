@@ -711,7 +711,7 @@
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
-                console.log('Departments loaded:', allDepartments.map(d => ({id: d.id, name: d.unit_name, dept: d.department_name, displayOrder: d.display_order})));
+                console.log('Departments loaded (API order):', allDepartments.map(d => ({id: d.id, name: d.unit_name, dept: d.department_name})));
             }
             console.log('Loaded ' + allSchools.length + ' schools, ' + allDepartments.length + ' departments');
         } catch(e) {
@@ -795,7 +795,7 @@
             });
         }
         
-        // Process departments - preserve order from API (sorted by display_order, then department_name, then id)
+        // Process departments - preserve order from API
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractWaterAccounts(dept);
@@ -1007,7 +1007,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...<\/td><tr>';
+        tbody.innerHTML = '<td><td colspan="12" class="no-data">Loading data...<\/td><\/tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1056,18 +1056,33 @@
             return (a.originalId || a.id) - (b.originalId || b.id);
         });
         
-        // Sort departments by display_order, then by department_name, then by id (same as Departments tab)
-        departmentsList.sort((a, b) => {
-            const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
-            const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
-            if (orderA !== orderB) return orderA - orderB;
-            
-            const deptA = a.departmentName || 'Other';
-            const deptB = b.departmentName || 'Other';
-            if (deptA !== deptB) return deptA.localeCompare(deptB);
-            
-            return (a.originalId || a.id) - (b.originalId || b.id);
+        // CRITICAL FIX: Sort departments EXACTLY like Departments tab
+        // First, sort by department_name to group them, then by id within each group
+        // But the groups order should be by the smallest id in each group
+        const deptByDepartmentName = new Map();
+        for (let i = 0; i < departmentsList.length; i++) {
+            const dept = departmentsList[i];
+            const deptName = dept.departmentName || 'Other';
+            if (!deptByDepartmentName.has(deptName)) {
+                deptByDepartmentName.set(deptName, []);
+            }
+            deptByDepartmentName.get(deptName).push(dept);
+        }
+        
+        // Sort department groups by the minimum id in each group (oldest first)
+        const sortedDeptGroups = Array.from(deptByDepartmentName.entries()).sort((a, b) => {
+            const minIdA = Math.min(...a[1].map(d => d.originalId || d.id));
+            const minIdB = Math.min(...b[1].map(d => d.originalId || d.id));
+            return minIdA - minIdB;
         });
+        
+        // Within each group, sort by id (oldest first, newest last)
+        for (let d = 0; d < sortedDeptGroups.length; d++) {
+            const [deptName, deptsInGroup] = sortedDeptGroups[d];
+            deptsInGroup.sort((a, b) => {
+                return (a.originalId || a.id) - (b.originalId || b.id);
+            });
+        }
         
         // Group schools by cluster
         const schoolsByCluster = new Map();
@@ -1171,30 +1186,9 @@
         }
         
         // ============ RENDER DEPARTMENTS - EXACT ORDER AS DEPARTMENTS TAB ============
-        // Group departments by department name (preserving the sorted order)
-        const deptByDepartmentName = new Map();
-        for (let i = 0; i < departmentsList.length; i++) {
-            const dept = departmentsList[i];
-            const deptName = dept.departmentName || 'Other';
-            if (!deptByDepartmentName.has(deptName)) {
-                deptByDepartmentName.set(deptName, []);
-            }
-            deptByDepartmentName.get(deptName).push(dept);
-        }
-        
-        // Get department groups in the order they appear in the sorted list
-        const sortedDeptNames = [];
-        for (let i = 0; i < departmentsList.length; i++) {
-            const deptName = departmentsList[i].departmentName || 'Other';
-            if (!sortedDeptNames.includes(deptName)) {
-                sortedDeptNames.push(deptName);
-            }
-        }
-        
-        // Render each department group
-        for (let d = 0; d < sortedDeptNames.length; d++) {
-            const deptName = sortedDeptNames[d];
-            const deptsInGroup = deptByDepartmentName.get(deptName);
+        // Render each department group in order of smallest id in group
+        for (let d = 0; d < sortedDeptGroups.length; d++) {
+            const [deptName, deptsInGroup] = sortedDeptGroups[d];
             
             if (!deptsInGroup || deptsInGroup.length === 0) continue;
             
