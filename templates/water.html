@@ -815,6 +815,7 @@
                 departmentName: dept.department_name || 'Other',
                 displayOrder: dept.display_order || 999,
                 originalId: dept.id,
+                originalIndex: allSchools.length + idx,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -1033,12 +1034,17 @@
         const schoolsList = filteredEntities.filter(function(e) { return e.type === 'school'; });
         let departmentsList = filteredEntities.filter(function(e) { return e.type === 'department'; });
         
-        // FIX: Sort departments by display_order, then by id (to match Departments tab order)
+        // FIX: Sort departments exactly like the Departments tab
+        // Sort by display_order, then by department_name, then by id
         departmentsList.sort((a, b) => {
             const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
             const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
             if (orderA !== orderB) return orderA - orderB;
-            // If same display_order, sort by id (original order from API)
+            
+            const deptA = a.departmentName || 'Other';
+            const deptB = b.departmentName || 'Other';
+            if (deptA !== deptB) return deptA.localeCompare(deptB);
+            
             return (a.originalId || a.id) - (b.originalId || b.id);
         });
         
@@ -1141,8 +1147,8 @@
             }
         }
         
-        // ============ RENDER DEPARTMENTS - ALWAYS SHOW ALL, SORTED BY DISPLAY_ORDER THEN ID ============
-        // Group departments by department name
+        // ============ RENDER DEPARTMENTS - EXACT ORDER AS DEPARTMENTS TAB ============
+        // Group departments by department name (preserving the sorted order)
         const deptByDepartmentName = new Map();
         for (let i = 0; i < departmentsList.length; i++) {
             const dept = departmentsList[i];
@@ -1153,26 +1159,21 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        // Sort department groups by the minimum display_order in each group, then by min id
-        const sortedDeptGroups = Array.from(deptByDepartmentName.entries()).sort((a, b) => {
-            const minOrderA = Math.min(...a[1].map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
-            const minOrderB = Math.min(...b[1].map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
-            if (minOrderA !== minOrderB) return minOrderA - minOrderB;
-            const minIdA = Math.min(...a[1].map(d => d.originalId || d.id));
-            const minIdB = Math.min(...b[1].map(d => d.originalId || d.id));
-            return minIdA - minIdB;
-        });
+        // Get department groups in the order they appear in the sorted list
+        const sortedDeptNames = [];
+        for (let i = 0; i < departmentsList.length; i++) {
+            const deptName = departmentsList[i].departmentName || 'Other';
+            if (!sortedDeptNames.includes(deptName)) {
+                sortedDeptNames.push(deptName);
+            }
+        }
         
-        for (let d = 0; d < sortedDeptGroups.length; d++) {
-            const [deptName, deptsInGroup] = sortedDeptGroups[d];
+        // Render each department group
+        for (let d = 0; d < sortedDeptNames.length; d++) {
+            const deptName = sortedDeptNames[d];
+            const deptsInGroup = deptByDepartmentName.get(deptName);
             
-            // Sort departments within group by display_order, then by id
-            deptsInGroup.sort((a, b) => {
-                const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
-                const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
-                if (orderA !== orderB) return orderA - orderB;
-                return (a.originalId || a.id) - (b.originalId || b.id);
-            });
+            if (!deptsInGroup || deptsInGroup.length === 0) continue;
             
             const visibleGroupEntities = [];
             
