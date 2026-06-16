@@ -350,10 +350,40 @@
             animation: fadeOut 4s ease forwards;
         }
 
+        .saving-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #ff9800;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .saving-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid white;
+            border-top: 2px solid #ff9800;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
         @keyframes fadeOut {
             0% { opacity: 1; transform: translateY(0); }
             80% { opacity: 1; }
             100% { opacity: 0; visibility: hidden; transform: translateY(20px); }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         
         .seq-number {
@@ -426,7 +456,7 @@
             padding: 15px;
             width: 100%;
         }
-        
+
         .summary-title-box {
             background-color: var(--bill-border);
             color: white;
@@ -437,26 +467,26 @@
             font-weight: bold;
             font-size: 0.9rem;
         }
-        
+
         .summary-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 15px;
             align-items: end;
         }
-        
+
         .summary-item {
             display: flex;
             flex-direction: column;
             gap: 5px;
         }
-        
+
         .summary-label {
             font-size: 0.7rem;
             font-weight: 600;
             color: #e65100;
         }
-        
+
         .summary-input {
             width: 100%;
             padding: 6px 8px;
@@ -467,13 +497,13 @@
             text-align: right;
             box-sizing: border-box;
         }
-        
+
         .summary-input:focus {
             outline: none;
             border-color: var(--warning);
             box-shadow: 0 0 0 2px rgba(248, 150, 30, 0.2);
         }
-        
+
         .summary-value {
             font-weight: bold;
             font-size: 0.85rem;
@@ -484,26 +514,26 @@
             text-align: right;
             border: 1px solid #ffcc80;
         }
-        
+
         .entity-actions {
             display: flex;
             gap: 8px;
             align-items: center;
             white-space: nowrap;
         }
-        
+
         .total-due {
             font-size: 0.7rem;
             color: #2e7d32;
             margin-left: 10px;
             font-weight: normal;
         }
-        
+
         .placeholder-text {
             color: #999;
             font-style: italic;
         }
-        
+
         .department-name-badge {
             background: #7b1fa2;
             color: white;
@@ -517,11 +547,11 @@
             padding: 15px 20px;
             background-color: transparent;
         }
-        
+
         .summary-row {
             background-color: transparent;
         }
-        
+
         .bill-number-input {
             font-family: monospace;
             width: 100%;
@@ -531,17 +561,17 @@
             font-size: 0.75rem;
             background: white;
         }
-        
+
         .bill-number-input:focus {
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
         }
-        
+
         .bill-number-cell {
             background-color: #fff8e1;
         }
-        
+
         .summary-actions {
             display: flex;
             justify-content: flex-end;
@@ -549,11 +579,11 @@
             padding-top: 10px;
             border-top: 1px solid #ffcc80;
         }
-        
+
         .notes-cell {
             min-width: 150px;
         }
-        
+
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -567,11 +597,11 @@
             justify-content: center;
             visibility: hidden;
         }
-        
+
         .loading-overlay.active {
             visibility: visible;
         }
-        
+
         .spinner {
             width: 50px;
             height: 50px;
@@ -582,11 +612,6 @@
             background: white;
             padding: 10px;
             border-radius: 50%;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
 
         .saving-indicator {
@@ -599,6 +624,11 @@
             animation: spin 1s linear infinite;
             margin-right: 8px;
             vertical-align: middle;
+        }
+
+        .btn-success:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
     </style>
 </head>
@@ -701,6 +731,7 @@
     let currentYear = new Date().getFullYear();
     let isLoading = false;
     let savingEntities = new Set();
+    let activeSavingToast = null;
     
     let savedScrollPosition = 0;
 
@@ -722,6 +753,33 @@
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
+    }
+
+    function showSavingToast(entityName) {
+        if (activeSavingToast) {
+            activeSavingToast.remove();
+        }
+        const toast = document.createElement('div');
+        toast.className = 'saving-toast';
+        toast.innerHTML = '<span class="saving-spinner"></span> Saving ' + entityName + '... Please wait';
+        document.body.appendChild(toast);
+        activeSavingToast = toast;
+        return toast;
+    }
+
+    function hideSavingToast() {
+        if (activeSavingToast) {
+            activeSavingToast.remove();
+            activeSavingToast = null;
+        }
+    }
+
+    function showToast(message, isError = false) {
+        const toast = document.createElement('div');
+        toast.className = isError ? 'error-toast' : 'success-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
     }
 
     function populateYears() {
@@ -766,6 +824,7 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
+                existingSummaryData = {};
                 for (const bill of existingBills) {
                     if (bill.notes && bill.notes.startsWith('{')) {
                         try {
@@ -842,7 +901,8 @@
                 typeLabel: '🏫 School',
                 clusterNumber: cluster,
                 departmentName: null,
-                displayOrder: idx,
+                displayOrder: school.display_order || 999,
+                originalId: school.id,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -871,7 +931,8 @@
                 typeLabel: '🏛️ Department',
                 clusterNumber: null,
                 departmentName: dept.department_name || 'Other',
-                displayOrder: allSchools.length + idx,
+                displayOrder: dept.display_order || 999,
+                originalId: dept.id,
                 accountGroups: accountGroups,
                 hasAccounts: hasAccounts
             });
@@ -880,24 +941,47 @@
         return entities;
     }
 
+    // FIXED: findExistingBill - SKIPS summary bills
     function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
-        return existingBills.find(bill => 
-            bill.entity_type === entityType &&
-            bill.entity_id == entityId &&
-            (bill.account_number || '—') === (accountNumber || '—') &&
-            (bill.phone_number || '—') === (phoneNumber || '—') &&
-            bill.month == month && 
-            bill.year == year &&
-            !bill.notes?.includes('isSummary')
-        );
-    }
-
-    function showToast(message, isError = false) {
-        const toast = document.createElement('div');
-        toast.className = isError ? 'error-toast' : 'success-toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 4000);
+        const normalizePhone = (phone) => {
+            if (!phone || phone === '—') return '';
+            let normalized = String(phone).replace(/[\s\-\(\)]/g, '');
+            if (normalized.startsWith('+673')) {
+                normalized = normalized.substring(4);
+            }
+            if (normalized.startsWith('673')) {
+                normalized = normalized.substring(3);
+            }
+            while (normalized.startsWith('0')) {
+                normalized = normalized.substring(1);
+            }
+            return normalized;
+        };
+        
+        const normalizedInputPhone = normalizePhone(phoneNumber);
+        
+        // CRITICAL: Skip summary bills - they are for the summary box only
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            // Skip summary bills
+            if (bill.notes && bill.notes.includes('isSummary')) {
+                continue;
+            }
+            if (bill.entity_type === entityType &&
+                bill.entity_id == entityId &&
+                bill.month == month && 
+                bill.year == year) {
+                
+                const billPhone = normalizePhone(bill.phone_number);
+                if (billPhone === normalizedInputPhone) {
+                    console.log(`✅ Found phone bill for ${phoneNumber}: ID ${bill.id}, charges: ${bill.current_charges}`);
+                    return bill;
+                }
+            }
+        }
+        
+        console.log(`❌ No phone bill found for ${phoneNumber}`);
+        return null;
     }
 
     function matchesSearch(entity, searchTerm) {
@@ -915,17 +999,15 @@
         return false;
     }
 
-    // ============ WORKING SAVE FUNCTION (NO UPSERT) ============
-    async function saveEntityData(entityRow, summaryValues, month, year) {
+    async function saveEntityDataBackground(entityRow, summaryValues, month, year) {
         const startTime = performance.now();
-        console.log('⏱️ ========================================');
-        console.log('⏱️ START SAVE at:', new Date().toLocaleTimeString());
-        console.log('⏱️ ========================================');
+        console.log('⏱️ START BACKGROUND SAVE');
         
         if (isLoading) return;
         
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         const entityType = entityRow.getAttribute('data-entity-type');
+        const entityName = entityRow.getAttribute('data-entity-name');
         const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
         
         if (!hasAccounts) {
@@ -938,75 +1020,8 @@
             return;
         }
         
-        // Get all account rows first to get Bill No.
-        let accountRows = [];
-        let accountRow = entityRow.nextElementSibling;
-        while (accountRow && accountRow.classList && accountRow.classList.contains('account-header-row')) {
-            accountRows.push(accountRow);
-            accountRow = accountRow.nextElementSibling;
-            while (accountRow && accountRow.classList && accountRow.classList.contains('phone-row')) {
-                accountRow = accountRow.nextElementSibling;
-            }
-        }
+        showSavingToast(entityName);
         
-        // Build a map of account number to Bill No.
-        const billNoMap = {};
-        for (const accRow of accountRows) {
-            const accNumber = accRow.getAttribute('data-account-number');
-            const billNoInput = accRow.querySelector('.account-bill-number-input');
-            if (accNumber && billNoInput) {
-                billNoMap[accNumber] = billNoInput.value;
-            }
-        }
-        
-        // Now get all phone rows to collect bill data
-        let phoneRows = [];
-        let nextRow = entityRow.nextElementSibling;
-        while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
-            if (nextRow.classList.contains('phone-row')) {
-                phoneRows.push(nextRow);
-            }
-            nextRow = nextRow.nextElementSibling;
-        }
-        
-        console.log(`📞 Found ${phoneRows.length} phone rows for this entity`);
-        
-        // COLLECT ALL BILLS INTO ONE ARRAY
-        const batchBills = [];
-        
-        for (const row of phoneRows) {
-            const accountNumber = row.getAttribute('data-account-number');
-            const phoneNumber = row.getAttribute('data-phone');
-            const billNo = billNoMap[accountNumber] || '';
-            
-            const currentInput = row.querySelector('.current-charge-input');
-            const totalAmountInput = row.querySelector('.total-amount-input');
-            const notesInput = row.querySelector('.notes-input');
-            
-            const currentCharges = parseFloat(currentInput?.value) || 0;
-            const totalAmount = parseFloat(totalAmountInput?.value) || 0;
-            const notes = notesInput?.value || '';
-            
-            if (phoneNumber && phoneNumber !== '—') {
-                batchBills.push({
-                    account_number: accountNumber === '—' ? '' : accountNumber,
-                    phone_number: phoneNumber,
-                    meter_number: billNo,
-                    current_charges: currentCharges,
-                    amount_paid: 0,
-                    notes: JSON.stringify({ totalAmount: totalAmount, originalNotes: notes }),
-                    month: month,
-                    year: year,
-                    entity_type: entityType,
-                    entity_id: entityId,
-                    utility_type: 'telephone'
-                });
-            }
-        }
-        
-        console.log(`📦 Sending ${batchBills.length} bills in ONE API call to /batch-update`);
-        
-        // Find save button
         let summaryContainer = entityRow.nextElementSibling;
         while (summaryContainer && !summaryContainer.querySelector('.summary-container')) {
             summaryContainer = summaryContainer.nextElementSibling;
@@ -1021,17 +1036,85 @@
             saveBtn.disabled = true;
         }
         
+        let accountRows = [];
+        let accountRow = entityRow.nextElementSibling;
+        while (accountRow && accountRow.classList && accountRow.classList.contains('account-header-row')) {
+            accountRows.push(accountRow);
+            accountRow = accountRow.nextElementSibling;
+            while (accountRow && accountRow.classList && accountRow.classList.contains('phone-row')) {
+                accountRow = accountRow.nextElementSibling;
+            }
+        }
+        
+        const billNoMap = {};
+        for (const accRow of accountRows) {
+            const accNumber = accRow.getAttribute('data-account-number');
+            const billNoInput = accRow.querySelector('.account-bill-number-input');
+            if (accNumber && billNoInput) {
+                billNoMap[accNumber] = billNoInput.value;
+            }
+        }
+        
+        let phoneRows = [];
+        let nextRow = entityRow.nextElementSibling;
+        while (nextRow && (nextRow.classList.contains('account-header-row') || nextRow.classList.contains('phone-row'))) {
+            if (nextRow.classList.contains('phone-row')) {
+                phoneRows.push(nextRow);
+            }
+            nextRow = nextRow.nextElementSibling;
+        }
+        
+        console.log(`📞 Found ${phoneRows.length} phone rows for entity: ${entityName}`);
+        
+        const batchBills = [];
+        for (let i = 0; i < phoneRows.length; i++) {
+            const row = phoneRows[i];
+            const accountNumber = row.getAttribute('data-account-number');
+            const phoneNumber = row.getAttribute('data-phone');
+            const billNo = billNoMap[accountNumber] || '';
+            const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
+            
+            const currentInput = row.querySelector('.current-charge-input');
+            const totalAmountInput = row.querySelector('.total-amount-input');
+            const notesInput = row.querySelector('.notes-input');
+            
+            const currentCharges = parseFloat(currentInput?.value) || 0;
+            const totalAmount = parseFloat(totalAmountInput?.value) || 0;
+            const notes = notesInput?.value || '';
+            
+            console.log(`📞 Row ${i+1}: Phone=${phoneNumber}, Bill Amount=$${currentCharges}, Total Amount=$${totalAmount}, Bill No=${billNo}, Existing ID=${existingBillId}`);
+            
+            if (phoneNumber && phoneNumber !== '—') {
+                batchBills.push({
+                    id: existingBillId,
+                    account_number: accountNumber === '—' ? '' : accountNumber,
+                    phone_number: phoneNumber,
+                    meter_number: billNo,
+                    current_charges: currentCharges,
+                    amount_paid: 0,
+                    notes: JSON.stringify({ 
+                        totalAmount: totalAmount, 
+                        originalNotes: notes, 
+                        billNumber: billNo 
+                    }),
+                    month: month,
+                    year: year,
+                    entity_type: entityType,
+                    entity_id: entityId,
+                    utility_type: 'telephone'
+                });
+            }
+        }
+        
+        console.log(`📦 Sending ${batchBills.length} phone bills to server`);
+        
         savingEntities.add(entityId);
         
         try {
             let successCount = 0;
             let errorCount = 0;
             
-            const apiStartTime = performance.now();
-            
-            // ONE API CALL FOR ALL PHONE BILLS
             if (batchBills.length > 0) {
-                console.log(`🔄 Sending request to server...`);
                 const resp = await fetch('/api/utility-bills/batch-update', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1040,15 +1123,73 @@
                 const result = await resp.json();
                 successCount = result.success_count || 0;
                 errorCount = result.error_count || 0;
+                console.log(`📊 Server response for phone bills: ${successCount} success, ${errorCount} failed`);
                 
-                const apiEndTime = performance.now();
-                console.log(`⏱️ API call duration: ${(apiEndTime - apiStartTime).toFixed(0)}ms`);
-                console.log(`📊 Server response: ${successCount} success, ${errorCount} failed`);
+                if (successCount > 0) {
+                    await loadExistingBills(month, year);
+                    
+                    for (let i = 0; i < phoneRows.length; i++) {
+                        const row = phoneRows[i];
+                        const phoneNumber = row.getAttribute('data-phone');
+                        
+                        let matchingBill = null;
+                        for (let j = 0; j < existingBills.length; j++) {
+                            const bill = existingBills[j];
+                            // Skip summary bills
+                            if (bill.notes && bill.notes.includes('isSummary')) {
+                                continue;
+                            }
+                            if (bill.entity_id === entityId &&
+                                bill.entity_type === entityType &&
+                                bill.phone_number === phoneNumber &&
+                                bill.month === month &&
+                                bill.year === year) {
+                                matchingBill = bill;
+                                break;
+                            }
+                        }
+                        
+                        if (matchingBill && matchingBill.id) {
+                            row.setAttribute('data-bill-id', matchingBill.id);
+                            console.log(`✅ Updated bill ID for phone ${phoneNumber}: ${matchingBill.id}`);
+                            
+                            const currentInput = row.querySelector('.current-charge-input');
+                            const totalAmountInput = row.querySelector('.total-amount-input');
+                            const notesInput = row.querySelector('.notes-input');
+                            
+                            if (currentInput && matchingBill.current_charges !== undefined) {
+                                currentInput.value = matchingBill.current_charges.toFixed(2);
+                            }
+                            if (totalAmountInput && matchingBill.notes) {
+                                try {
+                                    const notesData = JSON.parse(matchingBill.notes);
+                                    if (notesData.totalAmount !== undefined) {
+                                        totalAmountInput.value = notesData.totalAmount.toFixed(2);
+                                    }
+                                    if (notesData.originalNotes !== undefined) {
+                                        notesInput.value = notesData.originalNotes;
+                                    }
+                                } catch(e) {}
+                            }
+                        }
+                    }
+                }
             }
             
-            // Save summary data
-            const summaryStartTime = performance.now();
+            // Save summary data (the bottom summary box)
             if (summaryValues) {
+                // First, check if there's an existing summary bill
+                let existingSummary = null;
+                for (let i = 0; i < existingBills.length; i++) {
+                    const bill = existingBills[i];
+                    if (bill.entity_type === entityType && 
+                        bill.entity_id === entityId && 
+                        bill.notes && bill.notes.includes('isSummary')) {
+                        existingSummary = bill;
+                        break;
+                    }
+                }
+                
                 const summaryBillData = {
                     utility_type: 'telephone',
                     entity_type: entityType,
@@ -1068,43 +1209,37 @@
                     year: year
                 };
                 
-                const existingSummary = existingBills.find(b => 
-                    b.entity_type === entityType && 
-                    b.entity_id === entityId && 
-                    b.notes?.includes('isSummary')
-                );
-                
                 if (existingSummary && existingSummary.id) {
                     await fetch(`/api/utility-bills/${existingSummary.id}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(summaryBillData)
                     });
+                    console.log(`✅ Updated summary for ${entityName}`);
                 } else {
                     await fetch('/api/utility-bills', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(summaryBillData)
                     });
+                    console.log(`✅ Created summary for ${entityName}`);
                 }
             }
-            const summaryEndTime = performance.now();
-            console.log(`⏱️ Summary save duration: ${(summaryEndTime - summaryStartTime).toFixed(0)}ms`);
             
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
-            console.log(`⏱️ ========================================`);
-            console.log(`⏱️ TOTAL SAVE TIME: ${totalTime}ms`);
-            console.log(`⏱️ ========================================`);
+            
+            hideSavingToast();
             
             if (errorCount === 0) {
-                showToast(`✅ Saved ${successCount} record${successCount > 1 ? 's' : ''} successfully (${totalTime}ms)`);
-                await renderTelephoneTable();
+                showToast(`✅ ${entityName}: Saved ${successCount} phone record(s) successfully (${totalTime}ms)`);
+                updateEntityTotalDisplay(entityId, summaryValues);
             } else {
-                showToast(`⚠️ Saved ${successCount} records, ${errorCount} failed`, true);
+                showToast(`⚠️ ${entityName}: Saved ${successCount} records, ${errorCount} failed`, true);
             }
         } catch (err) {
             console.error('❌ Save error:', err);
+            hideSavingToast();
             showToast('Network error. Please try again.', true);
         } finally {
             savingEntities.delete(entityId);
@@ -1113,10 +1248,28 @@
                 saveBtn.disabled = false;
             }
             isLoading = false;
-            showLoading(false);
         }
     }
-    // ============ END WORKING SAVE FUNCTION ============
+    
+    function updateEntityTotalDisplay(entityId, summaryValues) {
+        const entityTotalSpan = document.getElementById(`entity-total-${entityId}`);
+        if (entityTotalSpan && summaryValues) {
+            const amountPaid = summaryValues.amountPaid || 0;
+            entityTotalSpan.innerHTML = `(Total Paid: $${amountPaid.toFixed(2)})`;
+        }
+        
+        const entityStatusSpan = document.getElementById(`entity-status-${entityId}`);
+        if (entityStatusSpan) {
+            const amountPaid = summaryValues?.amountPaid || 0;
+            if (amountPaid > 0) {
+                entityStatusSpan.innerHTML = 'Paid';
+                entityStatusSpan.className = 'status-badge status-paid';
+            } else {
+                entityStatusSpan.innerHTML = 'Pending';
+                entityStatusSpan.className = 'status-badge status-pending';
+            }
+        }
+    }
 
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
@@ -1152,8 +1305,48 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        const schoolsList = filteredEntities.filter(e => e.type === 'school');
-        const departmentsList = filteredEntities.filter(e => e.type === 'department');
+        let schoolsList = filteredEntities.filter(e => e.type === 'school');
+        let departmentsList = filteredEntities.filter(e => e.type === 'department');
+        
+        schoolsList.sort((a, b) => {
+            const clusterA = a.clusterNumber ? parseInt(a.clusterNumber.replace('CLUSTER ', '')) : 999;
+            const clusterB = b.clusterNumber ? parseInt(b.clusterNumber.replace('CLUSTER ', '')) : 999;
+            if (clusterA !== clusterB) return clusterA - clusterB;
+            const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
+            const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
+            if (orderA !== orderB) return orderA - orderB;
+            return (a.originalId || a.id) - (b.originalId || b.id);
+        });
+        
+        const deptByDepartmentName = new Map();
+        for (let i = 0; i < departmentsList.length; i++) {
+            const dept = departmentsList[i];
+            const deptName = dept.departmentName || 'Other';
+            if (!deptByDepartmentName.has(deptName)) {
+                deptByDepartmentName.set(deptName, []);
+            }
+            deptByDepartmentName.get(deptName).push(dept);
+        }
+        
+        const sortedDeptGroups = Array.from(deptByDepartmentName.entries()).sort((a, b) => {
+            const minIdA = Math.min(...a[1].map(d => d.originalId || d.id));
+            const minIdB = Math.min(...b[1].map(d => d.originalId || d.id));
+            return minIdA - minIdB;
+        });
+        
+        for (let d = 0; d < sortedDeptGroups.length; d++) {
+            const [deptName, deptsInGroup] = sortedDeptGroups[d];
+            deptsInGroup.sort((a, b) => {
+                return (a.originalId || a.id) - (b.originalId || b.id);
+            });
+        }
+        
+        const sortedDepartmentsList = [];
+        for (let d = 0; d < sortedDeptGroups.length; d++) {
+            const [deptName, deptsInGroup] = sortedDeptGroups[d];
+            sortedDepartmentsList.push(...deptsInGroup);
+        }
+        departmentsList = sortedDepartmentsList;
         
         const schoolsByCluster = new Map();
         for (const school of schoolsList) {
@@ -1237,26 +1430,17 @@
             }
         }
         
-        const deptByDepartmentName = new Map();
+        const deptByDeptName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
-            if (!deptByDepartmentName.has(deptName)) {
-                deptByDepartmentName.set(deptName, []);
+            if (!deptByDeptName.has(deptName)) {
+                deptByDeptName.set(deptName, []);
             }
-            deptByDepartmentName.get(deptName).push(dept);
+            deptByDeptName.get(deptName).push(dept);
         }
         
-        const deptNamesInOrder = [];
-        for (const dept of departmentsList) {
-            const deptName = dept.departmentName || 'Other';
-            if (!deptNamesInOrder.includes(deptName)) {
-                deptNamesInOrder.push(deptName);
-            }
-        }
-        
-        for (const deptName of deptNamesInOrder) {
-            const deptsInGroup = deptByDepartmentName.get(deptName);
-            if (!deptsInGroup || deptsInGroup.length === 0) continue;
+        for (let d = 0; d < sortedDeptGroups.length; d++) {
+            const [deptName, deptsInGroup] = sortedDeptGroups[d];
             
             let hasVisibleInGroup = false;
             const visibleGroupEntities = [];
@@ -1350,15 +1534,14 @@
             <td class="seq-number">${startSerial}</div>
             <td class="entity-header">
                 <span class="entity-name">${escapeHtml(entity.name)}</span>
-                <span class="total-due" id="entity-total-${entity.id}">(Total Paid: $0.00)</span>
+                <span class="total-due" id="entity-total-${entity.id}">(Total Paid: $${(existingSummary.amountPaid || 0).toFixed(2)})</span>
             </div>
             <td><span class="badge ${entity.type === 'school' ? 'badge-school' : 'badge-department'}">${entity.typeLabel}</span></div>
             <td colspan="3"></div>
             <td></div>
             <td></div>
-            <td><span class="status-badge status-pending" id="entity-status-${entity.id}">Pending</span></div>
+            <td><span class="status-badge ${(existingSummary.amountPaid || 0) > 0 ? 'status-paid' : 'status-pending'}" id="entity-status-${entity.id}">${(existingSummary.amountPaid || 0) > 0 ? 'Paid' : 'Pending'}</span></div>
             <td class="entity-actions">
-                <!-- No actions here - only Save All button in summary box -->
             </div>
         `;
         tbody.appendChild(entityRow);
@@ -1367,17 +1550,20 @@
             if (account.isPlaceholder) continue;
             
             let accountBillNumber = '';
-            let accountTotalPaid = 0;
             
-            if (account.numbers.length > 0) {
-                const firstNum = account.numbers[0];
-                const existing = firstNum.existing;
-                if (existing && existing.meter_number) {
+            for (const num of account.numbers) {
+                const existing = num.existing;
+                if (existing && existing.meter_number && existing.meter_number !== '') {
                     accountBillNumber = existing.meter_number;
-                } else if (existing && existing.notes) {
+                    break;
+                }
+                if (existing && existing.notes) {
                     try {
                         const parsed = JSON.parse(existing.notes);
-                        accountBillNumber = parsed.billNumber || '';
+                        if (parsed.billNumber && parsed.billNumber !== '') {
+                            accountBillNumber = parsed.billNumber;
+                            break;
+                        }
                     } catch(e) {}
                 }
             }
@@ -1389,10 +1575,10 @@
             accountRow.setAttribute('data-account-number', account.accountNumber);
             
             accountRow.innerHTML = `
-                <td></div>
+                <tr></div>
                 <td colspan="2">
                     <span class="account-number">📁 ${escapeHtml(account.accountNumber)}</span>
-                </div>
+                 </div>
                 <td class="bill-number-cell"><input type="text" class="bill-number-input account-bill-number-input" value="${escapeHtml(accountBillNumber)}" placeholder="Enter Bill No."></div>
                 <td colspan="2"></div>
                 <td></div>
@@ -1403,22 +1589,34 @@
             
             for (const num of account.numbers) {
                 const existing = num.existing;
+                
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
                 let totalAmount = 0;
                 let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 let notes = num.notes || '';
                 
-                if (existing && existing.notes && existing.notes.startsWith('{')) {
+                if (existing && existing.notes) {
                     try {
-                        const parsed = JSON.parse(existing.notes);
-                        totalAmount = parsed.totalAmount || 0;
-                        amountPaid = parsed.amountPaid || existing.amount_paid || 0;
-                        notes = parsed.originalNotes || num.notes || '';
-                    } catch(e) {}
+                        if (typeof existing.notes === 'string' && (existing.notes.startsWith('{') || existing.notes.startsWith('['))) {
+                            const parsed = JSON.parse(existing.notes);
+                            if (parsed.totalAmount !== undefined) {
+                                totalAmount = parsed.totalAmount;
+                            }
+                            if (parsed.originalNotes !== undefined) {
+                                notes = parsed.originalNotes;
+                            }
+                            if (parsed.amountPaid !== undefined) {
+                                amountPaid = parsed.amountPaid;
+                            }
+                        } else if (typeof existing.notes === 'string' && existing.notes !== '') {
+                            notes = existing.notes;
+                        }
+                    } catch(e) {
+                        notes = existing.notes;
+                    }
                 }
                 
                 if (!account.isPlaceholder) {
-                    accountTotalPaid += amountPaid;
                     entityTotalPaid += amountPaid;
                     if (amountPaid > 0) {
                         entityHasBills = true;
@@ -1431,7 +1629,9 @@
                 phoneRow.className = 'phone-row';
                 phoneRow.setAttribute('data-account-number', account.accountNumber);
                 phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
-                phoneRow.setAttribute('data-bill-id', num.billId || '');
+                if (existing && existing.id) {
+                    phoneRow.setAttribute('data-bill-id', existing.id);
+                }
                 
                 phoneRow.innerHTML = `
                     <td class="seq-number">${serial}</div>
@@ -1452,15 +1652,10 @@
         
         const entityStatusSpan = document.getElementById(`entity-status-${entity.id}`);
         if (entityStatusSpan) {
-            const entityStatusText = entityHasBills ? 'Paid' : 'Pending';
-            const entityStatusClass = entityHasBills ? 'status-paid' : 'status-pending';
+            const entityStatusText = (existingSummary.amountPaid || 0) > 0 ? 'Paid' : 'Pending';
+            const entityStatusClass = (existingSummary.amountPaid || 0) > 0 ? 'status-paid' : 'status-pending';
             entityStatusSpan.innerHTML = entityStatusText;
             entityStatusSpan.className = `status-badge ${entityStatusClass}`;
-        }
-        
-        const entityTotalSpan = document.getElementById(`entity-total-${entity.id}`);
-        if (entityTotalSpan) {
-            entityTotalSpan.innerHTML = `(Total Paid: $${entityTotalPaid.toFixed(2)})`;
         }
         
         const previousOutstanding = existingSummary.previousOutstanding || 0;
@@ -1512,7 +1707,6 @@
         summaryRow.appendChild(summaryCell);
         tbody.appendChild(summaryRow);
         
-        // Add event listeners for dynamic calculation
         const prevOutInput = summaryCell.querySelector('.summary-previous-outstanding');
         const prevPayInput = summaryCell.querySelector('.summary-previous-payment');
         const totalAccInput = summaryCell.querySelector('.summary-total-account-charges');
@@ -1535,15 +1729,13 @@
         const saveBtn = summaryCell.querySelector('.save-entity-btn');
         if (saveBtn) {
             saveBtn.onclick = async () => {
-                saveScrollPosition();
-                
                 const summaryValues = {
                     previousOutstanding: parseFloat(prevOutInput?.value) || 0,
                     previousPayment: parseFloat(prevPayInput?.value) || 0,
                     totalAccountCharges: parseFloat(totalAccInput?.value) || 0,
                     amountPaid: parseFloat(summaryCell.querySelector('.summary-amount-paid')?.value) || 0
                 };
-                await saveEntityData(entityRow, summaryValues, month, year);
+                await saveEntityDataBackground(entityRow, summaryValues, month, year);
             };
         }
         
@@ -1576,8 +1768,6 @@
                     }
                 }
                 if (entityRow && entityRow.classList.contains('entity-row')) {
-                    saveScrollPosition();
-                    
                     const entityId = entityRow.getAttribute('data-entity-id');
                     const prevOutInput = document.querySelector(`#prev_out_${entityId}`);
                     const prevPayInput = document.querySelector(`#prev_pay_${entityId}`);
@@ -1590,7 +1780,7 @@
                         totalAccountCharges: parseFloat(totalAccInput?.value) || 0,
                         amountPaid: parseFloat(amountPaidInput?.value) || 0
                     };
-                    await saveEntityData(entityRow, summaryValues, currentMonth, currentYear);
+                    await saveEntityDataBackground(entityRow, summaryValues, currentMonth, currentYear);
                 }
                 return;
             }
