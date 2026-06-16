@@ -941,7 +941,6 @@
         return entities;
     }
 
-    // COMPLETELY REWRITTEN findExistingBill - matches by phone number only
     function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
         // Normalize phone number for matching
         const normalizePhone = (phone) => {
@@ -953,16 +952,11 @@
             if (normalized.startsWith('673')) {
                 normalized = normalized.substring(3);
             }
-            // Also remove leading zeros
-            while (normalized.startsWith('0')) {
-                normalized = normalized.substring(1);
-            }
             return normalized;
         };
         
         const normalizedInputPhone = normalizePhone(phoneNumber);
         
-        // Search through all bills for this entity, month, year
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
@@ -1064,7 +1058,7 @@
         
         console.log(`📞 Found ${phoneRows.length} phone rows for entity: ${entityName}`);
         
-        // Collect all bills
+        // Collect all bills - FIX: Use amount_paid from summaryValues, not 0
         const batchBills = [];
         for (let i = 0; i < phoneRows.length; i++) {
             const row = phoneRows[i];
@@ -1090,7 +1084,7 @@
                     phone_number: phoneNumber,
                     meter_number: billNo,
                     current_charges: currentCharges,
-                    amount_paid: 0,
+                    amount_paid: summaryValues ? (summaryValues.amountPaid || 0) : 0,
                     notes: JSON.stringify({ 
                         totalAmount: totalAmount, 
                         originalNotes: notes, 
@@ -1125,15 +1119,13 @@
                 console.log(`📊 Server response: ${successCount} success, ${errorCount} failed`);
                 
                 if (successCount > 0) {
-                    // Reload bills after save
                     await loadExistingBills(month, year);
                     
-                    // Update data-bill-id attributes for ALL phone rows
+                    // Update data-bill-id attributes
                     for (let i = 0; i < phoneRows.length; i++) {
                         const row = phoneRows[i];
                         const phoneNumber = row.getAttribute('data-phone');
                         
-                        // Find matching bill in the refreshed data
                         let matchingBill = null;
                         for (let j = 0; j < existingBills.length; j++) {
                             const bill = existingBills[j];
@@ -1151,7 +1143,6 @@
                             row.setAttribute('data-bill-id', matchingBill.id);
                             console.log(`✅ Updated bill ID for phone ${phoneNumber}: ${matchingBill.id}`);
                             
-                            // Update the input values
                             const currentInput = row.querySelector('.current-charge-input');
                             const totalAmountInput = row.querySelector('.total-amount-input');
                             if (currentInput && matchingBill.current_charges !== undefined) {
@@ -1291,11 +1282,9 @@
         tbody.innerHTML = '';
         let globalSerial = 1;
         
-        // Separate schools and departments
         let schoolsList = filteredEntities.filter(e => e.type === 'school');
         let departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // Sort schools exactly like Schools tab
         schoolsList.sort((a, b) => {
             const clusterA = a.clusterNumber ? parseInt(a.clusterNumber.replace('CLUSTER ', '')) : 999;
             const clusterB = b.clusterNumber ? parseInt(b.clusterNumber.replace('CLUSTER ', '')) : 999;
@@ -1306,7 +1295,6 @@
             return (a.originalId || a.id) - (b.originalId || b.id);
         });
         
-        // Sort departments exactly like Departments tab
         const deptByDepartmentName = new Map();
         for (let i = 0; i < departmentsList.length; i++) {
             const dept = departmentsList[i];
@@ -1419,7 +1407,6 @@
             }
         }
         
-        // Render departments in sorted order
         const deptByDeptName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1585,7 +1572,6 @@
                 let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 let notes = num.notes || '';
                 
-                // Parse notes to get totalAmount
                 if (existing && existing.notes) {
                     try {
                         if (typeof existing.notes === 'string' && (existing.notes.startsWith('{') || existing.notes.startsWith('['))) {
@@ -1620,7 +1606,6 @@
                 phoneRow.className = 'phone-row';
                 phoneRow.setAttribute('data-account-number', account.accountNumber);
                 phoneRow.setAttribute('data-phone', escapeHtml(num.phoneNumber));
-                // CRITICAL: Set data-bill-id from existing bill
                 if (existing && existing.id) {
                     phoneRow.setAttribute('data-bill-id', existing.id);
                 }
