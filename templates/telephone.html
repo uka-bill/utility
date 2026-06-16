@@ -456,7 +456,7 @@
             padding: 15px;
             width: 100%;
         }
-        
+
         .summary-title-box {
             background-color: var(--bill-border);
             color: white;
@@ -467,26 +467,26 @@
             font-weight: bold;
             font-size: 0.9rem;
         }
-        
+
         .summary-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 15px;
             align-items: end;
         }
-        
+
         .summary-item {
             display: flex;
             flex-direction: column;
             gap: 5px;
         }
-        
+
         .summary-label {
             font-size: 0.7rem;
             font-weight: 600;
             color: #e65100;
         }
-        
+
         .summary-input {
             width: 100%;
             padding: 6px 8px;
@@ -497,13 +497,13 @@
             text-align: right;
             box-sizing: border-box;
         }
-        
+
         .summary-input:focus {
             outline: none;
             border-color: var(--warning);
             box-shadow: 0 0 0 2px rgba(248, 150, 30, 0.2);
         }
-        
+
         .summary-value {
             font-weight: bold;
             font-size: 0.85rem;
@@ -514,26 +514,26 @@
             text-align: right;
             border: 1px solid #ffcc80;
         }
-        
+
         .entity-actions {
             display: flex;
             gap: 8px;
             align-items: center;
             white-space: nowrap;
         }
-        
+
         .total-due {
             font-size: 0.7rem;
             color: #2e7d32;
             margin-left: 10px;
             font-weight: normal;
         }
-        
+
         .placeholder-text {
             color: #999;
             font-style: italic;
         }
-        
+
         .department-name-badge {
             background: #7b1fa2;
             color: white;
@@ -547,11 +547,11 @@
             padding: 15px 20px;
             background-color: transparent;
         }
-        
+
         .summary-row {
             background-color: transparent;
         }
-        
+
         .bill-number-input {
             font-family: monospace;
             width: 100%;
@@ -561,17 +561,17 @@
             font-size: 0.75rem;
             background: white;
         }
-        
+
         .bill-number-input:focus {
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
         }
-        
+
         .bill-number-cell {
             background-color: #fff8e1;
         }
-        
+
         .summary-actions {
             display: flex;
             justify-content: flex-end;
@@ -579,11 +579,11 @@
             padding-top: 10px;
             border-top: 1px solid #ffcc80;
         }
-        
+
         .notes-cell {
             min-width: 150px;
         }
-        
+
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -597,11 +597,11 @@
             justify-content: center;
             visibility: hidden;
         }
-        
+
         .loading-overlay.active {
             visibility: visible;
         }
-        
+
         .spinner {
             width: 50px;
             height: 50px;
@@ -625,7 +625,7 @@
             margin-right: 8px;
             vertical-align: middle;
         }
-        
+
         .btn-success:disabled {
             opacity: 0.6;
             cursor: not-allowed;
@@ -845,6 +845,7 @@
                 existingBills = [];
             }
             console.log(`Loaded ${existingBills.length} existing telephone bills for ${month}/${year}`);
+            console.log('Bills details:', existingBills.map(b => ({id: b.id, entity: b.entity_name, phone: b.phone_number, charges: b.current_charges})));
         } catch(e) {
             console.error(e);
             existingBills = [];
@@ -942,15 +943,42 @@
     }
 
     function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
-        return existingBills.find(bill => 
-            bill.entity_type === entityType &&
-            bill.entity_id == entityId &&
-            (bill.account_number || '—') === (accountNumber || '—') &&
-            (bill.phone_number || '—') === (phoneNumber || '—') &&
-            bill.month == month && 
-            bill.year == year &&
-            !bill.notes?.includes('isSummary')
-        );
+        // Normalize phone number for matching
+        const normalizePhone = (phone) => {
+            if (!phone || phone === '—') return '';
+            let normalized = String(phone).replace(/[\s\-]/g, '');
+            if (normalized.startsWith('+673')) {
+                normalized = normalized.substring(4);
+            }
+            if (normalized.startsWith('673')) {
+                normalized = normalized.substring(3);
+            }
+            return normalized;
+        };
+        
+        const normalizedInputPhone = normalizePhone(phoneNumber);
+        
+        console.log(`🔍 Looking for bill: entity=${entityId}, phone=${phoneNumber}, normalized=${normalizedInputPhone}`);
+        
+        // Try exact match with original phone number
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            if (bill.entity_type === entityType &&
+                bill.entity_id == entityId &&
+                bill.month == month && 
+                bill.year == year &&
+                !(bill.notes && bill.notes.includes('isSummary'))) {
+                
+                const billPhone = normalizePhone(bill.phone_number);
+                if (billPhone === normalizedInputPhone || bill.phone_number === phoneNumber) {
+                    console.log(`✅ Found bill by phone: ${bill.phone_number} -> ID: ${bill.id}, charges: ${bill.current_charges}`);
+                    return bill;
+                }
+            }
+        }
+        
+        console.log(`❌ No bill found for phone ${phoneNumber}`);
+        return null;
     }
 
     function matchesSearch(entity, searchTerm) {
@@ -1054,6 +1082,8 @@
             const totalAmount = parseFloat(totalAmountInput?.value) || 0;
             const notes = notesInput?.value || '';
             
+            console.log(`📞 Row ${i+1}: Phone=${phoneNumber}, Bill Amount=$${currentCharges}, Total Amount=$${totalAmount}, Bill No=${billNo}, Existing ID=${existingBillId}`);
+            
             if (phoneNumber && phoneNumber !== '—') {
                 batchBills.push({
                     id: existingBillId,
@@ -1076,6 +1106,8 @@
             }
         }
         
+        console.log(`📦 Sending ${batchBills.length} bills to server`);
+        
         savingEntities.add(entityId);
         
         try {
@@ -1091,37 +1123,48 @@
                 const result = await resp.json();
                 successCount = result.success_count || 0;
                 errorCount = result.error_count || 0;
+                console.log(`📊 Server response: ${successCount} success, ${errorCount} failed`);
                 
                 if (successCount > 0) {
                     await loadExistingBills(month, year);
                     
+                    // Update data-bill-id attributes for ALL phone rows
                     for (let i = 0; i < phoneRows.length; i++) {
                         const row = phoneRows[i];
                         const phoneNumber = row.getAttribute('data-phone');
                         const accountNumber = row.getAttribute('data-account-number');
                         
-                        const matchingBill = existingBills.find(bill => 
-                            bill.entity_id === entityId &&
-                            bill.entity_type === entityType &&
-                            bill.phone_number === phoneNumber &&
-                            bill.account_number === accountNumber &&
-                            bill.month === month &&
-                            bill.year === year
-                        );
+                        // Find matching bill in the refreshed data
+                        let matchingBill = null;
+                        for (let j = 0; j < existingBills.length; j++) {
+                            const bill = existingBills[j];
+                            if (bill.entity_id === entityId &&
+                                bill.entity_type === entityType &&
+                                bill.phone_number === phoneNumber &&
+                                bill.month === month &&
+                                bill.year === year) {
+                                matchingBill = bill;
+                                break;
+                            }
+                        }
                         
                         if (matchingBill && matchingBill.id) {
                             row.setAttribute('data-bill-id', matchingBill.id);
+                            console.log(`✅ Updated bill ID for phone ${phoneNumber}: ${matchingBill.id}`);
                             
+                            // Update the input values to match what's in the database
                             const currentInput = row.querySelector('.current-charge-input');
                             const totalAmountInput = row.querySelector('.total-amount-input');
                             if (currentInput && matchingBill.current_charges !== undefined) {
                                 currentInput.value = matchingBill.current_charges.toFixed(2);
+                                console.log(`   Updated Bill Amount to ${matchingBill.current_charges}`);
                             }
                             if (totalAmountInput && matchingBill.notes) {
                                 try {
                                     const notesData = JSON.parse(matchingBill.notes);
                                     if (notesData.totalAmount !== undefined) {
                                         totalAmountInput.value = notesData.totalAmount.toFixed(2);
+                                        console.log(`   Updated Total Amount to ${notesData.totalAmount}`);
                                     }
                                     if (notesData.billNumber) {
                                         for (const accRow of accountRows) {
@@ -1130,6 +1173,7 @@
                                                 const billNoInput = accRow.querySelector('.account-bill-number-input');
                                                 if (billNoInput && billNoInput.value !== notesData.billNumber) {
                                                     billNoInput.value = notesData.billNumber;
+                                                    console.log(`   Updated Bill No to ${notesData.billNumber}`);
                                                 }
                                                 break;
                                             }
@@ -1137,6 +1181,8 @@
                                     }
                                 } catch(e) {}
                             }
+                        } else {
+                            console.log(`⚠️ Could not find matching bill for phone ${phoneNumber} after save`);
                         }
                     }
                 }
@@ -1267,24 +1313,18 @@
         let schoolsList = filteredEntities.filter(e => e.type === 'school');
         let departmentsList = filteredEntities.filter(e => e.type === 'department');
         
-        // ============ FIX: Sort schools exactly like Schools tab ============
+        // Sort schools exactly like Schools tab
         schoolsList.sort((a, b) => {
-            // First by cluster number
             const clusterA = a.clusterNumber ? parseInt(a.clusterNumber.replace('CLUSTER ', '')) : 999;
             const clusterB = b.clusterNumber ? parseInt(b.clusterNumber.replace('CLUSTER ', '')) : 999;
             if (clusterA !== clusterB) return clusterA - clusterB;
-            
-            // Then by display_order
             const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
             const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
             if (orderA !== orderB) return orderA - orderB;
-            
-            // Then by id
             return (a.originalId || a.id) - (b.originalId || b.id);
         });
         
-        // ============ FIX: Sort departments exactly like Departments tab ============
-        // Group departments by department name
+        // Sort departments exactly like Departments tab
         const deptByDepartmentName = new Map();
         for (let i = 0; i < departmentsList.length; i++) {
             const dept = departmentsList[i];
@@ -1295,14 +1335,12 @@
             deptByDepartmentName.get(deptName).push(dept);
         }
         
-        // Sort department groups by the minimum id in each group (oldest first)
         const sortedDeptGroups = Array.from(deptByDepartmentName.entries()).sort((a, b) => {
             const minIdA = Math.min(...a[1].map(d => d.originalId || d.id));
             const minIdB = Math.min(...b[1].map(d => d.originalId || d.id));
             return minIdA - minIdB;
         });
         
-        // Within each group, sort by id (oldest first, newest last)
         for (let d = 0; d < sortedDeptGroups.length; d++) {
             const [deptName, deptsInGroup] = sortedDeptGroups[d];
             deptsInGroup.sort((a, b) => {
@@ -1310,7 +1348,6 @@
             });
         }
         
-        // Rebuild departmentsList in the correct sorted order
         const sortedDepartmentsList = [];
         for (let d = 0; d < sortedDeptGroups.length; d++) {
             const [deptName, deptsInGroup] = sortedDeptGroups[d];
@@ -1400,8 +1437,7 @@
             }
         }
         
-        // ============ RENDER DEPARTMENTS IN SORTED ORDER ============
-        // Group departments by department name for rendering
+        // Render departments in sorted order
         const deptByDeptName = new Map();
         for (const dept of departmentsList) {
             const deptName = dept.departmentName || 'Other';
@@ -1411,7 +1447,6 @@
             deptByDeptName.get(deptName).push(dept);
         }
         
-        // Render each department group in the order from sortedDeptGroups
         for (let d = 0; d < sortedDeptGroups.length; d++) {
             const [deptName, deptsInGroup] = sortedDeptGroups[d];
             
@@ -1560,20 +1595,39 @@
             `;
             tbody.appendChild(accountRow);
             
+            let phoneCounter = 0;
             for (const num of account.numbers) {
+                phoneCounter++;
                 const existing = num.existing;
+                
+                console.log(`📞 ${entity.name} - Phone ${phoneCounter}: ${num.phoneNumber}, Existing bill:`, existing ? `YES (id: ${existing.id}, charges: ${existing.current_charges})` : 'NO');
+                
                 let currentCharges = existing ? (existing.current_charges || 0) : 0;
                 let totalAmount = 0;
                 let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 let notes = num.notes || '';
                 
-                if (existing && existing.notes && existing.notes.startsWith('{')) {
+                // Parse notes to get totalAmount
+                if (existing && existing.notes) {
                     try {
-                        const parsed = JSON.parse(existing.notes);
-                        totalAmount = parsed.totalAmount || 0;
-                        amountPaid = parsed.amountPaid || existing.amount_paid || 0;
-                        notes = parsed.originalNotes || num.notes || '';
-                    } catch(e) {}
+                        if (typeof existing.notes === 'string' && (existing.notes.startsWith('{') || existing.notes.startsWith('['))) {
+                            const parsed = JSON.parse(existing.notes);
+                            if (parsed.totalAmount !== undefined) {
+                                totalAmount = parsed.totalAmount;
+                                console.log(`📞 ${entity.name} - Phone ${phoneCounter}: Found totalAmount ${totalAmount} in notes`);
+                            }
+                            if (parsed.originalNotes !== undefined) {
+                                notes = parsed.originalNotes;
+                            }
+                            if (parsed.amountPaid !== undefined) {
+                                amountPaid = parsed.amountPaid;
+                            }
+                        } else if (typeof existing.notes === 'string' && existing.notes !== '') {
+                            notes = existing.notes;
+                        }
+                    } catch(e) {
+                        notes = existing.notes;
+                    }
                 }
                 
                 if (!account.isPlaceholder) {
