@@ -838,6 +838,10 @@
             if (resp.ok) {
                 existingBills = await resp.json();
                 console.log('Loaded ' + existingBills.length + ' bills for ' + month + '/' + year);
+                // Log first bill to see structure
+                if (existingBills.length > 0) {
+                    console.log('First bill:', existingBills[0]);
+                }
             } else {
                 existingBills = [];
             }
@@ -949,27 +953,19 @@
         return entities;
     }
 
-    // Find the MASTER bill (first phone bill that contains summary data)
-    function findMasterBill(entityType, entityId, month, year) {
-        // First, find all bills for this entity
-        let entityBills = [];
+    // Find bills for a specific entity
+    function findEntityBills(entityType, entityId, month, year) {
+        const bills = [];
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
                 bill.month == month && 
                 bill.year == year) {
-                entityBills.push(bill);
+                bills.push(bill);
             }
         }
-        
-        // Sort by id (oldest first) - the first bill is the master
-        entityBills.sort((a, b) => a.id - b.id);
-        
-        if (entityBills.length > 0) {
-            return entityBills[0];
-        }
-        return null;
+        return bills;
     }
 
     function findExistingBillByPhone(entityType, entityId, phoneNumber, month, year) {
@@ -1020,7 +1016,7 @@
         });
     }
 
-    // Render entity with ALL entity-level fields in summary row
+    // Render entity
     function renderEntity(tbody, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1030,8 +1026,25 @@
         
         let meterRowsData = [];
         
-        // Find the MASTER bill (first bill for this entity)
-        const masterBill = findMasterBill(entity.type, entity.id, month, year);
+        // Find all bills for this entity
+        const entityBills = findEntityBills(entity.type, entity.id, month, year);
+        
+        // Find the master bill (first bill with bill_number set)
+        let masterBill = null;
+        let masterBillIndex = -1;
+        for (let i = 0; i < entityBills.length; i++) {
+            if (entityBills[i].bill_number && entityBills[i].bill_number !== '') {
+                masterBill = entityBills[i];
+                masterBillIndex = i;
+                break;
+            }
+        }
+        
+        // If no bill has bill_number, use the first bill as master
+        if (!masterBill && entityBills.length > 0) {
+            masterBill = entityBills[0];
+            masterBillIndex = 0;
+        }
         
         let summaryBillNo = '';
         let summaryTotalAccountCharges = 0;
@@ -1052,7 +1065,7 @@
             summaryPrevPayment = parsedNotes.previousPayment || 0;
             summaryTotalCurrent = summaryOutstanding + summaryTotalAccountCharges - summaryPrevPayment;
             
-            console.log('Master bill found for ' + entity.name + ': BillNo=' + summaryBillNo + ', Outstanding=' + summaryOutstanding + ', id=' + masterBill.id);
+            console.log('Master bill found for ' + entity.name + ': BillNo=' + summaryBillNo + ', Outstanding=' + summaryOutstanding);
         } else {
             console.log('No master bill found for ' + entity.name);
         }
@@ -1071,16 +1084,9 @@
                 
                 // Find existing bill for this phone number
                 let existing = null;
-                // Skip if phone number is the master bill's phone number? No, master bill has the first phone's number
-                // Actually, we need to find by phone number
-                for (let i = 0; i < existingBills.length; i++) {
-                    const bill = existingBills[i];
-                    if (bill.entity_type === entity.type &&
-                        bill.entity_id == entity.id &&
-                        bill.phone_number === phoneNum &&
-                        bill.month == month && 
-                        bill.year == year) {
-                        existing = bill;
+                for (let i = 0; i < entityBills.length; i++) {
+                    if (entityBills[i].phone_number === phoneNum) {
+                        existing = entityBills[i];
                         break;
                     }
                 }
@@ -1152,7 +1158,7 @@
         const entityTotalCurrent = summaryOutstanding + summaryTotalAccountCharges - summaryPrevPayment;
         const entityTotalCurrentClass = entityTotalCurrent < 0 ? 'negative' : '';
         
-        // ENTITY ROW - shows summary/header
+        // ENTITY ROW
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
@@ -1187,7 +1193,7 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // SUMMARY ROW - ALL entity-level fields
+        // SUMMARY ROW
         const summaryRow = document.createElement('tr');
         summaryRow.className = 'summary-row';
         summaryRow.setAttribute('data-entity-id', entity.id);
@@ -1209,7 +1215,7 @@
             '<td></td>';
         tbody.appendChild(summaryRow);
         
-        // METER ROWS - each phone number with per-phone inputs
+        // METER ROWS
         for (let i = 0; i < meterRowsData.length; i++) {
             const data = meterRowsData[i];
             const meterRow = document.createElement('tr');
@@ -1235,7 +1241,6 @@
                 phoneDisplay = '<span class="phone-number-item placeholder-text">📞 No phone number</span>';
             }
             
-            // Show Bill No. only on the master row (first phone)
             const billNoDisplay = data.isMasterRow ? '#' + escapeHtml(data.billNoDisplay) : '—';
             
             meterRow.innerHTML = 
@@ -1384,7 +1389,6 @@
         }
         
         const batchBills = [];
-        let isFirstPhone = true;
         
         for (let i = 0; i < meterRows.length; i++) {
             const row = meterRows[i];
@@ -1410,7 +1414,7 @@
                 originalNotes: notes
             };
             
-            // Only the master (first phone) gets the bill number and summary data
+            // Only the master (first phone) gets the bill number
             const billNo = isMaster ? entityBillNo : '';
             
             batchBills.push({
@@ -1433,8 +1437,6 @@
                 notes: JSON.stringify(notesObj),
                 updated_at: new Date().toISOString()
             });
-            
-            isFirstPhone = false;
         }
         
         savingEntities.add(entityId);
@@ -1487,6 +1489,7 @@
                 }
             } else {
                 showToast(entityName + ': ' + result.error_count + ' failed', true);
+                console.log('Errors:', result.errors);
             }
         } catch (err) {
             console.error('Save error:', err);
