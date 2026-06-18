@@ -941,16 +941,18 @@
         return entities;
     }
 
+    // ============ ULTRA ROBUST findExistingBill ============
     function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
+        // Super aggressive phone number normalization
         const normalizePhone = (phone) => {
-            if (!phone || phone === '—') return '';
-            let normalized = String(phone).replace(/[\s\-\(\)]/g, '');
-            if (normalized.startsWith('+673')) {
-                normalized = normalized.substring(4);
-            }
+            if (!phone || phone === '—' || phone === '') return '';
+            // Remove ALL non-digit characters
+            let normalized = String(phone).replace(/[^0-9]/g, '');
+            // If phone starts with 673 (Brunei country code), remove it
             if (normalized.startsWith('673')) {
                 normalized = normalized.substring(3);
             }
+            // Remove leading zeros
             while (normalized.startsWith('0')) {
                 normalized = normalized.substring(1);
             }
@@ -959,25 +961,43 @@
         
         const normalizedInputPhone = normalizePhone(phoneNumber);
         
-        // ONLY match by phone number - SKIP summary bills
+        // Try to match by normalized phone number (skip summary bills)
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
-            // CRITICAL: Skip summary bills
             if (bill.notes && bill.notes.includes('isSummary')) {
                 continue;
             }
             if (bill.entity_type === entityType &&
-                bill.entity_id == entityId &&
-                bill.month == month && 
-                bill.year == year) {
+                bill.entity_id === entityId &&
+                bill.month === month && 
+                bill.year === year) {
                 const billPhone = normalizePhone(bill.phone_number);
                 if (billPhone === normalizedInputPhone) {
-                    console.log(`✅ Found phone bill for ${phoneNumber}: ID ${bill.id}, charges: ${bill.current_charges}`);
                     return bill;
                 }
             }
         }
-        console.log(`❌ No phone bill found for ${phoneNumber}`);
+        
+        // If no match, try to match by partial phone number (last 7 digits)
+        if (normalizedInputPhone.length >= 7) {
+            const last7 = normalizedInputPhone.slice(-7);
+            for (let i = 0; i < existingBills.length; i++) {
+                const bill = existingBills[i];
+                if (bill.notes && bill.notes.includes('isSummary')) {
+                    continue;
+                }
+                if (bill.entity_type === entityType &&
+                    bill.entity_id === entityId &&
+                    bill.month === month && 
+                    bill.year === year) {
+                    const billPhone = normalizePhone(bill.phone_number);
+                    if (billPhone.slice(-7) === last7) {
+                        return bill;
+                    }
+                }
+            }
+        }
+        
         return null;
     }
 
@@ -1172,7 +1192,6 @@
                 }
             }
             
-            // SAVE SUMMARY BILL - CRITICAL: phone_number MUST be empty string
             if (summaryValues) {
                 let existingSummary = null;
                 for (let i = 0; i < existingBills.length; i++) {
@@ -1190,7 +1209,7 @@
                     entity_type: entityType,
                     entity_id: entityId,
                     account_number: '',
-                    phone_number: '',  // CRITICAL: MUST be empty string
+                    phone_number: '',
                     current_charges: 0,
                     amount_paid: summaryValues.amountPaid || 0,
                     notes: JSON.stringify({
