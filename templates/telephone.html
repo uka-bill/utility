@@ -978,15 +978,13 @@
         return entities;
     }
 
-    function findExistingBill(entityType, entityId, accountNumber, billNo, month, year) {
+    function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
-            const billNoField = bill.bill_number || bill.meter_number || '';
-            
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
                 (bill.account_number || '—') === (accountNumber || '—') &&
-                (billNoField || '—') === (billNo || '—') &&
+                (bill.phone_number || '—') === (phoneNumber || '—') &&
                 bill.month == month && 
                 bill.year == year) {
                 return bill;
@@ -1029,7 +1027,7 @@
         });
     }
 
-    // Render entity with proper row structure - ALL entity-level fields in summary row
+    // Render entity with ALL entity-level fields in summary row
     function renderEntity(tbody, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1042,6 +1040,7 @@
         let entityTotalOutstanding = 0;
         let entityTotalPrevPayment = 0;
         let entityBillNo = '';
+        let entityPaid = 0;
         
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
@@ -1053,8 +1052,7 @@
             for (let n = 0; n < phoneNumbers.length; n++) {
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
-                const billNo = phoneNum;
-                const existing = findExistingBill(entity.type, entity.id, account.accountNumber, billNo, month, year);
+                const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phoneNum, month, year);
                 
                 let parsedNotes = {};
                 if (existing && existing.notes) {
@@ -1087,6 +1085,7 @@
                 
                 if (!isPlaceholderAccount) {
                     entityTotalPaid += amountPaid;
+                    entityPaid += amountPaid;
                     if (existing && amountPaid > 0) entityHasBills = true;
                     entityTotalAccountCharges += totalAccountCharges;
                     entityTotalOutstanding += outstandingCharges;
@@ -1177,7 +1176,7 @@
             '<td><input type="number" step="0.01" class="inline-input entity-total-outstanding" value="' + entityTotalOutstanding.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
             '<td><input type="number" step="0.01" class="inline-input entity-total-prev-payment" value="' + entityTotalPrevPayment.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
             '<td><input type="text" class="inline-input entity-total-current ' + entityTotalCurrentClass + '" value="' + entityTotalCurrent.toFixed(2) + '" readonly data-entity-id="' + entity.id + '"></td>' +
-            '<td><input type="number" step="0.01" class="inline-input entity-amount-paid" value="' + entityTotalPaid.toFixed(2) + '" placeholder="$" data-entity-id="' + entity.id + '"></td>' +
+            '<td><input type="number" step="0.01" class="inline-input entity-amount-paid" value="' + entityPaid.toFixed(2) + '" placeholder="$" data-entity-id="' + entity.id + '"></td>' +
             '<td></td>' +
             '<td></td>' +
             '<td></td>';
@@ -1189,7 +1188,7 @@
             const meterRow = document.createElement('tr');
             meterRow.className = 'meter-row';
             meterRow.setAttribute('data-account', escapeHtml(data.accountNumber));
-            meterRow.setAttribute('data-bill-no', escapeHtml(data.billNo));
+            meterRow.setAttribute('data-phone', escapeHtml(data.phoneNumber));
             if (data.billId) meterRow.setAttribute('data-bill-id', data.billId);
             
             let accountDisplayHtml = '';
@@ -1233,7 +1232,7 @@
 
     // Recalculate entity totals from inputs
     function recalculateEntityTotals(entityRow) {
-        // Find the summary row (next row after entity row)
+        // Find the summary row
         let summaryRow = entityRow.nextElementSibling;
         while (summaryRow && !summaryRow.classList.contains('summary-row')) {
             summaryRow = summaryRow.nextElementSibling;
@@ -1289,7 +1288,6 @@
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityName = entityRow.getAttribute('data-entity-name');
-        const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
         
         if (savingEntities.has(entityId)) {
             showToast('Already saving...', true);
@@ -1357,11 +1355,11 @@
         }
         
         const batchBills = [];
-        let isFirstPhone = true;
         
         for (let i = 0; i < meterRows.length; i++) {
             const row = meterRows[i];
             const accountNumber = row.getAttribute('data-account');
+            const phoneNumber = row.getAttribute('data-phone');
             const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
             
             const rentalInput = row.querySelector('.rental-input');
@@ -1378,19 +1376,8 @@
             const previousPayment = entityTotalPrevPayment;
             const totalCurrentCharges = outstandingCharges + totalAccountCharges - previousPayment;
             
-            // Only send bill_no for first phone
-            const billNo = isFirstPhone ? entityBillNo : '';
-            isFirstPhone = false;
-            
-            // Get phone number from display
-            let phoneNumber = '';
-            const phoneDisplay = row.querySelector('.phone-number-item');
-            if (phoneDisplay) {
-                const phoneText = phoneDisplay.textContent.replace('📞', '').trim();
-                if (phoneText && phoneText !== 'No phone number' && phoneText !== '—') {
-                    phoneNumber = phoneText;
-                }
-            }
+            // Only send bill_no for first phone (i == 0)
+            const billNo = (i === 0) ? entityBillNo : '';
             
             batchBills.push({
                 id: existingBillId,
@@ -1401,10 +1388,10 @@
                 account_number: accountNumber === '—' ? '' : accountNumber,
                 bill_number: billNo,
                 meter_number: billNo,
-                phone_number: phoneNumber || billNo,
+                phone_number: phoneNumber || '',
                 current_charges: rentalAmount,
                 unsettled_charges: outstandingCharges,
-                amount_paid: entityAmountPaid, // Same amount paid for ALL phones (entity-level)
+                amount_paid: entityAmountPaid, // Same amount paid for ALL phones
                 month: month,
                 year: year,
                 bill_month: month,
@@ -1625,8 +1612,7 @@
                     const numbers = account.numbers || [{ phoneNumber: '—', location: '' }];
                     for (let n = 0; n < numbers.length; n++) {
                         const phone = numbers[n];
-                        const billNo = phone.phoneNumber || '—';
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, billNo, month, year);
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phone.phoneNumber, month, year);
                         const amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
                         
                         if (statusFilter === 'all' ||
@@ -1676,8 +1662,7 @@
                     const numbers = account.numbers || [{ phoneNumber: '—', location: '' }];
                     for (let n = 0; n < numbers.length; n++) {
                         const phone = numbers[n];
-                        const billNo = phone.phoneNumber || '—';
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, billNo, month, year);
+                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phone.phoneNumber, month, year);
                         const amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
                         
                         if (statusFilter === 'all' ||
