@@ -837,6 +837,7 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
+                console.log('Loaded ' + existingBills.length + ' bills for ' + month + '/' + year);
             } else {
                 existingBills = [];
             }
@@ -948,14 +949,32 @@
         return entities;
     }
 
-    function findExistingBillsForEntity(entityType, entityId, month, year) {
+    // Find the SUMMARY bill for an entity (bill with empty phone_number and non-empty bill_number)
+    function findSummaryBill(entityType, entityId, month, year) {
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            if (bill.entity_type === entityType &&
+                bill.entity_id == entityId &&
+                bill.month == month && 
+                bill.year == year &&
+                (bill.phone_number === '' || bill.phone_number === null) &&
+                bill.bill_number && bill.bill_number !== '') {
+                return bill;
+            }
+        }
+        return null;
+    }
+
+    // Find individual phone bills for an entity
+    function findPhoneBills(entityType, entityId, month, year) {
         const bills = [];
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
                 bill.month == month && 
-                bill.year == year) {
+                bill.year == year &&
+                bill.phone_number && bill.phone_number !== '') {
                 bills.push(bill);
             }
         }
@@ -967,7 +986,7 @@
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
-                (bill.phone_number || '—') === (phoneNumber || '—') &&
+                (bill.phone_number || '') === (phoneNumber || '') &&
                 bill.month == month && 
                 bill.year == year) {
                 return bill;
@@ -1020,11 +1039,9 @@
         
         let meterRowsData = [];
         
-        // Get existing bills for this entity
-        const entityBills = findExistingBillsForEntity(entity.type, entity.id, month, year);
+        // Find the SUMMARY bill first
+        const summaryBill = findSummaryBill(entity.type, entity.id, month, year);
         
-        // Find the summary bill (first bill with notes containing entity-level values)
-        let summaryBill = null;
         let summaryBillNo = '';
         let summaryTotalAccountCharges = 0;
         let summaryOutstanding = 0;
@@ -1032,42 +1049,25 @@
         let summaryAmountPaid = 0;
         let summaryTotalCurrent = 0;
         
-        for (let i = 0; i < entityBills.length; i++) {
-            const bill = entityBills[i];
+        if (summaryBill) {
             let parsedNotes = {};
-            if (bill.notes) {
-                try { parsedNotes = JSON.parse(bill.notes); } catch(e) {}
+            if (summaryBill.notes) {
+                try { parsedNotes = JSON.parse(summaryBill.notes); } catch(e) {}
             }
-            // Check if this is the summary bill (has totalAccountCharges or is marked as summary)
-            if (parsedNotes.totalAccountCharges !== undefined || parsedNotes.isSummary === true) {
-                summaryBill = bill;
-                summaryBillNo = bill.bill_number || bill.meter_number || '';
-                summaryTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
-                summaryOutstanding = parseFloat(bill.unsettled_charges) || 0;
-                summaryPrevPayment = parsedNotes.previousPayment || 0;
-                summaryAmountPaid = parseFloat(bill.amount_paid) || 0;
-                summaryTotalCurrent = summaryOutstanding + summaryTotalAccountCharges - summaryPrevPayment;
-                break;
-            }
+            summaryBillNo = summaryBill.bill_number || '';
+            summaryOutstanding = parseFloat(summaryBill.unsettled_charges) || 0;
+            summaryAmountPaid = parseFloat(summaryBill.amount_paid) || 0;
+            summaryTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
+            summaryPrevPayment = parsedNotes.previousPayment || 0;
+            summaryTotalCurrent = summaryOutstanding + summaryTotalAccountCharges - summaryPrevPayment;
+            
+            console.log('Summary bill found for ' + entity.name + ': BillNo=' + summaryBillNo + ', Outstanding=' + summaryOutstanding);
+        } else {
+            console.log('No summary bill found for ' + entity.name);
         }
         
-        // If no summary bill found, create default values
-        if (!summaryBill) {
-            // Try to get values from first bill
-            if (entityBills.length > 0) {
-                const firstBill = entityBills[0];
-                let parsedNotes = {};
-                if (firstBill.notes) {
-                    try { parsedNotes = JSON.parse(firstBill.notes); } catch(e) {}
-                }
-                summaryTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
-                summaryOutstanding = parseFloat(firstBill.unsettled_charges) || 0;
-                summaryPrevPayment = parsedNotes.previousPayment || 0;
-                summaryAmountPaid = parseFloat(firstBill.amount_paid) || 0;
-                summaryBillNo = firstBill.bill_number || firstBill.meter_number || '';
-                summaryTotalCurrent = summaryOutstanding + summaryTotalAccountCharges - summaryPrevPayment;
-            }
-        }
+        // Find all phone bills for this entity
+        const phoneBills = findPhoneBills(entity.type, entity.id, month, year);
         
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
@@ -1079,7 +1079,15 @@
             for (let n = 0; n < phoneNumbers.length; n++) {
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
-                const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
+                
+                // Find existing bill for this phone number
+                let existing = null;
+                for (let i = 0; i < phoneBills.length; i++) {
+                    if (phoneBills[i].phone_number === phoneNum) {
+                        existing = phoneBills[i];
+                        break;
+                    }
+                }
                 
                 let parsedNotes = {};
                 if (existing && existing.notes) {
@@ -1093,9 +1101,6 @@
                 let rentalAmount = existing ? (parseFloat(existing.current_charges) || 0) : 0;
                 let totalAmount = parsedNotes.totalAmount || 0;
                 let notes = parsedNotes.originalNotes || phone.notes || '';
-                
-                // Check if this is the summary bill or a regular phone bill
-                const isSummaryBill = (existing && existing.bill_number && existing.bill_number !== '');
                 
                 if (statusFilter !== 'all') {
                     if (statusFilter === 'paid' && summaryAmountPaid === 0) continue;
@@ -1385,7 +1390,7 @@
         
         const batchBills = [];
         
-        // First, create the summary bill
+        // First, create/update the SUMMARY bill (empty phone_number, non-empty bill_number)
         batchBills.push({
             id: null, // Will be upserted
             utility_type: 'telephone',
@@ -1395,7 +1400,7 @@
             account_number: '',
             bill_number: entityBillNo,
             meter_number: entityBillNo,
-            phone_number: '', // Empty for summary bill
+            phone_number: '', // Empty = summary bill
             current_charges: 0,
             unsettled_charges: entityTotalOutstanding,
             amount_paid: entityAmountPaid,
@@ -1413,7 +1418,7 @@
             updated_at: new Date().toISOString()
         });
         
-        // Then create individual phone bills
+        // Then create/update individual phone bills
         for (let i = 0; i < meterRows.length; i++) {
             const row = meterRows[i];
             const accountNumber = row.getAttribute('data-account');
