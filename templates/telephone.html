@@ -610,18 +610,6 @@
             cursor: not-allowed;
         }
         
-        .amount-paid-disabled {
-            width: 100%;
-            min-width: 45px;
-            padding: 4px 4px;
-            border-radius: 4px;
-            border: 1px solid #eee;
-            background-color: #f5f5f5;
-            font-size: 0.72rem;
-            text-align: center;
-            color: #999;
-        }
-
         .dash-cell {
             text-align: center;
             color: #999;
@@ -1031,10 +1019,6 @@
         return [{ phoneNumber: '—', location: '' }];
     }
 
-    function calculateTotalCurrent(prevOutstanding, totalAccountCharges, prevPayment) {
-        return (parseFloat(prevOutstanding) || 0) + (parseFloat(totalAccountCharges) || 0) - (parseFloat(prevPayment) || 0);
-    }
-
     function escapeHtml(str) {
         if (!str) return '';
         return String(str).replace(/[&<>]/g, function(m) {
@@ -1045,15 +1029,13 @@
         });
     }
 
-    // Render entity with proper row structure
+    // Render entity with proper row structure - ALL entity-level fields in summary row
     function renderEntity(tbody, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
         let isPlaceholder = !entity.hasAccounts;
-        let isFirstPhone = true;
         let hasVisibleMeters = false;
-        let meterRowCount = 0;
         
         let meterRowsData = [];
         let entityTotalAccountCharges = 0;
@@ -1122,11 +1104,7 @@
                     locationDisplay: locationDisplay,
                     rentalAmount: rentalAmount,
                     totalAmount: totalAmount,
-                    totalAccountCharges: totalAccountCharges,
-                    outstandingCharges: outstandingCharges,
-                    previousPayment: previousPayment,
                     amountPaid: amountPaid,
-                    totalCurrentCharges: totalCurrentCharges,
                     notes: notes,
                     billId: existing ? existing.id : null,
                     isFirstForAccount: isFirstForAccount,
@@ -1137,7 +1115,6 @@
                 
                 isFirstForAccount = false;
                 hasVisibleMeters = true;
-                meterRowCount++;
                 serial++;
             }
         }
@@ -1149,14 +1126,13 @@
         const entityTotalCurrent = entityTotalOutstanding + entityTotalAccountCharges - entityTotalPrevPayment;
         const entityTotalCurrentClass = entityTotalCurrent < 0 ? 'negative' : '';
         
-        // ENTITY ROW - shows summary/totals
+        // ENTITY ROW - shows summary/header
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
         entityRow.setAttribute('data-entity-id', entity.id);
         entityRow.setAttribute('data-entity-name', entity.name);
         entityRow.setAttribute('data-has-accounts', !isPlaceholder);
-        entityRow.setAttribute('data-meter-count', meterRowCount);
         
         let entityStatusText = 'Pending';
         let entityStatusClass = 'status-pending';
@@ -1185,9 +1161,10 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // SUMMARY ROW - shows entity totals (Bill No., Total Acct Chg, Prev Outstanding, Prev Payment, Total Current)
+        // SUMMARY ROW - ALL entity-level fields (Bill No., Total Acct, Prev Outstanding, Prev Payment, Total Current, Amount Paid)
         const summaryRow = document.createElement('tr');
         summaryRow.className = 'summary-row';
+        summaryRow.setAttribute('data-entity-id', entity.id);
         summaryRow.innerHTML = 
             '<td></td>' +
             '<td><span class="summary-label">Entity Totals:</span></td>' +
@@ -1200,13 +1177,13 @@
             '<td><input type="number" step="0.01" class="inline-input entity-total-outstanding" value="' + entityTotalOutstanding.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
             '<td><input type="number" step="0.01" class="inline-input entity-total-prev-payment" value="' + entityTotalPrevPayment.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
             '<td><input type="text" class="inline-input entity-total-current ' + entityTotalCurrentClass + '" value="' + entityTotalCurrent.toFixed(2) + '" readonly data-entity-id="' + entity.id + '"></td>' +
-            '<td></td>' +
+            '<td><input type="number" step="0.01" class="inline-input entity-amount-paid" value="' + entityTotalPaid.toFixed(2) + '" placeholder="$" data-entity-id="' + entity.id + '"></td>' +
             '<td></td>' +
             '<td></td>' +
             '<td></td>';
         tbody.appendChild(summaryRow);
         
-        // METER ROWS - each phone number with its own inputs
+        // METER ROWS - each phone number with per-phone inputs (Rental, Total Amount, Notes)
         for (let i = 0; i < meterRowsData.length; i++) {
             const data = meterRowsData[i];
             const meterRow = document.createElement('tr');
@@ -1214,14 +1191,6 @@
             meterRow.setAttribute('data-account', escapeHtml(data.accountNumber));
             meterRow.setAttribute('data-bill-no', escapeHtml(data.billNo));
             if (data.billId) meterRow.setAttribute('data-bill-id', data.billId);
-            
-            let amountPaidHtml = '';
-            if (isFirstPhone) {
-                amountPaidHtml = '<input type="number" step="0.01" class="inline-input amount-paid-input ' + data.placeholderClass + '" value="' + data.amountPaid.toFixed(2) + '" placeholder="$" ' + data.disabledAttr + '>';
-                isFirstPhone = false;
-            } else {
-                amountPaidHtml = '<div class="amount-paid-disabled">—</div>';
-            }
             
             let accountDisplayHtml = '';
             if (data.isFirstForAccount) {
@@ -1251,7 +1220,7 @@
                 '<td class="dash-cell">—</td>' +
                 '<td class="dash-cell">—</td>' +
                 '<td class="dash-cell">—</td>' +
-                '<td class="amount-paid-cell">' + amountPaidHtml + '</td>' +
+                '<td class="dash-cell">—</td>' +
                 '<td class="notes-cell"><input type="text" class="inline-input notes-input ' + data.placeholderClass + '" value="' + escapeHtml(data.notes) + '" placeholder="Notes..." ' + data.disabledAttr + '></td>' +
                 '<td></td>' +
                 '<td></td>';
@@ -1276,6 +1245,7 @@
         const entityTotalOutstandingInput = summaryRow.querySelector('.entity-total-outstanding');
         const entityTotalPrevPaymentInput = summaryRow.querySelector('.entity-total-prev-payment');
         const entityTotalCurrentInput = summaryRow.querySelector('.entity-total-current');
+        const entityAmountPaidInput = summaryRow.querySelector('.entity-amount-paid');
         
         let totalAccountCharges = parseFloat(entityTotalAccountInput ? entityTotalAccountInput.value : 0) || 0;
         let totalOutstanding = parseFloat(entityTotalOutstandingInput ? entityTotalOutstandingInput.value : 0) || 0;
@@ -1291,23 +1261,10 @@
             }
         }
         
-        // Update status
-        let meterRows = [];
-        let nextRow = summaryRow.nextElementSibling;
-        while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
-            meterRows.push(nextRow);
-            nextRow = nextRow.nextElementSibling;
-        }
-        
-        let totalPaid = 0;
-        meterRows.forEach(row => {
-            const amountPaidInput = row.querySelector('.amount-paid-input');
-            if (amountPaidInput) {
-                totalPaid += parseFloat(amountPaidInput.value) || 0;
-            }
-        });
-        
+        // Update status based on amount paid
         const entityId = entityRow.getAttribute('data-entity-id');
+        const totalPaid = parseFloat(entityAmountPaidInput ? entityAmountPaidInput.value : 0) || 0;
+        
         const entityStatusSpan = document.getElementById('entity-status-' + entityId);
         const entityTotalSpan = document.getElementById('entity-total-' + entityId);
         if (entityTotalSpan) {
@@ -1383,17 +1340,20 @@
         let entityTotalAccountCharges = 0;
         let entityTotalOutstanding = 0;
         let entityTotalPrevPayment = 0;
+        let entityAmountPaid = 0;
         
         if (summaryRow) {
             const billNoInput = summaryRow.querySelector('.entity-billno');
             const totalAccountInput = summaryRow.querySelector('.entity-total-account');
             const totalOutstandingInput = summaryRow.querySelector('.entity-total-outstanding');
             const totalPrevPaymentInput = summaryRow.querySelector('.entity-total-prev-payment');
+            const amountPaidInput = summaryRow.querySelector('.entity-amount-paid');
             
             entityBillNo = billNoInput ? billNoInput.value : '';
             entityTotalAccountCharges = parseFloat(totalAccountInput ? totalAccountInput.value : 0) || 0;
             entityTotalOutstanding = parseFloat(totalOutstandingInput ? totalOutstandingInput.value : 0) || 0;
             entityTotalPrevPayment = parseFloat(totalPrevPaymentInput ? totalPrevPaymentInput.value : 0) || 0;
+            entityAmountPaid = parseFloat(amountPaidInput ? amountPaidInput.value : 0) || 0;
         }
         
         const batchBills = [];
@@ -1406,12 +1366,10 @@
             
             const rentalInput = row.querySelector('.rental-input');
             const totalAmountInput = row.querySelector('.total-amount-input');
-            const amountPaidInput = row.querySelector('.amount-paid-input');
             const notesInput = row.querySelector('.notes-input');
             
             const rentalAmount = parseFloat(rentalInput ? rentalInput.value : 0) || 0;
             const totalAmount = parseFloat(totalAmountInput ? totalAmountInput.value : 0) || 0;
-            const amountPaid = parseFloat(amountPaidInput ? amountPaidInput.value : 0) || 0;
             const notes = notesInput ? notesInput.value : '';
             
             // Use entity-level values for all phones
@@ -1420,9 +1378,11 @@
             const previousPayment = entityTotalPrevPayment;
             const totalCurrentCharges = outstandingCharges + totalAccountCharges - previousPayment;
             
+            // Only send bill_no for first phone
             const billNo = isFirstPhone ? entityBillNo : '';
             isFirstPhone = false;
             
+            // Get phone number from display
             let phoneNumber = '';
             const phoneDisplay = row.querySelector('.phone-number-item');
             if (phoneDisplay) {
@@ -1444,7 +1404,7 @@
                 phone_number: phoneNumber || billNo,
                 current_charges: rentalAmount,
                 unsettled_charges: outstandingCharges,
-                amount_paid: amountPaid,
+                amount_paid: entityAmountPaid, // Same amount paid for ALL phones (entity-level)
                 month: month,
                 year: year,
                 bill_month: month,
@@ -1473,6 +1433,7 @@
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
             
+            // Remove saving highlight, add saved highlight
             meterRows.forEach(row => {
                 const inputs = row.querySelectorAll('.inline-input');
                 inputs.forEach(input => {
@@ -1495,15 +1456,13 @@
             if (result.success) {
                 showToast(entityName + ': Saved ' + result.success_count + ' record(s) (' + totalTime + 'ms)', false);
                 // Update status
-                let totalPaid = 0;
-                batchBills.forEach(b => { totalPaid += b.amount_paid || 0; });
                 const entityStatusSpan = document.getElementById('entity-status-' + entityId);
                 const entityTotalSpan = document.getElementById('entity-total-' + entityId);
                 if (entityTotalSpan) {
-                    entityTotalSpan.innerHTML = '(Total Paid: $' + totalPaid.toFixed(2) + ')';
+                    entityTotalSpan.innerHTML = '(Total Paid: $' + entityAmountPaid.toFixed(2) + ')';
                 }
                 if (entityStatusSpan) {
-                    if (totalPaid > 0) {
+                    if (entityAmountPaid > 0) {
                         entityStatusSpan.innerHTML = 'Paid';
                         entityStatusSpan.className = 'status-badge status-paid';
                     } else {
@@ -1554,7 +1513,8 @@
             const target = e.target;
             if (target.classList && (target.classList.contains('entity-total-account') || 
                                      target.classList.contains('entity-total-outstanding') || 
-                                     target.classList.contains('entity-total-prev-payment'))) {
+                                     target.classList.contains('entity-total-prev-payment') ||
+                                     target.classList.contains('entity-amount-paid'))) {
                 const summaryRow = target.closest('tr.summary-row');
                 if (summaryRow) {
                     const entityRow = summaryRow.previousElementSibling;
