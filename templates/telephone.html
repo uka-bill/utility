@@ -325,21 +325,6 @@
             transition: background 0.3s ease;
         }
 
-        .inline-input.entity-total-display {
-            background: #e8f5e9;
-            font-weight: 700;
-            color: #1b5e20;
-            border-color: #a5d6a7;
-            cursor: default;
-            text-align: center;
-        }
-
-        .inline-input.entity-total-display.negative {
-            color: #dc3545;
-            background: #fce4ec;
-            border-color: #ffcdd2;
-        }
-
         .inline-input.bill-no-input {
             text-align: center;
             font-weight: 600;
@@ -528,7 +513,7 @@
         }
         
         .meter-row td:first-child {
-            padding-left: 20px;
+            padding-left: 5px;
         }
         
         .entity-actions {
@@ -630,21 +615,6 @@
             color: #2e7d32;
             text-align: right;
             padding-right: 8px;
-        }
-
-        .summary-value {
-            font-weight: 700;
-            font-size: 0.72rem;
-            color: #1b5e20;
-            text-align: center;
-            background: #e8f5e9;
-            border-radius: 4px;
-            padding: 2px 4px;
-        }
-
-        .summary-value.negative {
-            color: #dc3545;
-            background: #fce4ec;
         }
 
         /* Scrollbar styling */
@@ -978,12 +948,25 @@
         return entities;
     }
 
-    function findExistingBill(entityType, entityId, accountNumber, phoneNumber, month, year) {
+    function findExistingBillsForEntity(entityType, entityId, month, year) {
+        const bills = [];
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
-                (bill.account_number || '—') === (accountNumber || '—') &&
+                bill.month == month && 
+                bill.year == year) {
+                bills.push(bill);
+            }
+        }
+        return bills;
+    }
+
+    function findExistingBillByPhone(entityType, entityId, phoneNumber, month, year) {
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            if (bill.entity_type === entityType &&
+                bill.entity_id == entityId &&
                 (bill.phone_number || '—') === (phoneNumber || '—') &&
                 bill.month == month && 
                 bill.year == year) {
@@ -1036,11 +1019,55 @@
         let hasVisibleMeters = false;
         
         let meterRowsData = [];
-        let entityTotalAccountCharges = 0;
-        let entityTotalOutstanding = 0;
-        let entityTotalPrevPayment = 0;
-        let entityBillNo = '';
-        let entityPaid = 0;
+        
+        // Get existing bills for this entity
+        const entityBills = findExistingBillsForEntity(entity.type, entity.id, month, year);
+        
+        // Find the summary bill (first bill with notes containing entity-level values)
+        let summaryBill = null;
+        let summaryBillNo = '';
+        let summaryTotalAccountCharges = 0;
+        let summaryOutstanding = 0;
+        let summaryPrevPayment = 0;
+        let summaryAmountPaid = 0;
+        let summaryTotalCurrent = 0;
+        
+        for (let i = 0; i < entityBills.length; i++) {
+            const bill = entityBills[i];
+            let parsedNotes = {};
+            if (bill.notes) {
+                try { parsedNotes = JSON.parse(bill.notes); } catch(e) {}
+            }
+            // Check if this is the summary bill (has totalAccountCharges or is marked as summary)
+            if (parsedNotes.totalAccountCharges !== undefined || parsedNotes.isSummary === true) {
+                summaryBill = bill;
+                summaryBillNo = bill.bill_number || bill.meter_number || '';
+                summaryTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
+                summaryOutstanding = parseFloat(bill.unsettled_charges) || 0;
+                summaryPrevPayment = parsedNotes.previousPayment || 0;
+                summaryAmountPaid = parseFloat(bill.amount_paid) || 0;
+                summaryTotalCurrent = summaryOutstanding + summaryTotalAccountCharges - summaryPrevPayment;
+                break;
+            }
+        }
+        
+        // If no summary bill found, create default values
+        if (!summaryBill) {
+            // Try to get values from first bill
+            if (entityBills.length > 0) {
+                const firstBill = entityBills[0];
+                let parsedNotes = {};
+                if (firstBill.notes) {
+                    try { parsedNotes = JSON.parse(firstBill.notes); } catch(e) {}
+                }
+                summaryTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
+                summaryOutstanding = parseFloat(firstBill.unsettled_charges) || 0;
+                summaryPrevPayment = parsedNotes.previousPayment || 0;
+                summaryAmountPaid = parseFloat(firstBill.amount_paid) || 0;
+                summaryBillNo = firstBill.bill_number || firstBill.meter_number || '';
+                summaryTotalCurrent = summaryOutstanding + summaryTotalAccountCharges - summaryPrevPayment;
+            }
+        }
         
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
@@ -1052,7 +1079,7 @@
             for (let n = 0; n < phoneNumbers.length; n++) {
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
-                const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phoneNum, month, year);
+                const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
                 
                 let parsedNotes = {};
                 if (existing && existing.notes) {
@@ -1065,18 +1092,14 @@
                 
                 let rentalAmount = existing ? (parseFloat(existing.current_charges) || 0) : 0;
                 let totalAmount = parsedNotes.totalAmount || 0;
-                let totalAccountCharges = parsedNotes.totalAccountCharges || 0;
-                let outstandingCharges = existing ? (parseFloat(existing.unsettled_charges) || 0) : 0;
-                let previousPayment = parsedNotes.previousPayment || 0;
-                let amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
                 let notes = parsedNotes.originalNotes || phone.notes || '';
-                let billNoDisplay = existing ? (existing.bill_number || existing.meter_number || '') : '';
                 
-                const totalCurrentCharges = outstandingCharges + totalAccountCharges - previousPayment;
+                // Check if this is the summary bill or a regular phone bill
+                const isSummaryBill = (existing && existing.bill_number && existing.bill_number !== '');
                 
                 if (statusFilter !== 'all') {
-                    if (statusFilter === 'paid' && amountPaid === 0) continue;
-                    if (statusFilter === 'pending' && amountPaid > 0) continue;
+                    if (statusFilter === 'paid' && summaryAmountPaid === 0) continue;
+                    if (statusFilter === 'pending' && summaryAmountPaid > 0) continue;
                 }
                 
                 const isPlaceholderAccount = account.isPlaceholder || phoneNum === '—';
@@ -1084,32 +1107,35 @@
                 const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
                 
                 if (!isPlaceholderAccount) {
-                    entityTotalPaid += amountPaid;
-                    entityPaid += amountPaid;
-                    if (existing && amountPaid > 0) entityHasBills = true;
-                    entityTotalAccountCharges += totalAccountCharges;
-                    entityTotalOutstanding += outstandingCharges;
-                    entityTotalPrevPayment += previousPayment;
-                    if (billNoDisplay) entityBillNo = billNoDisplay;
+                    entityTotalPaid = summaryAmountPaid;
+                    if (summaryAmountPaid > 0) entityHasBills = true;
                 }
                 
                 const locationDisplay = phone.location ? '<span class="phone-location">📍 ' + escapeHtml(phone.location) + '</span>' : '';
                 
+                // Determine if this row should show the Bill No. (only first phone row gets it)
+                const showBillNo = (meterRowsData.length === 0);
+                
                 meterRowsData.push({
                     serial: serial,
                     accountNumber: account.accountNumber,
-                    billNo: billNoDisplay,
                     phoneNumber: phoneNum,
                     locationDisplay: locationDisplay,
                     rentalAmount: rentalAmount,
                     totalAmount: totalAmount,
-                    amountPaid: amountPaid,
                     notes: notes,
                     billId: existing ? existing.id : null,
                     isFirstForAccount: isFirstForAccount,
                     isPlaceholder: isPlaceholderAccount,
                     disabledAttr: disabledAttr,
-                    placeholderClass: placeholderClass
+                    placeholderClass: placeholderClass,
+                    showBillNo: showBillNo,
+                    billNoDisplay: summaryBillNo,
+                    totalAccountCharges: summaryTotalAccountCharges,
+                    outstandingCharges: summaryOutstanding,
+                    previousPayment: summaryPrevPayment,
+                    amountPaid: summaryAmountPaid,
+                    totalCurrentCharges: summaryTotalCurrent
                 });
                 
                 isFirstForAccount = false;
@@ -1122,7 +1148,7 @@
             return startSerial;
         }
         
-        const entityTotalCurrent = entityTotalOutstanding + entityTotalAccountCharges - entityTotalPrevPayment;
+        const entityTotalCurrent = summaryOutstanding + summaryTotalAccountCharges - summaryPrevPayment;
         const entityTotalCurrentClass = entityTotalCurrent < 0 ? 'negative' : '';
         
         // ENTITY ROW - shows summary/header
@@ -1141,7 +1167,7 @@
         } else if (entityHasBills) {
             entityStatusText = 'Paid';
             entityStatusClass = 'status-paid';
-        } else if (entityTotalPaid === 0 && meterRowsData.some(d => !d.isPlaceholder)) {
+        } else if (summaryAmountPaid === 0 && meterRowsData.some(d => !d.isPlaceholder)) {
             entityStatusText = 'Not entered';
         } else {
             entityStatusText = 'Partially Paid';
@@ -1151,7 +1177,7 @@
         entityRow.innerHTML = 
             '<td class="seq-number">' + startSerial + '</td>' +
             '<td class="entity-header"><span class="entity-name">' + escapeHtml(entity.name) + '</span>' +
-                '<span class="total-due" id="entity-total-' + entity.id + '">(Total Paid: $' + entityTotalPaid.toFixed(2) + ')</span>' +
+                '<span class="total-due" id="entity-total-' + entity.id + '">(Total Paid: $' + summaryAmountPaid.toFixed(2) + ')</span>' +
             '</td>' +
             '<td><span class="badge ' + (entity.type === 'school' ? 'badge-school' : 'badge-department') + '">' + entity.typeLabel + '</span></td>' +
             '<td class="dash-cell">—</td>' +
@@ -1168,15 +1194,15 @@
             '<td></td>' +
             '<td><span class="summary-label">Entity Totals:</span></td>' +
             '<td></td>' +
-            '<td><input type="text" class="inline-input bill-no-input entity-billno" value="' + escapeHtml(entityBillNo) + '" placeholder="Bill No." data-entity-id="' + entity.id + '"></td>' +
+            '<td><input type="text" class="inline-input bill-no-input entity-billno" value="' + escapeHtml(summaryBillNo) + '" placeholder="Bill No." data-entity-id="' + entity.id + '"></td>' +
             '<td></td>' +
             '<td></td>' +
             '<td></td>' +
-            '<td><input type="number" step="0.01" class="inline-input entity-total-account" value="' + entityTotalAccountCharges.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
-            '<td><input type="number" step="0.01" class="inline-input entity-total-outstanding" value="' + entityTotalOutstanding.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
-            '<td><input type="number" step="0.01" class="inline-input entity-total-prev-payment" value="' + entityTotalPrevPayment.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
+            '<td><input type="number" step="0.01" class="inline-input entity-total-account" value="' + summaryTotalAccountCharges.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
+            '<td><input type="number" step="0.01" class="inline-input entity-total-outstanding" value="' + summaryOutstanding.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
+            '<td><input type="number" step="0.01" class="inline-input entity-total-prev-payment" value="' + summaryPrevPayment.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
             '<td><input type="text" class="inline-input entity-total-current ' + entityTotalCurrentClass + '" value="' + entityTotalCurrent.toFixed(2) + '" readonly data-entity-id="' + entity.id + '"></td>' +
-            '<td><input type="number" step="0.01" class="inline-input entity-amount-paid" value="' + entityPaid.toFixed(2) + '" placeholder="$" data-entity-id="' + entity.id + '"></td>' +
+            '<td><input type="number" step="0.01" class="inline-input entity-amount-paid" value="' + summaryAmountPaid.toFixed(2) + '" placeholder="$" data-entity-id="' + entity.id + '"></td>' +
             '<td></td>' +
             '<td></td>' +
             '<td></td>';
@@ -1207,11 +1233,14 @@
                 phoneDisplay = '<span class="phone-number-item placeholder-text">📞 No phone number</span>';
             }
             
+            // Show Bill No. only on the first meter row
+            const billNoDisplay = data.showBillNo ? '#' + escapeHtml(data.billNoDisplay) : '—';
+            
             meterRow.innerHTML = 
-                '<td class="seq-number">' + (data.isFirstForAccount ? data.serial : '') + '</td>' +
+                '<td class="seq-number">' + data.serial + '</td>' +
                 '<td></td>' +
                 '<td></td>' +
-                '<td class="dash-cell">—</td>' +
+                '<td class="dash-cell">' + billNoDisplay + '</td>' +
                 '<td>' + accountDisplayHtml + phoneDisplay + '</td>' +
                 '<td><input type="number" step="0.01" class="inline-input rental-input ' + data.placeholderClass + '" value="' + data.rentalAmount.toFixed(2) + '" placeholder="$" ' + data.disabledAttr + '></td>' +
                 '<td><input type="number" step="0.01" class="inline-input total-amount-input ' + data.placeholderClass + '" value="' + data.totalAmount.toFixed(2) + '" placeholder="$" ' + data.disabledAttr + '></td>' +
@@ -1356,6 +1385,35 @@
         
         const batchBills = [];
         
+        // First, create the summary bill
+        batchBills.push({
+            id: null, // Will be upserted
+            utility_type: 'telephone',
+            entity_type: entityType,
+            entity_id: entityId,
+            entity_name: entityName,
+            account_number: '',
+            bill_number: entityBillNo,
+            meter_number: entityBillNo,
+            phone_number: '', // Empty for summary bill
+            current_charges: 0,
+            unsettled_charges: entityTotalOutstanding,
+            amount_paid: entityAmountPaid,
+            month: month,
+            year: year,
+            bill_month: month,
+            bill_year: year,
+            notes: JSON.stringify({ 
+                isSummary: true,
+                totalAccountCharges: entityTotalAccountCharges,
+                previousPayment: entityTotalPrevPayment,
+                totalCurrentCharges: entityTotalOutstanding + entityTotalAccountCharges - entityTotalPrevPayment,
+                originalNotes: ''
+            }),
+            updated_at: new Date().toISOString()
+        });
+        
+        // Then create individual phone bills
         for (let i = 0; i < meterRows.length; i++) {
             const row = meterRows[i];
             const accountNumber = row.getAttribute('data-account');
@@ -1370,15 +1428,6 @@
             const totalAmount = parseFloat(totalAmountInput ? totalAmountInput.value : 0) || 0;
             const notes = notesInput ? notesInput.value : '';
             
-            // Use entity-level values for all phones
-            const totalAccountCharges = entityTotalAccountCharges;
-            const outstandingCharges = entityTotalOutstanding;
-            const previousPayment = entityTotalPrevPayment;
-            const totalCurrentCharges = outstandingCharges + totalAccountCharges - previousPayment;
-            
-            // Only send bill_no for first phone (i == 0)
-            const billNo = (i === 0) ? entityBillNo : '';
-            
             batchBills.push({
                 id: existingBillId,
                 utility_type: 'telephone',
@@ -1386,21 +1435,21 @@
                 entity_id: entityId,
                 entity_name: entityName,
                 account_number: accountNumber === '—' ? '' : accountNumber,
-                bill_number: billNo,
-                meter_number: billNo,
+                bill_number: '', // Empty for individual phone bills
+                meter_number: '',
                 phone_number: phoneNumber || '',
                 current_charges: rentalAmount,
-                unsettled_charges: outstandingCharges,
-                amount_paid: entityAmountPaid, // Same amount paid for ALL phones
+                unsettled_charges: entityTotalOutstanding,
+                amount_paid: entityAmountPaid,
                 month: month,
                 year: year,
                 bill_month: month,
                 bill_year: year,
                 notes: JSON.stringify({ 
                     totalAmount: totalAmount,
-                    totalAccountCharges: totalAccountCharges,
-                    previousPayment: previousPayment,
-                    totalCurrentCharges: totalCurrentCharges,
+                    totalAccountCharges: entityTotalAccountCharges,
+                    previousPayment: entityTotalPrevPayment,
+                    totalCurrentCharges: entityTotalOutstanding + entityTotalAccountCharges - entityTotalPrevPayment,
                     originalNotes: notes 
                 }),
                 updated_at: new Date().toISOString()
@@ -1612,7 +1661,7 @@
                     const numbers = account.numbers || [{ phoneNumber: '—', location: '' }];
                     for (let n = 0; n < numbers.length; n++) {
                         const phone = numbers[n];
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phone.phoneNumber, month, year);
+                        const existing = findExistingBillByPhone(entity.type, entity.id, phone.phoneNumber, month, year);
                         const amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
                         
                         if (statusFilter === 'all' ||
@@ -1662,7 +1711,7 @@
                     const numbers = account.numbers || [{ phoneNumber: '—', location: '' }];
                     for (let n = 0; n < numbers.length; n++) {
                         const phone = numbers[n];
-                        const existing = findExistingBill(entity.type, entity.id, account.accountNumber, phone.phoneNumber, month, year);
+                        const existing = findExistingBillByPhone(entity.type, entity.id, phone.phoneNumber, month, year);
                         const amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
                         
                         if (statusFilter === 'all' ||
