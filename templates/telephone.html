@@ -227,7 +227,7 @@
             z-index: 20;
             border-bottom: 2px solid white;
             font-weight: 600;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             white-space: normal;
             word-wrap: break-word;
             line-height: 1.2;
@@ -735,12 +735,12 @@
                     <th class="col-type">Type</th>
                     <th class="col-billno">Bill No.</th>
                     <th class="col-account">Account / Phone</th>
-                    <th class="col-rental">Rental ($)</th>
-                    <th class="col-total-amount">Total Amt ($)</th>
-                    <th class="col-total-account">Total Acct Chg ($)</th>
-                    <th class="col-prev-outstanding">Prev Outstanding ($)</th>
-                    <th class="col-prev-payment">Prev Payment ($)</th>
-                    <th class="col-total-current">Total Current Chg ($)</th>
+                    <th class="col-rental">Rental Amount ($)</th>
+                    <th class="col-total-amount">Total Amount ($)</th>
+                    <th class="col-total-account">Total Account Charges ($)</th>
+                    <th class="col-prev-outstanding">Previous Outstanding ($)</th>
+                    <th class="col-prev-payment">Previous Payment ($)</th>
+                    <th class="col-total-current">Total Current Charges ($)</th>
                     <th class="col-amount-paid">Amount Paid ($)</th>
                     <th class="col-notes">Notes</th>
                     <th class="col-status">Status</th>
@@ -838,7 +838,6 @@
             if (resp.ok) {
                 existingBills = await resp.json();
                 console.log('Loaded ' + existingBills.length + ' bills for ' + month + '/' + year);
-                // Log first bill to see structure
                 if (existingBills.length > 0) {
                     console.log('First bill:', existingBills[0]);
                 }
@@ -953,7 +952,6 @@
         return entities;
     }
 
-    // Find bills for a specific entity
     function findEntityBills(entityType, entityId, month, year) {
         const bills = [];
         for (let i = 0; i < existingBills.length; i++) {
@@ -1016,7 +1014,6 @@
         });
     }
 
-    // Render entity
     function renderEntity(tbody, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1026,10 +1023,8 @@
         
         let meterRowsData = [];
         
-        // Find all bills for this entity
         const entityBills = findEntityBills(entity.type, entity.id, month, year);
         
-        // Find the master bill (first bill with bill_number set)
         let masterBill = null;
         let masterBillIndex = -1;
         for (let i = 0; i < entityBills.length; i++) {
@@ -1040,7 +1035,6 @@
             }
         }
         
-        // If no bill has bill_number, use the first bill as master
         if (!masterBill && entityBills.length > 0) {
             masterBill = entityBills[0];
             masterBillIndex = 0;
@@ -1070,7 +1064,6 @@
             console.log('No master bill found for ' + entity.name);
         }
         
-        // Build meter rows
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             let isFirstForAccount = true;
@@ -1082,7 +1075,6 @@
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
                 
-                // Find existing bill for this phone number
                 let existing = null;
                 for (let i = 0; i < entityBills.length; i++) {
                     if (entityBills[i].phone_number === phoneNum) {
@@ -1120,7 +1112,6 @@
                 
                 const locationDisplay = phone.location ? '<span class="phone-location">📍 ' + escapeHtml(phone.location) + '</span>' : '';
                 
-                // Determine if this is the master row (first phone)
                 const isMasterRow = (meterRowsData.length === 0);
                 
                 meterRowsData.push({
@@ -1158,7 +1149,6 @@
         const entityTotalCurrent = summaryOutstanding + summaryTotalAccountCharges - summaryPrevPayment;
         const entityTotalCurrentClass = entityTotalCurrent < 0 ? 'negative' : '';
         
-        // ENTITY ROW
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
         entityRow.setAttribute('data-entity-type', entity.type);
@@ -1193,7 +1183,6 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // SUMMARY ROW
         const summaryRow = document.createElement('tr');
         summaryRow.className = 'summary-row';
         summaryRow.setAttribute('data-entity-id', entity.id);
@@ -1215,7 +1204,6 @@
             '<td></td>';
         tbody.appendChild(summaryRow);
         
-        // METER ROWS
         for (let i = 0; i < meterRowsData.length; i++) {
             const data = meterRowsData[i];
             const meterRow = document.createElement('tr');
@@ -1266,7 +1254,6 @@
         return serial;
     }
 
-    // Recalculate entity totals from inputs
     function recalculateEntityTotals(entityRow) {
         let summaryRow = entityRow.nextElementSibling;
         while (summaryRow && !summaryRow.classList.contains('summary-row')) {
@@ -1330,13 +1317,11 @@
         
         showSavingToast(entityName);
         
-        // Find summary row
         let summaryRow = entityRow.nextElementSibling;
         while (summaryRow && !summaryRow.classList.contains('summary-row')) {
             summaryRow = summaryRow.nextElementSibling;
         }
         
-        // Find meter rows
         let meterRows = [];
         let nextRow = summaryRow ? summaryRow.nextElementSibling : null;
         while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
@@ -1350,7 +1335,6 @@
             return;
         }
         
-        // Highlight saving
         meterRows.forEach(row => {
             const inputs = row.querySelectorAll('.inline-input');
             inputs.forEach(input => input.classList.add('saving'));
@@ -1367,7 +1351,6 @@
             saveBtn.disabled = true;
         }
         
-        // Get entity-level values from summary row
         let entityBillNo = '';
         let entityTotalAccountCharges = 0;
         let entityTotalOutstanding = 0;
@@ -1405,7 +1388,6 @@
             const totalAmount = parseFloat(totalAmountInput ? totalAmountInput.value : 0) || 0;
             const notes = notesInput ? notesInput.value : '';
             
-            // Build notes
             const notesObj = {
                 totalAmount: totalAmount,
                 totalAccountCharges: entityTotalAccountCharges,
@@ -1414,7 +1396,6 @@
                 originalNotes: notes
             };
             
-            // Only the master (first phone) gets the bill number
             const billNo = isMaster ? entityBillNo : '';
             
             batchBills.push({
