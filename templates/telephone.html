@@ -949,36 +949,27 @@
         return entities;
     }
 
-    // Find the SUMMARY bill for an entity (bill with empty phone_number and non-empty bill_number)
-    function findSummaryBill(entityType, entityId, month, year) {
+    // Find the MASTER bill (first phone bill that contains summary data)
+    function findMasterBill(entityType, entityId, month, year) {
+        // First, find all bills for this entity
+        let entityBills = [];
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
                 bill.month == month && 
-                bill.year == year &&
-                (bill.phone_number === '' || bill.phone_number === null) &&
-                bill.bill_number && bill.bill_number !== '') {
-                return bill;
+                bill.year == year) {
+                entityBills.push(bill);
             }
+        }
+        
+        // Sort by id (oldest first) - the first bill is the master
+        entityBills.sort((a, b) => a.id - b.id);
+        
+        if (entityBills.length > 0) {
+            return entityBills[0];
         }
         return null;
-    }
-
-    // Find individual phone bills for an entity
-    function findPhoneBills(entityType, entityId, month, year) {
-        const bills = [];
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            if (bill.entity_type === entityType &&
-                bill.entity_id == entityId &&
-                bill.month == month && 
-                bill.year == year &&
-                bill.phone_number && bill.phone_number !== '') {
-                bills.push(bill);
-            }
-        }
-        return bills;
     }
 
     function findExistingBillByPhone(entityType, entityId, phoneNumber, month, year) {
@@ -1039,8 +1030,8 @@
         
         let meterRowsData = [];
         
-        // Find the SUMMARY bill first
-        const summaryBill = findSummaryBill(entity.type, entity.id, month, year);
+        // Find the MASTER bill (first bill for this entity)
+        const masterBill = findMasterBill(entity.type, entity.id, month, year);
         
         let summaryBillNo = '';
         let summaryTotalAccountCharges = 0;
@@ -1049,26 +1040,24 @@
         let summaryAmountPaid = 0;
         let summaryTotalCurrent = 0;
         
-        if (summaryBill) {
+        if (masterBill) {
             let parsedNotes = {};
-            if (summaryBill.notes) {
-                try { parsedNotes = JSON.parse(summaryBill.notes); } catch(e) {}
+            if (masterBill.notes) {
+                try { parsedNotes = JSON.parse(masterBill.notes); } catch(e) {}
             }
-            summaryBillNo = summaryBill.bill_number || '';
-            summaryOutstanding = parseFloat(summaryBill.unsettled_charges) || 0;
-            summaryAmountPaid = parseFloat(summaryBill.amount_paid) || 0;
+            summaryBillNo = masterBill.bill_number || '';
+            summaryOutstanding = parseFloat(masterBill.unsettled_charges) || 0;
+            summaryAmountPaid = parseFloat(masterBill.amount_paid) || 0;
             summaryTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
             summaryPrevPayment = parsedNotes.previousPayment || 0;
             summaryTotalCurrent = summaryOutstanding + summaryTotalAccountCharges - summaryPrevPayment;
             
-            console.log('Summary bill found for ' + entity.name + ': BillNo=' + summaryBillNo + ', Outstanding=' + summaryOutstanding);
+            console.log('Master bill found for ' + entity.name + ': BillNo=' + summaryBillNo + ', Outstanding=' + summaryOutstanding + ', id=' + masterBill.id);
         } else {
-            console.log('No summary bill found for ' + entity.name);
+            console.log('No master bill found for ' + entity.name);
         }
         
-        // Find all phone bills for this entity
-        const phoneBills = findPhoneBills(entity.type, entity.id, month, year);
-        
+        // Build meter rows
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             let isFirstForAccount = true;
@@ -1082,9 +1071,16 @@
                 
                 // Find existing bill for this phone number
                 let existing = null;
-                for (let i = 0; i < phoneBills.length; i++) {
-                    if (phoneBills[i].phone_number === phoneNum) {
-                        existing = phoneBills[i];
+                // Skip if phone number is the master bill's phone number? No, master bill has the first phone's number
+                // Actually, we need to find by phone number
+                for (let i = 0; i < existingBills.length; i++) {
+                    const bill = existingBills[i];
+                    if (bill.entity_type === entity.type &&
+                        bill.entity_id == entity.id &&
+                        bill.phone_number === phoneNum &&
+                        bill.month == month && 
+                        bill.year == year) {
+                        existing = bill;
                         break;
                     }
                 }
@@ -1118,8 +1114,8 @@
                 
                 const locationDisplay = phone.location ? '<span class="phone-location">📍 ' + escapeHtml(phone.location) + '</span>' : '';
                 
-                // Determine if this row should show the Bill No. (only first phone row gets it)
-                const showBillNo = (meterRowsData.length === 0);
+                // Determine if this is the master row (first phone)
+                const isMasterRow = (meterRowsData.length === 0);
                 
                 meterRowsData.push({
                     serial: serial,
@@ -1134,7 +1130,7 @@
                     isPlaceholder: isPlaceholderAccount,
                     disabledAttr: disabledAttr,
                     placeholderClass: placeholderClass,
-                    showBillNo: showBillNo,
+                    isMasterRow: isMasterRow,
                     billNoDisplay: summaryBillNo,
                     totalAccountCharges: summaryTotalAccountCharges,
                     outstandingCharges: summaryOutstanding,
@@ -1191,7 +1187,7 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // SUMMARY ROW - ALL entity-level fields (Bill No., Total Acct, Prev Outstanding, Prev Payment, Total Current, Amount Paid)
+        // SUMMARY ROW - ALL entity-level fields
         const summaryRow = document.createElement('tr');
         summaryRow.className = 'summary-row';
         summaryRow.setAttribute('data-entity-id', entity.id);
@@ -1213,7 +1209,7 @@
             '<td></td>';
         tbody.appendChild(summaryRow);
         
-        // METER ROWS - each phone number with per-phone inputs (Rental, Total Amount, Notes)
+        // METER ROWS - each phone number with per-phone inputs
         for (let i = 0; i < meterRowsData.length; i++) {
             const data = meterRowsData[i];
             const meterRow = document.createElement('tr');
@@ -1221,6 +1217,7 @@
             meterRow.setAttribute('data-account', escapeHtml(data.accountNumber));
             meterRow.setAttribute('data-phone', escapeHtml(data.phoneNumber));
             if (data.billId) meterRow.setAttribute('data-bill-id', data.billId);
+            meterRow.setAttribute('data-is-master', data.isMasterRow ? 'true' : 'false');
             
             let accountDisplayHtml = '';
             if (data.isFirstForAccount) {
@@ -1238,8 +1235,8 @@
                 phoneDisplay = '<span class="phone-number-item placeholder-text">📞 No phone number</span>';
             }
             
-            // Show Bill No. only on the first meter row
-            const billNoDisplay = data.showBillNo ? '#' + escapeHtml(data.billNoDisplay) : '—';
+            // Show Bill No. only on the master row (first phone)
+            const billNoDisplay = data.isMasterRow ? '#' + escapeHtml(data.billNoDisplay) : '—';
             
             meterRow.innerHTML = 
                 '<td class="seq-number">' + data.serial + '</td>' +
@@ -1266,7 +1263,6 @@
 
     // Recalculate entity totals from inputs
     function recalculateEntityTotals(entityRow) {
-        // Find the summary row
         let summaryRow = entityRow.nextElementSibling;
         while (summaryRow && !summaryRow.classList.contains('summary-row')) {
             summaryRow = summaryRow.nextElementSibling;
@@ -1294,7 +1290,6 @@
             }
         }
         
-        // Update status based on amount paid
         const entityId = entityRow.getAttribute('data-entity-id');
         const totalPaid = parseFloat(entityAmountPaidInput ? entityAmountPaidInput.value : 0) || 0;
         
@@ -1389,41 +1384,14 @@
         }
         
         const batchBills = [];
+        let isFirstPhone = true;
         
-        // First, create/update the SUMMARY bill (empty phone_number, non-empty bill_number)
-        batchBills.push({
-            id: null, // Will be upserted
-            utility_type: 'telephone',
-            entity_type: entityType,
-            entity_id: entityId,
-            entity_name: entityName,
-            account_number: '',
-            bill_number: entityBillNo,
-            meter_number: entityBillNo,
-            phone_number: '', // Empty = summary bill
-            current_charges: 0,
-            unsettled_charges: entityTotalOutstanding,
-            amount_paid: entityAmountPaid,
-            month: month,
-            year: year,
-            bill_month: month,
-            bill_year: year,
-            notes: JSON.stringify({ 
-                isSummary: true,
-                totalAccountCharges: entityTotalAccountCharges,
-                previousPayment: entityTotalPrevPayment,
-                totalCurrentCharges: entityTotalOutstanding + entityTotalAccountCharges - entityTotalPrevPayment,
-                originalNotes: ''
-            }),
-            updated_at: new Date().toISOString()
-        });
-        
-        // Then create/update individual phone bills
         for (let i = 0; i < meterRows.length; i++) {
             const row = meterRows[i];
             const accountNumber = row.getAttribute('data-account');
             const phoneNumber = row.getAttribute('data-phone');
             const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
+            const isMaster = row.getAttribute('data-is-master') === 'true';
             
             const rentalInput = row.querySelector('.rental-input');
             const totalAmountInput = row.querySelector('.total-amount-input');
@@ -1433,6 +1401,18 @@
             const totalAmount = parseFloat(totalAmountInput ? totalAmountInput.value : 0) || 0;
             const notes = notesInput ? notesInput.value : '';
             
+            // Build notes
+            const notesObj = {
+                totalAmount: totalAmount,
+                totalAccountCharges: entityTotalAccountCharges,
+                previousPayment: entityTotalPrevPayment,
+                totalCurrentCharges: entityTotalOutstanding + entityTotalAccountCharges - entityTotalPrevPayment,
+                originalNotes: notes
+            };
+            
+            // Only the master (first phone) gets the bill number and summary data
+            const billNo = isMaster ? entityBillNo : '';
+            
             batchBills.push({
                 id: existingBillId,
                 utility_type: 'telephone',
@@ -1440,8 +1420,8 @@
                 entity_id: entityId,
                 entity_name: entityName,
                 account_number: accountNumber === '—' ? '' : accountNumber,
-                bill_number: '', // Empty for individual phone bills
-                meter_number: '',
+                bill_number: billNo,
+                meter_number: billNo,
                 phone_number: phoneNumber || '',
                 current_charges: rentalAmount,
                 unsettled_charges: entityTotalOutstanding,
@@ -1450,15 +1430,11 @@
                 year: year,
                 bill_month: month,
                 bill_year: year,
-                notes: JSON.stringify({ 
-                    totalAmount: totalAmount,
-                    totalAccountCharges: entityTotalAccountCharges,
-                    previousPayment: entityTotalPrevPayment,
-                    totalCurrentCharges: entityTotalOutstanding + entityTotalAccountCharges - entityTotalPrevPayment,
-                    originalNotes: notes 
-                }),
+                notes: JSON.stringify(notesObj),
                 updated_at: new Date().toISOString()
             });
+            
+            isFirstPhone = false;
         }
         
         savingEntities.add(entityId);
@@ -1474,7 +1450,6 @@
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
             
-            // Remove saving highlight, add saved highlight
             meterRows.forEach(row => {
                 const inputs = row.querySelectorAll('.inline-input');
                 inputs.forEach(input => {
@@ -1496,7 +1471,6 @@
             
             if (result.success) {
                 showToast(entityName + ': Saved ' + result.success_count + ' record(s) (' + totalTime + 'ms)', false);
-                // Update status
                 const entityStatusSpan = document.getElementById('entity-status-' + entityId);
                 const entityTotalSpan = document.getElementById('entity-total-' + entityId);
                 if (entityTotalSpan) {
@@ -1537,7 +1511,6 @@
     }
 
     function attachEventListeners() {
-        // Save button click
         document.getElementById('billsTableBody').addEventListener('click', async function(e) {
             const saveBtn = e.target.closest('.save-entity-btn');
             if (saveBtn && !saveBtn.disabled) {
@@ -1549,7 +1522,6 @@
             }
         });
         
-        // Entity total input changes - recalculate
         document.getElementById('billsTableBody').addEventListener('input', function(e) {
             const target = e.target;
             if (target.classList && (target.classList.contains('entity-total-account') || 
