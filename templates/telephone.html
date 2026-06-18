@@ -204,7 +204,6 @@
             position: relative;
         }
 
-        /* FIXED HEADER - Freeze Panes */
         .data-table {
             width: 100%;
             border-collapse: collapse;
@@ -236,10 +235,9 @@
             vertical-align: middle;
         }
 
-        /* Column Widths - No Horizontal Scroll */
         .col-seq { width: 30px; }
-        .col-entity { width: 130px; }
-        .col-type { width: 65px; }
+        .col-entity { width: 120px; }
+        .col-type { width: 60px; }
         .col-billno { width: 70px; }
         .col-account { width: 100px; }
         .col-rental { width: 65px; }
@@ -254,7 +252,7 @@
         .col-actions { width: 60px; }
 
         .data-table td {
-            padding: 6px 3px;
+            padding: 4px 3px;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
             font-size: 0.78rem;
@@ -327,7 +325,7 @@
             transition: background 0.3s ease;
         }
 
-        .inline-input.entity-total-input {
+        .inline-input.entity-total-display {
             background: #e8f5e9;
             font-weight: 700;
             color: #1b5e20;
@@ -336,28 +334,16 @@
             text-align: center;
         }
 
-        .inline-input.entity-total-input.negative {
+        .inline-input.entity-total-display.negative {
             color: #dc3545;
             background: #fce4ec;
             border-color: #ffcdd2;
-        }
-
-        .inline-input.entity-total-input.disabled-input {
-            background: #f5f5f5;
-            color: #999;
-            border-color: #e0e0e0;
-            cursor: default;
         }
 
         .inline-input.bill-no-input {
             text-align: center;
             font-weight: 600;
             font-size: 0.7rem;
-        }
-
-        .inline-input.bill-no-input.entity-total {
-            background: #e8f5e9;
-            border-color: #a5d6a7;
         }
 
         .account-number {
@@ -636,6 +622,43 @@
             color: #999;
         }
 
+        .dash-cell {
+            text-align: center;
+            color: #999;
+            font-size: 0.7rem;
+        }
+
+        /* Summary row style */
+        .summary-row td {
+            background-color: #f8faf8;
+            border-top: 1px solid #c8e6c9;
+            border-bottom: 1px solid #c8e6c9;
+            padding: 4px 3px;
+        }
+
+        .summary-label {
+            font-weight: 600;
+            font-size: 0.65rem;
+            color: #2e7d32;
+            text-align: right;
+            padding-right: 8px;
+        }
+
+        .summary-value {
+            font-weight: 700;
+            font-size: 0.72rem;
+            color: #1b5e20;
+            text-align: center;
+            background: #e8f5e9;
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+
+        .summary-value.negative {
+            color: #dc3545;
+            background: #fce4ec;
+        }
+
         /* Scrollbar styling */
         .table-wrapper::-webkit-scrollbar {
             width: 6px;
@@ -656,7 +679,6 @@
             background: #a8a8a8;
         }
 
-        /* Responsive adjustments */
         @media screen and (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -678,13 +700,6 @@
                 width: 100%;
                 min-width: unset;
             }
-        }
-
-        /* Center align for disabled/dash cells */
-        .dash-cell {
-            text-align: center;
-            color: #999;
-            font-size: 0.7rem;
         }
     </style>
 </head>
@@ -934,7 +949,6 @@
             let accountGroups = accounts;
             let hasAccounts = accounts.length > 0 && !accounts[0].isPlaceholder;
             
-            // Always show entity, even without accounts
             let cluster = school.cluster_number ? 'CLUSTER ' + school.cluster_number : 'Unassigned';
             
             entities.push({
@@ -1021,32 +1035,23 @@
         return (parseFloat(prevOutstanding) || 0) + (parseFloat(totalAccountCharges) || 0) - (parseFloat(prevPayment) || 0);
     }
 
-    // Check if a row is the first phone for this entity (for Bill No.)
-    function isFirstPhoneForEntity(row, entityRow) {
-        let firstRow = entityRow.nextElementSibling;
-        while (firstRow && firstRow.classList && firstRow.classList.contains('meter-row')) {
-            if (firstRow === row) return true;
-            firstRow = firstRow.nextElementSibling;
-        }
-        return false;
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
     }
 
-    // Check if a row is the first phone for this entity (for entity totals)
-    function isFirstRowForEntity(row, entityRow) {
-        let firstRow = entityRow.nextElementSibling;
-        while (firstRow && firstRow.classList && firstRow.classList.contains('meter-row')) {
-            if (firstRow === row) return true;
-            firstRow = firstRow.nextElementSibling;
-        }
-        return false;
-    }
-
+    // Render entity with proper row structure
     function renderEntity(tbody, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
         let isPlaceholder = !entity.hasAccounts;
-        let isFirstMeter = true;
+        let isFirstPhone = true;
         let hasVisibleMeters = false;
         let meterRowCount = 0;
         
@@ -1141,8 +1146,20 @@
             return startSerial;
         }
         
-        let entityStatusClass = 'status-pending';
+        const entityTotalCurrent = entityTotalOutstanding + entityTotalAccountCharges - entityTotalPrevPayment;
+        const entityTotalCurrentClass = entityTotalCurrent < 0 ? 'negative' : '';
+        
+        // ENTITY ROW - shows summary/totals
+        const entityRow = document.createElement('tr');
+        entityRow.className = 'entity-row';
+        entityRow.setAttribute('data-entity-type', entity.type);
+        entityRow.setAttribute('data-entity-id', entity.id);
+        entityRow.setAttribute('data-entity-name', entity.name);
+        entityRow.setAttribute('data-has-accounts', !isPlaceholder);
+        entityRow.setAttribute('data-meter-count', meterRowCount);
+        
         let entityStatusText = 'Pending';
+        let entityStatusClass = 'status-pending';
         if (isPlaceholder && meterRowsData.length > 0) {
             entityStatusText = 'No account';
             entityStatusClass = 'status-pending';
@@ -1156,53 +1173,40 @@
             entityStatusClass = 'status-partial';
         }
         
-        const entityTotalCurrent = entityTotalOutstanding + entityTotalAccountCharges - entityTotalPrevPayment;
-        const entityTotalCurrentClass = entityTotalCurrent < 0 ? 'negative' : '';
-        
-        const entityRow = document.createElement('tr');
-        entityRow.className = 'entity-row';
-        entityRow.setAttribute('data-entity-type', entity.type);
-        entityRow.setAttribute('data-entity-id', entity.id);
-        entityRow.setAttribute('data-entity-name', entity.name);
-        entityRow.setAttribute('data-has-accounts', !isPlaceholder);
-        entityRow.setAttribute('data-meter-count', meterRowCount);
-        
-        // Store entity totals as data attributes for saving
-        entityRow.setAttribute('data-total-account', entityTotalAccountCharges.toFixed(2));
-        entityRow.setAttribute('data-total-outstanding', entityTotalOutstanding.toFixed(2));
-        entityRow.setAttribute('data-total-prev-payment', entityTotalPrevPayment.toFixed(2));
-        entityRow.setAttribute('data-total-current', entityTotalCurrent.toFixed(2));
-        entityRow.setAttribute('data-bill-no', entityBillNo);
-        
         entityRow.innerHTML = 
             '<td class="seq-number">' + startSerial + '</td>' +
             '<td class="entity-header"><span class="entity-name">' + escapeHtml(entity.name) + '</span>' +
                 '<span class="total-due" id="entity-total-' + entity.id + '">(Total Paid: $' + entityTotalPaid.toFixed(2) + ')</span>' +
             '</td>' +
             '<td><span class="badge ' + (entity.type === 'school' ? 'badge-school' : 'badge-department') + '">' + entity.typeLabel + '</span></td>' +
-            '<td>' +
-                '<input type="text" class="inline-input bill-no-input entity-total" value="' + escapeHtml(entityBillNo) + '" placeholder="Bill No." data-entity-id="' + entity.id + '">' +
-            '</td>' +
-            '<td colspan="3"></td>' +
-            '<td>' +
-                '<input type="number" step="0.01" class="inline-input entity-total-input entity-total-account" value="' + entityTotalAccountCharges.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '">' +
-            '</td>' +
-            '<td>' +
-                '<input type="number" step="0.01" class="inline-input entity-total-input entity-total-outstanding" value="' + entityTotalOutstanding.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '">' +
-            '</td>' +
-            '<td>' +
-                '<input type="number" step="0.01" class="inline-input entity-total-input entity-total-prev-payment" value="' + entityTotalPrevPayment.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '">' +
-            '</td>' +
-            '<td>' +
-                '<input type="text" class="inline-input entity-total-input ' + entityTotalCurrentClass + ' entity-total-current" value="' + entityTotalCurrent.toFixed(2) + '" readonly data-entity-id="' + entity.id + '">' +
-            '</td>' +
-            '<td colspan="2"></td>' +
+            '<td class="dash-cell">—</td>' +
+            '<td colspan="9"></td>' +
             '<td><span class="status-badge ' + entityStatusClass + '" id="entity-status-' + entity.id + '">' + entityStatusText + '</span></td>' +
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // Render meter rows
-        let isFirstPhone = true;
+        // SUMMARY ROW - shows entity totals (Bill No., Total Acct Chg, Prev Outstanding, Prev Payment, Total Current)
+        const summaryRow = document.createElement('tr');
+        summaryRow.className = 'summary-row';
+        summaryRow.innerHTML = 
+            '<td></td>' +
+            '<td><span class="summary-label">Entity Totals:</span></td>' +
+            '<td></td>' +
+            '<td><input type="text" class="inline-input bill-no-input entity-billno" value="' + escapeHtml(entityBillNo) + '" placeholder="Bill No." data-entity-id="' + entity.id + '"></td>' +
+            '<td></td>' +
+            '<td></td>' +
+            '<td></td>' +
+            '<td><input type="number" step="0.01" class="inline-input entity-total-account" value="' + entityTotalAccountCharges.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
+            '<td><input type="number" step="0.01" class="inline-input entity-total-outstanding" value="' + entityTotalOutstanding.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
+            '<td><input type="number" step="0.01" class="inline-input entity-total-prev-payment" value="' + entityTotalPrevPayment.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
+            '<td><input type="text" class="inline-input entity-total-current ' + entityTotalCurrentClass + '" value="' + entityTotalCurrent.toFixed(2) + '" readonly data-entity-id="' + entity.id + '"></td>' +
+            '<td></td>' +
+            '<td></td>' +
+            '<td></td>' +
+            '<td></td>';
+        tbody.appendChild(summaryRow);
+        
+        // METER ROWS - each phone number with its own inputs
         for (let i = 0; i < meterRowsData.length; i++) {
             const data = meterRowsData[i];
             const meterRow = document.createElement('tr');
@@ -1235,14 +1239,11 @@
                 phoneDisplay = '<span class="phone-number-item placeholder-text">📞 No phone number</span>';
             }
             
-            // Determine if this is the first row for entity totals (show dash for others)
-            const isFirstRowForEntity = (i === 0);
-            
             meterRow.innerHTML = 
                 '<td class="seq-number">' + (data.isFirstForAccount ? data.serial : '') + '</td>' +
                 '<td></td>' +
                 '<td></td>' +
-                '<td class="dash-cell">' + (isFirstRowForEntity ? '' : '—') + '</td>' +
+                '<td class="dash-cell">—</td>' +
                 '<td>' + accountDisplayHtml + phoneDisplay + '</td>' +
                 '<td><input type="number" step="0.01" class="inline-input rental-input ' + data.placeholderClass + '" value="' + data.rentalAmount.toFixed(2) + '" placeholder="$" ' + data.disabledAttr + '></td>' +
                 '<td><input type="number" step="0.01" class="inline-input total-amount-input ' + data.placeholderClass + '" value="' + data.totalAmount.toFixed(2) + '" placeholder="$" ' + data.disabledAttr + '></td>' +
@@ -1256,52 +1257,31 @@
                 '<td></td>';
             
             tbody.appendChild(meterRow);
-            
-            // Attach recalculate events for entity totals
-            attachEntityTotalEvents(meterRow, entityRow);
         }
         
         return serial;
     }
 
-    // Attach events to recalculate entity totals
-    function attachEntityTotalEvents(row, entityRow) {
-        // When any per-row input changes, recalculate entity totals
-        const inputs = row.querySelectorAll('.rental-input, .total-amount-input');
-        inputs.forEach(input => {
-            input.addEventListener('input', function() {
-                // This triggers recalculation of entity totals
-                recalculateEntityTotals(entityRow);
-            });
-            input.addEventListener('change', function() {
-                recalculateEntityTotals(entityRow);
-            });
-        });
-    }
-
-    // Recalculate entity totals from per-row inputs and entity total inputs
+    // Recalculate entity totals from inputs
     function recalculateEntityTotals(entityRow) {
-        let meterRows = [];
-        let nextRow = entityRow.nextElementSibling;
-        while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
-            meterRows.push(nextRow);
-            nextRow = nextRow.nextElementSibling;
+        // Find the summary row (next row after entity row)
+        let summaryRow = entityRow.nextElementSibling;
+        while (summaryRow && !summaryRow.classList.contains('summary-row')) {
+            summaryRow = summaryRow.nextElementSibling;
         }
-
-        // Get entity total inputs
-        const entityTotalAccountInput = entityRow.querySelector('.entity-total-account');
-        const entityTotalOutstandingInput = entityRow.querySelector('.entity-total-outstanding');
-        const entityTotalPrevPaymentInput = entityRow.querySelector('.entity-total-prev-payment');
-        const entityTotalCurrentInput = entityRow.querySelector('.entity-total-current');
-        const entityBillNoInput = entityRow.querySelector('.bill-no-input');
-
-        // Get values from entity total inputs (these are the master values)
+        
+        if (!summaryRow) return;
+        
+        const entityTotalAccountInput = summaryRow.querySelector('.entity-total-account');
+        const entityTotalOutstandingInput = summaryRow.querySelector('.entity-total-outstanding');
+        const entityTotalPrevPaymentInput = summaryRow.querySelector('.entity-total-prev-payment');
+        const entityTotalCurrentInput = summaryRow.querySelector('.entity-total-current');
+        
         let totalAccountCharges = parseFloat(entityTotalAccountInput ? entityTotalAccountInput.value : 0) || 0;
         let totalOutstanding = parseFloat(entityTotalOutstandingInput ? entityTotalOutstandingInput.value : 0) || 0;
         let totalPrevPayment = parseFloat(entityTotalPrevPaymentInput ? entityTotalPrevPaymentInput.value : 0) || 0;
         let totalCurrentCharges = totalOutstanding + totalAccountCharges - totalPrevPayment;
-
-        // Update total current
+        
         if (entityTotalCurrentInput) {
             entityTotalCurrentInput.value = totalCurrentCharges.toFixed(2);
             if (totalCurrentCharges < 0) {
@@ -1310,8 +1290,15 @@
                 entityTotalCurrentInput.classList.remove('negative');
             }
         }
-
+        
         // Update status
+        let meterRows = [];
+        let nextRow = summaryRow.nextElementSibling;
+        while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
+            meterRows.push(nextRow);
+            nextRow = nextRow.nextElementSibling;
+        }
+        
         let totalPaid = 0;
         meterRows.forEach(row => {
             const amountPaidInput = row.querySelector('.amount-paid-input');
@@ -1319,9 +1306,10 @@
                 totalPaid += parseFloat(amountPaidInput.value) || 0;
             }
         });
-
-        const entityStatusSpan = document.getElementById('entity-status-' + entityRow.getAttribute('data-entity-id'));
-        const entityTotalSpan = document.getElementById('entity-total-' + entityRow.getAttribute('data-entity-id'));
+        
+        const entityId = entityRow.getAttribute('data-entity-id');
+        const entityStatusSpan = document.getElementById('entity-status-' + entityId);
+        const entityTotalSpan = document.getElementById('entity-total-' + entityId);
         if (entityTotalSpan) {
             entityTotalSpan.innerHTML = '(Total Paid: $' + totalPaid.toFixed(2) + ')';
         }
@@ -1336,7 +1324,6 @@
         }
     }
 
-    // Save entity data with background saving
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         
@@ -1354,8 +1341,15 @@
         
         showSavingToast(entityName);
         
+        // Find summary row
+        let summaryRow = entityRow.nextElementSibling;
+        while (summaryRow && !summaryRow.classList.contains('summary-row')) {
+            summaryRow = summaryRow.nextElementSibling;
+        }
+        
+        // Find meter rows
         let meterRows = [];
-        let nextRow = entityRow.nextElementSibling;
+        let nextRow = summaryRow ? summaryRow.nextElementSibling : null;
         while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
             meterRows.push(nextRow);
             nextRow = nextRow.nextElementSibling;
@@ -1367,15 +1361,15 @@
             return;
         }
         
-        // Highlight saving rows
+        // Highlight saving
         meterRows.forEach(row => {
             const inputs = row.querySelectorAll('.inline-input');
             inputs.forEach(input => input.classList.add('saving'));
         });
-        
-        // Also highlight entity inputs
-        const entityInputs = entityRow.querySelectorAll('.inline-input');
-        entityInputs.forEach(input => input.classList.add('saving'));
+        if (summaryRow) {
+            const inputs = summaryRow.querySelectorAll('.inline-input');
+            inputs.forEach(input => input.classList.add('saving'));
+        }
         
         const saveBtn = entityRow.querySelector('.save-entity-btn');
         const originalBtnText = saveBtn ? saveBtn.innerHTML : 'Save All';
@@ -1384,16 +1378,23 @@
             saveBtn.disabled = true;
         }
         
-        // Get entity-level values
-        const entityBillNoInput = entityRow.querySelector('.bill-no-input');
-        const entityTotalAccountInput = entityRow.querySelector('.entity-total-account');
-        const entityTotalOutstandingInput = entityRow.querySelector('.entity-total-outstanding');
-        const entityTotalPrevPaymentInput = entityRow.querySelector('.entity-total-prev-payment');
+        // Get entity-level values from summary row
+        let entityBillNo = '';
+        let entityTotalAccountCharges = 0;
+        let entityTotalOutstanding = 0;
+        let entityTotalPrevPayment = 0;
         
-        const entityBillNo = entityBillNoInput ? entityBillNoInput.value : '';
-        const entityTotalAccountCharges = parseFloat(entityTotalAccountInput ? entityTotalAccountInput.value : 0) || 0;
-        const entityTotalOutstanding = parseFloat(entityTotalOutstandingInput ? entityTotalOutstandingInput.value : 0) || 0;
-        const entityTotalPrevPayment = parseFloat(entityTotalPrevPaymentInput ? entityTotalPrevPaymentInput.value : 0) || 0;
+        if (summaryRow) {
+            const billNoInput = summaryRow.querySelector('.entity-billno');
+            const totalAccountInput = summaryRow.querySelector('.entity-total-account');
+            const totalOutstandingInput = summaryRow.querySelector('.entity-total-outstanding');
+            const totalPrevPaymentInput = summaryRow.querySelector('.entity-total-prev-payment');
+            
+            entityBillNo = billNoInput ? billNoInput.value : '';
+            entityTotalAccountCharges = parseFloat(totalAccountInput ? totalAccountInput.value : 0) || 0;
+            entityTotalOutstanding = parseFloat(totalOutstandingInput ? totalOutstandingInput.value : 0) || 0;
+            entityTotalPrevPayment = parseFloat(totalPrevPaymentInput ? totalPrevPaymentInput.value : 0) || 0;
+        }
         
         const batchBills = [];
         let isFirstPhone = true;
@@ -1419,11 +1420,9 @@
             const previousPayment = entityTotalPrevPayment;
             const totalCurrentCharges = outstandingCharges + totalAccountCharges - previousPayment;
             
-            // Only send bill_no for first phone
             const billNo = isFirstPhone ? entityBillNo : '';
             isFirstPhone = false;
             
-            // Get phone number from display
             let phoneNumber = '';
             const phoneDisplay = row.querySelector('.phone-number-item');
             if (phoneDisplay) {
@@ -1474,7 +1473,6 @@
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
             
-            // Remove saving highlight, add saved highlight
             meterRows.forEach(row => {
                 const inputs = row.querySelectorAll('.inline-input');
                 inputs.forEach(input => {
@@ -1483,17 +1481,36 @@
                     setTimeout(() => input.classList.remove('saved'), 2000);
                 });
             });
-            entityInputs.forEach(input => {
-                input.classList.remove('saving');
-                input.classList.add('saved');
-                setTimeout(() => input.classList.remove('saved'), 2000);
-            });
+            if (summaryRow) {
+                const inputs = summaryRow.querySelectorAll('.inline-input');
+                inputs.forEach(input => {
+                    input.classList.remove('saving');
+                    input.classList.add('saved');
+                    setTimeout(() => input.classList.remove('saved'), 2000);
+                });
+            }
             
             hideSavingToast();
             
             if (result.success) {
                 showToast(entityName + ': Saved ' + result.success_count + ' record(s) (' + totalTime + 'ms)', false);
-                updateEntityTotalDisplay(entityId, batchBills);
+                // Update status
+                let totalPaid = 0;
+                batchBills.forEach(b => { totalPaid += b.amount_paid || 0; });
+                const entityStatusSpan = document.getElementById('entity-status-' + entityId);
+                const entityTotalSpan = document.getElementById('entity-total-' + entityId);
+                if (entityTotalSpan) {
+                    entityTotalSpan.innerHTML = '(Total Paid: $' + totalPaid.toFixed(2) + ')';
+                }
+                if (entityStatusSpan) {
+                    if (totalPaid > 0) {
+                        entityStatusSpan.innerHTML = 'Paid';
+                        entityStatusSpan.className = 'status-badge status-paid';
+                    } else {
+                        entityStatusSpan.innerHTML = 'Pending';
+                        entityStatusSpan.className = 'status-badge status-pending';
+                    }
+                }
             } else {
                 showToast(entityName + ': ' + result.error_count + ' failed', true);
             }
@@ -1503,7 +1520,10 @@
                 const inputs = row.querySelectorAll('.inline-input');
                 inputs.forEach(input => input.classList.remove('saving'));
             });
-            entityInputs.forEach(input => input.classList.remove('saving'));
+            if (summaryRow) {
+                const inputs = summaryRow.querySelectorAll('.inline-input');
+                inputs.forEach(input => input.classList.remove('saving'));
+            }
             hideSavingToast();
             showToast('Network error. Please try again.', true);
         } finally {
@@ -1515,40 +1535,7 @@
             isLoading = false;
         }
     }
-    
-    function updateEntityTotalDisplay(entityId, batchBills) {
-        let totalPaid = 0;
-        for (let i = 0; i < batchBills.length; i++) {
-            totalPaid += batchBills[i].amount_paid || 0;
-        }
-        
-        const entityTotalSpan = document.getElementById('entity-total-' + entityId);
-        if (entityTotalSpan) {
-            entityTotalSpan.innerHTML = '(Total Paid: $' + totalPaid.toFixed(2) + ')';
-        }
-        
-        const entityStatusSpan = document.getElementById('entity-status-' + entityId);
-        if (entityStatusSpan) {
-            if (totalPaid > 0) {
-                entityStatusSpan.innerHTML = 'Paid';
-                entityStatusSpan.className = 'status-badge status-paid';
-            } else {
-                entityStatusSpan.innerHTML = 'Pending';
-                entityStatusSpan.className = 'status-badge status-pending';
-            }
-        }
-    }
 
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str).replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
-    
     function attachEventListeners() {
         // Save button click
         document.getElementById('billsTableBody').addEventListener('click', async function(e) {
@@ -1568,9 +1555,12 @@
             if (target.classList && (target.classList.contains('entity-total-account') || 
                                      target.classList.contains('entity-total-outstanding') || 
                                      target.classList.contains('entity-total-prev-payment'))) {
-                const entityRow = target.closest('tr.entity-row');
-                if (entityRow) {
-                    recalculateEntityTotals(entityRow);
+                const summaryRow = target.closest('tr.summary-row');
+                if (summaryRow) {
+                    const entityRow = summaryRow.previousElementSibling;
+                    if (entityRow && entityRow.classList.contains('entity-row')) {
+                        recalculateEntityTotals(entityRow);
+                    }
                 }
             }
         });
@@ -1688,7 +1678,6 @@
                     }
                     if (hasVisible) break;
                 }
-                // Always show entity, even if no visible meters
                 visibleClusterEntities.push(entity);
                 hasVisibleInCluster = true;
             }
@@ -1740,7 +1729,6 @@
                     }
                     if (hasVisible) break;
                 }
-                // Always show entity
                 visibleGroupEntities.push(entity);
             }
             
