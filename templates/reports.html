@@ -1520,6 +1520,8 @@
 
         // ============ PRINT SELECTED BUTTON ============
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
+            console.log('🖨️ Print Selected button clicked');
+            
             const schoolIds = getSelectedSchoolIds();
             const departmentIds = getSelectedDepartmentIds();
             const utilityTypes = getSelectedUtilityTypes();
@@ -1527,6 +1529,11 @@
             const month = document.getElementById('printMonth').value;
             const year = document.getElementById('printYear').value;
             const itemsPerPage = parseInt(document.getElementById('itemsPerPage').value) || 10;
+
+            console.log('📊 Selected schools:', schoolIds);
+            console.log('📊 Selected departments:', departmentIds);
+            console.log('📊 Selected utilities:', utilityTypes);
+            console.log('📅 Month:', month, 'Year:', year);
 
             // Validation
             if (schoolIds.length === 0 && departmentIds.length === 0) {
@@ -1549,23 +1556,34 @@
 
                 // Fetch bills for each utility type
                 for (const utilityType of utilityTypes) {
+                    console.log(`📡 Fetching ${utilityType} bills...`);
+                    
                     // Fetch for schools
                     for (const schoolId of schoolIds) {
                         let url = `/api/utility-bills?utility_type=${utilityType}&entity_type=school&entity_id=${schoolId}`;
                         if (month !== 'all') url += `&month=${month}`;
                         if (year !== 'all') url += `&year=${year}`;
                         
-                        const resp = await fetch(url);
-                        if (resp.ok) {
-                            const bills = await resp.json();
-                            allBills.push(...bills);
-                            
-                            if (!entityMap.has(`school_${schoolId}`)) {
-                                const school = allSchoolsData.find(s => s.id === schoolId);
-                                if (school) {
-                                    entityMap.set(`school_${schoolId}`, { name: school.name, type: 'school' });
+                        console.log(`🔗 Fetching: ${url}`);
+                        
+                        try {
+                            const resp = await fetch(url);
+                            if (resp.ok) {
+                                const bills = await resp.json();
+                                console.log(`✅ Found ${bills.length} bills for school ${schoolId}`);
+                                allBills.push(...bills);
+                                
+                                if (!entityMap.has(`school_${schoolId}`)) {
+                                    const school = allSchoolsData.find(s => s.id === schoolId);
+                                    if (school) {
+                                        entityMap.set(`school_${schoolId}`, { name: school.name, type: 'school' });
+                                    }
                                 }
+                            } else {
+                                console.error(`❌ Failed to fetch bills for school ${schoolId}: ${resp.status}`);
                             }
+                        } catch (err) {
+                            console.error(`❌ Error fetching school ${schoolId}:`, err);
                         }
                     }
 
@@ -1575,24 +1593,35 @@
                         if (month !== 'all') url += `&month=${month}`;
                         if (year !== 'all') url += `&year=${year}`;
                         
-                        const resp = await fetch(url);
-                        if (resp.ok) {
-                            const bills = await resp.json();
-                            allBills.push(...bills);
-                            
-                            if (!entityMap.has(`department_${deptId}`)) {
-                                const dept = allDepartmentsData.find(d => d.id === deptId);
-                                if (dept) {
-                                    const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-                                    entityMap.set(`department_${deptId}`, { name: displayName, type: 'department' });
+                        console.log(`🔗 Fetching: ${url}`);
+                        
+                        try {
+                            const resp = await fetch(url);
+                            if (resp.ok) {
+                                const bills = await resp.json();
+                                console.log(`✅ Found ${bills.length} bills for department ${deptId}`);
+                                allBills.push(...bills);
+                                
+                                if (!entityMap.has(`department_${deptId}`)) {
+                                    const dept = allDepartmentsData.find(d => d.id === deptId);
+                                    if (dept) {
+                                        const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
+                                        entityMap.set(`department_${deptId}`, { name: displayName, type: 'department' });
+                                    }
                                 }
+                            } else {
+                                console.error(`❌ Failed to fetch bills for department ${deptId}: ${resp.status}`);
                             }
+                        } catch (err) {
+                            console.error(`❌ Error fetching department ${deptId}:`, err);
                         }
                     }
                 }
 
+                console.log(`📊 Total bills fetched: ${allBills.length}`);
+
                 if (allBills.length === 0) {
-                    alert('⚠️ No bills found for the selected entities and period.');
+                    alert('⚠️ No bills found for the selected entities and period. Check console for details.');
                     loadingIndicator.style.display = 'none';
                     return;
                 }
@@ -1665,8 +1694,10 @@
                     printRows.push(row);
                 }
 
+                console.log(`📄 Processed ${printRows.length} rows for printing`);
+
                 if (printRows.length === 0) {
-                    alert('⚠️ No data to print.');
+                    alert('⚠️ No data to print after processing.');
                     loadingIndicator.style.display = 'none';
                     return;
                 }
@@ -1678,8 +1709,8 @@
                 generateUtilityPrint(printRows, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone);
 
             } catch (error) {
-                console.error('Error:', error);
-                alert('❌ Error generating print report: ' + error.message);
+                console.error('❌ Error in print flow:', error);
+                alert('❌ Error generating print report: ' + error.message + '\n\nCheck console for details.');
             } finally {
                 loadingIndicator.style.display = 'none';
             }
