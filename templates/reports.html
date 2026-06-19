@@ -737,6 +737,11 @@
             box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.08);
         }
 
+        .pagination-control .info-text {
+            font-size: 0.75rem;
+            color: var(--gray);
+        }
+
         .summary-cards {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -1070,7 +1075,7 @@
                     <div class="pagination-control">
                         <label>Items per page:</label>
                         <input type="number" id="itemsPerPage" value="10" min="5" max="50">
-                        <span style="font-size:0.75rem; color:var(--gray);">(for Water &amp; Electricity)</span>
+                        <span class="info-text">(for Telephone only)</span>
                     </div>
                 </div>
             </div>
@@ -1078,43 +1083,8 @@
             <!-- Column Selection for Print -->
             <div class="column-selection-section">
                 <h4>Select Columns to Print:</h4>
-                <div class="column-checkboxes">
-                    <div class="column-checkbox-item">
-                        <input type="checkbox" class="print-col-checkbox" data-col="no" checked disabled>
-                        <label>No.</label>
-                    </div>
-                    <div class="column-checkbox-item">
-                        <input type="checkbox" class="print-col-checkbox" data-col="entityName" checked>
-                        <label>Entity Name</label>
-                    </div>
-                    <div class="column-checkbox-item">
-                        <input type="checkbox" class="print-col-checkbox" data-col="entityType" checked>
-                        <label>Type</label>
-                    </div>
-                    <div class="column-checkbox-item">
-                        <input type="checkbox" class="print-col-checkbox" data-col="accountNumber" checked>
-                        <label>Account / Meter</label>
-                    </div>
-                    <div class="column-checkbox-item">
-                        <input type="checkbox" class="print-col-checkbox" data-col="consumption" checked>
-                        <label>Consumption</label>
-                    </div>
-                    <div class="column-checkbox-item">
-                        <input type="checkbox" class="print-col-checkbox" data-col="billAmount" checked>
-                        <label>Bill Amount</label>
-                    </div>
-                    <div class="column-checkbox-item">
-                        <input type="checkbox" class="print-col-checkbox" data-col="amountPaid" checked>
-                        <label>Amount Paid</label>
-                    </div>
-                    <div class="column-checkbox-item">
-                        <input type="checkbox" class="print-col-checkbox" data-col="outstanding" checked>
-                        <label>Outstanding</label>
-                    </div>
-                    <div class="column-checkbox-item">
-                        <input type="checkbox" class="print-col-checkbox" data-col="period" checked>
-                        <label>Period</label>
-                    </div>
+                <div class="column-checkboxes" id="printColumnCheckboxes">
+                    <!-- Columns will be dynamically populated based on selected utilities -->
                 </div>
             </div>
             
@@ -1276,6 +1246,95 @@
         document.getElementById('year').max = 2035;
         document.getElementById('month').value = new Date().getMonth() + 1;
 
+        // Column definitions for each utility type
+        const COLUMN_DEFINITIONS = {
+            water: [
+                { key: 'no', label: 'No.', show: true, required: true },
+                { key: 'entityName', label: 'Entity Name', show: true },
+                { key: 'entityType', label: 'Type', show: true },
+                { key: 'accountNumber', label: 'Account No.', show: true },
+                { key: 'meterNumber', label: 'Meter No.', show: true },
+                { key: 'consumption', label: 'Consumption (m³)', show: true },
+                { key: 'billAmount', label: 'Bill Amount ($)', show: true },
+                { key: 'amountPaid', label: 'Amount Paid ($)', show: true },
+                { key: 'outstanding', label: 'Outstanding ($)', show: true },
+                { key: 'period', label: 'Period', show: true }
+            ],
+            electricity: [
+                { key: 'no', label: 'No.', show: true, required: true },
+                { key: 'entityName', label: 'Entity Name', show: true },
+                { key: 'entityType', label: 'Type', show: true },
+                { key: 'accountNumber', label: 'Account No.', show: true },
+                { key: 'meterNumber', label: 'Meter No.', show: true },
+                { key: 'consumption', label: 'Consumption (kWh)', show: true },
+                { key: 'billAmount', label: 'Bill Amount ($)', show: true },
+                { key: 'amountPaid', label: 'Amount Paid ($)', show: true },
+                { key: 'outstanding', label: 'Outstanding ($)', show: true },
+                { key: 'period', label: 'Period', show: true }
+            ],
+            telephone: [
+                { key: 'no', label: 'No.', show: true, required: true },
+                { key: 'entityName', label: 'Entity Name', show: true },
+                { key: 'entityType', label: 'Type', show: true },
+                { key: 'accountNumber', label: 'Account No.', show: true },
+                { key: 'phoneNumber', label: 'Phone No.', show: true },
+                { key: 'billNumber', label: 'Bill No.', show: true },
+                { key: 'rentalAmount', label: 'Rental Amount ($)', show: true },
+                { key: 'totalAmount', label: 'Total Amount ($)', show: true },
+                { key: 'totalAccountCharges', label: 'Total Account Charges ($)', show: true },
+                { key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true },
+                { key: 'previousPayment', label: 'Previous Payment ($)', show: true },
+                { key: 'totalCurrentCharges', label: 'Total Current Charges ($)', show: true },
+                { key: 'amountPaid', label: 'Amount Paid ($)', show: true },
+                { key: 'period', label: 'Period', show: true }
+            ]
+        };
+
+        // Get column definitions based on selected utility types
+        function getSelectedColumnDefinitions() {
+            const selectedTypes = getSelectedUtilityTypes();
+            if (selectedTypes.length === 0) return [];
+            
+            // If multiple utilities selected, use the first one's columns
+            // Or we could combine them - but for simplicity, use the first selected
+            const primaryType = selectedTypes[0];
+            return COLUMN_DEFINITIONS[primaryType] || [];
+        }
+
+        function populateColumnCheckboxes() {
+            const container = document.getElementById('printColumnCheckboxes');
+            const selectedTypes = getSelectedUtilityTypes();
+            
+            if (selectedTypes.length === 0) {
+                container.innerHTML = '<span style="color:var(--gray); font-size:0.85rem;">Please select at least one utility type</span>';
+                return;
+            }
+
+            // Use the first selected utility type for column definitions
+            const primaryType = selectedTypes[0];
+            const columns = COLUMN_DEFINITIONS[primaryType] || [];
+            
+            container.innerHTML = '';
+            columns.forEach(col => {
+                const div = document.createElement('div');
+                div.className = 'column-checkbox-item';
+                const checkedAttr = col.show !== false ? 'checked' : '';
+                const disabledAttr = col.required ? 'disabled' : '';
+                div.innerHTML = `
+                    <input type="checkbox" class="print-col-checkbox" data-col="${col.key}" ${checkedAttr} ${disabledAttr}>
+                    <label>${col.label}</label>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // Listen for utility type changes to update column checkboxes
+        document.addEventListener('change', function(e) {
+            if (e.target.classList && e.target.classList.contains('utility-type-checkbox')) {
+                populateColumnCheckboxes();
+            }
+        });
+
         function populateYears() {
             const yearSelect = document.getElementById('printYear');
             yearSelect.innerHTML = '<option value="all">All Years</option>';
@@ -1365,6 +1424,7 @@
 
         function toggleAllUtilities(checked) {
             document.querySelectorAll('.utility-type-checkbox').forEach(cb => cb.checked = checked);
+            populateColumnCheckboxes();
         }
 
         function getSelectedSchoolIds() {
@@ -1493,6 +1553,16 @@
                     const entityName = entityInfo?.name || bill.entity_name || 'Unknown';
                     const entityType = entityInfo?.type || bill.entity_type || 'unknown';
 
+                    let parsedNotes = {};
+                    if (bill.notes && bill.notes.startsWith('{')) {
+                        try { parsedNotes = JSON.parse(bill.notes); } catch(e) {}
+                    }
+
+                    // Check if this is a summary bill for telephone (skip it)
+                    if (bill.utility_type === 'telephone' && bill.notes && bill.notes.includes('isSummary')) {
+                        continue;
+                    }
+
                     let consumption = '—';
                     if (bill.utility_type === 'water' && bill.consumption_m3) {
                         consumption = bill.consumption_m3.toFixed(2) + ' m³';
@@ -1509,25 +1579,31 @@
                         meterTelNo = bill.meter_number || '—';
                     }
 
-                    // Check if this is a summary bill for telephone (skip it)
-                    if (bill.utility_type === 'telephone' && bill.notes && bill.notes.includes('isSummary')) {
-                        continue;
-                    }
-
-                    printRows.push({
+                    const row = {
                         no: serial++,
                         entityName: entityName,
                         entityType: entityType === 'school' ? '🏫 School' : '🏛️ Department',
                         utilityType: bill.utility_type === 'water' ? '💧 Water' : 
                                     bill.utility_type === 'electricity' ? '⚡ Electricity' : '📞 Telephone',
                         accountNumber: bill.account_number || '—',
-                        meterTelNo: meterTelNo,
+                        meterNumber: bill.utility_type === 'telephone' ? '—' : (bill.meter_number || '—'),
+                        phoneNumber: bill.utility_type === 'telephone' ? (bill.phone_number || '—') : '—',
+                        billNumber: bill.utility_type === 'telephone' ? (bill.bill_number || bill.meter_number || '—') : '—',
+                        rentalAmount: bill.utility_type === 'telephone' ? (parseFloat(bill.current_charges) || 0) : 0,
+                        totalAmount: bill.utility_type === 'telephone' ? (parsedNotes.totalAmount || 0) : 0,
+                        totalAccountCharges: bill.utility_type === 'telephone' ? (parsedNotes.totalAccountCharges || 0) : 0,
+                        previousOutstanding: bill.utility_type === 'telephone' ? (parseFloat(bill.unsettled_charges) || 0) : 0,
+                        previousPayment: bill.utility_type === 'telephone' ? (parsedNotes.previousPayment || 0) : 0,
+                        totalCurrentCharges: bill.utility_type === 'telephone' ? 
+                            ((parseFloat(bill.unsettled_charges) || 0) + (parsedNotes.totalAccountCharges || 0) - (parsedNotes.previousPayment || 0)) : 0,
                         consumption: consumption,
+                        meterTelNo: meterTelNo,
                         billAmount: parseFloat(bill.current_charges) || 0,
                         amountPaid: parseFloat(bill.amount_paid) || 0,
                         outstanding: parseFloat(bill.unsettled_charges) || 0,
                         period: getMonthName(bill.month) + ' ' + bill.year
-                    });
+                    };
+                    printRows.push(row);
                 }
 
                 if (printRows.length === 0) {
@@ -1536,8 +1612,18 @@
                     return;
                 }
 
-                // Generate print HTML with pagination
-                generateUtilityPrint(printRows, month, year, selectedColumns, itemsPerPage, utilityTypes);
+                // Check if Telephone is selected for pagination
+                const hasTelephone = utilityTypes.includes('telephone');
+                const hasWaterElectricity = utilityTypes.some(u => u === 'water' || u === 'electricity');
+                
+                // Determine pagination: only telephone gets paginated
+                const usePagination = hasTelephone && !hasWaterElectricity;
+                // If both telephone and water/electricity are selected, telephone gets paginated, water/electricity don't
+                // Actually, we'll paginate only if ONLY telephone is selected
+                const paginateOnlyTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
+
+                // Generate print HTML
+                generateUtilityPrint(printRows, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -1547,26 +1633,93 @@
             }
         });
 
-        function generateUtilityPrint(data, month, year, selectedColumns, itemsPerPage, utilityTypes) {
+        function generateUtilityPrint(data, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
             const yearDisplay = year !== 'all' ? year : 'All Years';
             
-            const totalPages = Math.ceil(data.length / itemsPerPage);
+            // Determine which columns to show based on utility types
+            const hasTelephone = utilityTypes.includes('telephone');
+            const hasWater = utilityTypes.includes('water');
+            const hasElectricity = utilityTypes.includes('electricity');
+            const hasWaterElectricity = hasWater || hasElectricity;
             
-            // Build column headers based on selection
-            const colConfig = [
-                { key: 'no', label: 'No.', show: true },
-                { key: 'entityName', label: 'Entity Name', show: selectedColumns.entityName !== false },
-                { key: 'entityType', label: 'Type', show: selectedColumns.entityType !== false },
-                { key: 'accountNumber', label: 'Account / Meter', show: selectedColumns.accountNumber !== false },
-                { key: 'consumption', label: 'Consumption', show: selectedColumns.consumption !== false },
-                { key: 'billAmount', label: 'Bill Amount ($)', show: selectedColumns.billAmount !== false },
-                { key: 'amountPaid', label: 'Amount Paid ($)', show: selectedColumns.amountPaid !== false },
-                { key: 'outstanding', label: 'Outstanding ($)', show: selectedColumns.outstanding !== false },
-                { key: 'period', label: 'Period', show: selectedColumns.period !== false }
-            ];
-            
+            // Build column headers based on selection and utility type
+            let colConfig = [];
+
+            // Always include No.
+            colConfig.push({ key: 'no', label: 'No.', show: true });
+
+            // Entity columns
+            if (selectedColumns.entityName !== false) {
+                colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
+            }
+            if (selectedColumns.entityType !== false) {
+                colConfig.push({ key: 'entityType', label: 'Type', show: true });
+            }
+
+            // Utility-specific columns
+            if (hasWaterElectricity) {
+                // Water/Electricity columns
+                if (selectedColumns.accountNumber !== false) {
+                    colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
+                }
+                if (selectedColumns.meterNumber !== false) {
+                    colConfig.push({ key: 'meterTelNo', label: 'Meter No.', show: true });
+                }
+                if (selectedColumns.consumption !== false) {
+                    colConfig.push({ key: 'consumption', label: hasWater ? 'Consumption (m³)' : 'Consumption (kWh)', show: true });
+                }
+                if (selectedColumns.billAmount !== false) {
+                    colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
+                }
+                if (selectedColumns.amountPaid !== false) {
+                    colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
+                }
+                if (selectedColumns.outstanding !== false) {
+                    colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
+                }
+            }
+
+            if (hasTelephone) {
+                // Telephone columns
+                if (selectedColumns.accountNumber !== false) {
+                    colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
+                }
+                if (selectedColumns.phoneNumber !== false) {
+                    colConfig.push({ key: 'meterTelNo', label: 'Phone No.', show: true });
+                }
+                if (selectedColumns.billNumber !== false) {
+                    colConfig.push({ key: 'billNumber', label: 'Bill No.', show: true });
+                }
+                if (selectedColumns.rentalAmount !== false) {
+                    colConfig.push({ key: 'rentalAmount', label: 'Rental Amount ($)', show: true });
+                }
+                if (selectedColumns.totalAmount !== false) {
+                    colConfig.push({ key: 'totalAmount', label: 'Total Amount ($)', show: true });
+                }
+                if (selectedColumns.totalAccountCharges !== false) {
+                    colConfig.push({ key: 'totalAccountCharges', label: 'Total Account Charges ($)', show: true });
+                }
+                if (selectedColumns.previousOutstanding !== false) {
+                    colConfig.push({ key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true });
+                }
+                if (selectedColumns.previousPayment !== false) {
+                    colConfig.push({ key: 'previousPayment', label: 'Previous Payment ($)', show: true });
+                }
+                if (selectedColumns.totalCurrentCharges !== false) {
+                    colConfig.push({ key: 'totalCurrentCharges', label: 'Total Current Charges ($)', show: true });
+                }
+                if (selectedColumns.amountPaid !== false) {
+                    colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
+                }
+            }
+
+            // Period column
+            if (selectedColumns.period !== false) {
+                colConfig.push({ key: 'period', label: 'Period', show: true });
+            }
+
             const visibleCols = colConfig.filter(c => c.show !== false);
             const utilityTypeLabels = utilityTypes.map(u => {
                 if (u === 'water') return '💧 Water';
@@ -1574,6 +1727,10 @@
                 if (u === 'telephone') return '📞 Telephone';
                 return u;
             }).join(', ');
+
+            // Determine if we should paginate (only for telephone-only)
+            const shouldPaginate = paginateOnlyTelephone && hasTelephone;
+            const totalPages = shouldPaginate ? Math.ceil(data.length / itemsPerPage) : 1;
 
             let printHtml = `
                 <!DOCTYPE html>
@@ -1598,6 +1755,7 @@
                         .print-table td:first-child, .print-table th:first-child { text-align: center; width: 30px; }
                         .print-table .currency-cell { text-align: right; }
                         .print-table .entity-name-cell { font-weight: 600; }
+                        .print-table .mono-cell { font-family: monospace; font-size: 7pt; }
                         .page-number { text-align: center; margin-top: 20px; font-size: 8pt; color: #666; }
                         .footer-note { text-align: center; margin-top: 15px; font-size: 7pt; color: #999; border-top: 1px solid #ddd; padding-top: 8px; }
                         .utility-badge { display: inline-block; padding: 1px 8px; border-radius: 12px; font-size: 6.5pt; font-weight: 600; }
@@ -1612,25 +1770,41 @@
                 <body>
             `;
 
+            const totalItems = data.length;
+            const pageSize = shouldPaginate ? itemsPerPage : totalItems;
+
             for (let page = 1; page <= totalPages; page++) {
                 const startIdx = (page - 1) * itemsPerPage;
-                const endIdx = Math.min(startIdx + itemsPerPage, data.length);
-                const pageData = data.slice(startIdx, endIdx);
+                const endIdx = shouldPaginate ? Math.min(startIdx + itemsPerPage, data.length) : data.length;
+                const pageData = shouldPaginate ? data.slice(startIdx, endIdx) : data;
                 
                 // Calculate totals for this page
                 let totalBillAmount = 0;
                 let totalAmountPaid = 0;
                 let totalOutstanding = 0;
+                let totalRentalAmount = 0;
+                let totalTotalAmount = 0;
+                let totalAccountCharges = 0;
+                let totalPrevOutstanding = 0;
+                let totalPrevPayment = 0;
+                let totalCurrentCharges = 0;
+
                 pageData.forEach(item => {
                     totalBillAmount += item.billAmount || 0;
                     totalAmountPaid += item.amountPaid || 0;
                     totalOutstanding += item.outstanding || 0;
+                    totalRentalAmount += item.rentalAmount || 0;
+                    totalTotalAmount += item.totalAmount || 0;
+                    totalAccountCharges += item.totalAccountCharges || 0;
+                    totalPrevOutstanding += item.previousOutstanding || 0;
+                    totalPrevPayment += item.previousPayment || 0;
+                    totalCurrentCharges += item.totalCurrentCharges || 0;
                 });
 
                 printHtml += `
                     <div class="print-page">
                         <div class="attachment-header">
-                            Page ${page} of ${totalPages}
+                            ${shouldPaginate ? `Page ${page} of ${totalPages}` : ''}
                         </div>
                         <div class="print-header">
                             <h2>🏛️ MINISTRY OF EDUCATION BRUNEI</h2>
@@ -1664,12 +1838,13 @@
                             printHtml += `<td><span class="utility-badge ${cls}">${escapeHtml(value)}</span></td>`;
                         } else if (col.key === 'no') {
                             printHtml += `<td>${value}</td>`;
-                        } else if (['billAmount', 'amountPaid', 'outstanding'].includes(col.key)) {
+                        } else if (['billAmount', 'amountPaid', 'outstanding', 'rentalAmount', 'totalAmount', 
+                                    'totalAccountCharges', 'previousOutstanding', 'previousPayment', 'totalCurrentCharges'].includes(col.key)) {
                             printHtml += `<td class="currency-cell">${value}</td>`;
-                        } else if (col.key === 'accountNumber') {
-                            printHtml += `<td style="font-family:monospace;font-size:7pt;">${escapeHtml(value)}</td>`;
-                        } else if (col.key === 'meterTelNo') {
-                            printHtml += `<td style="font-family:monospace;font-size:7pt;">${escapeHtml(value)}</td>`;
+                        } else if (col.key === 'accountNumber' || col.key === 'meterTelNo' || col.key === 'billNumber') {
+                            printHtml += `<td class="mono-cell">${escapeHtml(value)}</td>`;
+                        } else if (col.key === 'consumption') {
+                            printHtml += `<td>${escapeHtml(value)}</td>`;
                         } else {
                             printHtml += `<td>${escapeHtml(value)}</td>`;
                         }
@@ -1681,9 +1856,58 @@
                 printHtml += `
                             <tr class="summary-row">
                                 <td colspan="${visibleCols.length - 3}"></td>
-                                <td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>
-                                <td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>
-                                <td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>
+                `;
+
+                // Add summary columns based on what's visible
+                if (hasWaterElectricity && hasTelephone) {
+                    // Both types
+                    if (visibleCols.some(c => c.key === 'billAmount')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
+                    }
+                    if (visibleCols.some(c => c.key === 'amountPaid')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                    }
+                    if (visibleCols.some(c => c.key === 'outstanding')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
+                    }
+                } else if (hasWaterElectricity) {
+                    // Water/Electricity only
+                    if (visibleCols.some(c => c.key === 'billAmount')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
+                    }
+                    if (visibleCols.some(c => c.key === 'amountPaid')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                    }
+                    if (visibleCols.some(c => c.key === 'outstanding')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
+                    }
+                } else if (hasTelephone) {
+                    // Telephone only
+                    if (visibleCols.some(c => c.key === 'rentalAmount')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalRentalAmount.toFixed(2)}</strong></td>`;
+                    }
+                    if (visibleCols.some(c => c.key === 'totalAmount')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalTotalAmount.toFixed(2)}</strong></td>`;
+                    }
+                    if (visibleCols.some(c => c.key === 'totalAccountCharges')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalAccountCharges.toFixed(2)}</strong></td>`;
+                    }
+                    if (visibleCols.some(c => c.key === 'previousOutstanding')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalPrevOutstanding.toFixed(2)}</strong></td>`;
+                    }
+                    if (visibleCols.some(c => c.key === 'previousPayment')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalPrevPayment.toFixed(2)}</strong></td>`;
+                    }
+                    if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalCurrentCharges.toFixed(2)}</strong></td>`;
+                    }
+                    if (visibleCols.some(c => c.key === 'amountPaid')) {
+                        printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                    }
+                }
+
+                printHtml += `
+                                <td></td>
                             </tr>
                 `;
 
@@ -1691,7 +1915,7 @@
                             </tbody>
                         </table>
                         <div class="page-number">
-                            Page ${page} of ${totalPages}
+                            ${shouldPaginate ? `Page ${page} of ${totalPages}` : ''}
                         </div>
                         <div class="footer-note">
                             This is a computer-generated document. No signature required.
@@ -2140,9 +2364,16 @@
             return str.replace(/"/g, '""');
         }
 
+        // Initialize
         populateYears();
         loadEntitiesForSelection();
         loadCheckboxLists();
+        populateColumnCheckboxes();
+
+        // Re-populate columns when utility selection changes
+        document.querySelectorAll('.utility-type-checkbox').forEach(cb => {
+            cb.addEventListener('change', populateColumnCheckboxes);
+        });
     </script>
 </body>
 </html>
