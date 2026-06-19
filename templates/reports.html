@@ -1236,6 +1236,9 @@
         </div>
     </div>
 
+    <!-- Print Preview Container (hidden, used for printing) -->
+    <div id="printPreviewContainer" style="display: none;"></div>
+
     <script>
         let allSchoolsData = [];
         let allDepartmentsData = [];
@@ -1705,8 +1708,8 @@
                 // Check if only telephone is selected for pagination
                 const paginateOnlyTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
 
-                // Generate and open print window
-                generateUtilityPrint(printRows, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone);
+                // Generate print preview
+                generatePrintPreview(printRows, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone);
 
             } catch (error) {
                 console.error('❌ Error in print flow:', error);
@@ -1716,7 +1719,7 @@
             }
         });
 
-        function generateUtilityPrint(data, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone) {
+        function generatePrintPreview(data, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
             const yearDisplay = year !== 'all' ? year : 'All Years';
@@ -2115,9 +2118,6 @@
                         window.onload = function() {
                             setTimeout(function() {
                                 window.print();
-                                setTimeout(function() {
-                                    window.close();
-                                }, 5000);
                             }, 500);
                         };
                     <\/script>
@@ -2125,12 +2125,36 @@
                 </html>
             `;
 
-            const printWindow = window.open('', '_blank', 'width=1200,height=800');
-            if (printWindow) {
-                printWindow.document.write(printHtml);
-                printWindow.document.close();
+            // Open in a new tab for print preview
+            const previewWindow = window.open('', '_blank');
+            if (previewWindow) {
+                previewWindow.document.write(printHtml);
+                previewWindow.document.close();
+                // Focus the window
+                previewWindow.focus();
             } else {
-                alert('⚠️ Please allow pop-ups for this site to print. Click the print button again.');
+                // If pop-up blocked, use the current page with print styles
+                alert('⚠️ Please allow pop-ups for this site, or click the Print button below.');
+                
+                // Create a hidden iframe as fallback
+                const iframe = document.createElement('iframe');
+                iframe.style.position = 'absolute';
+                iframe.style.width = '0';
+                iframe.style.height = '0';
+                iframe.style.border = 'none';
+                document.body.appendChild(iframe);
+                
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+                doc.open();
+                doc.write(printHtml);
+                doc.close();
+                
+                setTimeout(() => {
+                    iframe.contentWindow.print();
+                    setTimeout(() => {
+                        document.body.removeChild(iframe);
+                    }, 5000);
+                }, 500);
             }
         }
 
@@ -2574,9 +2598,6 @@
                         window.onload = function() {
                             setTimeout(function() {
                                 window.print();
-                                setTimeout(function() {
-                                    window.close();
-                                }, 3000);
                             }, 500);
                         };
                     <\/script>
@@ -2584,10 +2605,12 @@
                 </html>
             `;
             
-            const printWindow = window.open('', '_blank', 'width=1200,height=800');
-            if (printWindow) {
-                printWindow.document.write(printHtml);
-                printWindow.document.close();
+            // Open in new tab for print preview
+            const previewWindow = window.open('', '_blank');
+            if (previewWindow) {
+                previewWindow.document.write(printHtml);
+                previewWindow.document.close();
+                previewWindow.focus();
             } else {
                 alert('⚠️ Please allow pop-ups for this site to print.');
             }
