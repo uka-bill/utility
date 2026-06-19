@@ -131,6 +131,7 @@
             list-style: none;
             gap: 4px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .nav-tabs li {
@@ -820,95 +821,68 @@
             white-space: nowrap;
         }
 
-        /* Print styles - only show report content */
         @media print {
-            /* Hide everything except the report content */
-            .navbar,
-            .page-header,
-            .print-section,
-            .info-note,
-            .report-controls,
-            .action-buttons,
-            .summary-cards,
-            .scroll-hint,
-            .data-table-container::-webkit-scrollbar,
-            .no-print {
+            @page {
+                size: portrait;
+                margin: 0.5in;
+            }
+            
+            .navbar, .report-controls, .action-buttons, .summary-cards, .period-column,
+            .print-section, .no-print, .column-selection-section {
                 display: none !important;
             }
             
             .container {
-                margin-top: 0 !important;
-                padding: 0 !important;
-                max-width: 100% !important;
-            }
-            
-            .report-results {
-                display: block !important;
-                box-shadow: none !important;
-                padding: 20px !important;
-                border: none !important;
-                border-radius: 0 !important;
-                background: white !important;
-            }
-            
-            .results-header {
-                border-bottom: 2px solid #1a56db !important;
-                margin-bottom: 15px !important;
-                padding-bottom: 10px !important;
-            }
-            
-            .results-title {
-                font-size: 14pt !important;
-            }
-            
-            .data-table-container {
-                max-height: none !important;
-                overflow: visible !important;
-                border: none !important;
-            }
-            
-            .data-table {
-                min-width: auto !important;
-                width: 100% !important;
-                font-size: 9pt !important;
-            }
-            
-            .data-table th {
-                background: #1a56db !important;
-                color: white !important;
-                padding: 6px 8px !important;
-                font-size: 7.5pt !important;
-                position: static !important;
-            }
-            
-            .data-table td {
-                padding: 4px 8px !important;
-                font-size: 8pt !important;
-            }
-            
-            .data-table tbody tr:hover {
-                background: transparent !important;
-            }
-            
-            .badge {
-                font-size: 6pt !important;
-                padding: 1px 8px !important;
+                margin-top: 0;
+                padding: 0;
             }
             
             .print-only {
-                display: block !important;
+                display: block;
+            }
+            
+            .report-results {
+                box-shadow: none;
+                padding: 0;
+                border: none;
+            }
+            
+            .data-table {
+                min-width: auto;
+                width: 100%;
+                font-size: 9pt;
+            }
+            
+            .data-table th, .data-table td {
+                padding: 4px 6px;
+                font-size: 8pt;
             }
             
             body {
-                background: white !important;
-                font-size: 11pt !important;
+                background: white;
+                font-size: 11pt;
+            }
+            
+            .payment-print-table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            
+            .payment-print-table th, .payment-print-table td {
+                border: 1px solid #000;
+                padding: 4px 8px;
+                text-align: left;
+                font-size: 8pt;
+            }
+            
+            .page-break {
+                page-break-before: always;
             }
             
             .page-number {
                 text-align: center;
                 margin-top: 20px;
                 font-size: 8pt;
-                color: #666;
             }
         }
 
@@ -1008,16 +982,16 @@
             </div>
         </div>
         <ul class="nav-tabs">
-    <li><a href="/dashboard" >Dashboard</a></li>
-    <li><a href="/departments">Departments</a></li>
-    <li><a href="/schools">Schools</a></li>
-    <li><a href="/water">Water</a></li>
-    <li><a href="/electricity">Electricity</a></li>
-    <li><a href="/telephone">Telephone</a></li>
-    <li><a href="/sut-office">SUT Office</a></li>
-    <li><a href="/reports" class="active">Reports &amp; Print</a></li>
-    <li><a href="/data-management">Data Management</a></li>
-</ul>
+            <li><a href="/dashboard">Dashboard</a></li>
+            <li><a href="/departments">Departments</a></li>
+            <li><a href="/schools">Schools</a></li>
+            <li><a href="/water">Water</a></li>
+            <li><a href="/electricity">Electricity</a></li>
+            <li><a href="/telephone">Telephone</a></li>
+            <li><a href="/sut-office">SUT Office</a></li>
+            <li><a href="/reports" class="active">Reports &amp; Print</a></li>
+            <li><a href="/data-management">Data Management</a></li>
+        </ul>
     </nav>
 
     <div class="container">
@@ -1317,50 +1291,6 @@
             ]
         };
 
-        // Get column definitions based on selected utility types
-        function getSelectedColumnDefinitions() {
-            const selectedTypes = getSelectedUtilityTypes();
-            if (selectedTypes.length === 0) return [];
-            
-            // If multiple utilities selected, use the first one's columns
-            const primaryType = selectedTypes[0];
-            return COLUMN_DEFINITIONS[primaryType] || [];
-        }
-
-        function populateColumnCheckboxes() {
-            const container = document.getElementById('printColumnCheckboxes');
-            const selectedTypes = getSelectedUtilityTypes();
-            
-            if (selectedTypes.length === 0) {
-                container.innerHTML = '<span style="color:var(--gray); font-size:0.85rem;">Please select at least one utility type</span>';
-                return;
-            }
-
-            // Use the first selected utility type for column definitions
-            const primaryType = selectedTypes[0];
-            const columns = COLUMN_DEFINITIONS[primaryType] || [];
-            
-            container.innerHTML = '';
-            columns.forEach(col => {
-                const div = document.createElement('div');
-                div.className = 'column-checkbox-item';
-                const checkedAttr = col.show !== false ? 'checked' : '';
-                const disabledAttr = col.required ? 'disabled' : '';
-                div.innerHTML = `
-                    <input type="checkbox" class="print-col-checkbox" data-col="${col.key}" ${checkedAttr} ${disabledAttr}>
-                    <label>${col.label}</label>
-                `;
-                container.appendChild(div);
-            });
-        }
-
-        // Listen for utility type changes to update column checkboxes
-        document.addEventListener('change', function(e) {
-            if (e.target.classList && e.target.classList.contains('utility-type-checkbox')) {
-                populateColumnCheckboxes();
-            }
-        });
-
         function populateYears() {
             const yearSelect = document.getElementById('printYear');
             yearSelect.innerHTML = '<option value="all">All Years</option>';
@@ -1485,7 +1415,110 @@
             return selected;
         }
 
-        // Print Utility Bills
+        function populateColumnCheckboxes() {
+            const container = document.getElementById('printColumnCheckboxes');
+            const selectedTypes = getSelectedUtilityTypes();
+            
+            if (selectedTypes.length === 0) {
+                container.innerHTML = '<span style="color:var(--gray); font-size:0.85rem;">Please select at least one utility type</span>';
+                return;
+            }
+
+            const primaryType = selectedTypes[0];
+            const columns = COLUMN_DEFINITIONS[primaryType] || [];
+            
+            container.innerHTML = '';
+            columns.forEach(col => {
+                const div = document.createElement('div');
+                div.className = 'column-checkbox-item';
+                const checkedAttr = col.show !== false ? 'checked' : '';
+                const disabledAttr = col.required ? 'disabled' : '';
+                div.innerHTML = `
+                    <input type="checkbox" class="print-col-checkbox" data-col="${col.key}" ${checkedAttr} ${disabledAttr}>
+                    <label>${col.label}</label>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // Listen for utility type changes
+        document.addEventListener('change', function(e) {
+            if (e.target.classList && e.target.classList.contains('utility-type-checkbox')) {
+                populateColumnCheckboxes();
+            }
+        });
+
+        async function loadEntitiesForSelection() {
+            try {
+                const schoolsRes = await fetch('/api/entities?type=school');
+                if (schoolsRes.ok) {
+                    const schools = await schoolsRes.json();
+                    const schoolsSelect = document.getElementById('schoolsSelect');
+                    schoolsSelect.innerHTML = '';
+                    if (schools.length === 0) {
+                        schoolsSelect.innerHTML = '<option value="">No schools found</option>';
+                    } else {
+                        schools.forEach(school => {
+                            const option = document.createElement('option');
+                            option.value = school.id;
+                            option.textContent = school.name + (school.cluster ? ` (Cluster ${school.cluster})` : '');
+                            schoolsSelect.appendChild(option);
+                        });
+                    }
+                }
+                
+                const deptsRes = await fetch('/api/entities?type=department');
+                if (deptsRes.ok) {
+                    const departments = await deptsRes.json();
+                    const departmentsSelect = document.getElementById('departmentsSelect');
+                    departmentsSelect.innerHTML = '';
+                    if (departments.length === 0) {
+                        departmentsSelect.innerHTML = '<option value="">No departments found</option>';
+                    } else {
+                        departments.forEach(dept => {
+                            const option = document.createElement('option');
+                            option.value = dept.id;
+                            option.textContent = dept.name;
+                            departmentsSelect.appendChild(option);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading entities:', error);
+            }
+        }
+
+        document.querySelectorAll('input[name="selectionType"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const specificEntitiesSection = document.getElementById('specificEntitiesSection');
+                if (this.value === 'specificEntities') {
+                    specificEntitiesSection.classList.add('active');
+                    if (document.getElementById('schoolsSelect').children.length <= 1) {
+                        loadEntitiesForSelection();
+                    }
+                } else {
+                    specificEntitiesSection.classList.remove('active');
+                }
+            });
+        });
+
+        function getMonthName(month) {
+            const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+            return months[month - 1] || 'Unknown';
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        // ============ PRINT SELECTED BUTTON ============
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
             const schoolIds = getSelectedSchoolIds();
             const departmentIds = getSelectedDepartmentIds();
@@ -1495,6 +1528,7 @@
             const year = document.getElementById('printYear').value;
             const itemsPerPage = parseInt(document.getElementById('itemsPerPage').value) || 10;
 
+            // Validation
             if (schoolIds.length === 0 && departmentIds.length === 0) {
                 alert('⚠️ Please select at least one school or department.');
                 return;
@@ -1505,6 +1539,7 @@
                 return;
             }
 
+            // Show loading
             const loadingIndicator = document.getElementById('loadingIndicator');
             loadingIndicator.style.display = 'block';
 
@@ -1512,7 +1547,7 @@
                 const allBills = [];
                 const entityMap = new Map();
 
-                // Fetch for each utility type
+                // Fetch bills for each utility type
                 for (const utilityType of utilityTypes) {
                     // Fetch for schools
                     for (const schoolId of schoolIds) {
@@ -1566,7 +1601,7 @@
                 const printRows = [];
                 let serial = 1;
 
-                // Sort by entity name then by utility type
+                // Sort by entity name
                 allBills.sort((a, b) => {
                     const nameA = entityMap.get(`${a.entity_type}_${a.entity_id}`)?.name || a.entity_name || '';
                     const nameB = entityMap.get(`${b.entity_type}_${b.entity_id}`)?.name || b.entity_name || '';
@@ -1584,7 +1619,7 @@
                         try { parsedNotes = JSON.parse(bill.notes); } catch(e) {}
                     }
 
-                    // Check if this is a summary bill for telephone (skip it)
+                    // Skip summary bills for telephone
                     if (bill.utility_type === 'telephone' && bill.notes && bill.notes.includes('isSummary')) {
                         continue;
                     }
@@ -1594,8 +1629,6 @@
                         consumption = bill.consumption_m3.toFixed(2) + ' m³';
                     } else if (bill.utility_type === 'electricity' && bill.consumption_kwh) {
                         consumption = bill.consumption_kwh.toFixed(2) + ' kWh';
-                    } else if (bill.utility_type === 'telephone') {
-                        consumption = '—';
                     }
 
                     let meterTelNo = '—';
@@ -1638,14 +1671,10 @@
                     return;
                 }
 
-                // Check if Telephone is selected for pagination
-                const hasTelephone = utilityTypes.includes('telephone');
-                const hasWaterElectricity = utilityTypes.some(u => u === 'water' || u === 'electricity');
-                
-                // Determine pagination: only telephone gets paginated when selected alone
+                // Check if only telephone is selected for pagination
                 const paginateOnlyTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
 
-                // Generate print HTML
+                // Generate and open print window
                 generateUtilityPrint(printRows, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone);
 
             } catch (error) {
@@ -1661,19 +1690,16 @@
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
             const yearDisplay = year !== 'all' ? year : 'All Years';
             
-            // Determine which columns to show based on utility types
             const hasTelephone = utilityTypes.includes('telephone');
             const hasWater = utilityTypes.includes('water');
             const hasElectricity = utilityTypes.includes('electricity');
             const hasWaterElectricity = hasWater || hasElectricity;
             
-            // Build column headers based on selection and utility type
+            // Build column headers
             let colConfig = [];
 
-            // Always include No.
             colConfig.push({ key: 'no', label: 'No.', show: true });
 
-            // Entity columns
             if (selectedColumns.entityName !== false) {
                 colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
             }
@@ -1681,9 +1707,7 @@
                 colConfig.push({ key: 'entityType', label: 'Type', show: true });
             }
 
-            // Utility-specific columns
             if (hasWaterElectricity) {
-                // Water/Electricity columns
                 if (selectedColumns.accountNumber !== false) {
                     colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
                 }
@@ -1705,7 +1729,6 @@
             }
 
             if (hasTelephone) {
-                // Telephone columns
                 if (selectedColumns.accountNumber !== false) {
                     colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
                 }
@@ -1738,7 +1761,6 @@
                 }
             }
 
-            // Period column
             if (selectedColumns.period !== false) {
                 colConfig.push({ key: 'period', label: 'Period', show: true });
             }
@@ -1751,11 +1773,9 @@
                 return u;
             }).join(', ');
 
-            // Determine if we should paginate (only for telephone-only)
             const shouldPaginate = paginateOnlyTelephone && hasTelephone;
             const totalPages = shouldPaginate ? Math.ceil(data.length / itemsPerPage) : 1;
 
-            // Get current date for report header
             const now = new Date();
             const reportDate = now.toLocaleDateString('en-US', {
                 year: 'numeric',
@@ -1910,15 +1930,11 @@
                 <body>
             `;
 
-            const totalItems = data.length;
-            const pageSize = shouldPaginate ? itemsPerPage : totalItems;
-
             for (let page = 1; page <= totalPages; page++) {
                 const startIdx = (page - 1) * itemsPerPage;
                 const endIdx = shouldPaginate ? Math.min(startIdx + itemsPerPage, data.length) : data.length;
                 const pageData = shouldPaginate ? data.slice(startIdx, endIdx) : data;
                 
-                // Calculate totals for this page
                 let totalBillAmount = 0;
                 let totalAmountPaid = 0;
                 let totalOutstanding = 0;
@@ -1992,15 +2008,13 @@
                     printHtml += `</tr>`;
                 }
 
-                // Add summary row
+                // Summary row
                 printHtml += `
                             <tr class="summary-row">
                                 <td colspan="${visibleCols.length - 3}"></td>
                 `;
 
-                // Add summary columns based on what's visible
                 if (hasWaterElectricity && hasTelephone) {
-                    // Both types
                     if (visibleCols.some(c => c.key === 'billAmount')) {
                         printHtml += `<td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
                     }
@@ -2011,7 +2025,6 @@
                         printHtml += `<td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
                     }
                 } else if (hasWaterElectricity) {
-                    // Water/Electricity only
                     if (visibleCols.some(c => c.key === 'billAmount')) {
                         printHtml += `<td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
                     }
@@ -2022,7 +2035,6 @@
                         printHtml += `<td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
                     }
                 } else if (hasTelephone) {
-                    // Telephone only
                     if (visibleCols.some(c => c.key === 'rentalAmount')) {
                         printHtml += `<td class="currency-cell"><strong>$${totalRentalAmount.toFixed(2)}</strong></td>`;
                     }
@@ -2046,7 +2058,6 @@
                     }
                 }
 
-                // Add period column if visible
                 if (visibleCols.some(c => c.key === 'period')) {
                     printHtml += `<td></td>`;
                 }
@@ -2083,85 +2094,16 @@
                 </html>
             `;
 
-            const printWindow = window.open('', '_blank');
+            const printWindow = window.open('', '_blank', 'width=1200,height=800');
             if (printWindow) {
                 printWindow.document.write(printHtml);
                 printWindow.document.close();
             } else {
-                alert('Please allow pop-ups for this site to print.');
+                alert('⚠️ Please allow pop-ups for this site to print. Click the print button again.');
             }
         }
 
-        async function loadEntitiesForSelection() {
-            try {
-                const schoolsRes = await fetch('/api/entities?type=school');
-                if (schoolsRes.ok) {
-                    const schools = await schoolsRes.json();
-                    const schoolsSelect = document.getElementById('schoolsSelect');
-                    schoolsSelect.innerHTML = '';
-                    if (schools.length === 0) {
-                        schoolsSelect.innerHTML = '<option value="">No schools found</option>';
-                    } else {
-                        schools.forEach(school => {
-                            const option = document.createElement('option');
-                            option.value = school.id;
-                            option.textContent = school.name + (school.cluster ? ` (Cluster ${school.cluster})` : '');
-                            schoolsSelect.appendChild(option);
-                        });
-                    }
-                }
-                
-                const deptsRes = await fetch('/api/entities?type=department');
-                if (deptsRes.ok) {
-                    const departments = await deptsRes.json();
-                    const departmentsSelect = document.getElementById('departmentsSelect');
-                    departmentsSelect.innerHTML = '';
-                    if (departments.length === 0) {
-                        departmentsSelect.innerHTML = '<option value="">No departments found</option>';
-                    } else {
-                        departments.forEach(dept => {
-                            const option = document.createElement('option');
-                            option.value = dept.id;
-                            option.textContent = dept.name;
-                            departmentsSelect.appendChild(option);
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading entities:', error);
-            }
-        }
-
-        document.querySelectorAll('input[name="selectionType"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const specificEntitiesSection = document.getElementById('specificEntitiesSection');
-                if (this.value === 'specificEntities') {
-                    specificEntitiesSection.classList.add('active');
-                    if (document.getElementById('schoolsSelect').children.length <= 1) {
-                        loadEntitiesForSelection();
-                    }
-                } else {
-                    specificEntitiesSection.classList.remove('active');
-                }
-            });
-        });
-
-        function getMonthName(month) {
-            const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                           'July', 'August', 'September', 'October', 'November', 'December'];
-            return months[month - 1] || 'Unknown';
-        }
-
-        function escapeHtml(str) {
-            if (!str) return '';
-            return String(str).replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            });
-        }
-
+        // ============ GENERATE REPORT ============
         document.getElementById('generateReport').addEventListener('click', async function() {
             const selectionType = document.querySelector('input[name="selectionType"]:checked').value;
             const entityType = document.getElementById('entityType').value;
@@ -2359,24 +2301,17 @@
             resultsDiv.scrollIntoView({ behavior: 'smooth' });
         }
 
-        // FIXED: Print Report - Only prints the report content, not the whole page
+        // ============ PRINT REPORT ============
         document.getElementById('printReport').addEventListener('click', function() {
-            // Get the report results content
-            const reportResults = document.getElementById('reportResults');
-            
-            // Create a new window for printing
-            const printWindow = window.open('', '_blank', 'width=1200,height=800');
-            
-            if (!printWindow) {
-                alert('Please allow pop-ups for this site to print.');
-                return;
-            }
-            
-            // Get the current report data
             const data = window.reportData || [];
             const title = window.reportTitleText || 'Utility Bills Report';
             const month = window.reportMonth || 'all';
             const year = window.reportYear || 'all';
+            
+            if (data.length === 0) {
+                alert('No data to print. Please generate a report first.');
+                return;
+            }
             
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -2390,7 +2325,6 @@
                 minute: '2-digit'
             });
             
-            // Build table rows from data
             let tableRows = '';
             let totalBillAmount = 0;
             let totalAmountPaid = 0;
@@ -2619,10 +2553,16 @@
                 </html>
             `;
             
-            printWindow.document.write(printHtml);
-            printWindow.document.close();
+            const printWindow = window.open('', '_blank', 'width=1200,height=800');
+            if (printWindow) {
+                printWindow.document.write(printHtml);
+                printWindow.document.close();
+            } else {
+                alert('⚠️ Please allow pop-ups for this site to print.');
+            }
         });
 
+        // ============ EXPORT PDF ============
         document.getElementById('exportPDF').addEventListener('click', function() {
             if (!window.reportData || window.reportData.length === 0) {
                 alert('No data to export. Please generate a report first.');
@@ -2638,6 +2578,7 @@
             }, 100);
         });
 
+        // ============ EXPORT EXCEL ============
         document.getElementById('exportExcel').addEventListener('click', function() {
             if (!window.reportData || window.reportData.length === 0) {
                 alert('No data to export. Please generate a report first.');
@@ -2774,7 +2715,6 @@
         loadCheckboxLists();
         populateColumnCheckboxes();
 
-        // Re-populate columns when utility selection changes
         document.querySelectorAll('.utility-type-checkbox').forEach(cb => {
             cb.addEventListener('change', populateColumnCheckboxes);
         });
