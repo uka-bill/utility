@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Management - Utility Bills Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1a56db;
+            --primary-light: #3b82f6;
+            --primary-dark: #1e3a5f;
+            --primary-gradient: linear-gradient(145deg, #1a56db 0%, #1e3a5f 100%);
+            --primary-glow: linear-gradient(135deg, rgba(26, 86, 219, 0.12) 0%, rgba(30, 58, 95, 0.06) 100%);
+            --secondary: #0f172a;
+            --success: #0d9488;
+            --success-light: #ccfbf1;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --info: #0891b2;
+            --light: #f8fafc;
+            --dark: #0f172a;
+            --gray: #64748b;
+            --gray-light: #e2e8f0;
+            --gray-50: #f1f5f9;
+            --white: #ffffff;
+            --shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+            --shadow-lg: 0 12px 48px rgba(15, 23, 42, 0.10);
+            --shadow-xl: 0 20px 60px rgba(15, 23, 42, 0.15);
+            --radius: 20px;
+            --radius-sm: 12px;
+            --radius-xs: 8px;
+            --transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--gray-50);
+            color: var(--dark);
+            font-size: 15px;
+            line-height: 1.6;
+            font-weight: 400;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--gray-50);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--gray-light);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gray);
+        }
+
+        .navbar {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 4px 20px rgba(0, 0, 0, 0.02);
+            padding: 0 32px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 76px;
+            border-bottom: 1px solid rgba(26, 86, 219, 0.06);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 800;
+            font-size: 1.2rem;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-gradient);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(26, 86, 219, 0.30);
+        }
+
+        .logo span {
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
+        }
+
+        .logo-sub {
+            font-weight: 400;
+            color: var(--gray);
+            font-size: 0.7rem;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            -webkit-text-fill-color: var(--gray);
+            display: block;
+            margin-top: -2px;
+        }
+
+        .nav-tabs {
+            display: flex;
+            list-style: none;
+            gap: 4px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .nav-tabs li {
+            margin: 0;
+        }
+
+        .nav-tabs a {
+            text-decoration: none;
+            color: var(--gray);
+            padding: 8px 18px;
+            border-radius: var(--radius-xs);
+            transition: var(--transition);
+            font-weight: 500;
+            font-size: 0.82rem;
+            letter-spacing: 0.15px;
+        }
+
+        .nav-tabs a:hover {
+            color: var(--primary);
+            background: rgba(26, 86, 219, 0.06);
+        }
+
+        .nav-tabs a.active {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: 0 4px 16px rgba(26, 86, 219, 0.30);
+        }
+
+        .container {
+            margin-top: 96px;
+            padding: 28px 36px 40px;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.7px;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .page-subtitle {
+            color: var(--gray);
+            font-size: 0.9rem;
+            font-weight: 400;
+            -webkit-text-fill-color: var(--gray);
+            display: block;
+            margin-top: 2px;
+        }
+
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: var(--radius-xs);
+            cursor: pointer;
+            font-weight: 600;
+            transition: var(--transition);
+            font-size: 0.85rem;
+            letter-spacing: 0.2px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Inter', sans-serif;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: 0 4px 16px rgba(26, 86, 219, 0.30);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(26, 86, 219, 0.40);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+            box-shadow: 0 4px 16px rgba(13, 148, 136, 0.30);
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(13, 148, 136, 0.40);
+        }
+
+        .btn-success:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+            box-shadow: 0 4px 16px rgba(220, 38, 38, 0.30);
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(220, 38, 38, 0.40);
+        }
+
+        .btn-danger:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+            box-shadow: 0 4px 16px rgba(217, 119, 6, 0.30);
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(217, 119, 6, 0.40);
+        }
+
+        .btn-secondary {
+            background: var(--gray-50);
+            color: var(--dark);
+            border: 1px solid var(--gray-light);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-light);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-sm {
+            padding: 6px 14px;
+            font-size: 0.78rem;
+            border-radius: var(--radius-xs);
+        }
+
+        .section-card {
+            background: var(--white);
+            border-radius: var(--radius);
+            padding: 32px 36px;
+            margin-bottom: 28px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            transition: var(--transition);
+        }
+
+        .section-card:hover {
+            box-shadow: var(--shadow-lg);
+        }
+
+        .section-card h2 {
+            margin-bottom: 16px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--dark);
+            letter-spacing: -0.3px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-card h2 .badge-icon {
+            font-size: 1.2rem;
+        }
+
+        .section-card > p {
+            color: var(--gray);
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+        }
+
+        .grid-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+        }
+
+        .option-card {
+            background: var(--gray-50);
+            border-radius: var(--radius-sm);
+            padding: 24px 26px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: var(--transition);
+        }
+
+        .option-card:hover {
+            border-color: var(--primary-light);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow);
+            background: var(--white);
+        }
+
+        .option-card .icon {
+            font-size: 2.2rem;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .option-card h3 {
+            margin-bottom: 8px;
+            color: var(--dark);
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .option-card p {
+            margin-bottom: 16px;
+            color: var(--gray);
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .option-card .btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .option-card .file-info {
+            font-size: 0.75rem;
+            color: var(--gray);
+            margin-top: 10px;
+            padding: 6px 12px;
+            background: var(--gray-50);
+            border-radius: var(--radius-xs);
+            display: inline-block;
+        }
+
+        .info-box {
+            background: var(--primary-glow);
+            border-left: 4px solid var(--primary);
+            padding: 20px 24px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 28px;
+            transition: var(--transition);
+        }
+
+        .info-box:hover {
+            box-shadow: var(--shadow);
+        }
+
+        .info-box h3 {
+            color: var(--primary-dark);
+            margin-bottom: 8px;
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .info-box p {
+            color: var(--dark);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .info-box.warning {
+            background: #fef3c7;
+            border-left-color: var(--warning);
+        }
+
+        .info-box.warning h3 {
+            color: var(--warning);
+        }
+
+        .info-box.success {
+            background: var(--success-light);
+            border-left-color: var(--success);
+        }
+
+        .info-box.success h3 {
+            color: var(--success);
+        }
+
+        .data-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .stat-item {
+            background: var(--gray-50);
+            padding: 14px 18px;
+            border-radius: var(--radius-xs);
+            text-align: center;
+            border: 1px solid var(--gray-light);
+        }
+
+        .stat-item .stat-number {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .stat-item .stat-label {
+            font-size: 0.7rem;
+            color: var(--gray);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .restore-upload-area {
+            border: 2px dashed var(--gray-light);
+            border-radius: var(--radius-sm);
+            padding: 40px 20px;
+            text-align: center;
+            transition: var(--transition);
+            cursor: pointer;
+            background: var(--gray-50);
+            position: relative;
+        }
+
+        .restore-upload-area:hover {
+            border-color: var(--primary-light);
+            background: var(--white);
+        }
+
+        .restore-upload-area.dragover {
+            border-color: var(--primary);
+            background: var(--primary-glow);
+        }
+
+        .restore-upload-area .upload-icon {
+            font-size: 3rem;
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        .restore-upload-area h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 4px;
+        }
+
+        .restore-upload-area p {
+            color: var(--gray);
+            font-size: 0.85rem;
+        }
+
+        .restore-upload-area .file-types {
+            font-size: 0.7rem;
+            color: var(--gray);
+            margin-top: 8px;
+            opacity: 0.7;
+        }
+
+        #restoreFileInput {
+            display: none;
+        }
+
+        .restore-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .backup-history {
+            margin-top: 20px;
+            border-top: 1px solid var(--gray-light);
+            padding-top: 16px;
+        }
+
+        .backup-history h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 12px;
+        }
+
+        .backup-history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--gray-light);
+            font-size: 0.82rem;
+        }
+
+        .backup-history-item:last-child {
+            border-bottom: none;
+        }
+
+        .backup-history-item .file-name {
+            font-weight: 500;
+        }
+
+        .backup-history-item .file-date {
+            color: var(--gray);
+            font-size: 0.75rem;
+        }
+
+        .backup-history-item .file-size {
+            color: var(--gray);
+            font-size: 0.75rem;
+        }
+
+        .supabase-section {
+            background: var(--white);
+            border-radius: var(--radius);
+            padding: 28px 32px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            transition: var(--transition);
+        }
+
+        .supabase-section:hover {
+            box-shadow: var(--shadow-lg);
+        }
+
+        .supabase-section h2 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--dark);
+            letter-spacing: -0.3px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .supabase-section ul {
+            list-style: none;
+            padding: 0;
+            margin: 12px 0 0 0;
+        }
+
+        .supabase-section ul li {
+            padding: 8px 0;
+            padding-left: 28px;
+            position: relative;
+            font-size: 0.9rem;
+            color: var(--dark);
+            border-bottom: 1px solid var(--gray-light);
+        }
+
+        .supabase-section ul li:last-child {
+            border-bottom: none;
+        }
+
+        .supabase-section ul li::before {
+            content: '▸';
+            position: absolute;
+            left: 8px;
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .supabase-section ul li a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+            transition: var(--transition);
+        }
+
+        .supabase-section ul li a:hover {
+            color: var(--primary-dark);
+            text-decoration: underline;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--dark);
+            color: white;
+            padding: 14px 24px;
+            border-radius: var(--radius-sm);
+            z-index: 3000;
+            display: none;
+            animation: slideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            font-weight: 500;
+            font-size: 0.9rem;
+            box-shadow: var(--shadow-xl);
+            max-width: 420px;
+        }
+
+        .toast.success {
+            background: var(--success);
+        }
+
+        .toast.error {
+            background: var(--danger);
+        }
+
+        .toast.warning {
+            background: var(--warning);
+        }
+
+        .toast.info {
+            background: var(--primary);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2.5px solid rgba(255, 255, 255, 0.3);
+            border-top: 2.5px solid white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .restore-progress {
+            display: none;
+            margin-top: 16px;
+        }
+
+        .restore-progress .progress-bar {
+            height: 6px;
+            background: var(--gray-light);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .restore-progress .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--primary-gradient);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        .restore-progress .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--gray);
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                padding: 20px 24px;
+            }
+            .grid-options {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 0 16px;
+                height: 64px;
+            }
+            .nav-tabs {
+                gap: 2px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: 4px;
+            }
+            .nav-tabs a {
+                padding: 6px 14px;
+                font-size: 0.75rem;
+                white-space: nowrap;
+            }
+            .container {
+                margin-top: 80px;
+                padding: 16px;
+            }
+            .page-title {
+                font-size: 1.6rem;
+            }
+            .section-card {
+                padding: 20px 24px;
+            }
+            .grid-options {
+                grid-template-columns: 1fr;
+            }
+            .option-card {
+                padding: 18px 20px;
+            }
+            .supabase-section {
+                padding: 20px 24px;
+            }
+            .data-stats {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .page-title {
+                font-size: 1.3rem;
+            }
+            .logo span {
+                font-size: 0.9rem;
+            }
+            .logo-sub {
+                display: none;
+            }
+            .section-card {
+                padding: 16px 18px;
+            }
+            .option-card {
+                padding: 14px 16px;
+            }
+            .option-card .icon {
+                font-size: 1.8rem;
+            }
+            .supabase-section {
+                padding: 16px 18px;
+            }
+            .data-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">
+            <div class="logo-icon">⚡</div>
+            <div>
+                <span>Utility Bills</span>
+                <span class="logo-sub">Management System</span>
+            </div>
+        </div>
+        <ul class="nav-tabs">
+            <li><a href="/dashboard">Dashboard</a></li>
+            <li><a href="/departments">Departments</a></li>
+            <li><a href="/schools">Schools</a></li>
+            <li><a href="/water">Water</a></li>
+            <li><a href="/electricity">Electricity</a></li>
+            <li><a href="/telephone">Telephone</a></li>
+            <li><a href="/sut-office">SUT Office</a></li>
+            <li><a href="/reports">Reports &amp; Print</a></li>
+            <li><a href="/data-management" class="active">Data Management</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">📊 Data Management</h1>
+                <span class="page-subtitle">Export, backup, and manage your data securely</span>
+            </div>
+        </div>
+
+        <!-- Info Box -->
+        <div class="info-box success">
+            <h3>✅ Secure Cloud Storage</h3>
+            <p>All your data is stored securely in Supabase cloud database. Use the options below to export your data to CSV files, create JSON backups, or restore from existing backups.</p>
+        </div>
+
+        <!-- Data Statistics -->
+        <div class="data-stats" id="dataStats">
+            <div class="stat-item">
+                <div class="stat-number" id="statSchools">-</div>
+                <div class="stat-label">Schools</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="statDepartments">-</div>
+                <div class="stat-label">Departments</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="statBills">-</div>
+                <div class="stat-label">Utility Bills</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="statBudgets">-</div>
+                <div class="stat-label">Budgets</div>
+            </div>
+        </div>
+
+        <!-- Export Section -->
+        <div class="section-card">
+            <h2><span class="badge-icon">📤</span> Export to CSV</h2>
+            <p>Download your data as CSV files that can be opened in Excel, Google Sheets, or any spreadsheet application.</p>
+            
+            <div class="grid-options">
+                <div class="option-card">
+                    <span class="icon">📦</span>
+                    <h3>All Data</h3>
+                    <p>Export all schools, departments, and utility bills in a single CSV file</p>
+                    <a href="/api/export-data?type=all" class="btn btn-primary">📥 Export All Data</a>
+                </div>
+                
+                <div class="option-card">
+                    <span class="icon">🏫</span>
+                    <h3>Schools Only</h3>
+                    <p>Export only school information</p>
+                    <a href="/api/export-data?type=schools" class="btn btn-success">📥 Export Schools</a>
+                </div>
+                
+                <div class="option-card">
+                    <span class="icon">🏛️</span>
+                    <h3>Departments Only</h3>
+                    <p>Export only department information</p>
+                    <a href="/api/export-data?type=departments" class="btn btn-success">📥 Export Departments</a>
+                </div>
+                
+                <div class="option-card">
+                    <span class="icon">📄</span>
+                    <h3>Utility Bills Only</h3>
+                    <p>Export only utility bill records</p>
+                    <a href="/api/export-data?type=utility_bills" class="btn btn-success">📥 Export Utility Bills</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backup & Restore Section -->
+        <div class="section-card">
+            <h2><span class="badge-icon">💾</span> Backup &amp; Restore</h2>
+            <p>Create a complete JSON backup of all your data or restore from an existing backup file.</p>
+            
+            <div class="grid-options" style="margin-bottom: 24px;">
+                <div class="option-card">
+                    <span class="icon">🔄</span>
+                    <h3>Create Backup</h3>
+                    <p>Create a complete JSON backup of all data in your system</p>
+                    <button class="btn btn-primary" id="createBackupBtn">📥 Create Backup</button>
+                    <div class="file-info" id="backupStatus">Ready to backup</div>
+                </div>
+                
+                <div class="option-card">
+                    <span class="icon">📥</span>
+                    <h3>Download Backup</h3>
+                    <p>Download the most recent backup file from cloud storage</p>
+                    <button class="btn btn-success" id="downloadBackupBtn">📥 Download Backup</button>
+                    <div class="file-info" id="downloadStatus">Check available backups</div>
+                </div>
+            </div>
+
+            <!-- Backup History -->
+            <div class="backup-history" id="backupHistory" style="display: none;">
+                <h4>📂 Recent Backups</h4>
+                <div id="backupHistoryList">
+                    <!-- Backup history items will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Restore Section -->
+        <div class="section-card">
+            <h2><span class="badge-icon">📥</span> Restore from Backup</h2>
+            
+            <div class="info-box warning" style="margin-bottom: 20px;">
+                <h3>⚠️ Important Notice</h3>
+                <p><strong>Restoring a backup will overwrite all current data.</strong> Please ensure you have a current backup before proceeding. This action cannot be undone.</p>
+            </div>
+            
+            <div class="restore-upload-area" id="restoreDropZone">
+                <span class="upload-icon">📂</span>
+                <h4>Drop your backup file here</h4>
+                <p>or click to browse for a JSON backup file</p>
+                <div class="file-types">Supported: .json (Supabase backup format)</div>
+                <input type="file" id="restoreFileInput" accept=".json">
+            </div>
+            
+            <div id="restoreFileInfo" style="display: none; margin-top: 16px; padding: 12px 16px; background: var(--gray-50); border-radius: var(--radius-xs);">
+                <strong>Selected file:</strong> <span id="selectedFileName"></span>
+                <span style="color: var(--gray); margin-left: 12px;" id="selectedFileSize"></span>
+            </div>
+            
+            <div class="restore-actions">
+                <button class="btn btn-danger" id="restoreBtn" disabled>⚠️ Restore Data</button>
+                <button class="btn btn-secondary" id="clearFileBtn" style="display: none;">Clear File</button>
+            </div>
+            
+            <div class="restore-progress" id="restoreProgress">
+                <div class="progress-text">
+                    <span>Restoring data...</span>
+                    <span id="restorePercent">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="restoreProgressFill"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Supabase Access -->
+        <div class="supabase-section">
+            <h2>☁️ Supabase Access</h2>
+            <p style="color: var(--gray); font-size: 0.9rem;">You can also access your data directly through the Supabase dashboard:</p>
+            <ul>
+                <li>Visit: <a href="https://app.supabase.com" target="_blank">https://app.supabase.com</a></li>
+                <li>Login with your account</li>
+                <li>Select your project</li>
+                <li>Go to "Table Editor" to view all data</li>
+                <li>Use the SQL Editor to run custom queries</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let selectedBackupFile = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDataStats();
+            loadBackupHistory();
+            setupEventListeners();
+        });
+
+        async function loadDataStats() {
+            try {
+                const [schoolsRes, deptsRes, billsRes, budgetsRes] = await Promise.all([
+                    fetch('/api/schools'),
+                    fetch('/api/departments'),
+                    fetch('/api/utility-bills?limit=1'),
+                    fetch('/api/budgets')
+                ]);
+
+                let schools = schoolsRes.ok ? await schoolsRes.json() : [];
+                let departments = deptsRes.ok ? await deptsRes.json() : [];
+                let bills = [];
+                let budgets = [];
+
+                if (billsRes.ok) {
+                    const billsData = await billsRes.json();
+                    bills = Array.isArray(billsData) ? billsData : [];
+                }
+
+                if (budgetsRes.ok) {
+                    const budgetsData = await budgetsRes.json();
+                    budgets = Array.isArray(budgetsData) ? budgetsData : [];
+                }
+
+                const totalBills = bills.length || 0;
+
+                document.getElementById('statSchools').textContent = schools.length || 0;
+                document.getElementById('statDepartments').textContent = departments.length || 0;
+                document.getElementById('statBills').textContent = totalBills || 0;
+                document.getElementById('statBudgets').textContent = budgets.length || 0;
+
+            } catch (error) {
+                console.error('Error loading data stats:', error);
+                document.getElementById('statSchools').textContent = 'Error';
+                document.getElementById('statDepartments').textContent = 'Error';
+                document.getElementById('statBills').textContent = 'Error';
+                document.getElementById('statBudgets').textContent = 'Error';
+            }
+        }
+
+        async function loadBackupHistory() {
+            try {
+                const response = await fetch('/api/backup-history');
+                if (response.ok) {
+                    const backups = await response.json();
+                    if (backups && backups.length > 0) {
+                        const container = document.getElementById('backupHistory');
+                        const list = document.getElementById('backupHistoryList');
+                        container.style.display = 'block';
+                        list.innerHTML = '';
+                        
+                        backups.forEach(backup => {
+                            const item = document.createElement('div');
+                            item.className = 'backup-history-item';
+                            const date = new Date(backup.created_at);
+                            const formattedDate = date.toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                            const size = backup.size ? (backup.size / 1024).toFixed(1) + ' KB' : 'Unknown';
+                            
+                            item.innerHTML = `
+                                <span class="file-name">${escapeHtml(backup.filename || 'backup.json')}</span>
+                                <span class="file-date">${formattedDate}</span>
+                                <span class="file-size">${size}</span>
+                            `;
+                            list.appendChild(item);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading backup history:', error);
+            }
+        }
+
+        function setupEventListeners() {
+            // Create Backup
+            document.getElementById('createBackupBtn').addEventListener('click', createBackup);
+
+            // Download Backup
+            document.getElementById('downloadBackupBtn').addEventListener('click', downloadBackup);
+
+            // Restore - File input
+            const fileInput = document.getElementById('restoreFileInput');
+            const dropZone = document.getElementById('restoreDropZone');
+
+            fileInput.addEventListener('change', handleFileSelect);
+
+            dropZone.addEventListener('click', function() {
+                fileInput.click();
+            });
+
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    fileInput.files = e.dataTransfer.files;
+                    handleFileSelect.call(fileInput);
+                }
+            });
+
+            // Restore button
+            document.getElementById('restoreBtn').addEventListener('click', performRestore);
+
+            // Clear file button
+            document.getElementById('clearFileBtn').addEventListener('click', clearFileSelection);
+        }
+
+        function handleFileSelect() {
+            const file = this.files[0];
+            if (!file) return;
+
+            if (!file.name.endsWith('.json')) {
+                showToast('Please select a valid JSON backup file.', 'error');
+                this.value = '';
+                return;
+            }
+
+            selectedBackupFile = file;
+            document.getElementById('selectedFileName').textContent = file.name;
+            document.getElementById('selectedFileSize').textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
+            document.getElementById('restoreFileInfo').style.display = 'block';
+            document.getElementById('restoreBtn').disabled = false;
+            document.getElementById('clearFileBtn').style.display = 'inline-flex';
+            showToast('File selected: ' + file.name, 'info');
+        }
+
+        function clearFileSelection() {
+            selectedBackupFile = null;
+            document.getElementById('restoreFileInput').value = '';
+            document.getElementById('restoreFileInfo').style.display = 'none';
+            document.getElementById('restoreBtn').disabled = true;
+            document.getElementById('clearFileBtn').style.display = 'none';
+            document.getElementById('restoreProgress').style.display = 'none';
+            document.getElementById('restoreProgressFill').style.width = '0%';
+            document.getElementById('restorePercent').textContent = '0%';
+        }
+
+        async function createBackup() {
+            const btn = document.getElementById('createBackupBtn');
+            const statusEl = document.getElementById('backupStatus');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Creating...';
+            statusEl.textContent = 'Creating backup...';
+            statusEl.style.color = 'var(--warning)';
+
+            try {
+                const response = await fetch('/api/backup-data', {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Backup creation failed');
+                }
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusEl.textContent = '✅ Backup created successfully!';
+                    statusEl.style.color = 'var(--success)';
+                    showToast('Backup created successfully!', 'success');
+                    loadBackupHistory();
+                } else {
+                    throw new Error(data.error || 'Backup creation failed');
+                }
+            } catch (error) {
+                console.error('Backup error:', error);
+                statusEl.textContent = '❌ Error: ' + error.message;
+                statusEl.style.color = 'var(--danger)';
+                showToast('Error creating backup: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '📥 Create Backup';
+                setTimeout(() => {
+                    if (statusEl.textContent.includes('Error')) {
+                        statusEl.textContent = 'Ready to backup';
+                        statusEl.style.color = '';
+                    }
+                }, 5000);
+            }
+        }
+
+        async function downloadBackup() {
+            const btn = document.getElementById('downloadBackupBtn');
+            const statusEl = document.getElementById('downloadStatus');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Downloading...';
+            statusEl.textContent = 'Fetching backup...';
+            statusEl.style.color = 'var(--warning)';
+
+            try {
+                const response = await fetch('/api/backup-data');
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Download failed');
+                }
+
+                const data = await response.json();
+                
+                if (data.data) {
+                    const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                    a.download = `backup_${timestamp}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    statusEl.textContent = '✅ Download complete!';
+                    statusEl.style.color = 'var(--success)';
+                    showToast('Backup downloaded successfully!', 'success');
+                } else {
+                    throw new Error('No backup data available');
+                }
+            } catch (error) {
+                console.error('Download error:', error);
+                statusEl.textContent = '❌ Error: ' + error.message;
+                statusEl.style.color = 'var(--danger)';
+                showToast('Error downloading backup: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '📥 Download Backup';
+                setTimeout(() => {
+                    if (statusEl.textContent.includes('Error')) {
+                        statusEl.textContent = 'Check available backups';
+                        statusEl.style.color = '';
+                    }
+                }, 5000);
+            }
+        }
+
+        async function performRestore() {
+            if (!selectedBackupFile) {
+                showToast('Please select a backup file first.', 'error');
+                return;
+            }
+
+            const confirmed = confirm(
+                '⚠️ WARNING: This will overwrite ALL current data with the data from the backup file.\n\n' +
+                'This action cannot be undone. Do you want to continue?'
+            );
+
+            if (!confirmed) return;
+
+            const btn = document.getElementById('restoreBtn');
+            const progressContainer = document.getElementById('restoreProgress');
+            const progressFill = document.getElementById('restoreProgressFill');
+            const percentEl = document.getElementById('restorePercent');
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Restoring...';
+            progressContainer.style.display = 'block';
+            progressFill.style.width = '0%';
+            percentEl.textContent = '0%';
+
+            try {
+                const reader = new FileReader();
+                
+                reader.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 50);
+                        progressFill.style.width = percent + '%';
+                        percentEl.textContent = percent + '%';
+                    }
+                };
+
+                const fileContent = await new Promise((resolve, reject) => {
+                    reader.onload = function(e) {
+                        try {
+                            const content = JSON.parse(e.target.result);
+                            resolve(content);
+                        } catch (err) {
+                            reject(new Error('Invalid JSON file format'));
+                        }
+                    };
+                    reader.onerror = function() {
+                        reject(new Error('Error reading file'));
+                    };
+                    reader.readAsText(selectedBackupFile);
+                });
+
+                progressFill.style.width = '50%';
+                percentEl.textContent = '50%';
+
+                const response = await fetch('/api/restore-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ data: fileContent })
+                });
+
+                progressFill.style.width = '90%';
+                percentEl.textContent = '90%';
+
+                const result = await response.json();
+
+                if (result.success) {
+                    progressFill.style.width = '100%';
+                    percentEl.textContent = '100%';
+                    showToast('✅ Data restored successfully!', 'success');
+                    
+                    setTimeout(() => {
+                        progressContainer.style.display = 'none';
+                        progressFill.style.width = '0%';
+                        percentEl.textContent = '0%';
+                        clearFileSelection();
+                        loadDataStats();
+                        loadBackupHistory();
+                    }, 1500);
+                } else {
+                    throw new Error(result.error || 'Restore failed');
+                }
+            } catch (error) {
+                console.error('Restore error:', error);
+                progressFill.style.width = '100%';
+                percentEl.textContent = '100%';
+                progressFill.style.background = 'var(--danger)';
+                showToast('❌ Error restoring data: ' + error.message, 'error');
+                
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    progressFill.style.width = '0%';
+                    progressFill.style.background = '';
+                    percentEl.textContent = '0%';
+                }, 3000);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '⚠️ Restore Data';
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type;
+            toast.style.display = 'block';
+            
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => {
+                toast.style.display = 'none';
+            }, 4000);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+    </script>
+</body>
+</html>
