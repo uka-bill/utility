@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* ... (keep all existing styles up to .processing-overlay) ... */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -916,6 +917,18 @@
             100% { transform: rotate(360deg); }
         }
 
+        /* ====== FIXED PRINT STYLES ====== */
+        .print-page {
+            margin-bottom: 20px;
+            min-height: 100vh;
+        }
+
+        /* Only apply page-break-after for pages that are NOT the last page */
+        .print-page:not(.last-page) {
+            page-break-after: always;
+        }
+
+        /* For print media */
         @media print {
             @page {
                 size: portrait;
@@ -970,14 +983,18 @@
                 font-size: 8pt;
             }
             
-            .page-break {
-                page-break-before: always;
-            }
-            
             .page-number {
                 text-align: center;
                 margin-top: 20px;
                 font-size: 8pt;
+            }
+            
+            /* Fix for print - ensure proper page breaks */
+            .print-page:not(.last-page) {
+                page-break-after: always;
+            }
+            .print-page.last-page {
+                page-break-after: auto;
             }
         }
 
@@ -1445,7 +1462,6 @@
 
         function updateProcessingStep(step, status, progress) {
             const steps = ['stepFetching', 'stepProcessing', 'stepGenerating'];
-            const stepNames = ['Fetching bills data...', 'Processing bills...', 'Generating print preview...'];
             
             // Update active step
             steps.forEach((s, index) => {
@@ -2000,14 +2016,14 @@
                             font-size: 10pt; 
                         }
                         .print-page { 
-                            margin-bottom: 30px; 
+                            margin-bottom: 20px; 
                             min-height: 100vh; 
                         }
-                        .print-page:last-child { 
-                            page-break-after: auto; 
-                        }
-                        .print-page:not(:last-child) {
+                        .print-page:not(.last-page) {
                             page-break-after: always;
+                        }
+                        .print-page.last-page {
+                            page-break-after: auto;
                         }
                         .attachment-header { 
                             text-align: right; 
@@ -2126,11 +2142,11 @@
                         }
                         @media print { 
                             body { padding: 0; margin: 0.4in; } 
-                            .print-page { 
-                                page-break-after: always; 
+                            .print-page:not(.last-page) {
+                                page-break-after: always;
                             }
-                            .print-page:last-child { 
-                                page-break-after: auto; 
+                            .print-page.last-page {
+                                page-break-after: auto;
                             }
                             .print-table th { background: #1a56db !important; color: white !important; }
                         }
