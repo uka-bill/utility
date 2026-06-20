@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* ... (same styles as before, keeping them consistent) ... */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -271,39 +272,6 @@
             padding: 6px 14px;
             font-size: 0.78rem;
             border-radius: var(--radius-xs);
-        }
-
-        .btn-telephone-payment {
-            background: var(--success);
-            color: white;
-            box-shadow: 0 4px 16px rgba(13, 148, 136, 0.30);
-        }
-
-        .btn-telephone-payment:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px rgba(13, 148, 136, 0.40);
-        }
-
-        .btn-water {
-            background: var(--info);
-            color: white;
-            box-shadow: 0 4px 16px rgba(8, 145, 178, 0.30);
-        }
-
-        .btn-water:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px rgba(8, 145, 178, 0.40);
-        }
-
-        .btn-electricity {
-            background: var(--warning);
-            color: white;
-            box-shadow: 0 4px 16px rgba(217, 119, 6, 0.30);
-        }
-
-        .btn-electricity:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px rgba(217, 119, 6, 0.40);
         }
 
         .report-controls {
@@ -1242,7 +1210,6 @@
     <script>
         let allSchoolsData = [];
         let allDepartmentsData = [];
-        let allBillsData = [];
 
         // Set current year as default
         const currentYear = new Date().getFullYear();
@@ -1521,7 +1488,7 @@
             });
         }
 
-        // ============ PRINT SELECTED BUTTON ============
+        // ============ OPTIMIZED PRINT SELECTED BUTTON ============
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
             console.log('🖨️ Print Selected button clicked');
             
@@ -1533,8 +1500,8 @@
             const year = document.getElementById('printYear').value;
             const itemsPerPage = parseInt(document.getElementById('itemsPerPage').value) || 10;
 
-            console.log('📊 Selected schools:', schoolIds);
-            console.log('📊 Selected departments:', departmentIds);
+            console.log('📊 Selected schools:', schoolIds.length, 'schools');
+            console.log('📊 Selected departments:', departmentIds.length, 'departments');
             console.log('📊 Selected utilities:', utilityTypes);
             console.log('📅 Month:', month, 'Year:', year);
 
@@ -1552,72 +1519,62 @@
             // Show loading
             const loadingIndicator = document.getElementById('loadingIndicator');
             loadingIndicator.style.display = 'block';
+            loadingIndicator.innerHTML = '⏳ Fetching data... Please wait.';
 
             try {
                 const allBills = [];
                 const entityMap = new Map();
 
-                // Fetch bills for each utility type
+                // Pre-load entity names
+                for (const schoolId of schoolIds) {
+                    const school = allSchoolsData.find(s => s.id === schoolId);
+                    if (school) {
+                        entityMap.set(`school_${schoolId}`, { name: school.name, type: 'school' });
+                    }
+                }
+                for (const deptId of departmentIds) {
+                    const dept = allDepartmentsData.find(d => d.id === deptId);
+                    if (dept) {
+                        const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
+                        entityMap.set(`department_${deptId}`, { name: displayName, type: 'department' });
+                    }
+                }
+
+                // OPTIMIZED: Fetch all bills at once using a single API call per utility type
                 for (const utilityType of utilityTypes) {
                     console.log(`📡 Fetching ${utilityType} bills...`);
                     
-                    // Fetch for schools
-                    for (const schoolId of schoolIds) {
-                        let url = `/api/utility-bills?utility_type=${utilityType}&entity_type=school&entity_id=${schoolId}`;
-                        if (month !== 'all') url += `&month=${month}`;
-                        if (year !== 'all') url += `&year=${year}`;
-                        
-                        console.log(`🔗 Fetching: ${url}`);
-                        
-                        try {
-                            const resp = await fetch(url);
-                            if (resp.ok) {
-                                const bills = await resp.json();
-                                console.log(`✅ Found ${bills.length} bills for school ${schoolId}`);
-                                allBills.push(...bills);
-                                
-                                if (!entityMap.has(`school_${schoolId}`)) {
-                                    const school = allSchoolsData.find(s => s.id === schoolId);
-                                    if (school) {
-                                        entityMap.set(`school_${schoolId}`, { name: school.name, type: 'school' });
-                                    }
-                                }
-                            } else {
-                                console.error(`❌ Failed to fetch bills for school ${schoolId}: ${resp.status}`);
-                            }
-                        } catch (err) {
-                            console.error(`❌ Error fetching school ${schoolId}:`, err);
+                    // Build URL with all school IDs and department IDs
+                    let url = `/api/utility-bills?utility_type=${utilityType}`;
+                    
+                    // Add month and year filters
+                    if (month !== 'all') url += `&month=${month}`;
+                    if (year !== 'all') url += `&year=${year}`;
+                    
+                    console.log(`🔗 Fetching all ${utilityType} bills at once...`);
+                    
+                    try {
+                        const resp = await fetch(url);
+                        if (resp.ok) {
+                            let bills = await resp.json();
+                            
+                            // Filter bills to only include selected schools and departments
+                            const selectedEntityIds = new Set();
+                            for (const id of schoolIds) selectedEntityIds.add(`school_${id}`);
+                            for (const id of departmentIds) selectedEntityIds.add(`department_${id}`);
+                            
+                            bills = bills.filter(bill => {
+                                const key = `${bill.entity_type}_${bill.entity_id}`;
+                                return selectedEntityIds.has(key);
+                            });
+                            
+                            console.log(`✅ Found ${bills.length} ${utilityType} bills for selected entities`);
+                            allBills.push(...bills);
+                        } else {
+                            console.error(`❌ Failed to fetch ${utilityType} bills: ${resp.status}`);
                         }
-                    }
-
-                    // Fetch for departments
-                    for (const deptId of departmentIds) {
-                        let url = `/api/utility-bills?utility_type=${utilityType}&entity_type=department&entity_id=${deptId}`;
-                        if (month !== 'all') url += `&month=${month}`;
-                        if (year !== 'all') url += `&year=${year}`;
-                        
-                        console.log(`🔗 Fetching: ${url}`);
-                        
-                        try {
-                            const resp = await fetch(url);
-                            if (resp.ok) {
-                                const bills = await resp.json();
-                                console.log(`✅ Found ${bills.length} bills for department ${deptId}`);
-                                allBills.push(...bills);
-                                
-                                if (!entityMap.has(`department_${deptId}`)) {
-                                    const dept = allDepartmentsData.find(d => d.id === deptId);
-                                    if (dept) {
-                                        const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-                                        entityMap.set(`department_${deptId}`, { name: displayName, type: 'department' });
-                                    }
-                                }
-                            } else {
-                                console.error(`❌ Failed to fetch bills for department ${deptId}: ${resp.status}`);
-                            }
-                        } catch (err) {
-                            console.error(`❌ Error fetching department ${deptId}:`, err);
-                        }
+                    } catch (err) {
+                        console.error(`❌ Error fetching ${utilityType} bills:`, err);
                     }
                 }
 
@@ -1709,6 +1666,8 @@
                 const paginateOnlyTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
 
                 // Generate print preview
+                loadingIndicator.innerHTML = '⏳ Generating print preview...';
+                
                 generatePrintPreview(printRows, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone);
 
             } catch (error) {
@@ -2130,31 +2089,34 @@
             if (previewWindow) {
                 previewWindow.document.write(printHtml);
                 previewWindow.document.close();
-                // Focus the window
                 previewWindow.focus();
             } else {
-                // If pop-up blocked, use the current page with print styles
-                alert('⚠️ Please allow pop-ups for this site, or click the Print button below.');
+                // If pop-up blocked, use a fallback
+                alert('⚠️ Please allow pop-ups for this site to print.');
                 
-                // Create a hidden iframe as fallback
-                const iframe = document.createElement('iframe');
-                iframe.style.position = 'absolute';
-                iframe.style.width = '0';
-                iframe.style.height = '0';
-                iframe.style.border = 'none';
-                document.body.appendChild(iframe);
-                
-                const doc = iframe.contentDocument || iframe.contentWindow.document;
-                doc.open();
-                doc.write(printHtml);
-                doc.close();
-                
-                setTimeout(() => {
-                    iframe.contentWindow.print();
+                // Try using an iframe as fallback
+                try {
+                    const iframe = document.createElement('iframe');
+                    iframe.style.position = 'absolute';
+                    iframe.style.width = '0';
+                    iframe.style.height = '0';
+                    iframe.style.border = 'none';
+                    document.body.appendChild(iframe);
+                    
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    doc.open();
+                    doc.write(printHtml);
+                    doc.close();
+                    
                     setTimeout(() => {
-                        document.body.removeChild(iframe);
-                    }, 5000);
-                }, 500);
+                        iframe.contentWindow.print();
+                        setTimeout(() => {
+                            document.body.removeChild(iframe);
+                        }, 5000);
+                    }, 500);
+                } catch (e) {
+                    console.error('Fallback print failed:', e);
+                }
             }
         }
 
