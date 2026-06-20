@@ -1305,8 +1305,8 @@
             <div class="results-header">
                 <h3 class="results-title" id="reportTitle">Report Results</h3>
                 <div class="print-only">
-                    <h3>🏛️ Ministry of Education Brunei</h3>
-                    <h4>Utility Bills Report</h4>
+                    <h3>Ministry of Education Brunei</h3>
+                    <h4>Utility Bills Payement List</h4>
                     <p id="reportDate">Generated on: </p>
                     <hr>
                 </div>
@@ -1452,7 +1452,9 @@
                 const el = document.getElementById(s);
                 if (index < step) {
                     el.classList.remove('active');
-                    el.querySelector('.step-check')?.remove();
+                    // Remove existing check mark
+                    const existingCheck = el.querySelector('.step-check');
+                    if (existingCheck) existingCheck.remove();
                     const check = document.createElement('span');
                     check.className = 'step-check';
                     check.textContent = ' ✅';
@@ -1970,7 +1972,8 @@
                 return u;
             }).join(', ');
 
-            const shouldPaginate = paginateOnlyTelephone && hasTelephone;
+            // Only paginate if Telephone is the ONLY utility AND data has more than itemsPerPage
+            const shouldPaginate = paginateOnlyTelephone && hasTelephone && data.length > itemsPerPage;
             const totalPages = shouldPaginate ? Math.ceil(data.length / itemsPerPage) : 1;
 
             const now = new Date();
@@ -2001,7 +2004,9 @@
                             margin-bottom: 30px; 
                             min-height: 100vh; 
                         }
-                        .print-page:last-child { page-break-after: auto; }
+                        .print-page:last-child { 
+                            page-break-after: auto; 
+                        }
                         .attachment-header { 
                             text-align: right; 
                             font-size: 10pt; 
@@ -2127,11 +2132,162 @@
                 <body>
             `;
 
-            for (let page = 1; page <= totalPages; page++) {
-                const startIdx = (page - 1) * itemsPerPage;
-                const endIdx = shouldPaginate ? Math.min(startIdx + itemsPerPage, data.length) : data.length;
-                const pageData = shouldPaginate ? data.slice(startIdx, endIdx) : data;
-                
+            // Only paginate if there are more items than itemsPerPage
+            if (shouldPaginate) {
+                // Paginated version
+                for (let page = 1; page <= totalPages; page++) {
+                    const startIdx = (page - 1) * itemsPerPage;
+                    const endIdx = Math.min(startIdx + itemsPerPage, data.length);
+                    const pageData = data.slice(startIdx, endIdx);
+                    
+                    // Skip if page has no data
+                    if (pageData.length === 0) continue;
+                    
+                    let totalBillAmount = 0;
+                    let totalAmountPaid = 0;
+                    let totalOutstanding = 0;
+                    let totalRentalAmount = 0;
+                    let totalTotalAmount = 0;
+                    let totalAccountCharges = 0;
+                    let totalPrevOutstanding = 0;
+                    let totalPrevPayment = 0;
+                    let totalCurrentCharges = 0;
+
+                    pageData.forEach(item => {
+                        totalBillAmount += item.billAmount || 0;
+                        totalAmountPaid += item.amountPaid || 0;
+                        totalOutstanding += item.outstanding || 0;
+                        totalRentalAmount += item.rentalAmount || 0;
+                        totalTotalAmount += item.totalAmount || 0;
+                        totalAccountCharges += item.totalAccountCharges || 0;
+                        totalPrevOutstanding += item.previousOutstanding || 0;
+                        totalPrevPayment += item.previousPayment || 0;
+                        totalCurrentCharges += item.totalCurrentCharges || 0;
+                    });
+
+                    printHtml += `
+                        <div class="print-page">
+                            <div class="attachment-header">
+                                Page ${page} of ${totalPages}
+                            </div>
+                            <div class="print-header">
+                                <div class="report-title-print">🏛️ MINISTRY OF EDUCATION BRUNEI</div>
+                                <div class="report-subtitle-print">Utility Bills Report</div>
+                                <div class="report-date-print">${monthName} ${yearDisplay} | Generated: ${reportDate}</div>
+                                <p>Utilities: ${utilityTypeLabels}</p>
+                            </div>
+                            <table class="print-table">
+                                <thead>
+                                    <tr>
+                                        ${visibleCols.map(c => `<th>${c.label}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+
+                    for (const item of pageData) {
+                        printHtml += `<tr>`;
+                        for (const col of visibleCols) {
+                            let value = item[col.key];
+                            if (typeof value === 'number') {
+                                value = value.toFixed(2);
+                            }
+                            if (col.key === 'entityName') {
+                                printHtml += `<td class="entity-name-cell">${escapeHtml(value)}</td>`;
+                            } else if (col.key === 'entityType') {
+                                printHtml += `<td>${escapeHtml(value)}</td>`;
+                            } else if (col.key === 'utilityType') {
+                                const cls = item.utilityType.includes('Water') ? 'water' : 
+                                           item.utilityType.includes('Electricity') ? 'electricity' : 'telephone';
+                                printHtml += `<td><span class="utility-badge ${cls}">${escapeHtml(value)}</span></td>`;
+                            } else if (col.key === 'no') {
+                                printHtml += `<td>${value}</td>`;
+                            } else if (['billAmount', 'amountPaid', 'outstanding', 'rentalAmount', 'totalAmount', 
+                                        'totalAccountCharges', 'previousOutstanding', 'previousPayment', 'totalCurrentCharges'].includes(col.key)) {
+                                printHtml += `<td class="currency-cell">${value}</td>`;
+                            } else if (col.key === 'accountNumber' || col.key === 'meterTelNo' || col.key === 'billNumber') {
+                                printHtml += `<td class="mono-cell">${escapeHtml(value)}</td>`;
+                            } else if (col.key === 'consumption') {
+                                printHtml += `<td>${escapeHtml(value)}</td>`;
+                            } else {
+                                printHtml += `<td>${escapeHtml(value)}</td>`;
+                            }
+                        }
+                        printHtml += `</tr>`;
+                    }
+
+                    // Summary row
+                    printHtml += `
+                                <tr class="summary-row">
+                                    <td colspan="${visibleCols.length - 3}"></td>
+                    `;
+
+                    if (hasWaterElectricity && hasTelephone) {
+                        if (visibleCols.some(c => c.key === 'billAmount')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
+                        }
+                        if (visibleCols.some(c => c.key === 'amountPaid')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                        }
+                        if (visibleCols.some(c => c.key === 'outstanding')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
+                        }
+                    } else if (hasWaterElectricity) {
+                        if (visibleCols.some(c => c.key === 'billAmount')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
+                        }
+                        if (visibleCols.some(c => c.key === 'amountPaid')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                        }
+                        if (visibleCols.some(c => c.key === 'outstanding')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
+                        }
+                    } else if (hasTelephone) {
+                        if (visibleCols.some(c => c.key === 'rentalAmount')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalRentalAmount.toFixed(2)}</strong></td>`;
+                        }
+                        if (visibleCols.some(c => c.key === 'totalAmount')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalTotalAmount.toFixed(2)}</strong></td>`;
+                        }
+                        if (visibleCols.some(c => c.key === 'totalAccountCharges')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalAccountCharges.toFixed(2)}</strong></td>`;
+                        }
+                        if (visibleCols.some(c => c.key === 'previousOutstanding')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalPrevOutstanding.toFixed(2)}</strong></td>`;
+                        }
+                        if (visibleCols.some(c => c.key === 'previousPayment')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalPrevPayment.toFixed(2)}</strong></td>`;
+                        }
+                        if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalCurrentCharges.toFixed(2)}</strong></td>`;
+                        }
+                        if (visibleCols.some(c => c.key === 'amountPaid')) {
+                            printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                        }
+                    }
+
+                    if (visibleCols.some(c => c.key === 'period')) {
+                        printHtml += `<td></td>`;
+                    }
+
+                    printHtml += `
+                                </tr>
+                    `;
+
+                    printHtml += `
+                                </tbody>
+                            </table>
+                            <div class="page-number">
+                                Page ${page} of ${totalPages}
+                            </div>
+                            <div class="footer-note">
+                                This is a computer-generated document. No signature required.
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                // Non-paginated version - all data on one page
                 let totalBillAmount = 0;
                 let totalAmountPaid = 0;
                 let totalOutstanding = 0;
@@ -2142,7 +2298,7 @@
                 let totalPrevPayment = 0;
                 let totalCurrentCharges = 0;
 
-                pageData.forEach(item => {
+                data.forEach(item => {
                     totalBillAmount += item.billAmount || 0;
                     totalAmountPaid += item.amountPaid || 0;
                     totalOutstanding += item.outstanding || 0;
@@ -2157,7 +2313,7 @@
                 printHtml += `
                     <div class="print-page">
                         <div class="attachment-header">
-                            ${shouldPaginate ? `Page ${page} of ${totalPages}` : ''}
+                            &nbsp;
                         </div>
                         <div class="print-header">
                             <div class="report-title-print">🏛️ MINISTRY OF EDUCATION BRUNEI</div>
@@ -2174,7 +2330,7 @@
                             <tbody>
                 `;
 
-                for (const item of pageData) {
+                for (const item of data) {
                     printHtml += `<tr>`;
                     for (const col of visibleCols) {
                         let value = item[col.key];
@@ -2205,6 +2361,7 @@
                     printHtml += `</tr>`;
                 }
 
+                // Summary row
                 printHtml += `
                             <tr class="summary-row">
                                 <td colspan="${visibleCols.length - 3}"></td>
@@ -2265,11 +2422,8 @@
                 printHtml += `
                             </tbody>
                         </table>
-                        <div class="page-number">
-                            ${shouldPaginate ? `Page ${page} of ${totalPages}` : ''}
-                        </div>
                         <div class="footer-note">
-                            This is a computer-generated document. No signature required.
+                            Total Bills: ${data.length} | This is a computer-generated document. No signature required.
                         </div>
                     </div>
                 `;
