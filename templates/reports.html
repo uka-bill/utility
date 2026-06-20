@@ -8,7 +8,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ... (same styles as before, keeping them consistent) ... */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -1204,7 +1203,6 @@
         </div>
     </div>
 
-    <!-- Print Preview Container (hidden, used for printing) -->
     <div id="printPreviewContainer" style="display: none;"></div>
 
     <script>
@@ -1411,7 +1409,6 @@
             });
         }
 
-        // Listen for utility type changes
         document.addEventListener('change', function(e) {
             if (e.target.classList && e.target.classList.contains('utility-type-checkbox')) {
                 populateColumnCheckboxes();
@@ -1488,7 +1485,7 @@
             });
         }
 
-        // ============ OPTIMIZED PRINT SELECTED BUTTON ============
+        // ============ PRINT SELECTED BUTTON - Uses generate-report API ============
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
             console.log('🖨️ Print Selected button clicked');
             
@@ -1505,7 +1502,6 @@
             console.log('📊 Selected utilities:', utilityTypes);
             console.log('📅 Month:', month, 'Year:', year);
 
-            // Validation
             if (schoolIds.length === 0 && departmentIds.length === 0) {
                 alert('⚠️ Please select at least one school or department.');
                 return;
@@ -1516,72 +1512,40 @@
                 return;
             }
 
-            // Show loading
             const loadingIndicator = document.getElementById('loadingIndicator');
             loadingIndicator.style.display = 'block';
             loadingIndicator.innerHTML = '⏳ Fetching data... Please wait.';
 
             try {
-                const allBills = [];
-                const entityMap = new Map();
+                // Use the same generate-report API that the Generate Report button uses
+                const requestData = {
+                    selection_type: 'specificEntities',
+                    utility_type: utilityTypes[0], // Only one utility type at a time for now
+                    month: month,
+                    year: year ? parseInt(year) : null,
+                    school_ids: schoolIds,
+                    department_ids: departmentIds
+                };
 
-                // Pre-load entity names
-                for (const schoolId of schoolIds) {
-                    const school = allSchoolsData.find(s => s.id === schoolId);
-                    if (school) {
-                        entityMap.set(`school_${schoolId}`, { name: school.name, type: 'school' });
-                    }
-                }
-                for (const deptId of departmentIds) {
-                    const dept = allDepartmentsData.find(d => d.id === deptId);
-                    if (dept) {
-                        const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
-                        entityMap.set(`department_${deptId}`, { name: displayName, type: 'department' });
-                    }
-                }
+                console.log('📡 Calling generate-report API...');
+                
+                const response = await fetch('/api/generate-report', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
 
-                // OPTIMIZED: Fetch all bills at once using a single API call per utility type
-                for (const utilityType of utilityTypes) {
-                    console.log(`📡 Fetching ${utilityType} bills...`);
-                    
-                    // Build URL with all school IDs and department IDs
-                    let url = `/api/utility-bills?utility_type=${utilityType}`;
-                    
-                    // Add month and year filters
-                    if (month !== 'all') url += `&month=${month}`;
-                    if (year !== 'all') url += `&year=${year}`;
-                    
-                    console.log(`🔗 Fetching all ${utilityType} bills at once...`);
-                    
-                    try {
-                        const resp = await fetch(url);
-                        if (resp.ok) {
-                            let bills = await resp.json();
-                            
-                            // Filter bills to only include selected schools and departments
-                            const selectedEntityIds = new Set();
-                            for (const id of schoolIds) selectedEntityIds.add(`school_${id}`);
-                            for (const id of departmentIds) selectedEntityIds.add(`department_${id}`);
-                            
-                            bills = bills.filter(bill => {
-                                const key = `${bill.entity_type}_${bill.entity_id}`;
-                                return selectedEntityIds.has(key);
-                            });
-                            
-                            console.log(`✅ Found ${bills.length} ${utilityType} bills for selected entities`);
-                            allBills.push(...bills);
-                        } else {
-                            console.error(`❌ Failed to fetch ${utilityType} bills: ${resp.status}`);
-                        }
-                    } catch (err) {
-                        console.error(`❌ Error fetching ${utilityType} bills:`, err);
-                    }
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
-                console.log(`📊 Total bills fetched: ${allBills.length}`);
+                const data = await response.json();
+                console.log(`✅ Received ${data.length} bills from generate-report`);
 
-                if (allBills.length === 0) {
-                    alert('⚠️ No bills found for the selected entities and period. Check console for details.');
+                if (data.length === 0) {
+                    alert('⚠️ No bills found for the selected entities and period.');
                     loadingIndicator.style.display = 'none';
                     return;
                 }
@@ -1591,18 +1555,13 @@
                 let serial = 1;
 
                 // Sort by entity name
-                allBills.sort((a, b) => {
-                    const nameA = entityMap.get(`${a.entity_type}_${a.entity_id}`)?.name || a.entity_name || '';
-                    const nameB = entityMap.get(`${b.entity_type}_${b.entity_id}`)?.name || b.entity_name || '';
-                    if (nameA !== nameB) return nameA.localeCompare(nameB);
-                    return (a.utility_type || '').localeCompare(b.utility_type || '');
+                data.sort((a, b) => {
+                    const nameA = a.entity_name || '';
+                    const nameB = b.entity_name || '';
+                    return nameA.localeCompare(nameB);
                 });
 
-                for (const bill of allBills) {
-                    const entityInfo = entityMap.get(`${bill.entity_type}_${bill.entity_id}`);
-                    const entityName = entityInfo?.name || bill.entity_name || 'Unknown';
-                    const entityType = entityInfo?.type || bill.entity_type || 'unknown';
-
+                for (const bill of data) {
                     let parsedNotes = {};
                     if (bill.notes && bill.notes.startsWith('{')) {
                         try { parsedNotes = JSON.parse(bill.notes); } catch(e) {}
@@ -1629,8 +1588,8 @@
 
                     const row = {
                         no: serial++,
-                        entityName: entityName,
-                        entityType: entityType === 'school' ? '🏫 School' : '🏛️ Department',
+                        entityName: bill.entity_name || 'Unknown',
+                        entityType: bill.entity_type === 'school' ? '🏫 School' : '🏛️ Department',
                         utilityType: bill.utility_type === 'water' ? '💧 Water' : 
                                     bill.utility_type === 'electricity' ? '⚡ Electricity' : '📞 Telephone',
                         accountNumber: bill.account_number || '—',
@@ -1662,10 +1621,7 @@
                     return;
                 }
 
-                // Check if only telephone is selected for pagination
                 const paginateOnlyTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
-
-                // Generate print preview
                 loadingIndicator.innerHTML = '⏳ Generating print preview...';
                 
                 generatePrintPreview(printRows, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone);
@@ -1688,7 +1644,6 @@
             const hasElectricity = utilityTypes.includes('electricity');
             const hasWaterElectricity = hasWater || hasElectricity;
             
-            // Build column headers
             let colConfig = [];
 
             colConfig.push({ key: 'no', label: 'No.', show: true });
@@ -2001,7 +1956,6 @@
                     printHtml += `</tr>`;
                 }
 
-                // Summary row
                 printHtml += `
                             <tr class="summary-row">
                                 <td colspan="${visibleCols.length - 3}"></td>
@@ -2084,39 +2038,13 @@
                 </html>
             `;
 
-            // Open in a new tab for print preview
             const previewWindow = window.open('', '_blank');
             if (previewWindow) {
                 previewWindow.document.write(printHtml);
                 previewWindow.document.close();
                 previewWindow.focus();
             } else {
-                // If pop-up blocked, use a fallback
                 alert('⚠️ Please allow pop-ups for this site to print.');
-                
-                // Try using an iframe as fallback
-                try {
-                    const iframe = document.createElement('iframe');
-                    iframe.style.position = 'absolute';
-                    iframe.style.width = '0';
-                    iframe.style.height = '0';
-                    iframe.style.border = 'none';
-                    document.body.appendChild(iframe);
-                    
-                    const doc = iframe.contentDocument || iframe.contentWindow.document;
-                    doc.open();
-                    doc.write(printHtml);
-                    doc.close();
-                    
-                    setTimeout(() => {
-                        iframe.contentWindow.print();
-                        setTimeout(() => {
-                            document.body.removeChild(iframe);
-                        }, 5000);
-                    }, 500);
-                } catch (e) {
-                    console.error('Fallback print failed:', e);
-                }
             }
         }
 
@@ -2567,7 +2495,6 @@
                 </html>
             `;
             
-            // Open in new tab for print preview
             const previewWindow = window.open('', '_blank');
             if (previewWindow) {
                 previewWindow.document.write(printHtml);
