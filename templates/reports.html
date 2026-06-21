@@ -916,19 +916,18 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* ====== FIXED PRINT STYLES - NARROW MARGINS ====== */
+        /* ====== PRINT STYLES ====== */
         @page {
             size: portrait;
-            margin: 0.3in 0.3in 0.3in 0.3in;
+            margin: 0.15in 0.15in 0.15in 0.15in;
         }
 
         .print-page {
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             min-height: 100vh;
             page-break-after: auto !important;
         }
 
-        /* Force page breaks using page-break-before */
         .print-page:not(.first-page) {
             page-break-before: always !important;
         }
@@ -937,10 +936,41 @@
             page-break-before: auto !important;
         }
 
+        .summary-row {
+            background: #f8fafc;
+            font-weight: 600;
+        }
+
+        .summary-row td {
+            border-top: 2px solid #1a56db;
+            padding-top: 6px;
+        }
+
+        .total-sum-row {
+            background: #e8f4fd;
+            font-weight: 700;
+        }
+
+        .total-sum-row td {
+            border-top: 3px double #1a56db;
+            padding-top: 8px;
+            font-size: 8.5pt;
+        }
+
+        .summary-label-cell {
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .page-total-label {
+            font-weight: 600;
+            color: #475569;
+        }
+
         @media print {
             @page {
                 size: portrait;
-                margin: 0.25in 0.25in 0.25in 0.25in;
+                margin: 0.2in 0.2in 0.2in 0.2in;
             }
             
             .navbar, .report-controls, .action-buttons, .summary-cards, .period-column,
@@ -997,12 +1027,18 @@
                 font-size: 8pt;
             }
             
-            /* Force page breaks */
             .print-page:not(.first-page) {
                 page-break-before: always !important;
             }
             .print-page.first-page {
                 page-break-before: auto !important;
+            }
+            
+            .summary-row td {
+                border-top: 2px solid #1a56db;
+            }
+            .total-sum-row td {
+                border-top: 3px double #1a56db;
             }
         }
 
@@ -2133,7 +2169,11 @@
                         .utility-badge.electricity { background: #fef3c7; color: #d97706; }
                         .utility-badge.telephone { background: #d1fae5; color: #0d9488; }
                         .summary-row { background: #f8fafc; font-weight: 600; }
-                        .summary-row td { border-top: 2px solid #1a56db; }
+                        .summary-row td { border-top: 2px solid #1a56db; padding-top: 6px; }
+                        .total-sum-row { background: #e8f4fd; font-weight: 700; }
+                        .total-sum-row td { border-top: 3px double #1a56db; padding-top: 8px; font-size: 8.5pt; }
+                        .summary-label-cell { font-weight: 700; color: #1e293b; }
+                        .page-total-label { font-weight: 600; color: #475569; }
                         .report-title-print { 
                             text-align: center; 
                             font-size: 16pt; 
@@ -2166,6 +2206,8 @@
                                 page-break-before: auto !important;
                             }
                             .print-table th { background: #1a56db !important; color: white !important; }
+                            .summary-row td { border-top: 2px solid #1a56db; }
+                            .total-sum-row td { border-top: 3px double #1a56db; }
                         }
                     </style>
                 </head>
@@ -2175,6 +2217,29 @@
             // Only paginate if there are MORE items than itemsPerPage
             if (shouldPaginate) {
                 // Paginated version - only when data.length > itemsPerPage
+                // First, calculate grand totals for ALL data
+                let grandTotalBillAmount = 0;
+                let grandTotalAmountPaid = 0;
+                let grandTotalOutstanding = 0;
+                let grandTotalRentalAmount = 0;
+                let grandTotalTotalAmount = 0;
+                let grandTotalAccountCharges = 0;
+                let grandTotalPrevOutstanding = 0;
+                let grandTotalPrevPayment = 0;
+                let grandTotalCurrentCharges = 0;
+
+                data.forEach(item => {
+                    grandTotalBillAmount += item.billAmount || 0;
+                    grandTotalAmountPaid += item.amountPaid || 0;
+                    grandTotalOutstanding += item.outstanding || 0;
+                    grandTotalRentalAmount += item.rentalAmount || 0;
+                    grandTotalTotalAmount += item.totalAmount || 0;
+                    grandTotalAccountCharges += item.totalAccountCharges || 0;
+                    grandTotalPrevOutstanding += item.previousOutstanding || 0;
+                    grandTotalPrevPayment += item.previousPayment || 0;
+                    grandTotalCurrentCharges += item.totalCurrentCharges || 0;
+                });
+
                 for (let page = 1; page <= totalPages; page++) {
                     const startIdx = (page - 1) * itemsPerPage;
                     const endIdx = Math.min(startIdx + itemsPerPage, data.length);
@@ -2184,6 +2249,7 @@
                     if (pageData.length === 0) continue;
                     
                     const isFirstPage = (page === 1);
+                    const isLastPage = (page === totalPages);
                     
                     let totalBillAmount = 0;
                     let totalAmountPaid = 0;
@@ -2258,53 +2324,54 @@
                         printHtml += `</tr>`;
                     }
 
-                    // Summary row
+                    // ===== PAGE TOTAL SUMMARY ROW =====
                     printHtml += `
                                 <tr class="summary-row">
                                     <td colspan="${visibleCols.length - 3}"></td>
                     `;
 
+                    // Add page totals for each currency column
                     if (hasWaterElectricity && hasTelephone) {
                         if (visibleCols.some(c => c.key === 'billAmount')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'amountPaid')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'outstanding')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
                         }
                     } else if (hasWaterElectricity) {
                         if (visibleCols.some(c => c.key === 'billAmount')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'amountPaid')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'outstanding')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
                         }
                     } else if (hasTelephone) {
                         if (visibleCols.some(c => c.key === 'rentalAmount')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalRentalAmount.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalRentalAmount.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'totalAmount')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalTotalAmount.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalTotalAmount.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'totalAccountCharges')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalAccountCharges.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalAccountCharges.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'previousOutstanding')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalPrevOutstanding.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalPrevOutstanding.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'previousPayment')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalPrevPayment.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalPrevPayment.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalCurrentCharges.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalCurrentCharges.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'amountPaid')) {
-                            printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
                         }
                     }
 
@@ -2315,6 +2382,66 @@
                     printHtml += `
                                 </tr>
                     `;
+
+                    // ===== GRAND TOTAL SUMMARY ROW (only on last page) =====
+                    if (isLastPage) {
+                        printHtml += `
+                                <tr class="total-sum-row">
+                                    <td colspan="${visibleCols.length - 3}"></td>
+                        `;
+
+                        if (hasWaterElectricity && hasTelephone) {
+                            if (visibleCols.some(c => c.key === 'billAmount')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalBillAmount.toFixed(2)}</strong></td>`;
+                            }
+                            if (visibleCols.some(c => c.key === 'amountPaid')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalAmountPaid.toFixed(2)}</strong></td>`;
+                            }
+                            if (visibleCols.some(c => c.key === 'outstanding')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalOutstanding.toFixed(2)}</strong></td>`;
+                            }
+                        } else if (hasWaterElectricity) {
+                            if (visibleCols.some(c => c.key === 'billAmount')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalBillAmount.toFixed(2)}</strong></td>`;
+                            }
+                            if (visibleCols.some(c => c.key === 'amountPaid')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalAmountPaid.toFixed(2)}</strong></td>`;
+                            }
+                            if (visibleCols.some(c => c.key === 'outstanding')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalOutstanding.toFixed(2)}</strong></td>`;
+                            }
+                        } else if (hasTelephone) {
+                            if (visibleCols.some(c => c.key === 'rentalAmount')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalRentalAmount.toFixed(2)}</strong></td>`;
+                            }
+                            if (visibleCols.some(c => c.key === 'totalAmount')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalTotalAmount.toFixed(2)}</strong></td>`;
+                            }
+                            if (visibleCols.some(c => c.key === 'totalAccountCharges')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalAccountCharges.toFixed(2)}</strong></td>`;
+                            }
+                            if (visibleCols.some(c => c.key === 'previousOutstanding')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalPrevOutstanding.toFixed(2)}</strong></td>`;
+                            }
+                            if (visibleCols.some(c => c.key === 'previousPayment')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalPrevPayment.toFixed(2)}</strong></td>`;
+                            }
+                            if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalCurrentCharges.toFixed(2)}</strong></td>`;
+                            }
+                            if (visibleCols.some(c => c.key === 'amountPaid')) {
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalAmountPaid.toFixed(2)}</strong></td>`;
+                            }
+                        }
+
+                        if (visibleCols.some(c => c.key === 'period')) {
+                            printHtml += `<td></td>`;
+                        }
+
+                        printHtml += `
+                                </tr>
+                        `;
+                    }
 
                     printHtml += `
                                 </tbody>
@@ -2403,7 +2530,7 @@
                     printHtml += `</tr>`;
                 }
 
-                // Summary row
+                // ===== PAGE TOTAL SUMMARY ROW =====
                 printHtml += `
                             <tr class="summary-row">
                                 <td colspan="${visibleCols.length - 3}"></td>
@@ -2411,45 +2538,45 @@
 
                 if (hasWaterElectricity && hasTelephone) {
                     if (visibleCols.some(c => c.key === 'billAmount')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'amountPaid')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'outstanding')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
                     }
                 } else if (hasWaterElectricity) {
                     if (visibleCols.some(c => c.key === 'billAmount')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'amountPaid')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'outstanding')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
                     }
                 } else if (hasTelephone) {
                     if (visibleCols.some(c => c.key === 'rentalAmount')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalRentalAmount.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalRentalAmount.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'totalAmount')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalTotalAmount.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalTotalAmount.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'totalAccountCharges')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalAccountCharges.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalAccountCharges.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'previousOutstanding')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalPrevOutstanding.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalPrevOutstanding.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'previousPayment')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalPrevPayment.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalPrevPayment.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalCurrentCharges.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalCurrentCharges.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'amountPaid')) {
-                        printHtml += `<td class="currency-cell"><strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
                     }
                 }
 
