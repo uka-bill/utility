@@ -369,18 +369,26 @@
             letter-spacing: -0.2px;
         }
 
+        /* ====== TABLE CONTAINER WITH HORIZONTAL SCROLL ====== */
         .data-table-container {
-            max-height: 600px;
-            overflow-y: auto;
             border: 1px solid var(--gray-light);
             border-radius: var(--radius-xs);
+            overflow-x: auto;
+            overflow-y: visible;
+            -webkit-overflow-scrolling: touch;
         }
 
         .data-table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 1200px;
             font-size: 0.78rem;
+            min-width: 1200px;
+            table-layout: auto;
+        }
+
+        /* Telephone needs wider min-width */
+        .data-table.telephone-table {
+            min-width: 1600px;
         }
 
         .data-table th {
@@ -396,6 +404,7 @@
             letter-spacing: 0.5px;
             border-bottom: 2px solid var(--gray-light);
             z-index: 10;
+            white-space: nowrap;
         }
 
         .data-table td {
@@ -961,10 +970,11 @@
             color: #475569;
         }
 
-        /* ====== TABLE HEADER FIX FOR SCROLLING ====== */
+        /* ====== TABLE HEADER FIX FOR HORIZONTAL SCROLL ====== */
         .data-table-wrapper {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
+            width: 100%;
         }
 
         .data-table-wrapper table {
@@ -983,6 +993,7 @@
             border: 1px solid #1a56db;
             font-size: 7.5pt;
             font-weight: 600;
+            white-space: nowrap;
         }
 
         .print-table-water td,
@@ -1086,6 +1097,10 @@
                 background: #1a56db !important;
                 color: white !important;
             }
+
+            .data-table-wrapper {
+                overflow-x: visible !important;
+            }
         }
 
         @media (max-width: 1024px) {
@@ -1155,6 +1170,12 @@
             .data-table-wrapper {
                 overflow-x: auto;
             }
+            .data-table {
+                min-width: 1000px;
+            }
+            .data-table.telephone-table {
+                min-width: 1400px;
+            }
         }
 
         @media (max-width: 480px) {
@@ -1173,6 +1194,9 @@
             .data-table {
                 font-size: 0.7rem;
                 min-width: 900px;
+            }
+            .data-table.telephone-table {
+                min-width: 1200px;
             }
             .utility-selector .checkbox-item {
                 font-size: 0.75rem;
@@ -1430,11 +1454,11 @@
             </div>
             
             <div class="scroll-hint no-print">
-                <i>↔️</i> Scroll horizontally to see all columns | <i>↕️</i> Scroll vertically to see all entries | <i>📌</i> Table headers are frozen/sticky while scrolling
+                <i>↔️</i> Scroll horizontally to see all columns | <i>📌</i> Table headers are frozen while scrolling
             </div>
             
             <div class="data-table-container">
-                <div class="data-table-wrapper">
+                <div class="data-table-wrapper" id="dataTableWrapper">
                     <table class="data-table" id="reportTable">
                         <thead id="reportTableHead">
                             <tr id="reportTableHeaderRow">
@@ -2034,7 +2058,6 @@
             const hasElectricity = utilityTypes.includes('electricity');
             const hasWaterElectricity = hasWater || hasElectricity;
             
-            // Get utility header
             const headerInfo = getUtilityHeader(utilityTypes);
             const titleText = headerInfo.title;
             const subtitleText = headerInfo.subtitle;
@@ -2128,7 +2151,6 @@
                 minute: '2-digit'
             });
 
-            // Determine which column index the summary should align under
             let summaryColIndex = visibleCols.length - 1;
             
             if (hasTelephone) {
@@ -2143,7 +2165,6 @@
                 }
             }
 
-            // Determine table class for styling
             let tableClass = 'print-table-water';
             if (hasTelephone) {
                 tableClass = 'print-table-telephone';
@@ -2298,7 +2319,6 @@
                             color: #94a3b8;
                             margin-bottom: 15px;
                         }
-                        /* Table wrapper for horizontal scroll */
                         .table-wrapper-scroll {
                             overflow-x: auto;
                             -webkit-overflow-scrolling: touch;
@@ -2319,7 +2339,6 @@
                 <body>
             `;
 
-            // Only paginate if there are MORE items than itemsPerPage
             if (shouldPaginate) {
                 let grandTotalBillAmount = 0;
                 let grandTotalAmountPaid = 0;
@@ -2426,7 +2445,6 @@
                         printHtml += `</tr>`;
                     }
 
-                    // Page Total Summary Row
                     printHtml += `
                                 <tr class="summary-row">
                                     <td colspan="${summaryColIndex}"></td>
@@ -2461,7 +2479,6 @@
                                 </tr>
                     `;
 
-                    // Total Sum Row (only on last page)
                     if (isLastPage) {
                         printHtml += `
                                 <tr class="total-sum-row">
@@ -2511,7 +2528,6 @@
                     `;
                 }
             } else {
-                // Non-paginated version - all data on one page
                 let totalBillAmount = 0;
                 let totalAmountPaid = 0;
                 let totalOutstanding = 0;
@@ -2586,7 +2602,6 @@
                     printHtml += `</tr>`;
                 }
 
-                // Total Summary Row
                 printHtml += `
                             <tr class="summary-row">
                                 <td colspan="${summaryColIndex}"></td>
@@ -2743,7 +2758,6 @@
             const reportDateSpan = document.getElementById('reportDate');
             const reportSubtitle = document.getElementById('reportSubtitle');
             
-            // Get the appropriate header based on utility type
             const headerInfo = getUtilityHeader([utilityType]);
             const titleText = headerInfo.title;
             const subtitleText = headerInfo.subtitle;
@@ -2785,10 +2799,8 @@
                 minute: '2-digit'
             });
             
-            // Get column definitions based on utility type
             const columns = COLUMN_DEFINITIONS[utilityType] || COLUMN_DEFINITIONS.water;
             
-            // Update table headers dynamically
             const headerRow = document.getElementById('reportTableHeaderRow');
             headerRow.innerHTML = '';
             columns.forEach(col => {
@@ -2801,6 +2813,13 @@
                     headerRow.appendChild(th);
                 }
             });
+            
+            // Set table class for horizontal scroll width
+            const table = document.getElementById('reportTable');
+            table.className = 'data-table';
+            if (utilityType === 'telephone') {
+                table.classList.add('telephone-table');
+            }
             
             const totalBills = data.length;
             const totalBillAmount = data.reduce((sum, bill) => sum + (bill.current_charges || 0), 0);
@@ -2907,7 +2926,6 @@
                 minute: '2-digit'
             });
             
-            // Get header based on utility type
             const utilityType = window.reportUtilityType || 'water';
             const headerInfo = getUtilityHeader([utilityType]);
             const titleText = headerInfo.title;
