@@ -961,6 +961,49 @@
             color: #475569;
         }
 
+        /* ====== TABLE HEADER FIX FOR SCROLLING ====== */
+        .data-table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .data-table-wrapper table {
+            min-width: 800px;
+            width: 100%;
+        }
+
+        /* ====== PRINT TABLE HEADERS FOR EACH UTILITY ====== */
+        .print-table-water th,
+        .print-table-electricity th,
+        .print-table-telephone th {
+            background: #1a56db;
+            color: white;
+            padding: 6px 8px;
+            text-align: left;
+            border: 1px solid #1a56db;
+            font-size: 7.5pt;
+            font-weight: 600;
+        }
+
+        .print-table-water td,
+        .print-table-electricity td,
+        .print-table-telephone td {
+            padding: 5px 8px;
+            border: 1px solid #e2e8f0;
+            vertical-align: top;
+            font-size: 7.5pt;
+        }
+
+        .print-table-water td:first-child,
+        .print-table-electricity td:first-child,
+        .print-table-telephone td:first-child,
+        .print-table-water th:first-child,
+        .print-table-electricity th:first-child,
+        .print-table-telephone th:first-child {
+            text-align: center;
+            width: 30px;
+        }
+
         @media print {
             @page {
                 size: portrait;
@@ -1036,6 +1079,13 @@
             .total-sum-row td {
                 border-top: 3px double #1a56db;
             }
+
+            .print-table-water th,
+            .print-table-electricity th,
+            .print-table-telephone th {
+                background: #1a56db !important;
+                color: white !important;
+            }
         }
 
         @media (max-width: 1024px) {
@@ -1102,6 +1152,9 @@
                 padding: 28px 24px;
                 margin: 0 16px;
             }
+            .data-table-wrapper {
+                overflow-x: auto;
+            }
         }
 
         @media (max-width: 480px) {
@@ -1133,6 +1186,9 @@
             }
             .processing-title {
                 font-size: 1rem;
+            }
+            .data-table-wrapper {
+                overflow-x: auto;
             }
         }
     </style>
@@ -1362,8 +1418,8 @@
             <div class="results-header">
                 <h3 class="results-title" id="reportTitle">Report Results</h3>
                 <div class="print-only">
-                    <h3>🏛️ Ministry of Education Brunei</h3>
-                    <h4>Utility Bills Report</h4>
+                    <h3>🏛️ KEMENTERIAN PENDIDIKAN</h3>
+                    <h4 id="reportSubtitle">Utility Bills Report</h4>
                     <p id="reportDate">Generated on: </p>
                     <hr>
                 </div>
@@ -1378,25 +1434,27 @@
             </div>
             
             <div class="data-table-container">
-                <table class="data-table" id="reportTable">
-                    <thead>
-                        <tr>
-                            <th>Entity Name</th>
-                            <th>Type</th>
-                            <th>Utility</th>
-                            <th>Account No.</th>
-                            <th>Meter / Phone No.</th>
-                            <th>Consumption</th>
-                            <th>Bill Amount</th>
-                            <th>Amount Paid</th>
-                            <th>Outstanding</th>
-                            <th class="period-column">Period</th>
-                        </tr>
-                    </thead>
-                    <tbody id="reportData">
-                        <tr><td colspan="10" class="no-results">Click "Generate Report" to view data</td></tr>
-                    </tbody>
-                </table>
+                <div class="data-table-wrapper">
+                    <table class="data-table" id="reportTable">
+                        <thead id="reportTableHead">
+                            <tr id="reportTableHeaderRow">
+                                <th>Entity Name</th>
+                                <th>Type</th>
+                                <th>Utility</th>
+                                <th>Account No.</th>
+                                <th>Meter / Phone No.</th>
+                                <th>Consumption</th>
+                                <th>Bill Amount</th>
+                                <th>Amount Paid</th>
+                                <th>Outstanding</th>
+                                <th class="period-column">Period</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportData">
+                            <tr><td colspan="10" class="no-results">Click "Generate Report" to view data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -1442,48 +1500,64 @@
         document.getElementById('year').max = 2035;
         document.getElementById('month').value = new Date().getMonth() + 1;
 
-        // Column definitions for each utility type
+        // ====== COLUMN DEFINITIONS FOR EACH UTILITY TYPE ======
         const COLUMN_DEFINITIONS = {
             water: [
-                { key: 'no', label: 'No.', show: true, required: true },
-                { key: 'entityName', label: 'Entity Name', show: true },
-                { key: 'entityType', label: 'Type', show: true },
-                { key: 'accountNumber', label: 'Account No.', show: true },
-                { key: 'meterNumber', label: 'Meter No.', show: true },
-                { key: 'consumption', label: 'Consumption (m³)', show: true },
-                { key: 'billAmount', label: 'Bill Amount ($)', show: true },
-                { key: 'amountPaid', label: 'Amount Paid ($)', show: true },
-                { key: 'outstanding', label: 'Outstanding ($)', show: true },
-                { key: 'period', label: 'Period', show: true }
+                { key: 'no', label: 'Bil.', show: true, required: true },
+                { key: 'entityName', label: 'Nama Entiti', show: true },
+                { key: 'entityType', label: 'Jenis', show: true },
+                { key: 'accountNumber', label: 'No. Akaun', show: true },
+                { key: 'meterNumber', label: 'No. Meter', show: true },
+                { key: 'consumption', label: 'Penggunaan (m³)', show: true },
+                { key: 'billAmount', label: 'Jumlah Bil ($)', show: true },
+                { key: 'amountPaid', label: 'Jumlah Dibayar ($)', show: true },
+                { key: 'outstanding', label: 'Baki Tertunggak ($)', show: true },
+                { key: 'period', label: 'Tempoh', show: true }
             ],
             electricity: [
-                { key: 'no', label: 'No.', show: true, required: true },
-                { key: 'entityName', label: 'Entity Name', show: true },
-                { key: 'entityType', label: 'Type', show: true },
-                { key: 'accountNumber', label: 'Account No.', show: true },
-                { key: 'meterNumber', label: 'Meter No.', show: true },
-                { key: 'consumption', label: 'Consumption (kWh)', show: true },
-                { key: 'billAmount', label: 'Bill Amount ($)', show: true },
-                { key: 'amountPaid', label: 'Amount Paid ($)', show: true },
-                { key: 'outstanding', label: 'Outstanding ($)', show: true },
-                { key: 'period', label: 'Period', show: true }
+                { key: 'no', label: 'Bil.', show: true, required: true },
+                { key: 'entityName', label: 'Nama Entiti', show: true },
+                { key: 'entityType', label: 'Jenis', show: true },
+                { key: 'accountNumber', label: 'No. Akaun', show: true },
+                { key: 'meterNumber', label: 'No. Meter', show: true },
+                { key: 'consumption', label: 'Penggunaan (kWh)', show: true },
+                { key: 'billAmount', label: 'Jumlah Bil ($)', show: true },
+                { key: 'amountPaid', label: 'Jumlah Dibayar ($)', show: true },
+                { key: 'outstanding', label: 'Baki Tertunggak ($)', show: true },
+                { key: 'period', label: 'Tempoh', show: true }
             ],
             telephone: [
-                { key: 'no', label: 'No.', show: true, required: true },
-                { key: 'entityName', label: 'Entity Name', show: true },
-                { key: 'entityType', label: 'Type', show: true },
-                { key: 'accountNumber', label: 'Account No.', show: true },
-                { key: 'phoneNumber', label: 'Phone No.', show: true },
-                { key: 'billNumber', label: 'Bill No.', show: true },
-                { key: 'rentalAmount', label: 'Rental Amount ($)', show: true },
-                { key: 'totalAmount', label: 'Total Amount ($)', show: true },
-                { key: 'totalAccountCharges', label: 'Total Account Charges ($)', show: true },
-                { key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true },
-                { key: 'previousPayment', label: 'Previous Payment ($)', show: true },
-                { key: 'totalCurrentCharges', label: 'Total Current Charges ($)', show: true },
-                { key: 'amountPaid', label: 'Amount Paid ($)', show: true },
-                { key: 'period', label: 'Period', show: true }
+                { key: 'no', label: 'Bil.', show: true, required: true },
+                { key: 'entityName', label: 'Nama Entiti', show: true },
+                { key: 'entityType', label: 'Jenis', show: true },
+                { key: 'accountNumber', label: 'No. Akaun', show: true },
+                { key: 'phoneNumber', label: 'No. Telefon', show: true },
+                { key: 'billNumber', label: 'No. Bil', show: true },
+                { key: 'rentalAmount', label: 'Sewa ($)', show: true },
+                { key: 'totalAmount', label: 'Jumlah ($)', show: true },
+                { key: 'totalAccountCharges', label: 'Jumlah Caj Akaun ($)', show: true },
+                { key: 'previousOutstanding', label: 'Baki Tertunggak Sebelum ($)', show: true },
+                { key: 'previousPayment', label: 'Bayaran Sebelum ($)', show: true },
+                { key: 'totalCurrentCharges', label: 'Jumlah Caj Semasa ($)', show: true },
+                { key: 'amountPaid', label: 'Jumlah Dibayar ($)', show: true },
+                { key: 'period', label: 'Tempoh', show: true }
             ]
+        };
+
+        // ====== HEADER DEFINITIONS FOR EACH UTILITY TYPE ======
+        const UTILITY_HEADERS = {
+            water: {
+                title: 'Master Invoice Pembayaran Bil Air',
+                subtitle: 'Laporan Bil Air'
+            },
+            electricity: {
+                title: 'Master Invoice Pembayaran Bil Elektrik',
+                subtitle: 'Laporan Bil Elektrik'
+            },
+            telephone: {
+                title: 'Master Invoice Pembayaran Bil Telefon',
+                subtitle: 'Laporan Bil Telefon'
+            }
         };
 
         // ====== PROCESSING OVERLAY FUNCTIONS ======
@@ -1492,7 +1566,6 @@
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
             
-            // Reset steps
             document.getElementById('stepFetching').classList.add('active');
             document.getElementById('stepProcessing').classList.remove('active');
             document.getElementById('stepGenerating').classList.remove('active');
@@ -1503,12 +1576,10 @@
         function updateProcessingStep(step, status, progress) {
             const steps = ['stepFetching', 'stepProcessing', 'stepGenerating'];
             
-            // Update active step
             steps.forEach((s, index) => {
                 const el = document.getElementById(s);
                 if (index < step) {
                     el.classList.remove('active');
-                    // Remove existing check mark
                     const existingCheck = el.querySelector('.step-check');
                     if (existingCheck) existingCheck.remove();
                     const check = document.createElement('span');
@@ -1534,7 +1605,7 @@
         function updateProcessingBillsCount(count) {
             const el = document.getElementById('processingBillsCount');
             if (count > 0) {
-                el.textContent = `${count} bill${count > 1 ? 's' : ''} found`;
+                el.textContent = `${count} bil${count > 1 ? 's' : ''} ditemui`;
             } else {
                 el.textContent = '';
             }
@@ -1675,7 +1746,7 @@
             const selectedTypes = getSelectedUtilityTypes();
             
             if (selectedTypes.length === 0) {
-                container.innerHTML = '<span style="color:var(--gray); font-size:0.85rem;">Please select at least one utility type</span>';
+                container.innerHTML = '<span style="color:var(--gray); font-size:0.85rem;">Sila pilih sekurang-kurangnya satu jenis utiliti</span>';
                 return;
             }
 
@@ -1762,6 +1833,12 @@
             return months[month - 1] || 'Unknown';
         }
 
+        function getMonthNameBM(month) {
+            const months = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 
+                           'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
+            return months[month - 1] || 'Unknown';
+        }
+
         function escapeHtml(str) {
             if (!str) return '';
             return String(str).replace(/[&<>]/g, function(m) {
@@ -1770,6 +1847,18 @@
                 if (m === '>') return '&gt;';
                 return m;
             });
+        }
+
+        // ============ GET UTILITY HEADER ============
+        function getUtilityHeader(utilityTypes) {
+            if (!utilityTypes || utilityTypes.length === 0) {
+                return {
+                    title: 'Master Invoice Pembayaran Bil Utiliti',
+                    subtitle: 'Laporan Bil Utiliti'
+                };
+            }
+            const primaryType = utilityTypes[0];
+            return UTILITY_HEADERS[primaryType] || UTILITY_HEADERS.water;
         }
 
         // ============ PRINT SELECTED BUTTON ============
@@ -1790,21 +1879,19 @@
             console.log('📅 Month:', month, 'Year:', year);
 
             if (schoolIds.length === 0 && departmentIds.length === 0) {
-                alert('⚠️ Please select at least one school or department.');
+                alert('⚠️ Sila pilih sekurang-kurangnya satu sekolah atau jabatan.');
                 return;
             }
 
             if (utilityTypes.length === 0) {
-                alert('⚠️ Please select at least one utility type.');
+                alert('⚠️ Sila pilih sekurang-kurangnya satu jenis utiliti.');
                 return;
             }
 
-            // Show processing overlay
             showProcessingOverlay();
             updateProcessingStep(0, 'Fetching bills data...', 10);
 
             try {
-                // Step 1: Fetch data
                 const requestData = {
                     selection_type: 'specificEntities',
                     utility_type: utilityTypes[0],
@@ -1837,12 +1924,11 @@
                     updateProcessingStep(1, 'No bills found', 100);
                     setTimeout(() => {
                         hideProcessingOverlay();
-                        alert('⚠️ No bills found for the selected entities and period.');
+                        alert('⚠️ Tiada bil ditemui untuk entiti dan tempoh yang dipilih.');
                     }, 800);
                     return;
                 }
 
-                // Step 2: Process bills
                 updateProcessingStep(1, `Processing ${data.length} bills...`, 50);
 
                 const printRows = [];
@@ -1881,9 +1967,9 @@
                     const row = {
                         no: serial++,
                         entityName: bill.entity_name || 'Unknown',
-                        entityType: bill.entity_type === 'school' ? '🏫 School' : '🏛️ Department',
-                        utilityType: bill.utility_type === 'water' ? '💧 Water' : 
-                                    bill.utility_type === 'electricity' ? '⚡ Electricity' : '📞 Telephone',
+                        entityType: bill.entity_type === 'school' ? '🏫 Sekolah' : '🏛️ Jabatan',
+                        utilityType: bill.utility_type === 'water' ? '💧 Air' : 
+                                    bill.utility_type === 'electricity' ? '⚡ Elektrik' : '📞 Telefon',
                         accountNumber: bill.account_number || '—',
                         meterNumber: bill.utility_type === 'telephone' ? '—' : (bill.meter_number || '—'),
                         phoneNumber: bill.utility_type === 'telephone' ? (bill.phone_number || '—') : '—',
@@ -1900,7 +1986,7 @@
                         billAmount: parseFloat(bill.current_charges) || 0,
                         amountPaid: parseFloat(bill.amount_paid) || 0,
                         outstanding: parseFloat(bill.unsettled_charges) || 0,
-                        period: getMonthName(bill.month) + ' ' + bill.year
+                        period: getMonthNameBM(bill.month) + ' ' + bill.year
                     };
                     printRows.push(row);
                 }
@@ -1911,20 +1997,17 @@
                     updateProcessingStep(1, 'No data to print', 100);
                     setTimeout(() => {
                         hideProcessingOverlay();
-                        alert('⚠️ No data to print after processing.');
+                        alert('⚠️ Tiada data untuk dicetak selepas pemprosesan.');
                     }, 800);
                     return;
                 }
 
-                // Step 3: Generate print preview
                 updateProcessingStep(2, 'Generating print preview...', 75);
 
                 const paginateOnlyTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
                 
-                // Generate the print preview
                 generatePrintPreview(printRows, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone);
 
-                // Complete
                 updateProcessingStep(2, '✅ Done! Opening print preview...', 100);
                 
                 setTimeout(() => {
@@ -1936,104 +2019,108 @@
                 updateProcessingStep(2, '❌ Error: ' + error.message, 100);
                 setTimeout(() => {
                     hideProcessingOverlay();
-                    alert('❌ Error generating print report: ' + error.message + '\n\nCheck console for details.');
+                    alert('❌ Ralat menjana laporan cetakan: ' + error.message + '\n\nSila semak konsol untuk butiran.');
                 }, 1000);
             }
         });
 
         function generatePrintPreview(data, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone) {
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-            const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
-            const yearDisplay = year !== 'all' ? year : 'All Years';
+            const monthNames = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
+            const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'Semua Bulan';
+            const yearDisplay = year !== 'all' ? year : 'Semua Tahun';
             
             const hasTelephone = utilityTypes.includes('telephone');
             const hasWater = utilityTypes.includes('water');
             const hasElectricity = utilityTypes.includes('electricity');
             const hasWaterElectricity = hasWater || hasElectricity;
             
+            // Get utility header
+            const headerInfo = getUtilityHeader(utilityTypes);
+            const titleText = headerInfo.title;
+            const subtitleText = headerInfo.subtitle;
+            
             let colConfig = [];
 
-            colConfig.push({ key: 'no', label: 'No.', show: true });
+            colConfig.push({ key: 'no', label: 'Bil.', show: true });
 
             if (selectedColumns.entityName !== false) {
-                colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
+                colConfig.push({ key: 'entityName', label: 'Nama Entiti', show: true });
             }
             if (selectedColumns.entityType !== false) {
-                colConfig.push({ key: 'entityType', label: 'Type', show: true });
+                colConfig.push({ key: 'entityType', label: 'Jenis', show: true });
             }
 
             if (hasWaterElectricity) {
                 if (selectedColumns.accountNumber !== false) {
-                    colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
+                    colConfig.push({ key: 'accountNumber', label: 'No. Akaun', show: true });
                 }
                 if (selectedColumns.meterNumber !== false) {
-                    colConfig.push({ key: 'meterTelNo', label: 'Meter No.', show: true });
+                    colConfig.push({ key: 'meterTelNo', label: 'No. Meter', show: true });
                 }
                 if (selectedColumns.consumption !== false) {
-                    colConfig.push({ key: 'consumption', label: hasWater ? 'Consumption (m³)' : 'Consumption (kWh)', show: true });
+                    colConfig.push({ key: 'consumption', label: hasWater ? 'Penggunaan (m³)' : 'Penggunaan (kWh)', show: true });
                 }
                 if (selectedColumns.billAmount !== false) {
-                    colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
+                    colConfig.push({ key: 'billAmount', label: 'Jumlah Bil ($)', show: true });
                 }
                 if (selectedColumns.amountPaid !== false) {
-                    colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
+                    colConfig.push({ key: 'amountPaid', label: 'Jumlah Dibayar ($)', show: true });
                 }
                 if (selectedColumns.outstanding !== false) {
-                    colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
+                    colConfig.push({ key: 'outstanding', label: 'Baki Tertunggak ($)', show: true });
                 }
             }
 
             if (hasTelephone) {
                 if (selectedColumns.accountNumber !== false) {
-                    colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
+                    colConfig.push({ key: 'accountNumber', label: 'No. Akaun', show: true });
                 }
                 if (selectedColumns.phoneNumber !== false) {
-                    colConfig.push({ key: 'meterTelNo', label: 'Phone No.', show: true });
+                    colConfig.push({ key: 'meterTelNo', label: 'No. Telefon', show: true });
                 }
                 if (selectedColumns.billNumber !== false) {
-                    colConfig.push({ key: 'billNumber', label: 'Bill No.', show: true });
+                    colConfig.push({ key: 'billNumber', label: 'No. Bil', show: true });
                 }
                 if (selectedColumns.rentalAmount !== false) {
-                    colConfig.push({ key: 'rentalAmount', label: 'Rental Amount ($)', show: true });
+                    colConfig.push({ key: 'rentalAmount', label: 'Sewa ($)', show: true });
                 }
                 if (selectedColumns.totalAmount !== false) {
-                    colConfig.push({ key: 'totalAmount', label: 'Total Amount ($)', show: true });
+                    colConfig.push({ key: 'totalAmount', label: 'Jumlah ($)', show: true });
                 }
                 if (selectedColumns.totalAccountCharges !== false) {
-                    colConfig.push({ key: 'totalAccountCharges', label: 'Total Account Charges ($)', show: true });
+                    colConfig.push({ key: 'totalAccountCharges', label: 'Jumlah Caj Akaun ($)', show: true });
                 }
                 if (selectedColumns.previousOutstanding !== false) {
-                    colConfig.push({ key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true });
+                    colConfig.push({ key: 'previousOutstanding', label: 'Baki Tertunggak Sebelum ($)', show: true });
                 }
                 if (selectedColumns.previousPayment !== false) {
-                    colConfig.push({ key: 'previousPayment', label: 'Previous Payment ($)', show: true });
+                    colConfig.push({ key: 'previousPayment', label: 'Bayaran Sebelum ($)', show: true });
                 }
                 if (selectedColumns.totalCurrentCharges !== false) {
-                    colConfig.push({ key: 'totalCurrentCharges', label: 'Total Current Charges ($)', show: true });
+                    colConfig.push({ key: 'totalCurrentCharges', label: 'Jumlah Caj Semasa ($)', show: true });
                 }
                 if (selectedColumns.amountPaid !== false) {
-                    colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
+                    colConfig.push({ key: 'amountPaid', label: 'Jumlah Dibayar ($)', show: true });
                 }
             }
 
             if (selectedColumns.period !== false) {
-                colConfig.push({ key: 'period', label: 'Period', show: true });
+                colConfig.push({ key: 'period', label: 'Tempoh', show: true });
             }
 
             const visibleCols = colConfig.filter(c => c.show !== false);
             const utilityTypeLabels = utilityTypes.map(u => {
-                if (u === 'water') return '💧 Water';
-                if (u === 'electricity') return '⚡ Electricity';
-                if (u === 'telephone') return '📞 Telephone';
+                if (u === 'water') return '💧 Air';
+                if (u === 'electricity') return '⚡ Elektrik';
+                if (u === 'telephone') return '📞 Telefon';
                 return u;
             }).join(', ');
 
-            // Only paginate if Telephone is the ONLY utility AND data has MORE than itemsPerPage
             const shouldPaginate = paginateOnlyTelephone && hasTelephone && data.length > itemsPerPage;
             const totalPages = shouldPaginate ? Math.ceil(data.length / itemsPerPage) : 1;
 
             const now = new Date();
-            const reportDate = now.toLocaleDateString('en-US', {
+            const reportDate = now.toLocaleDateString('ms-MY', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
@@ -2042,27 +2129,33 @@
             });
 
             // Determine which column index the summary should align under
-            let summaryColIndex = visibleCols.length - 1; // Default to last column (Period)
+            let summaryColIndex = visibleCols.length - 1;
             
             if (hasTelephone) {
-                // For Telephone: align under "Total Current Charges ($)" column
                 const totalCurrentIndex = visibleCols.findIndex(c => c.key === 'totalCurrentCharges');
                 if (totalCurrentIndex !== -1) {
                     summaryColIndex = totalCurrentIndex;
                 }
             } else if (hasWaterElectricity) {
-                // For Water/Electricity: align under "Amount Paid ($)" column
                 const amountPaidIndex = visibleCols.findIndex(c => c.key === 'amountPaid');
                 if (amountPaidIndex !== -1) {
                     summaryColIndex = amountPaidIndex;
                 }
             }
 
+            // Determine table class for styling
+            let tableClass = 'print-table-water';
+            if (hasTelephone) {
+                tableClass = 'print-table-telephone';
+            } else if (hasElectricity) {
+                tableClass = 'print-table-electricity';
+            }
+
             let printHtml = `
                 <!DOCTYPE html>
                 <html>
                 <head>
-                    <title>Utility Bills Report - ${monthName} ${yearDisplay}</title>
+                    <title>${titleText} - ${monthName} ${yearDisplay}</title>
                     <meta charset="UTF-8">
                     <style>
                         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2092,26 +2185,27 @@
                             text-align: center; 
                             margin-bottom: 25px; 
                         }
-                        .print-header h2 { 
+                        .print-header h1 { 
                             margin: 5px 0; 
                             color: #1a56db; 
-                            font-size: 14pt; 
+                            font-size: 16pt; 
                             font-weight: 700;
+                            text-transform: uppercase;
                         }
-                        .print-header h3 { 
+                        .print-header h2 { 
                             margin: 5px 0; 
                             font-weight: 600; 
-                            font-size: 11pt; 
+                            font-size: 12pt; 
                             color: #1e293b;
                         }
-                        .print-header h4 { 
+                        .print-header h3 { 
                             margin: 5px 0; 
                             color: #475569; 
                             font-weight: 400; 
                             font-size: 10pt; 
                         }
                         .print-header p { 
-                            margin: 5px 0; 
+                            margin: 3px 0; 
                             color: #64748b; 
                             font-size: 9pt; 
                         }
@@ -2120,6 +2214,7 @@
                             border-collapse: collapse; 
                             margin-top: 15px; 
                             font-size: 8pt; 
+                            min-width: 100%;
                         }
                         .print-table th { 
                             background: #1a56db; 
@@ -2129,6 +2224,7 @@
                             border: 1px solid #1a56db; 
                             font-size: 7.5pt; 
                             font-weight: 600; 
+                            white-space: nowrap;
                         }
                         .print-table td { 
                             padding: 5px 8px; 
@@ -2169,7 +2265,7 @@
                         .utility-badge { 
                             display: inline-block; 
                             padding: 1px 8px; 
-                            border-radius: 12px; 
+                            border-radius: 10px; 
                             font-size: 6.5pt; 
                             font-weight: 600; 
                         }
@@ -2187,22 +2283,25 @@
                             font-size: 16pt; 
                             font-weight: 700; 
                             color: #0f172a;
-                            margin-bottom: 4px;
+                            margin-bottom: 2px;
+                            text-transform: uppercase;
                         }
                         .report-subtitle-print {
                             text-align: center;
                             font-size: 11pt;
                             color: #475569;
-                            margin-bottom: 4px;
+                            margin-bottom: 2px;
                         }
                         .report-date-print {
                             text-align: center;
                             font-size: 9pt;
                             color: #94a3b8;
-                            margin-bottom: 20px;
+                            margin-bottom: 15px;
                         }
-                        .summary-col-align {
-                            text-align: right;
+                        /* Table wrapper for horizontal scroll */
+                        .table-wrapper-scroll {
+                            overflow-x: auto;
+                            -webkit-overflow-scrolling: touch;
                         }
                         @media print { 
                             body { padding: 0; margin: 0.4in; } 
@@ -2211,6 +2310,9 @@
                             .print-table th { background: #1a56db !important; color: white !important; }
                             .summary-row td { border-top: 2px solid #1a56db; }
                             .total-sum-row td { border-top: 3px double #1a56db; }
+                            .table-wrapper-scroll {
+                                overflow-x: visible !important;
+                            }
                         }
                     </style>
                 </head>
@@ -2219,7 +2321,6 @@
 
             // Only paginate if there are MORE items than itemsPerPage
             if (shouldPaginate) {
-                // First, calculate grand totals for ALL data
                 let grandTotalBillAmount = 0;
                 let grandTotalAmountPaid = 0;
                 let grandTotalOutstanding = 0;
@@ -2276,21 +2377,22 @@
                     printHtml += `
                         <div class="print-page">
                             <div class="attachment-header">
-                                Page ${page} of ${totalPages}
+                                Muka Surat ${page} daripada ${totalPages}
                             </div>
                             <div class="print-header">
-                                <div class="report-title-print">🏛️ MINISTRY OF EDUCATION BRUNEI</div>
-                                <div class="report-subtitle-print">Utility Bills Report</div>
-                                <div class="report-date-print">${monthName} ${yearDisplay} | Generated: ${reportDate}</div>
-                                <p>Utilities: ${utilityTypeLabels}</p>
+                                <div class="report-title-print">KEMENTERIAN PENDIDIKAN</div>
+                                <div class="report-subtitle-print">${titleText}</div>
+                                <div class="report-date-print">Bagi Bulan ${monthName} ${yearDisplay} | Dijana: ${reportDate}</div>
+                                <p>Utiliti: ${utilityTypeLabels}</p>
                             </div>
-                            <table class="print-table">
-                                <thead>
-                                    <tr>
-                                        ${visibleCols.map(c => `<th>${c.label}</th>`).join('')}
-                                    </tr>
-                                </thead>
-                                <tbody>
+                            <div class="table-wrapper-scroll">
+                                <table class="print-table ${tableClass}">
+                                    <thead>
+                                        <tr>
+                                            ${visibleCols.map(c => `<th>${c.label}</th>`).join('')}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
                     `;
 
                     for (const item of pageData) {
@@ -2305,8 +2407,8 @@
                             } else if (col.key === 'entityType') {
                                 printHtml += `<td>${escapeHtml(value)}</td>`;
                             } else if (col.key === 'utilityType') {
-                                const cls = item.utilityType.includes('Water') ? 'water' : 
-                                           item.utilityType.includes('Electricity') ? 'electricity' : 'telephone';
+                                const cls = item.utilityType.includes('Air') ? 'water' : 
+                                           item.utilityType.includes('Elektrik') ? 'electricity' : 'telephone';
                                 printHtml += `<td><span class="utility-badge ${cls}">${escapeHtml(value)}</span></td>`;
                             } else if (col.key === 'no') {
                                 printHtml += `<td>${value}</td>`;
@@ -2324,36 +2426,32 @@
                         printHtml += `</tr>`;
                     }
 
-                    // ===== PAGE TOTAL SUMMARY ROW =====
+                    // Page Total Summary Row
                     printHtml += `
                                 <tr class="summary-row">
                                     <td colspan="${summaryColIndex}"></td>
                     `;
 
-                    // Add page totals aligned under the correct column
                     if (hasWaterElectricity && hasTelephone) {
                         if (visibleCols.some(c => c.key === 'billAmount')) {
-                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Jumlah Muka Surat:</span> <strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'amountPaid')) {
-                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Jumlah Muka Surat:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
                         }
                         if (visibleCols.some(c => c.key === 'outstanding')) {
-                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Jumlah Muka Surat:</span> <strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
                         }
                     } else if (hasWaterElectricity) {
-                        // Water/Electricity: Show Page Total under Amount Paid
                         if (visibleCols.some(c => c.key === 'amountPaid')) {
-                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Jumlah Muka Surat:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
                         }
                     } else if (hasTelephone) {
-                        // Telephone: Show Page Total under Total Current Charges
                         if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
-                            printHtml += `<td class="currency-cell"><span class="page-total-label">Page Total:</span> <strong>$${totalCurrentCharges.toFixed(2)}</strong></td>`;
+                            printHtml += `<td class="currency-cell"><span class="page-total-label">Jumlah Muka Surat:</span> <strong>$${totalCurrentCharges.toFixed(2)}</strong></td>`;
                         }
                     }
 
-                    // Add remaining empty cells to fill the row
                     const remainingCols = visibleCols.length - summaryColIndex - 1;
                     for (let i = 0; i < remainingCols; i++) {
                         printHtml += `<td></td>`;
@@ -2363,7 +2461,7 @@
                                 </tr>
                     `;
 
-                    // ===== GRAND TOTAL SUMMARY ROW (only on last page) =====
+                    // Total Sum Row (only on last page)
                     if (isLastPage) {
                         printHtml += `
                                 <tr class="total-sum-row">
@@ -2372,27 +2470,24 @@
 
                         if (hasWaterElectricity && hasTelephone) {
                             if (visibleCols.some(c => c.key === 'billAmount')) {
-                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalBillAmount.toFixed(2)}</strong></td>`;
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Jumlah Keseluruhan:</span> <strong>$${grandTotalBillAmount.toFixed(2)}</strong></td>`;
                             }
                             if (visibleCols.some(c => c.key === 'amountPaid')) {
-                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalAmountPaid.toFixed(2)}</strong></td>`;
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Jumlah Keseluruhan:</span> <strong>$${grandTotalAmountPaid.toFixed(2)}</strong></td>`;
                             }
                             if (visibleCols.some(c => c.key === 'outstanding')) {
-                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalOutstanding.toFixed(2)}</strong></td>`;
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Jumlah Keseluruhan:</span> <strong>$${grandTotalOutstanding.toFixed(2)}</strong></td>`;
                             }
                         } else if (hasWaterElectricity) {
-                            // Water/Electricity: Show Total Sum under Amount Paid
                             if (visibleCols.some(c => c.key === 'amountPaid')) {
-                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalAmountPaid.toFixed(2)}</strong></td>`;
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Jumlah Keseluruhan:</span> <strong>$${grandTotalAmountPaid.toFixed(2)}</strong></td>`;
                             }
                         } else if (hasTelephone) {
-                            // Telephone: Show Total Sum under Total Current Charges
                             if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
-                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${grandTotalCurrentCharges.toFixed(2)}</strong></td>`;
+                                printHtml += `<td class="currency-cell"><span class="summary-label-cell">Jumlah Keseluruhan:</span> <strong>$${grandTotalCurrentCharges.toFixed(2)}</strong></td>`;
                             }
                         }
 
-                        // Add remaining empty cells
                         for (let i = 0; i < remainingCols; i++) {
                             printHtml += `<td></td>`;
                         }
@@ -2403,13 +2498,14 @@
                     }
 
                     printHtml += `
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
+                            </div>
                             <div class="page-number">
-                                Page ${page} of ${totalPages}
+                                Muka Surat ${page} daripada ${totalPages}
                             </div>
                             <div class="footer-note">
-                                This is a computer-generated document. No signature required.
+                                Ini adalah dokumen yang dihasilkan oleh komputer. Tandatangan tidak diperlukan.
                             </div>
                         </div>
                     `;
@@ -2444,18 +2540,19 @@
                             &nbsp;
                         </div>
                         <div class="print-header">
-                            <div class="report-title-print">🏛️ MINISTRY OF EDUCATION BRUNEI</div>
-                            <div class="report-subtitle-print">Utility Bills Report</div>
-                            <div class="report-date-print">${monthName} ${yearDisplay} | Generated: ${reportDate}</div>
-                            <p>Utilities: ${utilityTypeLabels}</p>
+                            <div class="report-title-print">KEMENTERIAN PENDIDIKAN</div>
+                            <div class="report-subtitle-print">${titleText}</div>
+                            <div class="report-date-print">Bagi Bulan ${monthName} ${yearDisplay} | Dijana: ${reportDate}</div>
+                            <p>Utiliti: ${utilityTypeLabels}</p>
                         </div>
-                        <table class="print-table">
-                            <thead>
-                                <tr>
-                                    ${visibleCols.map(c => `<th>${c.label}</th>`).join('')}
-                                </tr>
-                            </thead>
-                            <tbody>
+                        <div class="table-wrapper-scroll">
+                            <table class="print-table ${tableClass}">
+                                <thead>
+                                    <tr>
+                                        ${visibleCols.map(c => `<th>${c.label}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
                 `;
 
                 for (const item of data) {
@@ -2470,8 +2567,8 @@
                         } else if (col.key === 'entityType') {
                             printHtml += `<td>${escapeHtml(value)}</td>`;
                         } else if (col.key === 'utilityType') {
-                            const cls = item.utilityType.includes('Water') ? 'water' : 
-                                       item.utilityType.includes('Electricity') ? 'electricity' : 'telephone';
+                            const cls = item.utilityType.includes('Air') ? 'water' : 
+                                       item.utilityType.includes('Elektrik') ? 'electricity' : 'telephone';
                             printHtml += `<td><span class="utility-badge ${cls}">${escapeHtml(value)}</span></td>`;
                         } else if (col.key === 'no') {
                             printHtml += `<td>${value}</td>`;
@@ -2489,7 +2586,7 @@
                     printHtml += `</tr>`;
                 }
 
-                // ===== TOTAL SUMMARY ROW =====
+                // Total Summary Row
                 printHtml += `
                             <tr class="summary-row">
                                 <td colspan="${summaryColIndex}"></td>
@@ -2497,27 +2594,24 @@
 
                 if (hasWaterElectricity && hasTelephone) {
                     if (visibleCols.some(c => c.key === 'billAmount')) {
-                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Jumlah:</span> <strong>$${totalBillAmount.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'amountPaid')) {
-                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Jumlah:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
                     }
                     if (visibleCols.some(c => c.key === 'outstanding')) {
-                        printHtml += `<td class="currency-cell"><span class="page-total-label">Total:</span> <strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="page-total-label">Jumlah:</span> <strong>$${totalOutstanding.toFixed(2)}</strong></td>`;
                     }
                 } else if (hasWaterElectricity) {
-                    // Water/Electricity: Show Total under Amount Paid
                     if (visibleCols.some(c => c.key === 'amountPaid')) {
-                        printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="summary-label-cell">Jumlah Keseluruhan:</span> <strong>$${totalAmountPaid.toFixed(2)}</strong></td>`;
                     }
                 } else if (hasTelephone) {
-                    // Telephone: Show Total under Total Current Charges
                     if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
-                        printHtml += `<td class="currency-cell"><span class="summary-label-cell">Total Sum:</span> <strong>$${totalCurrentCharges.toFixed(2)}</strong></td>`;
+                        printHtml += `<td class="currency-cell"><span class="summary-label-cell">Jumlah Keseluruhan:</span> <strong>$${totalCurrentCharges.toFixed(2)}</strong></td>`;
                     }
                 }
 
-                // Add remaining empty cells
                 const remainingCols = visibleCols.length - summaryColIndex - 1;
                 for (let i = 0; i < remainingCols; i++) {
                     printHtml += `<td></td>`;
@@ -2528,10 +2622,11 @@
                 `;
 
                 printHtml += `
-                            </tbody>
-                        </table>
+                                </tbody>
+                            </table>
+                        </div>
                         <div class="footer-note">
-                            Total Bills: ${data.length} | This is a computer-generated document. No signature required.
+                            Jumlah Bil: ${data.length} | Ini adalah dokumen yang dihasilkan oleh komputer. Tandatangan tidak diperlukan.
                         </div>
                     </div>
                 `;
@@ -2555,7 +2650,7 @@
                 previewWindow.document.close();
                 previewWindow.focus();
             } else {
-                alert('⚠️ Please allow pop-ups for this site to print.');
+                alert('⚠️ Sila benarkan pop-up untuk laman ini bagi mencetak.');
             }
         }
 
@@ -2646,35 +2741,66 @@
             const exportPDFBtn = document.getElementById('exportPDF');
             const exportExcelBtn = document.getElementById('exportExcel');
             const reportDateSpan = document.getElementById('reportDate');
+            const reportSubtitle = document.getElementById('reportSubtitle');
             
-            let title = '📊 Utility Bills Report - ';
+            // Get the appropriate header based on utility type
+            const headerInfo = getUtilityHeader([utilityType]);
+            const titleText = headerInfo.title;
+            const subtitleText = headerInfo.subtitle;
+            
+            let title = '📊 ' + titleText + ' - ';
             
             if (selectionType === 'entityType') {
                 if (entityType !== 'all') {
-                    title += entityType === 'school' ? 'Schools ' : 'Departments ';
+                    title += entityType === 'school' ? 'Sekolah ' : 'Jabatan ';
                 }
                 if (utilityType !== 'all') {
                     title += '(' + utilityType.charAt(0).toUpperCase() + utilityType.slice(1) + ') ';
                 }
             } else {
-                title += 'Selected Entities ';
+                title += 'Entiti Terpilih ';
                 if (utilityType !== 'all') {
                     title += '(' + utilityType.charAt(0).toUpperCase() + utilityType.slice(1) + ') ';
                 }
             }
             
+            const monthName = month !== 'all' ? getMonthNameBM(parseInt(month)) : 'Semua Bulan';
             if (month !== 'all') {
-                title += getMonthName(parseInt(month)) + ' ';
+                title += monthName + ' ';
             }
             if (year && year !== 'all') {
                 title += year;
             }
             if (title.endsWith(' - ') || title.endsWith(' ')) {
-                title = '📊 All Utility Bills Report';
+                title = '📊 ' + titleText;
             }
             
             reportTitle.textContent = title;
-            reportDateSpan.textContent = 'Generated on: ' + new Date().toLocaleString();
+            reportSubtitle.textContent = subtitleText;
+            reportDateSpan.textContent = 'Dijana pada: ' + new Date().toLocaleString('ms-MY', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            // Get column definitions based on utility type
+            const columns = COLUMN_DEFINITIONS[utilityType] || COLUMN_DEFINITIONS.water;
+            
+            // Update table headers dynamically
+            const headerRow = document.getElementById('reportTableHeaderRow');
+            headerRow.innerHTML = '';
+            columns.forEach(col => {
+                if (col.show !== false) {
+                    const th = document.createElement('th');
+                    th.textContent = col.label;
+                    if (col.key === 'period') {
+                        th.className = 'period-column';
+                    }
+                    headerRow.appendChild(th);
+                }
+            });
             
             const totalBills = data.length;
             const totalBillAmount = data.reduce((sum, bill) => sum + (bill.current_charges || 0), 0);
@@ -2684,24 +2810,24 @@
             summaryCards.innerHTML = `
                 <div class="summary-card">
                     <div class="summary-value">${totalBills}</div>
-                    <div class="summary-label">Total Bills</div>
+                    <div class="summary-label">Jumlah Bil</div>
                 </div>
                 <div class="summary-card">
                     <div class="summary-value">$${totalBillAmount.toFixed(2)}</div>
-                    <div class="summary-label">Total Bill Amount</div>
+                    <div class="summary-label">Jumlah Bil</div>
                 </div>
                 <div class="summary-card">
                     <div class="summary-value">$${totalAmountPaid.toFixed(2)}</div>
-                    <div class="summary-label">Total Amount Paid</div>
+                    <div class="summary-label">Jumlah Dibayar</div>
                 </div>
                 <div class="summary-card">
                     <div class="summary-value">$${totalOutstanding.toFixed(2)}</div>
-                    <div class="summary-label">Total Outstanding</div>
+                    <div class="summary-label">Baki Tertunggak</div>
                 </div>
             `;
             
             if (data.length === 0) {
-                reportData.innerHTML = '<tr><td colspan="10" class="no-results">📭 No data found for the selected criteria</td></tr>';
+                reportData.innerHTML = '<tr><td colspan="10" class="no-results">📭 Tiada data ditemui untuk kriteria yang dipilih</td></tr>';
             } else {
                 reportData.innerHTML = '';
                 data.forEach(bill => {
@@ -2725,15 +2851,15 @@
                     
                     row.innerHTML = `
                         <td><strong>${escapeHtml(bill.entity_name || 'Unknown')}</strong></td>
-                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type === 'school' ? '🏫 School' : '🏛️ Department'}</span></td>
-                        <td><span class="badge badge-${bill.utility_type}">${bill.utility_type === 'water' ? '💧 Water' : bill.utility_type === 'electricity' ? '⚡ Electricity' : '📞 Telephone'}</span></td>
+                        <td><span class="badge ${bill.entity_type === 'school' ? 'badge-school' : 'badge-department'}">${bill.entity_type === 'school' ? '🏫 Sekolah' : '🏛️ Jabatan'}</span></td>
+                        <td><span class="badge badge-${bill.utility_type}">${bill.utility_type === 'water' ? '💧 Air' : bill.utility_type === 'electricity' ? '⚡ Elektrik' : '📞 Telefon'}</span></td>
                         <td>${escapeHtml(bill.account_number || '—')}</td>
                         <td>${escapeHtml(meterTelNo)}</td>
                         <td>${consumption}</td>
                         <td>$${(bill.current_charges || 0).toFixed(2)}</td>
                         <td>$${(bill.amount_paid || 0).toFixed(2)}</td>
                         <td>$${(bill.unsettled_charges || 0).toFixed(2)}</td>
-                        <td class="period-column">${getMonthName(bill.month)} ${bill.year}</td>
+                        <td class="period-column">${getMonthNameBM(bill.month)} ${bill.year}</td>
                     `;
                     reportData.appendChild(row);
                 });
@@ -2769,11 +2895,11 @@
                 return;
             }
             
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-            const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
-            const yearDisplay = year !== 'all' ? year : 'All Years';
+            const monthNames = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
+            const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'Semua Bulan';
+            const yearDisplay = year !== 'all' ? year : 'Semua Tahun';
             const now = new Date();
-            const reportDate = now.toLocaleDateString('en-US', {
+            const reportDate = now.toLocaleDateString('ms-MY', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
@@ -2781,10 +2907,18 @@
                 minute: '2-digit'
             });
             
+            // Get header based on utility type
+            const utilityType = window.reportUtilityType || 'water';
+            const headerInfo = getUtilityHeader([utilityType]);
+            const titleText = headerInfo.title;
+            
             let tableRows = '';
             let totalBillAmount = 0;
             let totalAmountPaid = 0;
             let totalOutstanding = 0;
+            
+            const columns = COLUMN_DEFINITIONS[utilityType] || COLUMN_DEFINITIONS.water;
+            const visibleCols = columns.filter(c => c.show !== false);
             
             data.forEach((bill, index) => {
                 let consumption = '—';
@@ -2811,14 +2945,14 @@
                 
                 const utilityBadgeClass = bill.utility_type === 'water' ? 'water' : 
                                          bill.utility_type === 'electricity' ? 'electricity' : 'telephone';
-                const utilityLabel = bill.utility_type === 'water' ? '💧 Water' : 
-                                    bill.utility_type === 'electricity' ? '⚡ Electricity' : '📞 Telephone';
+                const utilityLabel = bill.utility_type === 'water' ? '💧 Air' : 
+                                    bill.utility_type === 'electricity' ? '⚡ Elektrik' : '📞 Telefon';
                 
                 tableRows += `
                     <tr>
                         <td>${index + 1}</td>
                         <td class="entity-name-cell">${escapeHtml(bill.entity_name || 'Unknown')}</td>
-                        <td>${bill.entity_type === 'school' ? '🏫 School' : '🏛️ Department'}</td>
+                        <td>${bill.entity_type === 'school' ? '🏫 Sekolah' : '🏛️ Jabatan'}</td>
                         <td><span class="utility-badge ${utilityBadgeClass}">${utilityLabel}</span></td>
                         <td class="mono-cell">${escapeHtml(bill.account_number || '—')}</td>
                         <td class="mono-cell">${escapeHtml(meterTelNo)}</td>
@@ -2826,7 +2960,7 @@
                         <td class="currency-cell">$${billAmount.toFixed(2)}</td>
                         <td class="currency-cell">$${amountPaid.toFixed(2)}</td>
                         <td class="currency-cell">$${outstanding.toFixed(2)}</td>
-                        <td>${getMonthName(bill.month)} ${bill.year}</td>
+                        <td>${getMonthNameBM(bill.month)} ${bill.year}</td>
                     </tr>
                 `;
             });
@@ -2851,19 +2985,20 @@
                             border-bottom: 2px solid #1a56db;
                             padding-bottom: 15px;
                         }
-                        .print-header h2 { 
+                        .print-header h1 { 
                             margin: 5px 0; 
                             color: #1a56db; 
                             font-size: 16pt; 
-                            font-weight: 700; 
+                            font-weight: 700;
+                            text-transform: uppercase;
                         }
-                        .print-header h3 { 
+                        .print-header h2 { 
                             margin: 5px 0; 
                             font-weight: 600; 
                             font-size: 12pt; 
                             color: #1e293b;
                         }
-                        .print-header h4 { 
+                        .print-header h3 { 
                             margin: 5px 0; 
                             color: #475569; 
                             font-weight: 400; 
@@ -2937,6 +3072,7 @@
                             font-weight: 700; 
                             color: #0f172a;
                             margin-bottom: 4px;
+                            text-transform: uppercase;
                         }
                         .report-subtitle-print {
                             text-align: center;
@@ -2958,25 +3094,15 @@
                 </head>
                 <body>
                     <div class="print-header">
-                        <div class="report-title-print">🏛️ MINISTRY OF EDUCATION BRUNEI</div>
-                        <div class="report-subtitle-print">${title.replace('📊 ', '')}</div>
-                        <div class="report-date-print">${monthName} ${yearDisplay} | Generated: ${reportDate}</div>
+                        <div class="report-title-print">KEMENTERIAN PENDIDIKAN</div>
+                        <div class="report-subtitle-print">${titleText}</div>
+                        <div class="report-date-print">Bagi Bulan ${monthName} ${yearDisplay} | Dijana: ${reportDate}</div>
                     </div>
                     
                     <table class="print-table">
                         <thead>
                             <tr>
-                                <th>No.</th>
-                                <th>Entity Name</th>
-                                <th>Type</th>
-                                <th>Utility</th>
-                                <th>Account No.</th>
-                                <th>Meter / Phone No.</th>
-                                <th>Consumption</th>
-                                <th>Bill Amount ($)</th>
-                                <th>Amount Paid ($)</th>
-                                <th>Outstanding ($)</th>
-                                <th>Period</th>
+                                ${visibleCols.map(c => `<th>${c.label}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -2992,7 +3118,7 @@
                     </table>
                     
                     <div class="footer-note">
-                        Total Bills: ${data.length} | This is a computer-generated document. No signature required.
+                        Jumlah Bil: ${data.length} | Ini adalah dokumen yang dihasilkan oleh komputer. Tandatangan tidak diperlukan.
                     </div>
                     
                     <script>
@@ -3012,7 +3138,7 @@
                 previewWindow.document.close();
                 previewWindow.focus();
             } else {
-                alert('⚠️ Please allow pop-ups for this site to print.');
+                alert('⚠️ Sila benarkan pop-up untuk laman ini bagi mencetak.');
             }
         });
 
@@ -3056,7 +3182,18 @@
             
             doc.setFontSize(10);
             doc.setTextColor(100);
-            doc.text('Generated on: ' + new Date().toLocaleString(), 14, 22);
+            doc.text('Dijana pada: ' + new Date().toLocaleString('ms-MY', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }), 14, 22);
+            
+            const utilityType = window.reportUtilityType || 'water';
+            const columns = COLUMN_DEFINITIONS[utilityType] || COLUMN_DEFINITIONS.water;
+            const visibleCols = columns.filter(c => c.show !== false);
+            const headers = visibleCols.map(c => c.label);
             
             const tableData = data.map(bill => {
                 let consumption = '';
@@ -3075,23 +3212,37 @@
                     meterTelNo = bill.meter_number || '—';
                 }
                 
-                return [
-                    bill.entity_name || 'Unknown',
-                    bill.entity_type === 'school' ? 'School' : 'Department',
-                    bill.utility_type === 'water' ? 'Water' : (bill.utility_type === 'electricity' ? 'Electricity' : 'Telephone'),
-                    bill.account_number || '—',
-                    meterTelNo,
-                    consumption,
-                    '$' + (bill.current_charges || 0).toFixed(2),
-                    '$' + (bill.amount_paid || 0).toFixed(2),
-                    '$' + (bill.unsettled_charges || 0).toFixed(2),
-                    getMonthName(bill.month) + ' ' + bill.year
-                ];
+                const rowData = [];
+                visibleCols.forEach(col => {
+                    switch(col.key) {
+                        case 'no': rowData.push(''); break;
+                        case 'entityName': rowData.push(bill.entity_name || 'Unknown'); break;
+                        case 'entityType': rowData.push(bill.entity_type === 'school' ? 'Sekolah' : 'Jabatan'); break;
+                        case 'utilityType': rowData.push(bill.utility_type === 'water' ? 'Air' : (bill.utility_type === 'electricity' ? 'Elektrik' : 'Telefon')); break;
+                        case 'accountNumber': rowData.push(bill.account_number || '—'); break;
+                        case 'meterNumber': rowData.push(meterTelNo); break;
+                        case 'phoneNumber': rowData.push(bill.phone_number || '—'); break;
+                        case 'billNumber': rowData.push(bill.bill_number || bill.meter_number || '—'); break;
+                        case 'consumption': rowData.push(consumption); break;
+                        case 'billAmount': rowData.push('$' + (bill.current_charges || 0).toFixed(2)); break;
+                        case 'amountPaid': rowData.push('$' + (bill.amount_paid || 0).toFixed(2)); break;
+                        case 'outstanding': rowData.push('$' + (bill.unsettled_charges || 0).toFixed(2)); break;
+                        case 'rentalAmount': rowData.push('$' + (bill.current_charges || 0).toFixed(2)); break;
+                        case 'totalAmount': rowData.push('$' + (bill.totalAmount || 0).toFixed(2)); break;
+                        case 'totalAccountCharges': rowData.push('$' + (bill.totalAccountCharges || 0).toFixed(2)); break;
+                        case 'previousOutstanding': rowData.push('$' + (bill.unsettled_charges || 0).toFixed(2)); break;
+                        case 'previousPayment': rowData.push('$' + (bill.previousPayment || 0).toFixed(2)); break;
+                        case 'totalCurrentCharges': rowData.push('$' + (bill.totalCurrentCharges || 0).toFixed(2)); break;
+                        case 'period': rowData.push(getMonthNameBM(bill.month) + ' ' + bill.year); break;
+                        default: rowData.push('—');
+                    }
+                });
+                return rowData;
             });
             
             doc.autoTable({
                 startY: 30,
-                head: [['Entity', 'Type', 'Utility', 'Account No.', 'Meter/Tel No.', 'Consumption', 'Bill Amount', 'Amount Paid', 'Outstanding', 'Period']],
+                head: [headers],
                 body: tableData,
                 theme: 'grid',
                 headStyles: {
@@ -3114,33 +3265,57 @@
             const finalY = doc.lastAutoTable.finalY + 10;
             doc.setFontSize(10);
             doc.setTextColor(40);
-            doc.text(`Summary: ${data.length} bills | Total Bill Amount: $${totalBillAmount.toFixed(2)} | Total Paid: $${totalAmountPaid.toFixed(2)} | Total Outstanding: $${totalOutstanding.toFixed(2)}`, 14, finalY);
+            doc.text(`Ringkasan: ${data.length} bil | Jumlah Bil: $${totalBillAmount.toFixed(2)} | Jumlah Dibayar: $${totalAmountPaid.toFixed(2)} | Baki Tertunggak: $${totalOutstanding.toFixed(2)}`, 14, finalY);
             
             const currentDate = new Date().toISOString().slice(0, 10);
-            doc.save(`utility_bills_report_${currentDate}.pdf`);
+            doc.save(`laporan_utiliti_${currentDate}.pdf`);
         }
 
         function exportToExcel(data) {
-            let csvContent = "Entity,Type,Utility,Account No.,Meter/Tel No.,Consumption,Bill Amount,Amount Paid,Outstanding,Period\n";
+            const utilityType = window.reportUtilityType || 'water';
+            const columns = COLUMN_DEFINITIONS[utilityType] || COLUMN_DEFINITIONS.water;
+            const visibleCols = columns.filter(c => c.show !== false);
+            const headers = visibleCols.map(c => c.label);
+            
+            let csvContent = headers.join(',') + '\n';
             
             data.forEach(bill => {
-                let consumption = '';
-                if (bill.utility_type === 'water' && bill.consumption_m3) {
-                    consumption = bill.consumption_m3.toFixed(2) + ' m³';
-                } else if (bill.utility_type === 'electricity' && bill.consumption_kwh) {
-                    consumption = bill.consumption_kwh.toFixed(2) + ' kWh';
-                } else if (bill.utility_type === 'telephone') {
-                    consumption = '—';
-                }
-                
-                let meterTelNo = '';
-                if (bill.utility_type === 'telephone') {
-                    meterTelNo = bill.phone_number || bill.meter_number || '—';
-                } else {
-                    meterTelNo = bill.meter_number || '—';
-                }
-                
-                csvContent += `"${escapeCsv(bill.entity_name || 'Unknown')}","${bill.entity_type === 'school' ? 'School' : 'Department'}","${bill.utility_type === 'water' ? 'Water' : (bill.utility_type === 'electricity' ? 'Electricity' : 'Telephone')}","${escapeCsv(bill.account_number || '—')}","${escapeCsv(meterTelNo)}","${consumption}","${(bill.current_charges || 0).toFixed(2)}","${(bill.amount_paid || 0).toFixed(2)}","${(bill.unsettled_charges || 0).toFixed(2)}","${getMonthName(bill.month)} ${bill.year}"\n`;
+                const rowData = [];
+                visibleCols.forEach(col => {
+                    let value = '';
+                    switch(col.key) {
+                        case 'no': value = ''; break;
+                        case 'entityName': value = bill.entity_name || 'Unknown'; break;
+                        case 'entityType': value = bill.entity_type === 'school' ? 'Sekolah' : 'Jabatan'; break;
+                        case 'utilityType': value = bill.utility_type === 'water' ? 'Air' : (bill.utility_type === 'electricity' ? 'Elektrik' : 'Telefon'); break;
+                        case 'accountNumber': value = bill.account_number || '—'; break;
+                        case 'meterNumber': value = bill.meter_number || '—'; break;
+                        case 'phoneNumber': value = bill.phone_number || '—'; break;
+                        case 'billNumber': value = bill.bill_number || bill.meter_number || '—'; break;
+                        case 'consumption': 
+                            if (bill.utility_type === 'water' && bill.consumption_m3) {
+                                value = bill.consumption_m3.toFixed(2) + ' m³';
+                            } else if (bill.utility_type === 'electricity' && bill.consumption_kwh) {
+                                value = bill.consumption_kwh.toFixed(2) + ' kWh';
+                            } else {
+                                value = '—';
+                            }
+                            break;
+                        case 'billAmount': value = (bill.current_charges || 0).toFixed(2); break;
+                        case 'amountPaid': value = (bill.amount_paid || 0).toFixed(2); break;
+                        case 'outstanding': value = (bill.unsettled_charges || 0).toFixed(2); break;
+                        case 'rentalAmount': value = (bill.current_charges || 0).toFixed(2); break;
+                        case 'totalAmount': value = (bill.totalAmount || 0).toFixed(2); break;
+                        case 'totalAccountCharges': value = (bill.totalAccountCharges || 0).toFixed(2); break;
+                        case 'previousOutstanding': value = (bill.unsettled_charges || 0).toFixed(2); break;
+                        case 'previousPayment': value = (bill.previousPayment || 0).toFixed(2); break;
+                        case 'totalCurrentCharges': value = (bill.totalCurrentCharges || 0).toFixed(2); break;
+                        case 'period': value = getMonthNameBM(bill.month) + ' ' + bill.year; break;
+                        default: value = '—';
+                    }
+                    rowData.push(`"${String(value).replace(/"/g, '""')}"`);
+                });
+                csvContent += rowData.join(',') + '\n';
             });
             
             const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -3149,7 +3324,7 @@
             const currentDate = new Date().toISOString().slice(0, 10);
             
             link.setAttribute("href", url);
-            link.setAttribute("download", `utility_bills_report_${currentDate}.csv`);
+            link.setAttribute("download", `laporan_utiliti_${currentDate}.csv`);
             link.style.visibility = 'hidden';
             
             document.body.appendChild(link);
