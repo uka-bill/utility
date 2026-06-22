@@ -30,8 +30,6 @@
             --radius-sm: 12px;
             --radius-xs: 8px;
             --transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            /* Table header color - solid light blue */
-            --header-bg: #bfdbfe;
         }
 
         * {
@@ -382,15 +380,15 @@
         }
 
         .data-table th {
-            background: var(--header-bg);
-            color: var(--primary-dark);
+            background: var(--gray-50);
+            color: var(--dark);
             padding: 10px 8px;
             text-align: center;
             position: sticky;
             top: 0;
             z-index: 20;
-            border-bottom: 2px solid var(--primary-light);
-            font-weight: 700;
+            border-bottom: 2px solid var(--gray-light);
+            font-weight: 600;
             font-size: 0.62rem;
             text-transform: uppercase;
             letter-spacing: 0.3px;
@@ -398,11 +396,6 @@
             word-wrap: break-word;
             white-space: normal;
             line-height: 1.2;
-            border-right: 1px solid rgba(59, 130, 246, 0.15);
-        }
-
-        .data-table th:last-child {
-            border-right: none;
         }
 
         .col-seq { width: 30px; }
@@ -1266,6 +1259,7 @@
         
         const entityBills = findEntityBills(entity.type, entity.id, month, year);
         
+        // Find the master bill - the one with a non-empty bill_number
         let masterBill = null;
         let masterBillIndex = -1;
         for (let i = 0; i < entityBills.length; i++) {
@@ -1276,6 +1270,7 @@
             }
         }
         
+        // If no bill has a bill_number, use the first bill as master
         if (!masterBill && entityBills.length > 0) {
             masterBill = entityBills[0];
             masterBillIndex = 0;
@@ -1293,6 +1288,7 @@
             if (masterBill.notes) {
                 try { parsedNotes = JSON.parse(masterBill.notes); } catch(e) {}
             }
+            // IMPORTANT FIX: Read bill_number and unsettled_charges directly from the master bill
             summaryBillNo = masterBill.bill_number || '';
             summaryOutstanding = parseFloat(masterBill.unsettled_charges) || 0;
             summaryAmountPaid = parseFloat(masterBill.amount_paid) || 0;
@@ -1427,11 +1423,13 @@
             '<td></td>' +
             '<td><span class="summary-label">Entity Totals:</span></td>' +
             '<td></td>' +
+            // FIX: Bill No. input now properly populated with summaryBillNo from master bill
             '<td><input type="text" class="inline-input bill-no-input entity-billno" value="' + escapeHtml(summaryBillNo) + '" placeholder="Bill No." data-entity-id="' + entity.id + '"></td>' +
             '<td></td>' +
             '<td></td>' +
             '<td></td>' +
             '<td><input type="number" step="0.01" class="inline-input entity-total-account" value="' + summaryTotalAccountCharges.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
+            // FIX: Previous Outstanding input now properly populated with summaryOutstanding from master bill
             '<td><input type="number" step="0.01" class="inline-input entity-total-outstanding" value="' + summaryOutstanding.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
             '<td><input type="number" step="0.01" class="inline-input entity-total-prev-payment" value="' + summaryPrevPayment.toFixed(2) + '" placeholder="0.00" data-entity-id="' + entity.id + '"></td>' +
             '<td><input type="text" class="inline-input entity-total-current ' + entityTotalCurrentClass + '" value="' + entityTotalCurrent.toFixed(2) + '" readonly data-entity-id="' + entity.id + '"></td>' +
