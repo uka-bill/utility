@@ -643,7 +643,7 @@
             background-color: rgba(26, 86, 219, 0.06);
         }
 
-        /* ========== ACCOUNT SEPARATOR - CLEAN & SUBTLE ========== */
+        /* ========== ACCOUNT SEPARATOR ========== */
         .account-separator td {
             padding: 3px 8px;
             border-bottom: 1px dashed var(--gray-light);
@@ -1331,7 +1331,7 @@
         }
     }
 
-    // ============ RENDER WATER TABLE - ORIGINAL ============
+    // ============ RENDER WATER TABLE ============
     async function renderWaterTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1588,17 +1588,16 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY - ORIGINAL WITH SEPARATORS ADDED ============
+    // ============ RENDER ENTITY - WITH AMOUNT PAID PER ACCOUNT ============
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
         let isPlaceholder = !entity.hasAccounts;
-        let isFirstMeter = true;
         
         let meterRowsData = [];
         
-        // --- COLLECT ALL METER ROWS DATA (ORIGINAL) ---
+        // --- COLLECT ALL METER ROWS DATA ---
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             let isFirstMeterForAccount = true;
@@ -1653,7 +1652,7 @@
             }
         }
         
-        // --- ENTITY ROW (ORIGINAL) ---
+        // --- ENTITY ROW ---
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
         if (isPlaceholder) {
@@ -1686,7 +1685,7 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // --- LOOP THROUGH METER ROWS WITH SEPARATORS ---
+        // --- LOOP THROUGH METER ROWS WITH SEPARATORS & AMOUNT PAID PER ACCOUNT ---
         let currentAccount = null;
         
         for (let i = 0; i < meterRowsData.length; i++) {
@@ -1712,17 +1711,18 @@
                 tbody.appendChild(separatorRow);
             }
             
-            // --- METER ROW (ORIGINAL - WITH m³ REMOVED) ---
+            // --- METER ROW ---
             const meterRow = document.createElement('tr');
             meterRow.className = 'meter-row';
             meterRow.setAttribute('data-account', escapeHtml(meterData.accountNumber));
             meterRow.setAttribute('data-meter', escapeHtml(meterData.meterNumber));
             if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
             
+            // ========== FIX: Amount Paid on FIRST METER OF EACH ACCOUNT ==========
             let amountPaidHtml = '';
-            if (isFirstMeter) {
+            if (meterData.isFirstMeterForAccount) {
+                // Each account gets its own Amount Paid box
                 amountPaidHtml = '<input type="number" step="0.01" class="inline-input amount-paid-input ' + meterData.placeholderClass + '" value="' + meterData.amountPaid.toFixed(2) + '" placeholder="$" ' + meterData.disabledAttr + '>';
-                isFirstMeter = false;
             } else {
                 amountPaidHtml = '<div class="amount-paid-disabled">—</div>';
             }
