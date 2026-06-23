@@ -1168,7 +1168,7 @@
         return false;
     }
 
-    // ============ SAVE FUNCTION - UNCHANGED ============
+    // ============ SAVE FUNCTION - FIXED ============
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         
@@ -1191,10 +1191,18 @@
         
         showSavingToast(entityName);
         
+        // ========== FIX: Collect ALL meter rows for this entity ==========
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
-        while (nextRow && nextRow.classList && nextRow.classList.contains('meter-row')) {
-            meterRows.push(nextRow);
+        while (nextRow) {
+            // If we hit another entity-row, stop
+            if (nextRow.classList && nextRow.classList.contains('entity-row')) {
+                break;
+            }
+            // If it's a meter-row, collect it
+            if (nextRow.classList && nextRow.classList.contains('meter-row')) {
+                meterRows.push(nextRow);
+            }
             nextRow = nextRow.nextElementSibling;
         }
         
@@ -1588,13 +1596,12 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY - WITH SEPARATORS ============
+    // ============ RENDER ENTITY - WITH AMOUNT PAID PER ACCOUNT ============
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
         let isPlaceholder = !entity.hasAccounts;
-        let isFirstMeter = true;
         
         let meterRowsData = [];
         
@@ -1686,7 +1693,7 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // --- LOOP THROUGH METER ROWS WITH SEPARATORS ---
+        // --- LOOP THROUGH METER ROWS WITH SEPARATORS & AMOUNT PAID PER ACCOUNT ---
         let currentAccount = null;
         
         for (let i = 0; i < meterRowsData.length; i++) {
@@ -1712,17 +1719,18 @@
                 tbody.appendChild(separatorRow);
             }
             
-            // --- METER ROW (ORIGINAL - WITH kWh REMOVED) ---
+            // --- METER ROW ---
             const meterRow = document.createElement('tr');
             meterRow.className = 'meter-row';
             meterRow.setAttribute('data-account', escapeHtml(meterData.accountNumber));
             meterRow.setAttribute('data-meter', escapeHtml(meterData.meterNumber));
             if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
             
+            // ========== FIX: Amount Paid on FIRST METER OF EACH ACCOUNT ==========
             let amountPaidHtml = '';
-            if (isFirstMeter) {
+            if (meterData.isFirstMeterForAccount) {
+                // Each account gets its own Amount Paid box
                 amountPaidHtml = '<input type="number" step="0.01" class="inline-input amount-paid-input ' + meterData.placeholderClass + '" value="' + meterData.amountPaid.toFixed(2) + '" placeholder="$" ' + meterData.disabledAttr + '>';
-                isFirstMeter = false;
             } else {
                 amountPaidHtml = '<div class="amount-paid-disabled">—</div>';
             }
