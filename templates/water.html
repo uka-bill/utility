@@ -69,7 +69,7 @@
             background: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
-            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 4px 20px rgba(0, 0, 0, 0.02);
+            box-shadow: 0 1px 0 rgba(0,  0, 0, 0.04), 0 4px 20px rgba(0, 0, 0, 0.02);
             padding: 0 32px;
             position: fixed;
             top: 0;
@@ -662,22 +662,6 @@
             color: var(--primary-dark);
             font-weight: 600;
         }
-
-        /* ========== ACCOUNT SUMMARY ROW (PER ACCOUNT) ========== */
-        .account-summary-row td {
-            background-color: #f8faff;
-            border-top: 1px solid var(--gray-light);
-            border-bottom: 1px solid var(--gray-light);
-            padding: 4px 8px;
-        }
-        
-        .account-summary-label {
-            font-weight: 600;
-            font-size: 0.7rem;
-            color: var(--primary-dark);
-            text-align: right;
-            padding-right: 8px;
-        }
         
         .meter-row {
             border-left: 3px solid var(--success);
@@ -775,12 +759,6 @@
             font-size: 0.82rem;
             text-align: center;
             color: var(--gray);
-        }
-
-        .bill-no-input {
-            text-align: center;
-            font-weight: 600;
-            font-size: 0.75rem;
         }
 
         @media (max-width: 1024px) {
@@ -1353,7 +1331,7 @@
         }
     }
 
-    // ============ RENDER WATER TABLE - UNCHANGED EXCEPT SEPARATORS ============
+    // ============ RENDER WATER TABLE - ORIGINAL ============
     async function renderWaterTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1610,7 +1588,7 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY - ORIGINAL LOGIC WITH SEPARATORS ADDED ============
+    // ============ RENDER ENTITY - ORIGINAL WITH SEPARATORS ADDED ============
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1620,7 +1598,7 @@
         
         let meterRowsData = [];
         
-        // --- COLLECT ALL METER ROWS DATA (SAME AS ORIGINAL) ---
+        // --- COLLECT ALL METER ROWS DATA (ORIGINAL) ---
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             let isFirstMeterForAccount = true;
@@ -1667,8 +1645,7 @@
                     isFirstMeterForAccount: isFirstMeterForAccount,
                     isPlaceholder: isPlaceholderAccount,
                     disabledAttr: disabledAttr,
-                    placeholderClass: placeholderClass,
-                    accountNumberRaw: account.accountNumber
+                    placeholderClass: placeholderClass
                 });
                 
                 isFirstMeterForAccount = false;
@@ -1676,7 +1653,7 @@
             }
         }
         
-        // --- ENTITY ROW (SAME AS ORIGINAL) ---
+        // --- ENTITY ROW (ORIGINAL) ---
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
         if (isPlaceholder) {
@@ -1709,36 +1686,15 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // --- LOOP THROUGH METER ROWS WITH SEPARATORS & PER-ACCOUNT SUMMARIES ---
+        // --- LOOP THROUGH METER ROWS WITH SEPARATORS ---
         let currentAccount = null;
-        let accountMeterRows = [];
-        let accountTotalPaid = 0;
-        let accountBillId = null;
-        let accountBillNo = '';
-        let accountOutstanding = 0;
-        let accountTotalAccountCharges = 0;
-        let accountPrevPayment = 0;
         
         for (let i = 0; i < meterRowsData.length; i++) {
             const meterData = meterRowsData[i];
             const accountNum = meterData.accountNumber;
             
-            // --- IF NEW ACCOUNT, ADD SEPARATOR AND SUMMARY FOR PREVIOUS ACCOUNT ---
+            // --- IF NEW ACCOUNT, ADD SEPARATOR ---
             if (currentAccount !== null && currentAccount !== accountNum) {
-                // Add summary row for previous account
-                if (accountMeterRows.length > 0) {
-                    await renderAccountSummary(tbody, accountMeterRows, accountTotalPaid, accountBillId, accountBillNo, accountOutstanding, accountTotalAccountCharges, accountPrevPayment);
-                }
-                // Reset for new account
-                accountMeterRows = [];
-                accountTotalPaid = 0;
-                accountBillId = null;
-                accountBillNo = '';
-                accountOutstanding = 0;
-                accountTotalAccountCharges = 0;
-                accountPrevPayment = 0;
-                
-                // Add separator for new account
                 const accountDisplay = accountNum && accountNum !== '—' ? accountNum : 'No Account';
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'account-separator';
@@ -1756,26 +1712,7 @@
                 tbody.appendChild(separatorRow);
             }
             
-            // --- Get account-level data from first meter of this account ---
-            if (accountMeterRows.length === 0 && meterData.billId) {
-                accountBillId = meterData.billId;
-                // Try to get bill data from existingBills
-                for (let b = 0; b < existingBills.length; b++) {
-                    if (existingBills[b].id === meterData.billId) {
-                        let parsedNotes = {};
-                        if (existingBills[b].notes && existingBills[b].notes.startsWith('{')) {
-                            try { parsedNotes = JSON.parse(existingBills[b].notes); } catch(e) {}
-                        }
-                        accountBillNo = existingBills[b].bill_number || '';
-                        accountOutstanding = parseFloat(existingBills[b].unsettled_charges) || 0;
-                        accountTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
-                        accountPrevPayment = parsedNotes.previousPayment || 0;
-                        break;
-                    }
-                }
-            }
-            
-            // --- Add meter row (SAME AS ORIGINAL) ---
+            // --- METER ROW (ORIGINAL - EXACTLY AS BEFORE) ---
             const meterRow = document.createElement('tr');
             meterRow.className = 'meter-row';
             meterRow.setAttribute('data-account', escapeHtml(meterData.accountNumber));
@@ -1816,47 +1753,10 @@
                 '<td></td>';
             tbody.appendChild(meterRow);
             
-            // Track account total paid
-            accountTotalPaid += meterData.amountPaid;
-            accountMeterRows.push(meterData);
-            
             currentAccount = accountNum;
         }
         
-        // --- ADD SUMMARY ROW FOR THE LAST ACCOUNT ---
-        if (accountMeterRows.length > 0) {
-            await renderAccountSummary(tbody, accountMeterRows, accountTotalPaid, accountBillId, accountBillNo, accountOutstanding, accountTotalAccountCharges, accountPrevPayment);
-        }
-        
         return serial;
-    }
-    
-    // ============ HELPER: RENDER ACCOUNT SUMMARY ROW ============
-    async function renderAccountSummary(tbody, rows, accountTotalPaid, billId, billNo, outstanding, totalAccountCharges, prevPayment) {
-        let accountNumber = rows.length > 0 ? rows[0].accountNumber : '';
-        let accountTotalCurrent = outstanding + totalAccountCharges - prevPayment;
-        
-        const summaryRow = document.createElement('tr');
-        summaryRow.className = 'account-summary-row';
-        summaryRow.setAttribute('data-account', escapeHtml(accountNumber));
-        
-        summaryRow.innerHTML = 
-            '<td></td>' +
-            '<td><span class="account-summary-label">Account Totals:</span></td>' +
-            '<td></td>' +
-            '<td><input type="text" class="inline-input bill-no-input account-billno" value="' + escapeHtml(billNo) + '" placeholder="Bill No." data-account="' + escapeHtml(accountNumber) + '"></td>' +
-            '<td></td>' +
-            '<td></td>' +
-            '<td></td>' +
-            '<td><input type="number" step="0.01" class="inline-input account-total-account" value="' + totalAccountCharges.toFixed(2) + '" placeholder="0.00" data-account="' + escapeHtml(accountNumber) + '"></td>' +
-            '<td><input type="number" step="0.01" class="inline-input account-total-outstanding" value="' + outstanding.toFixed(2) + '" placeholder="0.00" data-account="' + escapeHtml(accountNumber) + '"></td>' +
-            '<td><input type="number" step="0.01" class="inline-input account-total-prev-payment" value="' + prevPayment.toFixed(2) + '" placeholder="0.00" data-account="' + escapeHtml(accountNumber) + '"></td>' +
-            '<td><input type="text" class="inline-input account-total-current" value="' + accountTotalCurrent.toFixed(2) + '" readonly style="background:#f0f7f0;font-weight:600;color:#1b5e20;"></td>' +
-            '<td><input type="number" step="0.01" class="inline-input account-amount-paid" value="' + accountTotalPaid.toFixed(2) + '" placeholder="$" data-account="' + escapeHtml(accountNumber) + '"></td>' +
-            '<td></td>' +
-            '<td></td>' +
-            '<td></td>';
-        tbody.appendChild(summaryRow);
     }
     
     function escapeHtml(str) {
