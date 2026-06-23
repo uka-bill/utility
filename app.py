@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response
 import os
 from supabase import create_client, Client
@@ -1063,6 +1064,8 @@ def batch_update_utility_bills():
                         "account_number": bill_data.get('account_number', ''),
                         "phone_number": phone_number,
                         "meter_number": bill_data.get('meter_number', ''),
+                        "bill_number": bill_data.get('bill_number', ''),  # ← FIXED: Added bill_number
+                        "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),  # ← FIXED: Added unsettled_charges
                         "current_charges": float(bill_data.get('current_charges', 0)),
                         "amount_paid": float(bill_data.get('amount_paid', 0)),
                         "month": month_val,
