@@ -1259,9 +1259,18 @@
         
         const entityBills = findEntityBills(entity.type, entity.id, month, year);
         
-        // FIX: ALWAYS use the first bill as the master bill
-        // This ensures Bill No. and Previous Outstanding are loaded consistently
-        let masterBill = entityBills.length > 0 ? entityBills[0] : null;
+        // Find any bill with a non-empty bill_number to use as master
+        let masterBill = null;
+        for (let i = 0; i < entityBills.length; i++) {
+            if (entityBills[i].bill_number && entityBills[i].bill_number !== '') {
+                masterBill = entityBills[i];
+                break;
+            }
+        }
+        // If no bill has a bill_number, use the first bill
+        if (!masterBill && entityBills.length > 0) {
+            masterBill = entityBills[0];
+        }
         
         let summaryBillNo = '';
         let summaryTotalAccountCharges = 0;
@@ -1275,7 +1284,6 @@
             if (masterBill.notes) {
                 try { parsedNotes = JSON.parse(masterBill.notes); } catch(e) {}
             }
-            // Read all summary values from the master bill
             summaryBillNo = masterBill.bill_number || '';
             summaryOutstanding = parseFloat(masterBill.unsettled_charges) || 0;
             summaryAmountPaid = parseFloat(masterBill.amount_paid) || 0;
@@ -1584,7 +1592,6 @@
             const totalPrevPaymentInput = summaryRow.querySelector('.entity-total-prev-payment');
             const amountPaidInput = summaryRow.querySelector('.entity-amount-paid');
             
-            // Read all values from the summary row inputs
             entityBillNo = billNoInput ? billNoInput.value.trim() : '';
             entityTotalAccountCharges = parseFloat(totalAccountInput ? totalAccountInput.value : 0) || 0;
             entityTotalOutstanding = parseFloat(totalOutstandingInput ? totalOutstandingInput.value : 0) || 0;
@@ -1617,8 +1624,9 @@
                 originalNotes: notes
             };
             
-            // Only save bill number on the master row
-            const billNo = isMaster ? entityBillNo : '';
+            // FIX: Save bill number on ALL rows, not just master
+            // This ensures the bill number is always available when loading
+            const billNo = entityBillNo;
             
             batchBills.push({
                 id: existingBillId,
@@ -1796,7 +1804,7 @@
         const deptByDepartmentName = new Map();
         for (let i = 0; i < departmentsList.length; i++) {
             const dept = departmentsList[i];
-            const deptName = dept.departmentName || 'Other';
+            const deptName = dept.department_name || 'Other';
             if (!deptByDepartmentName.has(deptName)) {
                 deptByDepartmentName.set(deptName, []);
             }
