@@ -399,7 +399,6 @@
             line-height: 1.3;
         }
 
-        /* Fix: Center align the "No." column header */
         .data-table th:first-child {
             text-align: center;
             width: 40px;
@@ -643,6 +642,27 @@
         .entity-row:hover {
             background-color: rgba(26, 86, 219, 0.06);
         }
+
+        /* ========== ACCOUNT SEPARATOR ========== */
+        .account-separator td {
+            padding: 3px 8px;
+            border-bottom: 1px dashed var(--gray-light);
+            background: transparent;
+            font-size: 0.7rem;
+            color: var(--gray);
+            vertical-align: middle;
+        }
+        
+        .account-separator .account-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .account-separator .account-label .acct-num {
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
         
         .meter-row {
             border-left: 3px solid var(--warning);
@@ -652,6 +672,11 @@
         .meter-row td:first-child {
             padding-left: 35px;
             text-align: center;
+            vertical-align: middle;
+        }
+        
+        .meter-row td {
+            vertical-align: middle;
         }
         
         .entity-actions {
@@ -666,12 +691,6 @@
             color: var(--gray);
             margin-left: 8px;
             font-weight: 400;
-        }
-        
-        .consumption-unit {
-            font-size: 0.7rem;
-            color: var(--gray);
-            margin-left: 5px;
         }
         
         .department-name-badge {
@@ -1149,6 +1168,7 @@
         return false;
     }
 
+    // ============ SAVE FUNCTION - UNCHANGED ============
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         
@@ -1159,7 +1179,11 @@
         const entityName = entityRow.getAttribute('data-entity-name');
         const hasAccounts = entityRow.getAttribute('data-has-accounts') === 'true';
         
-        // Allow saving even without meter number - user can enter data first
+        if (!hasAccounts) {
+            showToast('Cannot save: No electricity account configured for this entity.', true);
+            return;
+        }
+        
         if (savingEntities.has(entityId)) {
             showToast('Already saving...', true);
             return;
@@ -1187,7 +1211,6 @@
             saveBtn.disabled = true;
         }
         
-        // Apply yellow saving state to all inputs
         meterRows.forEach(row => {
             const inputs = row.querySelectorAll('.inline-input');
             inputs.forEach(input => {
@@ -1246,7 +1269,6 @@
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
             
-            // Apply green saved state to all inputs
             meterRows.forEach(row => {
                 const inputs = row.querySelectorAll('.inline-input');
                 inputs.forEach(input => {
@@ -1268,7 +1290,6 @@
             }
         } catch (err) {
             console.error('Save error:', err);
-            // Remove saving state on error
             meterRows.forEach(row => {
                 const inputs = row.querySelectorAll('.inline-input');
                 inputs.forEach(input => {
@@ -1310,6 +1331,7 @@
         }
     }
 
+    // ============ RENDER ELECTRICITY TABLE ============
     async function renderElectricityTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1566,6 +1588,7 @@
         showLoading(false);
     }
     
+    // ============ RENDER ENTITY - WITH SEPARATORS ============
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1575,6 +1598,7 @@
         
         let meterRowsData = [];
         
+        // --- COLLECT ALL METER ROWS DATA ---
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             let isFirstMeterForAccount = true;
@@ -1596,8 +1620,7 @@
                 let notes = parsedNotes.originalNotes || meter.notes || '';
                 
                 const isPlaceholderAccount = account.isPlaceholder || meter.isPlaceholder;
-                // REMOVED: disabled attribute - users can now enter data even without meter number
-                const disabledAttr = ''; // Always enabled
+                const disabledAttr = isPlaceholderAccount ? 'disabled' : '';
                 const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
                 
                 if (!isPlaceholderAccount) {
@@ -1630,6 +1653,7 @@
             }
         }
         
+        // --- ENTITY ROW ---
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
         if (isPlaceholder) {
@@ -1662,8 +1686,33 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
+        // --- LOOP THROUGH METER ROWS WITH SEPARATORS ---
+        let currentAccount = null;
+        
         for (let i = 0; i < meterRowsData.length; i++) {
             const meterData = meterRowsData[i];
+            const accountNum = meterData.accountNumber;
+            
+            // --- IF NEW ACCOUNT, ADD SEPARATOR ---
+            if (currentAccount !== null && currentAccount !== accountNum) {
+                const accountDisplay = accountNum && accountNum !== '—' ? accountNum : 'No Account';
+                const separatorRow = document.createElement('tr');
+                separatorRow.className = 'account-separator';
+                separatorRow.innerHTML = '<td colspan="12"><div class="account-label">▸ Account: <span class="acct-num">' + escapeHtml(accountDisplay) + '</span></div></td>';
+                tbody.appendChild(separatorRow);
+            }
+            
+            // --- IF FIRST ACCOUNT, ADD SEPARATOR ---
+            if (currentAccount === null) {
+                currentAccount = accountNum;
+                const accountDisplay = accountNum && accountNum !== '—' ? accountNum : 'No Account';
+                const separatorRow = document.createElement('tr');
+                separatorRow.className = 'account-separator';
+                separatorRow.innerHTML = '<td colspan="12"><div class="account-label">▸ Account: <span class="acct-num">' + escapeHtml(accountDisplay) + '</span></div></td>';
+                tbody.appendChild(separatorRow);
+            }
+            
+            // --- METER ROW (ORIGINAL - WITH kWh REMOVED) ---
             const meterRow = document.createElement('tr');
             meterRow.className = 'meter-row';
             meterRow.setAttribute('data-account', escapeHtml(meterData.accountNumber));
@@ -1694,7 +1743,7 @@
                     '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.meterNumber) + '</div>' +
                     meterData.locationDisplay +
                 '</td>' +
-                '<td><input type="number" step="0.01" class="inline-input consumption-input ' + meterData.placeholderClass + '" value="' + meterData.consumption.toFixed(2) + '" placeholder="kWh" ' + meterData.disabledAttr + '><span class="consumption-unit">kWh</span></td>' +
+                '<td><input type="number" step="0.01" class="inline-input consumption-input ' + meterData.placeholderClass + '" value="' + meterData.consumption.toFixed(2) + '" placeholder="kWh" ' + meterData.disabledAttr + '></td>' +
                 '<td><input type="number" step="0.01" class="inline-input current-charge-input ' + meterData.placeholderClass + '" value="' + meterData.currentCharges.toFixed(2) + '" placeholder="$" ' + meterData.disabledAttr + '></td>' +
                 '<td><input type="number" step="0.01" class="inline-input outstanding-input ' + meterData.placeholderClass + '" value="' + meterData.outstandingCharges.toFixed(2) + '" placeholder="$" ' + meterData.disabledAttr + '></td>' +
                 '<td><input type="number" step="0.01" class="inline-input previous-paid-input ' + meterData.placeholderClass + '" value="' + meterData.previousPayment.toFixed(2) + '" placeholder="$" ' + meterData.disabledAttr + '></td>' +
@@ -1703,6 +1752,8 @@
                 '<td></td>' +
                 '<td></td>';
             tbody.appendChild(meterRow);
+            
+            currentAccount = accountNum;
         }
         
         return serial;
