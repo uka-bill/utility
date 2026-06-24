@@ -1245,7 +1245,7 @@
         });
     }
 
-    // ============ SAVE FUNCTION - UNCHANGED ============
+    // ============ SAVE FUNCTION - FIXED WITH ACCOUNT NUMBER MATCHING ============
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         
@@ -1308,19 +1308,30 @@
             summaryRow = summaryRow.nextElementSibling;
         }
         
+        // ========== FIX: Group summary rows by account number ==========
+        const summaryMap = {};
+        for (let i = 0; i < summaryRows.length; i++) {
+            const sRow = summaryRows[i];
+            const account = sRow.getAttribute('data-account');
+            if (account) {
+                summaryMap[account] = sRow;
+            }
+        }
+        
         const batchBills = [];
         
-        // Process each meter row with its corresponding summary data
+        // ========== FIX: Match each meter row to its summary by account number ==========
         for (let i = 0; i < meterRows.length; i++) {
             const row = meterRows[i];
             const accountNumber = row.getAttribute('data-account');
             const phoneNumber = row.getAttribute('data-phone');
             const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
             
-            // Find the corresponding summary row (same index)
+            // Find the correct summary row for this account
+            const summaryRow = summaryMap[accountNumber] || null;
+            
             let summaryData = {};
-            if (summaryRows[i]) {
-                const summaryRow = summaryRows[i];
+            if (summaryRow) {
                 const billNoInput = summaryRow.querySelector('.account-billno');
                 const totalAccountInput = summaryRow.querySelector('.account-total-account');
                 const totalOutstandingInput = summaryRow.querySelector('.account-total-outstanding');
@@ -1624,7 +1635,7 @@
         showLoading(false);
     }
 
-    // ============ RENDER ENTITY - FIXED LOADING LOGIC ============
+    // ============ RENDER ENTITY ============
     function renderEntity(fragment, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1635,7 +1646,6 @@
         let accountData = [];
         const entityBills = findEntityBills(entity.type, entity.id, month, year);
         
-        // ========== PERFORMANCE OPTIMIZATION: Create bill lookup map ==========
         const billMap = {};
         for (let i = 0; i < entityBills.length; i++) {
             billMap[entityBills[i].phone_number] = entityBills[i];
@@ -1648,7 +1658,7 @@
             
             const phoneNumbers = getPhoneNumbers(account);
             
-            // ========== FIX: Find the best bill with summary data ==========
+            // Find the best bill with summary data
             let accountBillNo = '';
             let accountOutstanding = 0;
             let accountAmountPaid = 0;
@@ -1657,7 +1667,7 @@
             let accountTotalCurrent = 0;
             let foundSummaryData = false;
             
-            // First, try to find a bill with summary data (bill_number, unsettled_charges, or amount_paid)
+            // First, try to find a bill with summary data
             for (let n = 0; n < phoneNumbers.length; n++) {
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
@@ -1668,7 +1678,6 @@
                         try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
                     }
                     
-                    // Check if this bill has any summary data
                     const hasBillNo = existing.bill_number && existing.bill_number !== '';
                     const hasOutstanding = parseFloat(existing.unsettled_charges) > 0;
                     const hasAmountPaid = parseFloat(existing.amount_paid) > 0;
@@ -1676,7 +1685,6 @@
                     const hasPrevPayment = parsedNotes.previousPayment > 0;
                     
                     if (hasBillNo || hasOutstanding || hasAmountPaid || hasTotalAccount || hasPrevPayment) {
-                        // This bill has summary data - use it
                         accountBillNo = existing.bill_number || '';
                         accountOutstanding = parseFloat(existing.unsettled_charges) || 0;
                         accountAmountPaid = parseFloat(existing.amount_paid) || 0;
@@ -1689,7 +1697,7 @@
                 }
             }
             
-            // If no bill had summary data, try to find ANY bill in the account
+            // If no bill had summary data, try to find ANY bill
             if (!foundSummaryData) {
                 for (let n = 0; n < phoneNumbers.length; n++) {
                     const phone = phoneNumbers[n];
@@ -1735,7 +1743,6 @@
                 let amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
                 let billId = existing ? existing.id : null;
                 
-                // Check if this phone should be visible based on status filter
                 if (statusFilter !== 'all') {
                     if (statusFilter === 'paid' && amountPaid === 0) continue;
                     if (statusFilter === 'pending' && amountPaid > 0) continue;
@@ -1914,7 +1921,6 @@
             if (target.classList && (target.classList.contains('account-total-account') || 
                                      target.classList.contains('account-total-outstanding') || 
                                      target.classList.contains('account-total-prev-payment'))) {
-                // Find the parent summary row
                 const summaryRow = target.closest('tr.account-summary-row');
                 if (summaryRow) {
                     const totalAccountInput = summaryRow.querySelector('.account-total-account');
