@@ -507,17 +507,6 @@
             font-size: 0.7rem;
         }
 
-        .account-number {
-            font-family: 'Inter', monospace;
-            background: var(--gray-50);
-            padding: 2px 6px;
-            border-radius: var(--radius-xs);
-            font-size: 0.65rem;
-            display: inline-block;
-            word-break: break-all;
-            font-weight: 500;
-        }
-
         .phone-number-item {
             font-family: 'Inter', monospace;
             font-size: 0.65rem;
@@ -1443,7 +1432,7 @@
         }
     }
 
-    // ============ RENDER TELEPHONE TABLE - UNCHANGED ============
+    // ============ RENDER TELEPHONE TABLE ============
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1476,7 +1465,7 @@
             return;
         }
         
-        tbody.innerHTML = '';
+        const fragment = document.createDocumentFragment();
         let globalSerial = 1;
         
         let schoolsList = filteredEntities.filter(function(e) { return e.type === 'school'; });
@@ -1571,10 +1560,10 @@
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
                 separatorRow.innerHTML = '<td colspan="15"><div class="cluster-info"><span>📞 ' + cluster + '</span><span class="cluster-count">' + visibleClusterEntities.length + ' entit' + (visibleClusterEntities.length > 1 ? 'ies' : 'y') + ', ' + totalMeters + ' phone' + (totalMeters > 1 ? 's' : '') + '</span></div></td>';
-                tbody.appendChild(separatorRow);
+                fragment.appendChild(separatorRow);
                 
                 for (let i = 0; i < visibleClusterEntities.length; i++) {
-                    globalSerial = renderEntity(tbody, visibleClusterEntities[i], month, year, globalSerial, statusFilter);
+                    globalSerial = renderEntity(fragment, visibleClusterEntities[i], month, year, globalSerial, statusFilter);
                 }
             }
         }
@@ -1620,20 +1609,23 @@
                 const deptSeparator = document.createElement('tr');
                 deptSeparator.className = 'department-group-separator';
                 deptSeparator.innerHTML = '<td colspan="15"><div class="dept-group-info"><span class="department-name-badge">📞 ' + escapeHtml(deptName) + '</span><span class="dept-group-count">' + visibleGroupEntities.length + ' unit' + (visibleGroupEntities.length > 1 ? 's' : '') + ', ' + totalMeters + ' phone' + (totalMeters > 1 ? 's' : '') + '</span></div></td>';
-                tbody.appendChild(deptSeparator);
+                fragment.appendChild(deptSeparator);
                 
                 for (let i = 0; i < visibleGroupEntities.length; i++) {
-                    globalSerial = renderEntity(tbody, visibleGroupEntities[i], month, year, globalSerial, statusFilter);
+                    globalSerial = renderEntity(fragment, visibleGroupEntities[i], month, year, globalSerial, statusFilter);
                 }
             }
         }
+        
+        tbody.innerHTML = '';
+        tbody.appendChild(fragment);
         
         isLoading = false;
         showLoading(false);
     }
 
-    // ============ RENDER ENTITY - CLEAN VERSION (NO ACCOUNT NUMBER IN ROWS) ============
-    function renderEntity(tbody, entity, month, year, startSerial, statusFilter) {
+    // ============ RENDER ENTITY - FIXED LOADING LOGIC ============
+    function renderEntity(fragment, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
@@ -1643,6 +1635,12 @@
         let accountData = [];
         const entityBills = findEntityBills(entity.type, entity.id, month, year);
         
+        // ========== PERFORMANCE OPTIMIZATION: Create bill lookup map ==========
+        const billMap = {};
+        for (let i = 0; i < entityBills.length; i++) {
+            billMap[entityBills[i].phone_number] = entityBills[i];
+        }
+        
         // Process each account group
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
@@ -1650,31 +1648,66 @@
             
             const phoneNumbers = getPhoneNumbers(account);
             
-            // Get account-level data from the first phone's existing bill
+            // ========== FIX: Find the best bill with summary data ==========
             let accountBillNo = '';
             let accountOutstanding = 0;
             let accountAmountPaid = 0;
             let accountTotalAccountCharges = 0;
             let accountPrevPayment = 0;
             let accountTotalCurrent = 0;
+            let foundSummaryData = false;
             
-            // Check if any phone in this account has existing data
+            // First, try to find a bill with summary data (bill_number, unsettled_charges, or amount_paid)
             for (let n = 0; n < phoneNumbers.length; n++) {
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
-                const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
+                const existing = billMap[phoneNum] || null;
                 if (existing) {
                     let parsedNotes = {};
                     if (existing.notes) {
                         try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
                     }
-                    accountBillNo = existing.bill_number || '';
-                    accountOutstanding = parseFloat(existing.unsettled_charges) || 0;
-                    accountAmountPaid = parseFloat(existing.amount_paid) || 0;
-                    accountTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
-                    accountPrevPayment = parsedNotes.previousPayment || 0;
-                    accountTotalCurrent = accountOutstanding + accountTotalAccountCharges - accountPrevPayment;
-                    break;
+                    
+                    // Check if this bill has any summary data
+                    const hasBillNo = existing.bill_number && existing.bill_number !== '';
+                    const hasOutstanding = parseFloat(existing.unsettled_charges) > 0;
+                    const hasAmountPaid = parseFloat(existing.amount_paid) > 0;
+                    const hasTotalAccount = parsedNotes.totalAccountCharges > 0;
+                    const hasPrevPayment = parsedNotes.previousPayment > 0;
+                    
+                    if (hasBillNo || hasOutstanding || hasAmountPaid || hasTotalAccount || hasPrevPayment) {
+                        // This bill has summary data - use it
+                        accountBillNo = existing.bill_number || '';
+                        accountOutstanding = parseFloat(existing.unsettled_charges) || 0;
+                        accountAmountPaid = parseFloat(existing.amount_paid) || 0;
+                        accountTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
+                        accountPrevPayment = parsedNotes.previousPayment || 0;
+                        accountTotalCurrent = accountOutstanding + accountTotalAccountCharges - accountPrevPayment;
+                        foundSummaryData = true;
+                        break;
+                    }
+                }
+            }
+            
+            // If no bill had summary data, try to find ANY bill in the account
+            if (!foundSummaryData) {
+                for (let n = 0; n < phoneNumbers.length; n++) {
+                    const phone = phoneNumbers[n];
+                    const phoneNum = phone.phoneNumber || '—';
+                    const existing = billMap[phoneNum] || null;
+                    if (existing) {
+                        let parsedNotes = {};
+                        if (existing.notes) {
+                            try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
+                        }
+                        accountBillNo = existing.bill_number || '';
+                        accountOutstanding = parseFloat(existing.unsettled_charges) || 0;
+                        accountAmountPaid = parseFloat(existing.amount_paid) || 0;
+                        accountTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
+                        accountPrevPayment = parsedNotes.previousPayment || 0;
+                        accountTotalCurrent = accountOutstanding + accountTotalAccountCharges - accountPrevPayment;
+                        break;
+                    }
                 }
             }
             
@@ -1685,14 +1718,7 @@
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
                 
-                // Find existing bill for this phone
-                let existing = null;
-                for (let i = 0; i < entityBills.length; i++) {
-                    if (entityBills[i].phone_number === phoneNum) {
-                        existing = entityBills[i];
-                        break;
-                    }
-                }
+                const existing = billMap[phoneNum] || null;
                 
                 let parsedNotes = {};
                 if (existing && existing.notes) {
@@ -1789,20 +1815,20 @@
             '<td colspan="9"></td>' +
             '<td><span class="status-badge ' + entityStatusClass + '" id="entity-status-' + entity.id + '">' + entityStatusText + '</span></td>' +
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
-        tbody.appendChild(entityRow);
+        fragment.appendChild(entityRow);
         
         // --- LOOP THROUGH EACH ACCOUNT ---
         for (let a = 0; a < accountData.length; a++) {
             const account = accountData[a];
             
-            // --- ACCOUNT SEPARATOR (Account number appears here ONCE) ---
+            // --- ACCOUNT SEPARATOR ---
             const accountDisplay = account.accountNumber && account.accountNumber !== '—' ? account.accountNumber : 'No Account';
             const separatorRow = document.createElement('tr');
             separatorRow.className = 'account-separator';
             separatorRow.innerHTML = '<td colspan="15"><div class="account-label">▸ Account: <span class="acct-num">' + escapeHtml(accountDisplay) + '</span></div></td>';
-            tbody.appendChild(separatorRow);
+            fragment.appendChild(separatorRow);
             
-            // --- PER-ACCOUNT SUMMARY ROW (ONE per account) ---
+            // --- PER-ACCOUNT SUMMARY ROW ---
             const totalCurrentClass = account.totalCurrent < 0 ? 'negative' : '';
             
             const summaryRow = document.createElement('tr');
@@ -1810,7 +1836,6 @@
             summaryRow.setAttribute('data-account', escapeHtml(account.accountNumber));
             summaryRow.setAttribute('data-entity-id', entity.id);
             
-            // REMOVED: "Account Totals" label - now blank
             summaryRow.innerHTML = 
                 '<td></td>' +
                 '<td></td>' +
@@ -1827,9 +1852,9 @@
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>';
-            tbody.appendChild(summaryRow);
+            fragment.appendChild(summaryRow);
             
-            // --- LOOP THROUGH EACH PHONE (METER ROW) UNDER THIS ACCOUNT ---
+            // --- LOOP THROUGH EACH PHONE (METER ROW) ---
             for (let p = 0; p < account.phones.length; p++) {
                 const phone = account.phones[p];
                 
@@ -1839,7 +1864,6 @@
                 meterRow.setAttribute('data-phone', escapeHtml(phone.phoneNumber));
                 if (phone.billId) meterRow.setAttribute('data-bill-id', phone.billId);
                 
-                // ========== ACCOUNT NUMBER REMOVED - Only show phone number ==========
                 let phoneDisplay = '';
                 if (phone.phoneNumber && phone.phoneNumber !== '—') {
                     phoneDisplay = '<span class="phone-number-item">📞 ' + escapeHtml(phone.phoneNumber) + '</span>';
@@ -1864,7 +1888,7 @@
                     '<td></td>' +
                     '<td></td>';
                 
-                tbody.appendChild(meterRow);
+                fragment.appendChild(meterRow);
             }
         }
         
