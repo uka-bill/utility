@@ -1287,7 +1287,7 @@
         
         showSavingToast(entityName);
         
-        // Collect ALL meter rows for this entity (unchanged)
+        // Collect ALL meter rows for this entity
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow) {
@@ -1327,7 +1327,6 @@
             }
             if (summaryRow.classList && summaryRow.classList.contains('account-summary-row')) {
                 summaryRows.push(summaryRow);
-                // Also mark inputs in summary rows as saving
                 const inputs = summaryRow.querySelectorAll('.inline-input');
                 inputs.forEach(input => input.classList.add('saving'));
             }
@@ -1647,7 +1646,7 @@
         showLoading(false);
     }
 
-    // ============ RENDER ENTITY - NEW PER-ACCOUNT SUMMARIES ============
+    // ============ RENDER ENTITY - PER-ACCOUNT SUMMARY + MULTIPLE PHONES ============
     function renderEntity(tbody, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1664,6 +1663,37 @@
             if (account.isPlaceholder) isPlaceholder = true;
             
             const phoneNumbers = getPhoneNumbers(account);
+            
+            // Get account-level data from the first phone's existing bill
+            let accountBillNo = '';
+            let accountOutstanding = 0;
+            let accountAmountPaid = 0;
+            let accountTotalAccountCharges = 0;
+            let accountPrevPayment = 0;
+            let accountTotalCurrent = 0;
+            
+            // Check if any phone in this account has existing data
+            for (let n = 0; n < phoneNumbers.length; n++) {
+                const phone = phoneNumbers[n];
+                const phoneNum = phone.phoneNumber || '—';
+                const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
+                if (existing) {
+                    let parsedNotes = {};
+                    if (existing.notes) {
+                        try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
+                    }
+                    accountBillNo = existing.bill_number || '';
+                    accountOutstanding = parseFloat(existing.unsettled_charges) || 0;
+                    accountAmountPaid = parseFloat(existing.amount_paid) || 0;
+                    accountTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
+                    accountPrevPayment = parsedNotes.previousPayment || 0;
+                    accountTotalCurrent = accountOutstanding + accountTotalAccountCharges - accountPrevPayment;
+                    break;
+                }
+            }
+            
+            let phones = [];
+            let hasVisiblePhones = false;
             
             for (let n = 0; n < phoneNumbers.length; n++) {
                 const phone = phoneNumbers[n];
@@ -1690,12 +1720,8 @@
                 let rentalAmount = existing ? (parseFloat(existing.current_charges) || 0) : 0;
                 let totalAmount = parsedNotes.totalAmount || 0;
                 let notes = parsedNotes.originalNotes || phone.notes || '';
-                let billNo = existing ? (existing.bill_number || '') : '';
-                let outstanding = existing ? (parseFloat(existing.unsettled_charges) || 0) : 0;
                 let amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
-                let totalAccountCharges = parsedNotes.totalAccountCharges || 0;
-                let prevPayment = parsedNotes.previousPayment || 0;
-                let totalCurrent = outstanding + totalAccountCharges - prevPayment;
+                let billId = existing ? existing.id : null;
                 
                 // Check if this phone should be visible based on status filter
                 if (statusFilter !== 'all') {
@@ -1703,32 +1729,41 @@
                     if (statusFilter === 'pending' && amountPaid > 0) continue;
                 }
                 
-                const isPlaceholderAccount = account.isPlaceholder || phoneNum === '—';
-                const placeholderClass = isPlaceholderAccount ? 'placeholder-text' : '';
+                const isPlaceholderPhone = account.isPlaceholder || phoneNum === '—';
+                const placeholderClass = isPlaceholderPhone ? 'placeholder-text' : '';
                 
-                accountData.push({
+                phones.push({
                     serial: serial,
-                    accountNumber: account.accountNumber,
                     phoneNumber: phoneNum,
                     location: phone.location || '',
                     rentalAmount: rentalAmount,
                     totalAmount: totalAmount,
                     notes: notes,
-                    billNo: billNo,
-                    outstanding: outstanding,
                     amountPaid: amountPaid,
-                    totalAccountCharges: totalAccountCharges,
-                    prevPayment: prevPayment,
-                    totalCurrent: totalCurrent,
-                    billId: existing ? existing.id : null,
-                    isPlaceholder: isPlaceholderAccount,
+                    billId: billId,
+                    isPlaceholder: isPlaceholderPhone,
                     placeholderClass: placeholderClass
                 });
                 
                 entityTotalPaid += amountPaid;
                 if (amountPaid > 0) entityHasBills = true;
+                hasVisiblePhones = true;
                 hasVisibleMeters = true;
                 serial++;
+            }
+            
+            if (hasVisiblePhones) {
+                accountData.push({
+                    accountNumber: account.accountNumber,
+                    billNo: accountBillNo,
+                    outstanding: accountOutstanding,
+                    amountPaid: accountAmountPaid,
+                    totalAccountCharges: accountTotalAccountCharges,
+                    prevPayment: accountPrevPayment,
+                    totalCurrent: accountTotalCurrent,
+                    isPlaceholder: account.isPlaceholder || false,
+                    phones: phones
+                });
             }
         }
         
@@ -1745,7 +1780,7 @@
         } else if (entityHasBills) {
             entityStatusText = 'Paid';
             entityStatusClass = 'status-paid';
-        } else if (entityTotalPaid === 0 && accountData.some(d => !d.isPlaceholder)) {
+        } else if (entityTotalPaid === 0) {
             entityStatusText = 'Not entered';
         } else {
             entityStatusText = 'Partially Paid';
@@ -1771,82 +1806,86 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // --- LOOP THROUGH EACH ACCOUNT (PHONE) ---
-        for (let i = 0; i < accountData.length; i++) {
-            const data = accountData[i];
+        // --- LOOP THROUGH EACH ACCOUNT ---
+        for (let a = 0; a < accountData.length; a++) {
+            const account = accountData[a];
             
             // --- ACCOUNT SEPARATOR ---
-            const accountDisplay = data.accountNumber && data.accountNumber !== '—' ? data.accountNumber : 'No Account';
+            const accountDisplay = account.accountNumber && account.accountNumber !== '—' ? account.accountNumber : 'No Account';
             const separatorRow = document.createElement('tr');
             separatorRow.className = 'account-separator';
             separatorRow.innerHTML = '<td colspan="15"><div class="account-label">▸ Account: <span class="acct-num">' + escapeHtml(accountDisplay) + '</span></div></td>';
             tbody.appendChild(separatorRow);
             
-            // --- PER-ACCOUNT SUMMARY ROW ---
-            const totalCurrentClass = data.totalCurrent < 0 ? 'negative' : '';
+            // --- PER-ACCOUNT SUMMARY ROW (ONE per account) ---
+            const totalCurrentClass = account.totalCurrent < 0 ? 'negative' : '';
             
             const summaryRow = document.createElement('tr');
             summaryRow.className = 'account-summary-row';
-            summaryRow.setAttribute('data-account', escapeHtml(data.accountNumber));
+            summaryRow.setAttribute('data-account', escapeHtml(account.accountNumber));
             summaryRow.setAttribute('data-entity-id', entity.id);
             
             summaryRow.innerHTML = 
                 '<td></td>' +
                 '<td><span class="account-summary-label">Account Totals:</span></td>' +
                 '<td></td>' +
-                '<td><input type="text" class="inline-input bill-no-input account-billno" value="' + escapeHtml(data.billNo) + '" placeholder="Bill No." data-account="' + escapeHtml(data.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
+                '<td><input type="text" class="inline-input bill-no-input account-billno" value="' + escapeHtml(account.billNo) + '" placeholder="Bill No." data-account="' + escapeHtml(account.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>' +
-                '<td><input type="number" step="0.01" class="inline-input account-total-account" value="' + data.totalAccountCharges.toFixed(2) + '" placeholder="0.00" data-account="' + escapeHtml(data.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
-                '<td><input type="number" step="0.01" class="inline-input account-total-outstanding" value="' + data.outstanding.toFixed(2) + '" placeholder="0.00" data-account="' + escapeHtml(data.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
-                '<td><input type="number" step="0.01" class="inline-input account-total-prev-payment" value="' + data.prevPayment.toFixed(2) + '" placeholder="0.00" data-account="' + escapeHtml(data.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
-                '<td><input type="text" class="inline-input account-total-current ' + totalCurrentClass + '" value="' + data.totalCurrent.toFixed(2) + '" readonly style="background:#f0f7f0;font-weight:600;color:' + (data.totalCurrent < 0 ? '#dc2626' : '#1b5e20') + ';" data-account="' + escapeHtml(data.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
-                '<td><input type="number" step="0.01" class="inline-input account-amount-paid" value="' + data.amountPaid.toFixed(2) + '" placeholder="$" data-account="' + escapeHtml(data.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
+                '<td><input type="number" step="0.01" class="inline-input account-total-account" value="' + account.totalAccountCharges.toFixed(2) + '" placeholder="0.00" data-account="' + escapeHtml(account.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
+                '<td><input type="number" step="0.01" class="inline-input account-total-outstanding" value="' + account.outstanding.toFixed(2) + '" placeholder="0.00" data-account="' + escapeHtml(account.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
+                '<td><input type="number" step="0.01" class="inline-input account-total-prev-payment" value="' + account.prevPayment.toFixed(2) + '" placeholder="0.00" data-account="' + escapeHtml(account.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
+                '<td><input type="text" class="inline-input account-total-current ' + totalCurrentClass + '" value="' + account.totalCurrent.toFixed(2) + '" readonly style="background:#f0f7f0;font-weight:600;color:' + (account.totalCurrent < 0 ? '#dc2626' : '#1b5e20') + ';" data-account="' + escapeHtml(account.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
+                '<td><input type="number" step="0.01" class="inline-input account-amount-paid" value="' + account.amountPaid.toFixed(2) + '" placeholder="$" data-account="' + escapeHtml(account.accountNumber) + '" data-entity-id="' + entity.id + '"></td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td></td>';
             tbody.appendChild(summaryRow);
             
-            // --- METER ROW ---
-            const meterRow = document.createElement('tr');
-            meterRow.className = 'meter-row';
-            meterRow.setAttribute('data-account', escapeHtml(data.accountNumber));
-            meterRow.setAttribute('data-phone', escapeHtml(data.phoneNumber));
-            if (data.billId) meterRow.setAttribute('data-bill-id', data.billId);
-            
-            let accountDisplayHtml = '';
-            if (data.accountNumber && data.accountNumber !== '—') {
-                accountDisplayHtml = '<div><span class="account-number">📋 ' + escapeHtml(data.accountNumber) + '</span></div>';
-            } else {
-                accountDisplayHtml = '<div><span class="account-number placeholder-text">📋 No account</span></div>';
+            // --- LOOP THROUGH EACH PHONE (METER ROW) UNDER THIS ACCOUNT ---
+            for (let p = 0; p < account.phones.length; p++) {
+                const phone = account.phones[p];
+                
+                const meterRow = document.createElement('tr');
+                meterRow.className = 'meter-row';
+                meterRow.setAttribute('data-account', escapeHtml(account.accountNumber));
+                meterRow.setAttribute('data-phone', escapeHtml(phone.phoneNumber));
+                if (phone.billId) meterRow.setAttribute('data-bill-id', phone.billId);
+                
+                let accountDisplayHtml = '';
+                if (account.accountNumber && account.accountNumber !== '—') {
+                    accountDisplayHtml = '<div><span class="account-number">📋 ' + escapeHtml(account.accountNumber) + '</span></div>';
+                } else {
+                    accountDisplayHtml = '<div><span class="account-number placeholder-text">📋 No account</span></div>';
+                }
+                
+                let phoneDisplay = '';
+                if (phone.phoneNumber && phone.phoneNumber !== '—') {
+                    phoneDisplay = '<span class="phone-number-item">📞 ' + escapeHtml(phone.phoneNumber) + ' <span class="phone-location">📍 ' + escapeHtml(phone.location) + '</span></span>';
+                } else {
+                    phoneDisplay = '<span class="phone-number-item placeholder-text">📞 No phone number</span>';
+                }
+                
+                meterRow.innerHTML = 
+                    '<td class="seq-number">' + phone.serial + '</td>' +
+                    '<td></td>' +
+                    '<td></td>' +
+                    '<td class="dash-cell">—</td>' +
+                    '<td>' + accountDisplayHtml + phoneDisplay + '</td>' +
+                    '<td><input type="number" step="0.01" class="inline-input rental-input ' + phone.placeholderClass + '" value="' + phone.rentalAmount.toFixed(2) + '" placeholder="$"></td>' +
+                    '<td><input type="number" step="0.01" class="inline-input total-amount-input ' + phone.placeholderClass + '" value="' + phone.totalAmount.toFixed(2) + '" placeholder="$"></td>' +
+                    '<td class="dash-cell">—</td>' +
+                    '<td class="dash-cell">—</td>' +
+                    '<td class="dash-cell">—</td>' +
+                    '<td class="dash-cell">—</td>' +
+                    '<td class="dash-cell">—</td>' +
+                    '<td class="notes-cell"><input type="text" class="inline-input notes-input ' + phone.placeholderClass + '" value="' + escapeHtml(phone.notes) + '" placeholder="Notes..."></td>' +
+                    '<td></td>' +
+                    '<td></td>';
+                
+                tbody.appendChild(meterRow);
             }
-            
-            let phoneDisplay = '';
-            if (data.phoneNumber && data.phoneNumber !== '—') {
-                phoneDisplay = '<span class="phone-number-item">📞 ' + escapeHtml(data.phoneNumber) + ' <span class="phone-location">📍 ' + escapeHtml(data.location) + '</span></span>';
-            } else {
-                phoneDisplay = '<span class="phone-number-item placeholder-text">📞 No phone number</span>';
-            }
-            
-            meterRow.innerHTML = 
-                '<td class="seq-number">' + data.serial + '</td>' +
-                '<td></td>' +
-                '<td></td>' +
-                '<td class="dash-cell">—</td>' +
-                '<td>' + accountDisplayHtml + phoneDisplay + '</td>' +
-                '<td><input type="number" step="0.01" class="inline-input rental-input ' + data.placeholderClass + '" value="' + data.rentalAmount.toFixed(2) + '" placeholder="$"></td>' +
-                '<td><input type="number" step="0.01" class="inline-input total-amount-input ' + data.placeholderClass + '" value="' + data.totalAmount.toFixed(2) + '" placeholder="$"></td>' +
-                '<td class="dash-cell">—</td>' +
-                '<td class="dash-cell">—</td>' +
-                '<td class="dash-cell">—</td>' +
-                '<td class="dash-cell">—</td>' +
-                '<td class="dash-cell">—</td>' +
-                '<td class="notes-cell"><input type="text" class="inline-input notes-input ' + data.placeholderClass + '" value="' + escapeHtml(data.notes) + '" placeholder="Notes..."></td>' +
-                '<td></td>' +
-                '<td></td>';
-            
-            tbody.appendChild(meterRow);
         }
         
         return serial;
