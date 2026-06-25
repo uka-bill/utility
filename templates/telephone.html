@@ -1183,34 +1183,6 @@
         return entities;
     }
 
-    function findEntityBills(entityType, entityId, month, year) {
-        const bills = [];
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            if (bill.entity_type === entityType &&
-                bill.entity_id == entityId &&
-                bill.month == month && 
-                bill.year == year) {
-                bills.push(bill);
-            }
-        }
-        return bills;
-    }
-
-    function findExistingBillByPhone(entityType, entityId, phoneNumber, month, year) {
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            if (bill.entity_type === entityType &&
-                bill.entity_id == entityId &&
-                (bill.phone_number || '') === (phoneNumber || '') &&
-                bill.month == month && 
-                bill.year == year) {
-                return bill;
-            }
-        }
-        return null;
-    }
-
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
@@ -1245,7 +1217,7 @@
         });
     }
 
-    // ============ SAVE FUNCTION - WORKING ============
+    // ============ SAVE FUNCTION - UNCHANGED ============
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         
@@ -1438,7 +1410,7 @@
         }
     }
 
-    // ============ RENDER TELEPHONE TABLE - REVERTED ============
+    // ============ RENDER TELEPHONE TABLE - OPTIMIZED ============
     async function renderTelephoneTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1450,6 +1422,14 @@
         
         await loadAllEntities();
         await loadExistingBills(month, year);
+        
+        // ========== OPTIMIZATION: Build lookup maps ONCE ==========
+        const phoneBillMap = {};
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            const key = bill.entity_type + '|' + bill.entity_id + '|' + (bill.phone_number || '');
+            phoneBillMap[key] = bill;
+        }
         
         let allEntities = buildEntityList();
         
@@ -1538,7 +1518,8 @@
                     const numbers = account.numbers || [{ phoneNumber: '—', location: '' }];
                     for (let n = 0; n < numbers.length; n++) {
                         const phone = numbers[n];
-                        const existing = findExistingBillByPhone(entity.type, entity.id, phone.phoneNumber, month, year);
+                        const key = entity.type + '|' + entity.id + '|' + (phone.phoneNumber || '');
+                        const existing = phoneBillMap[key] || null;
                         const amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
                         
                         if (statusFilter === 'all' ||
@@ -1569,7 +1550,7 @@
                 fragment.appendChild(separatorRow);
                 
                 for (let i = 0; i < visibleClusterEntities.length; i++) {
-                    globalSerial = renderEntity(fragment, visibleClusterEntities[i], month, year, globalSerial, statusFilter);
+                    globalSerial = renderEntity(fragment, visibleClusterEntities[i], month, year, globalSerial, statusFilter, phoneBillMap);
                 }
             }
         }
@@ -1588,7 +1569,8 @@
                     const numbers = account.numbers || [{ phoneNumber: '—', location: '' }];
                     for (let n = 0; n < numbers.length; n++) {
                         const phone = numbers[n];
-                        const existing = findExistingBillByPhone(entity.type, entity.id, phone.phoneNumber, month, year);
+                        const key = entity.type + '|' + entity.id + '|' + (phone.phoneNumber || '');
+                        const existing = phoneBillMap[key] || null;
                         const amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
                         
                         if (statusFilter === 'all' ||
@@ -1618,7 +1600,7 @@
                 fragment.appendChild(deptSeparator);
                 
                 for (let i = 0; i < visibleGroupEntities.length; i++) {
-                    globalSerial = renderEntity(fragment, visibleGroupEntities[i], month, year, globalSerial, statusFilter);
+                    globalSerial = renderEntity(fragment, visibleGroupEntities[i], month, year, globalSerial, statusFilter, phoneBillMap);
                 }
             }
         }
@@ -1630,8 +1612,8 @@
         showLoading(false);
     }
 
-    // ============ RENDER ENTITY - REVERTED ============
-    function renderEntity(fragment, entity, month, year, startSerial, statusFilter) {
+    // ============ RENDER ENTITY - OPTIMIZED ============
+    function renderEntity(fragment, entity, month, year, startSerial, statusFilter, phoneBillMap) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
@@ -1639,7 +1621,6 @@
         let hasVisibleMeters = false;
         
         let accountData = [];
-        const entityBills = findEntityBills(entity.type, entity.id, month, year);
         
         // Process each account group
         for (let a = 0; a < entity.accountGroups.length; a++) {
@@ -1648,7 +1629,7 @@
             
             const phoneNumbers = getPhoneNumbers(account);
             
-            // Find the best bill with summary data
+            // Find the best bill with summary data using the map
             let accountBillNo = '';
             let accountOutstanding = 0;
             let accountAmountPaid = 0;
@@ -1660,7 +1641,8 @@
             for (let n = 0; n < phoneNumbers.length; n++) {
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
-                const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
+                const key = entity.type + '|' + entity.id + '|' + phoneNum;
+                const existing = phoneBillMap[key] || null;
                 
                 if (existing) {
                     let parsedNotes = {};
@@ -1691,7 +1673,8 @@
                 for (let n = 0; n < phoneNumbers.length; n++) {
                     const phone = phoneNumbers[n];
                     const phoneNum = phone.phoneNumber || '—';
-                    const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
+                    const key = entity.type + '|' + entity.id + '|' + phoneNum;
+                    const existing = phoneBillMap[key] || null;
                     
                     if (existing) {
                         let parsedNotes = {};
@@ -1716,7 +1699,8 @@
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
                 
-                const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
+                const key = entity.type + '|' + entity.id + '|' + phoneNum;
+                const existing = phoneBillMap[key] || null;
                 
                 let parsedNotes = {};
                 if (existing && existing.notes) {
