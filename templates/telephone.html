@@ -546,36 +546,6 @@
             font-size: 0.95rem;
         }
 
-        /* ========== LOADING SPINNER ========== */
-        .loading-spinner-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 60px 20px;
-            gap: 20px;
-        }
-
-        .loading-spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid var(--gray-light);
-            border-top: 4px solid var(--primary);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        .loading-spinner-text {
-            color: var(--gray);
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
         .success-toast {
             position: fixed;
             bottom: 24px;
@@ -637,6 +607,11 @@
             0% { opacity: 1; transform: translateY(0); }
             80% { opacity: 1; }
             100% { opacity: 0; visibility: hidden; transform: translateY(20px); }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         
         .seq-number {
@@ -1008,14 +983,7 @@
                 </tr>
             </thead>
             <tbody id="billsTableBody">
-                <tr>
-                    <td colspan="15">
-                        <div class="loading-spinner-container">
-                            <div class="loading-spinner"></div>
-                            <div class="loading-spinner-text">Loading telephone data...</div>
-                        </div>
-                    </td>
-                </tr>
+                <tr><td colspan="15" class="no-data">Loading data...</td></tr>
             </tbody>
         </table>
     </div>
@@ -1478,18 +1446,7 @@
         currentYear = year;
         
         const tbody = document.getElementById('billsTableBody');
-        
-        // Show loading spinner
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="15">
-                    <div class="loading-spinner-container">
-                        <div class="loading-spinner"></div>
-                        <div class="loading-spinner-text">Loading telephone data...</div>
-                    </div>
-                </td>
-            </tr>
-        `;
+        tbody.innerHTML = '<tr><td colspan="15" class="no-data">Loading data...</td></tr>';
         
         await loadAllEntities();
         await loadExistingBills(month, year);
@@ -1670,9 +1627,10 @@
         tbody.appendChild(fragment);
         
         isLoading = false;
+        showLoading(false);
     }
 
-    // ============ RENDER ENTITY ============
+    // ============ RENDER ENTITY - FIXED LOADING LOGIC ============
     function renderEntity(fragment, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1690,65 +1648,62 @@
             
             const phoneNumbers = getPhoneNumbers(account);
             
-            // Find the best bill with summary data
+            // ========== FIX: Find ANY bill for this account (not just one with summary data) ==========
+            let accountBill = null;
             let accountBillNo = '';
             let accountOutstanding = 0;
             let accountAmountPaid = 0;
             let accountTotalAccountCharges = 0;
             let accountPrevPayment = 0;
             let accountTotalCurrent = 0;
-            let foundSummaryData = false;
             
+            // First, try to find a bill with summary data (priority)
             for (let n = 0; n < phoneNumbers.length; n++) {
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
                 const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
-                
                 if (existing) {
                     let parsedNotes = {};
                     if (existing.notes) {
                         try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
                     }
-                    
-                    const hasBillNo = existing.bill_number && existing.bill_number !== '';
-                    const hasOutstanding = parseFloat(existing.unsettled_charges) > 0;
-                    const hasAmountPaid = parseFloat(existing.amount_paid) > 0;
-                    const hasTotalAccount = parsedNotes.totalAccountCharges > 0;
-                    const hasPrevPayment = parsedNotes.previousPayment > 0;
-                    
-                    if (hasBillNo || hasOutstanding || hasAmountPaid || hasTotalAccount || hasPrevPayment) {
-                        accountBillNo = existing.bill_number || '';
-                        accountOutstanding = parseFloat(existing.unsettled_charges) || 0;
-                        accountAmountPaid = parseFloat(existing.amount_paid) || 0;
-                        accountTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
-                        accountPrevPayment = parsedNotes.previousPayment || 0;
-                        accountTotalCurrent = accountOutstanding + accountTotalAccountCharges - accountPrevPayment;
-                        foundSummaryData = true;
+                    const hasData = (existing.bill_number && existing.bill_number !== '') ||
+                                    parseFloat(existing.unsettled_charges) > 0 ||
+                                    parseFloat(existing.amount_paid) > 0 ||
+                                    parsedNotes.totalAccountCharges > 0 ||
+                                    parsedNotes.previousPayment > 0;
+                    if (hasData) {
+                        accountBill = existing;
                         break;
                     }
                 }
             }
             
-            if (!foundSummaryData) {
+            // If no bill with summary data found, use the FIRST bill found
+            if (!accountBill) {
                 for (let n = 0; n < phoneNumbers.length; n++) {
                     const phone = phoneNumbers[n];
                     const phoneNum = phone.phoneNumber || '—';
                     const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
-                    
                     if (existing) {
-                        let parsedNotes = {};
-                        if (existing.notes) {
-                            try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
-                        }
-                        accountBillNo = existing.bill_number || '';
-                        accountOutstanding = parseFloat(existing.unsettled_charges) || 0;
-                        accountAmountPaid = parseFloat(existing.amount_paid) || 0;
-                        accountTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
-                        accountPrevPayment = parsedNotes.previousPayment || 0;
-                        accountTotalCurrent = accountOutstanding + accountTotalAccountCharges - accountPrevPayment;
+                        accountBill = existing;
                         break;
                     }
                 }
+            }
+            
+            // Use the found bill's data
+            if (accountBill) {
+                let parsedNotes = {};
+                if (accountBill.notes) {
+                    try { parsedNotes = JSON.parse(accountBill.notes); } catch(e) {}
+                }
+                accountBillNo = accountBill.bill_number || '';
+                accountOutstanding = parseFloat(accountBill.unsettled_charges) || 0;
+                accountAmountPaid = parseFloat(accountBill.amount_paid) || 0;
+                accountTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
+                accountPrevPayment = parsedNotes.previousPayment || 0;
+                accountTotalCurrent = accountOutstanding + accountTotalAccountCharges - accountPrevPayment;
             }
             
             let phones = [];
