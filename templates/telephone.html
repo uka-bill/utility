@@ -1245,7 +1245,7 @@
         });
     }
 
-    // ============ SAVE FUNCTION - FIXED: Collect ALL meter rows ============
+    // ============ SAVE FUNCTION - WITH PRESERVE-DATA FIX ============
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         
@@ -1262,7 +1262,7 @@
         
         showSavingToast(entityName);
         
-        // ========== FIX: Collect ALL meter rows for this entity ==========
+        // Collect ALL meter rows for this entity
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow) {
@@ -1293,7 +1293,7 @@
             inputs.forEach(input => input.classList.add('saving'));
         });
         
-        // ========== FIX: Collect ALL summary rows ==========
+        // Collect summary rows for each account
         let summaryRows = [];
         let summaryRow = entityRow.nextElementSibling;
         while (summaryRow) {
@@ -1308,7 +1308,7 @@
             summaryRow = summaryRow.nextElementSibling;
         }
         
-        // ========== FIX: Group summary rows by account number ==========
+        // Group summary rows by account number
         const summaryMap = {};
         for (let i = 0; i < summaryRows.length; i++) {
             const sRow = summaryRows[i];
@@ -1320,7 +1320,6 @@
         
         const batchBills = [];
         
-        // ========== FIX: Match each meter row to its summary by account number ==========
         for (let i = 0; i < meterRows.length; i++) {
             const row = meterRows[i];
             const accountNumber = row.getAttribute('data-account');
@@ -1353,12 +1352,55 @@
             const totalAmount = parseFloat(totalAmountInput ? totalAmountInput.value : 0) || 0;
             const notes = notesInput ? notesInput.value : '';
             
+            // ========== FIX: Preserve existing data if summary data is empty ==========
+            // If there's an existing bill, use its data for fields that are empty
+            let existingBill = null;
+            if (existingBillId) {
+                for (let b = 0; b < existingBills.length; b++) {
+                    if (existingBills[b].id === existingBillId) {
+                        existingBill = existingBills[b];
+                        break;
+                    }
+                }
+            }
+            
+            // If we have an existing bill and the summary data is empty, use existing data
+            let finalBillNo = summaryData.billNo || '';
+            let finalOutstanding = summaryData.totalOutstanding || 0;
+            let finalAmountPaid = summaryData.amountPaid || 0;
+            let finalTotalAccountCharges = summaryData.totalAccountCharges || 0;
+            let finalPrevPayment = summaryData.totalPrevPayment || 0;
+            
+            // If summary data is empty AND we have an existing bill, preserve existing data
+            if (existingBill && !summaryData.billNo && summaryData.totalOutstanding === 0 && summaryData.amountPaid === 0) {
+                // Check if the existing bill has data
+                let existingParsedNotes = {};
+                if (existingBill.notes) {
+                    try { existingParsedNotes = JSON.parse(existingBill.notes); } catch(e) {}
+                }
+                
+                const hasExistingData = (existingBill.bill_number && existingBill.bill_number !== '') ||
+                                        parseFloat(existingBill.unsettled_charges) > 0 ||
+                                        parseFloat(existingBill.amount_paid) > 0 ||
+                                        existingParsedNotes.totalAccountCharges > 0 ||
+                                        existingParsedNotes.previousPayment > 0;
+                
+                if (hasExistingData) {
+                    // Use existing data, but keep any rental/total amount changes
+                    finalBillNo = existingBill.bill_number || '';
+                    finalOutstanding = parseFloat(existingBill.unsettled_charges) || 0;
+                    finalAmountPaid = parseFloat(existingBill.amount_paid) || 0;
+                    finalTotalAccountCharges = existingParsedNotes.totalAccountCharges || 0;
+                    finalPrevPayment = existingParsedNotes.previousPayment || 0;
+                }
+            }
+            
             const notesObj = {
                 totalAmount: totalAmount,
-                totalAccountCharges: summaryData.totalAccountCharges || 0,
-                previousPayment: summaryData.totalPrevPayment || 0,
-                totalCurrentCharges: (summaryData.totalOutstanding || 0) + (summaryData.totalAccountCharges || 0) - (summaryData.totalPrevPayment || 0),
-                originalNotes: notes
+                totalAccountCharges: finalTotalAccountCharges || 0,
+                previousPayment: finalPrevPayment || 0,
+                totalCurrentCharges: (finalOutstanding || 0) + (finalTotalAccountCharges || 0) - (finalPrevPayment || 0),
+                originalNotes: notes || ''
             };
             
             batchBills.push({
@@ -1368,12 +1410,12 @@
                 entity_id: entityId,
                 entity_name: entityName,
                 account_number: accountNumber === '—' ? '' : accountNumber,
-                bill_number: summaryData.billNo || '',
-                meter_number: summaryData.billNo || '',
+                bill_number: finalBillNo || '',
+                meter_number: finalBillNo || '',
                 phone_number: phoneNumber || '',
                 current_charges: rentalAmount,
-                unsettled_charges: summaryData.totalOutstanding || 0,
-                amount_paid: summaryData.amountPaid || 0,
+                unsettled_charges: finalOutstanding || 0,
+                amount_paid: finalAmountPaid || 0,
                 month: month,
                 year: year,
                 bill_month: month,
