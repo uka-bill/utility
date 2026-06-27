@@ -1063,8 +1063,8 @@ def batch_update_utility_bills():
                         "account_number": bill_data.get('account_number', ''),
                         "phone_number": phone_number,
                         "meter_number": bill_data.get('meter_number', ''),
-                        "bill_number": bill_data.get('bill_number', ''),  # ← FIXED: Added bill_number
-                        "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),  # ← FIXED: Added unsettled_charges
+                        "bill_number": bill_data.get('bill_number', ''),
+                        "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
                         "current_charges": float(bill_data.get('current_charges', 0)),
                         "amount_paid": float(bill_data.get('amount_paid', 0)),
                         "month": month_val,
@@ -2400,9 +2400,11 @@ def api_utility_bills():
         if entity_id:
             query = query.eq("entity_id", int(entity_id))
         if month:
-            query = query.eq("month", int(month))
+            # ========== FIX: Filter by bill_month instead of month ==========
+            query = query.eq("bill_month", int(month))
         if year:
-            query = query.eq("year", int(year))
+            # ========== FIX: Filter by bill_year instead of year ==========
+            query = query.eq("bill_year", int(year))
         
         response = query.execute()
         
@@ -2418,9 +2420,9 @@ def api_utility_bills():
                     else:
                         bill_data['entity_name'] = 'Unknown School'
                 elif bill_data['entity_type'] == 'department':
-                    dept_response = supabase.table("departments").select("name").eq("id", bill_data['entity_id']).execute()
+                    dept_response = supabase.table("departments").select("name", "unit_name").eq("id", bill_data['entity_id']).execute()
                     if dept_response.data and len(dept_response.data) > 0:
-                        bill_data['entity_name'] = dept_response.data[0]['name']
+                        bill_data['entity_name'] = dept_response.data[0].get('unit_name') or dept_response.data[0].get('name') or 'Unknown Department'
                     else:
                         bill_data['entity_name'] = 'Unknown Department'
                 else:
@@ -2432,6 +2434,7 @@ def api_utility_bills():
         
     except Exception as e:
         print(f"❌ Utility bills GET error: {e}")
+        print(traceback.format_exc())
         return jsonify([]), 500
 
 @app.route('/api/utility-bills', methods=['POST'])
