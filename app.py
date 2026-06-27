@@ -2391,6 +2391,8 @@ def api_utility_bills():
         month = request.args.get('month')
         year = request.args.get('year')
         
+        print(f"📊 API Request - utility_type: {utility_type}, month: {month}, year: {year}, entity_type: {entity_type}, entity_id: {entity_id}")
+        
         query = supabase.table("utility_bills").select("*")
         
         if utility_type:
@@ -2399,14 +2401,21 @@ def api_utility_bills():
             query = query.eq("entity_type", entity_type)
         if entity_id:
             query = query.eq("entity_id", int(entity_id))
-        if month:
-            # ========== FIX: Filter by bill_month instead of month ==========
-            query = query.eq("bill_month", int(month))
-        if year:
-            # ========== FIX: Filter by bill_year instead of year ==========
-            query = query.eq("bill_year", int(year))
         
+        # ========== FIX: Filter by BOTH month AND bill_month using OR ==========
+        # This ensures data is found regardless of which column is used
+        if month:
+            month_val = int(month)
+            # Use or_ to match either month OR bill_month
+            query = query.or_(f"month.eq.{month_val},bill_month.eq.{month_val}")
+        if year:
+            year_val = int(year)
+            query = query.or_(f"year.eq.{year_val},bill_year.eq.{year_val}")
+        
+        print(f"📊 Query built, executing...")
         response = query.execute()
+        
+        print(f"📊 Response data count: {len(response.data) if response.data else 0}")
         
         bills = []
         if response.data:
@@ -2430,6 +2439,7 @@ def api_utility_bills():
                 
                 bills.append(bill_data)
         
+        print(f"📊 Returning {len(bills)} bills")
         return jsonify(bills)
         
     except Exception as e:
