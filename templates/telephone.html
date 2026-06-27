@@ -1075,6 +1075,7 @@
             } else {
                 existingBills = [];
             }
+            console.log('📊 Loaded ' + existingBills.length + ' bills for month=' + month + ', year=' + year);
         } catch(e) {
             console.error(e);
             existingBills = [];
@@ -1197,7 +1198,9 @@
         return bills;
     }
 
+    // ========== ROBUST BILL FINDING: Try multiple ways to find the bill ==========
     function findExistingBillByPhone(entityType, entityId, phoneNumber, month, year) {
+        // Method 1: Try exact match by phone_number, month, year
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
@@ -1208,6 +1211,29 @@
                 return bill;
             }
         }
+        
+        // Method 2: Try by bill_month instead of month
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            if (bill.entity_type === entityType &&
+                bill.entity_id == entityId &&
+                (bill.phone_number || '') === (phoneNumber || '') &&
+                (bill.bill_month || bill.month) == month && 
+                (bill.bill_year || bill.year) == year) {
+                return bill;
+            }
+        }
+        
+        // Method 3: Try without month/year (find ANY bill for this entity and phone)
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            if (bill.entity_type === entityType &&
+                bill.entity_id == entityId &&
+                (bill.phone_number || '') === (phoneNumber || '')) {
+                return bill;
+            }
+        }
+        
         return null;
     }
 
@@ -1677,7 +1703,7 @@
         showLoading(false);
     }
 
-    // ============ RENDER ENTITY - FIXED LOADING LOGIC ============
+    // ============ RENDER ENTITY - ROBUST BILL FINDING ============
     function renderEntity(fragment, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1734,6 +1760,35 @@
                     const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
                     if (existing) {
                         accountBill = existing;
+                        break;
+                    }
+                }
+            }
+            
+            // ========== FIX: If still no bill found, try to find any bill for this entity ==========
+            if (!accountBill) {
+                // Try to find ANY bill for this entity (ignoring phone number)
+                for (let i = 0; i < existingBills.length; i++) {
+                    const bill = existingBills[i];
+                    if (bill.entity_type === entity.type &&
+                        bill.entity_id == entity.id &&
+                        bill.month == month && 
+                        bill.year == year) {
+                        accountBill = bill;
+                        break;
+                    }
+                }
+            }
+            
+            // ========== FIX: If still no bill, try bill_month instead ==========
+            if (!accountBill) {
+                for (let i = 0; i < existingBills.length; i++) {
+                    const bill = existingBills[i];
+                    if (bill.entity_type === entity.type &&
+                        bill.entity_id == entity.id &&
+                        (bill.bill_month || bill.month) == month && 
+                        (bill.bill_year || bill.year) == year) {
+                        accountBill = bill;
                         break;
                     }
                 }
