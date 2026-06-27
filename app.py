@@ -1272,6 +1272,139 @@ def batch_update_utility_bills():
         print(traceback.format_exc())
         return jsonify({'error': str(e), 'success': False}), 500
 
+# ============ UTILITY BILLS API (FIXED - looks for both month and bill_month) ============
+
+@app.route('/api/utility-bills', methods=['GET'])
+def api_utility_bills():
+    try:
+        print("💡 GET /api/utility-bills called")
+        
+        if not supabase:
+            return jsonify([]), 500
+        
+        utility_type = request.args.get('utility_type')
+        entity_type = request.args.get('entity_type')
+        entity_id = request.args.get('entity_id')
+        month = request.args.get('month')
+        year = request.args.get('year')
+        
+        print(f"📊 API Request - utility_type: {utility_type}, month: {month}, year: {year}, entity_type: {entity_type}, entity_id: {entity_id}")
+        
+        all_bills = []
+        bill_ids = set()
+        
+        if month and year:
+            month_val = int(month)
+            year_val = int(year)
+            
+            # Query 1: Filter by month and year (regular month/year fields)
+            query1 = supabase.table("utility_bills").select("*")
+            if utility_type:
+                query1 = query1.eq("utility_type", utility_type)
+            if entity_type:
+                query1 = query1.eq("entity_type", entity_type)
+            if entity_id:
+                query1 = query1.eq("entity_id", int(entity_id))
+            query1 = query1.eq("month", month_val).eq("year", year_val)
+            response1 = query1.execute()
+            
+            if response1.data:
+                for bill in response1.data:
+                    bill_ids.add(bill.get('id'))
+                    all_bills.append(bill)
+                print(f"📊 Query 1 (month={month_val}) found {len(response1.data)} bills")
+            
+            # Query 2: Filter by bill_month and bill_year
+            query2 = supabase.table("utility_bills").select("*")
+            if utility_type:
+                query2 = query2.eq("utility_type", utility_type)
+            if entity_type:
+                query2 = query2.eq("entity_type", entity_type)
+            if entity_id:
+                query2 = query2.eq("entity_id", int(entity_id))
+            query2 = query2.eq("bill_month", month_val).eq("bill_year", year_val)
+            response2 = query2.execute()
+            
+            if response2.data:
+                for bill in response2.data:
+                    if bill.get('id') not in bill_ids:
+                        bill_ids.add(bill.get('id'))
+                        all_bills.append(bill)
+                print(f"📊 Query 2 (bill_month={month_val}) found {len(response2.data)} bills")
+            
+            # ========== FIX: Query 3 - Try without month filter (just year) ==========
+            # This is a fallback for bills that might have been saved with different month
+            if len(all_bills) == 0:
+                print(f"🔍 No bills found with month filters, trying without month filter...")
+                query3 = supabase.table("utility_bills").select("*")
+                if utility_type:
+                    query3 = query3.eq("utility_type", utility_type)
+                if entity_type:
+                    query3 = query3.eq("entity_type", entity_type)
+                if entity_id:
+                    query3 = query3.eq("entity_id", int(entity_id))
+                query3 = query3.eq("year", year_val)
+                response3 = query3.execute()
+                if response3.data:
+                    for bill in response3.data:
+                        if bill.get('id') not in bill_ids:
+                            bill_ids.add(bill.get('id'))
+                            all_bills.append(bill)
+                    print(f"📊 Query 3 (year only) found {len(response3.data)} bills")
+            
+            print(f"📊 Total unique bills found: {len(all_bills)}")
+            
+        else:
+            # No month/year filter - get all bills
+            query = supabase.table("utility_bills").select("*")
+            if utility_type:
+                query = query.eq("utility_type", utility_type)
+            if entity_type:
+                query = query.eq("entity_type", entity_type)
+            if entity_id:
+                query = query.eq("entity_id", int(entity_id))
+            response = query.execute()
+            all_bills = response.data if response.data else []
+        
+        # Enrich bills with entity names
+        bills = []
+        for bill in all_bills:
+            bill_data = dict(bill)
+            
+            if bill_data['entity_type'] == 'school':
+                school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
+                if school_response.data and len(school_response.data) > 0:
+                    bill_data['entity_name'] = school_response.data[0]['name']
+                else:
+                    bill_data['entity_name'] = 'Unknown School'
+            elif bill_data['entity_type'] == 'department':
+                dept_response = supabase.table("departments").select("name", "unit_name").eq("id", bill_data['entity_id']).execute()
+                if dept_response.data and len(dept_response.data) > 0:
+                    bill_data['entity_name'] = dept_response.data[0].get('unit_name') or dept_response.data[0].get('name') or 'Unknown Department'
+                else:
+                    bill_data['entity_name'] = 'Unknown Department'
+            else:
+                bill_data['entity_name'] = 'Unknown'
+            
+            # Add telephone number if telephone utility
+            if bill_data['utility_type'] == 'telephone' and not bill_data.get('phone_number'):
+                bill_data['phone_number'] = bill_data.get('meter_number', '')
+            
+            # Ensure numeric values are floats
+            bill_data['current_charges'] = float(bill_data.get('current_charges') or 0)
+            bill_data['late_charges'] = float(bill_data.get('late_charges') or 0)
+            bill_data['unsettled_charges'] = float(bill_data.get('unsettled_charges') or 0)
+            bill_data['amount_paid'] = float(bill_data.get('amount_paid') or 0)
+            
+            bills.append(bill_data)
+        
+        print(f"📊 Returning {len(bills)} bills")
+        return jsonify(bills)
+        
+    except Exception as e:
+        print(f"❌ Utility bills GET error: {e}")
+        print(traceback.format_exc())
+        return jsonify([]), 500
 
 # ============ BUDGET MANAGEMENT API ============
 
@@ -2468,122 +2601,7 @@ def delete_department(department_id):
     except Exception as e:
         return jsonify({'success': False, 'error': f'Failed to delete department: {str(e)}'}), 500
 
-# ============ UTILITY BILLS API ============
-
-@app.route('/api/utility-bills', methods=['GET'])
-def api_utility_bills():
-    try:
-        print("💡 GET /api/utility-bills called")
-        
-        if not supabase:
-            return jsonify([]), 500
-        
-        utility_type = request.args.get('utility_type')
-        entity_type = request.args.get('entity_type')
-        entity_id = request.args.get('entity_id')
-        month = request.args.get('month')
-        year = request.args.get('year')
-        
-        print(f"📊 API Request - utility_type: {utility_type}, month: {month}, year: {year}, entity_type: {entity_type}, entity_id: {entity_id}")
-        
-        # ========== FIX: Use two separate queries and merge results ==========
-        # This avoids the 'or_' attribute error and works with any Supabase version
-        
-        all_bills = []
-        bill_ids = set()
-        
-        if month and year:
-            month_val = int(month)
-            year_val = int(year)
-            
-            # Query 1: Filter by month and year
-            query1 = supabase.table("utility_bills").select("*")
-            if utility_type:
-                query1 = query1.eq("utility_type", utility_type)
-            if entity_type:
-                query1 = query1.eq("entity_type", entity_type)
-            if entity_id:
-                query1 = query1.eq("entity_id", int(entity_id))
-            query1 = query1.eq("month", month_val).eq("year", year_val)
-            response1 = query1.execute()
-            
-            if response1.data:
-                for bill in response1.data:
-                    bill_ids.add(bill.get('id'))
-                    all_bills.append(bill)
-                print(f"📊 Query 1 (month={month_val}) found {len(response1.data)} bills")
-            
-            # Query 2: Filter by bill_month and bill_year
-            query2 = supabase.table("utility_bills").select("*")
-            if utility_type:
-                query2 = query2.eq("utility_type", utility_type)
-            if entity_type:
-                query2 = query2.eq("entity_type", entity_type)
-            if entity_id:
-                query2 = query2.eq("entity_id", int(entity_id))
-            query2 = query2.eq("bill_month", month_val).eq("bill_year", year_val)
-            response2 = query2.execute()
-            
-            if response2.data:
-                for bill in response2.data:
-                    if bill.get('id') not in bill_ids:
-                        bill_ids.add(bill.get('id'))
-                        all_bills.append(bill)
-                print(f"📊 Query 2 (bill_month={month_val}) found {len(response2.data)} bills")
-            
-            print(f"📊 Total unique bills found: {len(all_bills)}")
-            
-        else:
-            # No month/year filter - get all bills
-            query = supabase.table("utility_bills").select("*")
-            if utility_type:
-                query = query.eq("utility_type", utility_type)
-            if entity_type:
-                query = query.eq("entity_type", entity_type)
-            if entity_id:
-                query = query.eq("entity_id", int(entity_id))
-            response = query.execute()
-            all_bills = response.data if response.data else []
-        
-        # Enrich bills with entity names
-        bills = []
-        for bill in all_bills:
-            bill_data = dict(bill)
-            
-            if bill_data['entity_type'] == 'school':
-                school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
-                if school_response.data and len(school_response.data) > 0:
-                    bill_data['entity_name'] = school_response.data[0]['name']
-                else:
-                    bill_data['entity_name'] = 'Unknown School'
-            elif bill_data['entity_type'] == 'department':
-                dept_response = supabase.table("departments").select("name", "unit_name").eq("id", bill_data['entity_id']).execute()
-                if dept_response.data and len(dept_response.data) > 0:
-                    bill_data['entity_name'] = dept_response.data[0].get('unit_name') or dept_response.data[0].get('name') or 'Unknown Department'
-                else:
-                    bill_data['entity_name'] = 'Unknown Department'
-            else:
-                bill_data['entity_name'] = 'Unknown'
-            
-            # Add telephone number if telephone utility
-            if bill_data['utility_type'] == 'telephone' and not bill_data.get('phone_number'):
-                bill_data['phone_number'] = bill_data.get('meter_number', '')
-            
-            # Ensure numeric values are floats
-            bill_data['current_charges'] = float(bill_data.get('current_charges') or 0)
-            bill_data['late_charges'] = float(bill_data.get('late_charges') or 0)
-            bill_data['unsettled_charges'] = float(bill_data.get('unsettled_charges') or 0)
-            bill_data['amount_paid'] = float(bill_data.get('amount_paid') or 0)
-            
-            bills.append(bill_data)
-        
-        print(f"📊 Returning {len(bills)} bills")
-        return jsonify(bills)
-        
-    except Exception as e:
-        print(f"❌ Utility bills GET error: {e}")
-        print(traceback.format_exc())
-        return jsonify([]), 500
+# ============ UTILITY BILLS API (CREATE) ============
 
 @app.route('/api/utility-bills', methods=['POST'])
 def create_utility_bill():
