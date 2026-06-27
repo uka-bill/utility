@@ -1184,52 +1184,53 @@
         return entities;
     }
 
-    function findEntityBills(entityType, entityId, month, year) {
-        const bills = [];
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            if (bill.entity_type === entityType &&
-                bill.entity_id == entityId &&
-                bill.month == month && 
-                bill.year == year) {
-                bills.push(bill);
+    // ========== FIXED: Better bill finding by entity_id + phone_number ==========
+    function findBillByEntityAndPhone(entityType, entityId, phoneNumber, month, year) {
+        if (!phoneNumber || phoneNumber === '—') {
+            // Try to find any bill for this entity without phone number
+            for (let i = 0; i < existingBills.length; i++) {
+                const bill = existingBills[i];
+                if (bill.entity_type === entityType &&
+                    bill.entity_id == entityId &&
+                    bill.month == month && 
+                    bill.year == year) {
+                    return bill;
+                }
             }
+            return null;
         }
-        return bills;
-    }
-
-    // ========== ROBUST BILL FINDING: Try multiple ways to find the bill ==========
-    function findExistingBillByPhone(entityType, entityId, phoneNumber, month, year) {
-        // Method 1: Try exact match by phone_number, month, year
+        
+        // First try: exact match on phone_number
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
-                (bill.phone_number || '') === (phoneNumber || '') &&
+                (bill.phone_number || '') === phoneNumber &&
                 bill.month == month && 
                 bill.year == year) {
                 return bill;
             }
         }
         
-        // Method 2: Try by bill_month instead of month
+        // Second try: match by account_number only (if phone numbers changed)
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
-                (bill.phone_number || '') === (phoneNumber || '') &&
-                (bill.bill_month || bill.month) == month && 
-                (bill.bill_year || bill.year) == year) {
+                bill.month == month && 
+                bill.year == year &&
+                !bill.phone_number) {
                 return bill;
             }
         }
         
-        // Method 3: Try without month/year (find ANY bill for this entity and phone)
+        // Third try: any bill for this entity in this month/year
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
-                (bill.phone_number || '') === (phoneNumber || '')) {
+                bill.month == month && 
+                bill.year == year) {
                 return bill;
             }
         }
@@ -1271,7 +1272,7 @@
         });
     }
 
-    // ============ SAVE FUNCTION - WITH PRESERVE-DATA FIX ============
+    // ============ SAVE FUNCTION - FIXED ============
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         
@@ -1345,11 +1346,13 @@
         }
         
         const batchBills = [];
+        const billsToDelete = [];
         
+        // First, collect data from each meter row
         for (let i = 0; i < meterRows.length; i++) {
             const row = meterRows[i];
-            const accountNumber = row.getAttribute('data-account');
-            const phoneNumber = row.getAttribute('data-phone');
+            const accountNumber = row.getAttribute('data-account') || '—';
+            const phoneNumber = row.getAttribute('data-phone') || '—';
             const existingBillId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
             
             // Find the correct summary row for this account
@@ -1378,8 +1381,7 @@
             const totalAmount = parseFloat(totalAmountInput ? totalAmountInput.value : 0) || 0;
             const notes = notesInput ? notesInput.value : '';
             
-            // ========== FIX: Preserve existing data if summary data is empty ==========
-            // If there's an existing bill, use its data for fields that are empty
+            // ========== FIX: Always preserve existing bill data ==========
             let existingBill = null;
             if (existingBillId) {
                 for (let b = 0; b < existingBills.length; b++) {
@@ -1390,104 +1392,102 @@
                 }
             }
             
-            // If we have an existing bill and the summary data is empty, use existing data
-            let finalBillNo = summaryData.billNo || '';
-            let finalOutstanding = summaryData.totalOutstanding || 0;
-            let finalAmountPaid = summaryData.amountPaid || 0;
-            let finalTotalAccountCharges = summaryData.totalAccountCharges || 0;
-            let finalPrevPayment = summaryData.totalPrevPayment || 0;
-            
-            // If summary data is empty AND we have an existing bill, preserve existing data
-            if (existingBill && !summaryData.billNo && summaryData.totalOutstanding === 0 && summaryData.amountPaid === 0) {
-                // Check if the existing bill has data
-                let existingParsedNotes = {};
-                if (existingBill.notes) {
-                    try { existingParsedNotes = JSON.parse(existingBill.notes); } catch(e) {}
-                }
-                
-                const hasExistingData = (existingBill.bill_number && existingBill.bill_number !== '') ||
-                                        parseFloat(existingBill.unsettled_charges) > 0 ||
-                                        parseFloat(existingBill.amount_paid) > 0 ||
-                                        existingParsedNotes.totalAccountCharges > 0 ||
-                                        existingParsedNotes.previousPayment > 0;
-                
-                if (hasExistingData) {
-                    // Use existing data, but keep any rental/total amount changes
-                    finalBillNo = existingBill.bill_number || '';
-                    finalOutstanding = parseFloat(existingBill.unsettled_charges) || 0;
-                    finalAmountPaid = parseFloat(existingBill.amount_paid) || 0;
-                    finalTotalAccountCharges = existingParsedNotes.totalAccountCharges || 0;
-                    finalPrevPayment = existingParsedNotes.previousPayment || 0;
-                }
+            // If we couldn't find by ID, try to find by entity and phone
+            if (!existingBill) {
+                existingBill = findBillByEntityAndPhone(entityType, entityId, phoneNumber, month, year);
             }
             
+            let parsedNotes = {};
+            if (existingBill && existingBill.notes) {
+                try { parsedNotes = JSON.parse(existingBill.notes); } catch(e) {}
+            }
+            
+            // Use existing data if available, otherwise use what was entered
+            // IMPORTANT: Always prefer existing data for fields that might be empty
+            let finalBillNo = summaryData.billNo || (existingBill ? existingBill.bill_number : '') || '';
+            let finalOutstanding = summaryData.totalOutstanding > 0 ? summaryData.totalOutstanding : (existingBill ? parseFloat(existingBill.unsettled_charges) || 0 : 0);
+            let finalAmountPaid = summaryData.amountPaid > 0 ? summaryData.amountPaid : (existingBill ? parseFloat(existingBill.amount_paid) || 0 : 0);
+            let finalTotalAccountCharges = summaryData.totalAccountCharges > 0 ? summaryData.totalAccountCharges : (parsedNotes.totalAccountCharges || 0);
+            let finalPrevPayment = summaryData.totalPrevPayment > 0 ? summaryData.totalPrevPayment : (parsedNotes.previousPayment || 0);
+            
+            // Always calculate total current
+            let finalTotalCurrent = finalTotalAccountCharges + finalOutstanding - finalPrevPayment;
+            
             const notesObj = {
-                totalAmount: totalAmount,
-                totalAccountCharges: finalTotalAccountCharges || 0,
-                previousPayment: finalPrevPayment || 0,
-                totalCurrentCharges: (finalOutstanding || 0) + (finalTotalAccountCharges || 0) - (finalPrevPayment || 0),
-                originalNotes: notes || ''
+                totalAmount: totalAmount || (parsedNotes.totalAmount || 0),
+                totalAccountCharges: finalTotalAccountCharges,
+                previousPayment: finalPrevPayment,
+                totalCurrentCharges: finalTotalCurrent,
+                originalNotes: notes || (parsedNotes.originalNotes || '')
             };
             
-            batchBills.push({
-                id: existingBillId,
-                utility_type: 'telephone',
-                entity_type: entityType,
-                entity_id: entityId,
-                entity_name: entityName,
-                account_number: accountNumber === '—' ? '' : accountNumber,
-                bill_number: finalBillNo || '',
-                meter_number: finalBillNo || '',
-                phone_number: phoneNumber || '',
-                current_charges: rentalAmount,
-                unsettled_charges: finalOutstanding || 0,
-                amount_paid: finalAmountPaid || 0,
-                month: month,
-                year: year,
-                bill_month: month,
-                bill_year: year,
-                notes: JSON.stringify(notesObj),
-                updated_at: new Date().toISOString()
-            });
+            // Only save if there's actual data to save
+            if (finalBillNo || finalOutstanding > 0 || finalAmountPaid > 0 || rentalAmount > 0 || finalTotalAccountCharges > 0 || notes) {
+                batchBills.push({
+                    id: existingBill ? existingBill.id : null,
+                    utility_type: 'telephone',
+                    entity_type: entityType,
+                    entity_id: entityId,
+                    entity_name: entityName,
+                    account_number: accountNumber === '—' ? '' : accountNumber,
+                    bill_number: finalBillNo,
+                    meter_number: finalBillNo,
+                    phone_number: phoneNumber === '—' ? '' : phoneNumber,
+                    current_charges: rentalAmount,
+                    unsettled_charges: finalOutstanding,
+                    amount_paid: finalAmountPaid,
+                    month: month,
+                    year: year,
+                    bill_month: month,
+                    bill_year: year,
+                    notes: JSON.stringify(notesObj),
+                    updated_at: new Date().toISOString()
+                });
+            }
         }
         
         savingEntities.add(entityId);
         
         try {
-            const resp = await fetch('/api/utility-bills/batch-update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bills: batchBills })
-            });
-            
-            const result = await resp.json();
-            const endTime = performance.now();
-            const totalTime = (endTime - startTime).toFixed(0);
-            
-            meterRows.forEach(row => {
-                const inputs = row.querySelectorAll('.inline-input');
-                inputs.forEach(input => {
-                    input.classList.remove('saving');
-                    input.classList.add('saved');
-                    setTimeout(() => input.classList.remove('saved'), 2000);
+            if (batchBills.length > 0) {
+                const resp = await fetch('/api/utility-bills/batch-update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bills: batchBills })
                 });
-            });
-            summaryRows.forEach(row => {
-                const inputs = row.querySelectorAll('.inline-input');
-                inputs.forEach(input => {
-                    input.classList.remove('saving');
-                    input.classList.add('saved');
-                    setTimeout(() => input.classList.remove('saved'), 2000);
+                
+                const result = await resp.json();
+                const endTime = performance.now();
+                const totalTime = (endTime - startTime).toFixed(0);
+                
+                meterRows.forEach(row => {
+                    const inputs = row.querySelectorAll('.inline-input');
+                    inputs.forEach(input => {
+                        input.classList.remove('saving');
+                        input.classList.add('saved');
+                        setTimeout(() => input.classList.remove('saved'), 2000);
+                    });
                 });
-            });
-            
-            hideSavingToast();
-            
-            if (result.success) {
-                showToast(entityName + ': Saved ' + result.success_count + ' record(s) (' + totalTime + 'ms)', false);
+                summaryRows.forEach(row => {
+                    const inputs = row.querySelectorAll('.inline-input');
+                    inputs.forEach(input => {
+                        input.classList.remove('saving');
+                        input.classList.add('saved');
+                        setTimeout(() => input.classList.remove('saved'), 2000);
+                    });
+                });
+                
+                hideSavingToast();
+                
+                if (result.success) {
+                    showToast(entityName + ': Saved ' + result.success_count + ' record(s) (' + totalTime + 'ms)', false);
+                } else {
+                    showToast(entityName + ': ' + result.error_count + ' failed', true);
+                    console.log('Errors:', result.errors);
+                }
             } else {
-                showToast(entityName + ': ' + result.error_count + ' failed', true);
-                console.log('Errors:', result.errors);
+                hideSavingToast();
+                showToast(entityName + ': No data to save', false);
             }
         } catch (err) {
             console.error('Save error:', err);
@@ -1611,7 +1611,7 @@
                     const numbers = account.numbers || [{ phoneNumber: '—', location: '' }];
                     for (let n = 0; n < numbers.length; n++) {
                         const phone = numbers[n];
-                        const existing = findExistingBillByPhone(entity.type, entity.id, phone.phoneNumber, month, year);
+                        const existing = findBillByEntityAndPhone(entity.type, entity.id, phone.phoneNumber, month, year);
                         const amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
                         
                         if (statusFilter === 'all' ||
@@ -1661,7 +1661,7 @@
                     const numbers = account.numbers || [{ phoneNumber: '—', location: '' }];
                     for (let n = 0; n < numbers.length; n++) {
                         const phone = numbers[n];
-                        const existing = findExistingBillByPhone(entity.type, entity.id, phone.phoneNumber, month, year);
+                        const existing = findBillByEntityAndPhone(entity.type, entity.id, phone.phoneNumber, month, year);
                         const amountPaid = existing ? (parseFloat(existing.amount_paid) || 0) : 0;
                         
                         if (statusFilter === 'all' ||
@@ -1703,7 +1703,7 @@
         showLoading(false);
     }
 
-    // ============ RENDER ENTITY - ROBUST BILL FINDING ============
+    // ============ RENDER ENTITY - FIXED: Properly loads existing data ============
     function renderEntity(fragment, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1712,7 +1712,6 @@
         let hasVisibleMeters = false;
         
         let accountData = [];
-        const entityBills = findEntityBills(entity.type, entity.id, month, year);
         
         // Process each account group
         for (let a = 0; a < entity.accountGroups.length; a++) {
@@ -1721,7 +1720,7 @@
             
             const phoneNumbers = getPhoneNumbers(account);
             
-            // ========== FIX: Find ANY bill for this account ==========
+            // ========== FIX: Find the bill for this account using the improved function ==========
             let accountBill = null;
             let accountBillNo = '';
             let accountOutstanding = 0;
@@ -1730,64 +1729,25 @@
             let accountPrevPayment = 0;
             let accountTotalCurrent = 0;
             
-            // First, try to find a bill with summary data (priority)
+            // Try to find a bill for any phone in this account
             for (let n = 0; n < phoneNumbers.length; n++) {
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
-                const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
+                const existing = findBillByEntityAndPhone(entity.type, entity.id, phoneNum, month, year);
                 if (existing) {
-                    let parsedNotes = {};
-                    if (existing.notes) {
-                        try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
-                    }
-                    const hasData = (existing.bill_number && existing.bill_number !== '') ||
-                                    parseFloat(existing.unsettled_charges) > 0 ||
-                                    parseFloat(existing.amount_paid) > 0 ||
-                                    parsedNotes.totalAccountCharges > 0 ||
-                                    parsedNotes.previousPayment > 0;
-                    if (hasData) {
-                        accountBill = existing;
-                        break;
-                    }
+                    accountBill = existing;
+                    break;
                 }
             }
             
-            // If no bill with summary data found, use the FIRST bill found
+            // If no bill found, try to find by entity ID only (for backward compatibility)
             if (!accountBill) {
-                for (let n = 0; n < phoneNumbers.length; n++) {
-                    const phone = phoneNumbers[n];
-                    const phoneNum = phone.phoneNumber || '—';
-                    const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
-                    if (existing) {
-                        accountBill = existing;
-                        break;
-                    }
-                }
-            }
-            
-            // ========== FIX: If still no bill found, try to find any bill for this entity ==========
-            if (!accountBill) {
-                // Try to find ANY bill for this entity (ignoring phone number)
                 for (let i = 0; i < existingBills.length; i++) {
                     const bill = existingBills[i];
                     if (bill.entity_type === entity.type &&
                         bill.entity_id == entity.id &&
                         bill.month == month && 
                         bill.year == year) {
-                        accountBill = bill;
-                        break;
-                    }
-                }
-            }
-            
-            // ========== FIX: If still no bill, try bill_month instead ==========
-            if (!accountBill) {
-                for (let i = 0; i < existingBills.length; i++) {
-                    const bill = existingBills[i];
-                    if (bill.entity_type === entity.type &&
-                        bill.entity_id == entity.id &&
-                        (bill.bill_month || bill.month) == month && 
-                        (bill.bill_year || bill.year) == year) {
                         accountBill = bill;
                         break;
                     }
@@ -1805,7 +1765,7 @@
                 accountAmountPaid = parseFloat(accountBill.amount_paid) || 0;
                 accountTotalAccountCharges = parsedNotes.totalAccountCharges || 0;
                 accountPrevPayment = parsedNotes.previousPayment || 0;
-                accountTotalCurrent = accountOutstanding + accountTotalAccountCharges - accountPrevPayment;
+                accountTotalCurrent = accountTotalAccountCharges + accountOutstanding - accountPrevPayment;
             }
             
             let phones = [];
@@ -1815,7 +1775,8 @@
                 const phone = phoneNumbers[n];
                 const phoneNum = phone.phoneNumber || '—';
                 
-                const existing = findExistingBillByPhone(entity.type, entity.id, phoneNum, month, year);
+                // ========== FIX: Use the improved bill finding function ==========
+                const existing = findBillByEntityAndPhone(entity.type, entity.id, phoneNum, month, year);
                 
                 let parsedNotes = {};
                 if (existing && existing.notes) {
