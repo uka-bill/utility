@@ -981,7 +981,7 @@ def format_file_size(size):
         size /= 1024.0
     return f"{size:.1f} TB"
 
-# ============ BATCH UPDATE API (FIXED - RESPECTS MONTH, NO IGNORE MONTH FALLBACK) ============
+# ============ BATCH UPDATE API (FIXED FOR TELEPHONE) ============
 
 @app.route('/api/utility-bills/batch-update', methods=['POST'])
 def batch_update_utility_bills():
@@ -1000,13 +1000,11 @@ def batch_update_utility_bills():
         
         print(f"📦 Batch updating {len(bills)} bills")
         
-        if bills:
-            print(f"📋 First bill sample: {json.dumps(bills[0], indent=2)}")
-        
         start_time = time.time()
         success_count = 0
         error_count = 0
         
+        # Pre-fetch entity names
         school_ids = set()
         dept_ids = set()
         for bill in bills:
@@ -1046,18 +1044,16 @@ def batch_update_utility_bills():
                 if utility_type == 'telephone':
                     account_number = bill_data.get('account_number', '')
                     bill_number = bill_data.get('bill_number', '')
-                    phone_number = bill_data.get('phone_number', '')
                     
+                    # ========== FIX: Find by entity_id + month + year (IGNORE ACCOUNT NUMBER) ==========
                     existing = None
                     existing_id = None
-                    bill_id = bill_data.get('id')
                     
                     print(f"🔍 Looking for bill: entity_id={entity_id}, entity={entity_name}, month={month_val}, year={year_val}")
                     
-                    # ========== METHOD 1: Try by entity_id + month + year (EXACT MATCH) ==========
+                    # METHOD 1: Try by entity_id + month + year
                     try:
-                        print(f"🔍 Trying entity_id + month + year (EXACT MATCH)")
-                        query = supabase.table("utility_bills").select("id, *")\
+                        query = supabase.table("utility_bills").select("id")\
                             .eq("utility_type", "telephone")\
                             .eq("entity_type", entity_type)\
                             .eq("entity_id", entity_id)\
@@ -1067,15 +1063,14 @@ def batch_update_utility_bills():
                         if check_response.data and len(check_response.data) > 0:
                             existing_id = check_response.data[0]['id']
                             existing = check_response
-                            print(f"📍 Found by entity_id + month + year (EXACT MATCH): {existing_id}")
+                            print(f"📍 Found by entity_id + month + year: {existing_id}")
                     except Exception as e:
                         print(f"⚠️ Error: {e}")
                     
-                    # ========== METHOD 2: Try by bill_month + bill_year ==========
+                    # METHOD 2: Try by entity_id + bill_month + bill_year (fallback)
                     if not existing_id:
                         try:
-                            print(f"🔍 Trying bill_month + bill_year")
-                            query = supabase.table("utility_bills").select("id, *")\
+                            query = supabase.table("utility_bills").select("id")\
                                 .eq("utility_type", "telephone")\
                                 .eq("entity_type", entity_type)\
                                 .eq("entity_id", entity_id)\
@@ -1089,21 +1084,16 @@ def batch_update_utility_bills():
                         except Exception as e:
                             print(f"⚠️ Error: {e}")
                     
-                    # ========== METHOD 3: Try by ID ==========
-                    if not existing_id and bill_id:
+                    # METHOD 3: Try by ID (if provided)
+                    if not existing_id and bill_data.get('id'):
                         try:
-                            check_response = supabase.table("utility_bills").select("id, *").eq("id", bill_id).execute()
+                            check_response = supabase.table("utility_bills").select("id").eq("id", bill_data['id']).execute()
                             if check_response.data and len(check_response.data) > 0:
                                 existing_id = check_response.data[0]['id']
                                 existing = check_response
                                 print(f"📍 Found by ID: {existing_id}")
                         except Exception as e:
                             print(f"⚠️ Error: {e}")
-                    
-                    # ========== CRITICAL FIX: NO "entity_id + year" FALLBACK ==========
-                    # We DO NOT try to find by entity_id + year (ignoring month) because
-                    # that would find a bill from a different month and overwrite it.
-                    # Instead, if no exact match is found, we create a NEW bill.
                     
                     # Parse notes to extract phone data
                     notes_data = {}
@@ -1116,53 +1106,35 @@ def batch_update_utility_bills():
                     if not notes_data.get('phones'):
                         notes_data['phones'] = []
                     
-                    # ========== Use the month/year from the frontend ==========
-                    final_month = month_val
-                    final_year = year_val
-                    
-                    if existing and existing.data:
-                        existing_bill_data = existing.data[0]
-                        # ALWAYS use the existing bill's month and year
-                        final_month = existing_bill_data.get('month', month_val)
-                        final_year = existing_bill_data.get('year', year_val)
-                        print(f"📌 Using existing bill's month={final_month}, year={final_year}")
-                        
-                        # Also preserve the account_number from the existing bill if not provided
-                        if not account_number:
-                            account_number = existing_bill_data.get('account_number', '')
-                            print(f"📌 Using existing bill's account_number={account_number}")
-                    else:
-                        print(f"📌 No existing bill found for month={month_val}, year={year_val}, creating NEW bill")
-                    
+                    # Build the record
                     record = {
                         "utility_type": "telephone",
                         "entity_type": entity_type,
                         "entity_id": entity_id,
                         "entity_name": entity_name,
                         "account_number": account_number,
-                        "phone_number": phone_number,
+                        "phone_number": '',
                         "meter_number": bill_number,
                         "bill_number": bill_number,
                         "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
                         "current_charges": float(bill_data.get('current_charges', 0)),
                         "amount_paid": float(bill_data.get('amount_paid', 0)),
-                        "month": final_month,
-                        "year": final_year,
-                        "bill_month": final_month,
-                        "bill_year": final_year,
+                        "month": month_val,
+                        "year": year_val,
+                        "bill_month": month_val,
+                        "bill_year": year_val,
                         "notes": json.dumps(notes_data),
                         "updated_at": datetime.now().isoformat()
                     }
                     
                     # If we found an existing bill, UPDATE it
                     if existing_id:
-                        print(f"🔄 UPDATING bill ID {existing_id} for {entity_name} (month={final_month}, year={final_year})")
+                        print(f"🔄 UPDATING bill ID {existing_id} for {entity_name}")
                         supabase.table("utility_bills").update(record).eq("id", existing_id).execute()
                         print(f"✅ Updated telephone bill ID {existing_id} for {entity_name}")
-                        print(f"   📊 unsettled_charges={record['unsettled_charges']}, amount_paid={record['amount_paid']}")
                     else:
                         # Otherwise INSERT new bill
-                        print(f"📝 INSERTING NEW bill for {entity_name} (month={final_month}, year={final_year})")
+                        print(f"📝 INSERTING NEW bill for {entity_name} (month={month_val}, year={year_val})")
                         record["created_at"] = datetime.now().isoformat()
                         result = supabase.table("utility_bills").insert(record).execute()
                         print(f"✅ Created NEW telephone bill for {entity_name}")
@@ -1172,6 +1144,7 @@ def batch_update_utility_bills():
                     success_count += 1
                 
                 elif utility_type == 'water':
+                    # Find existing water bill
                     existing = supabase.table("utility_bills").select("id")\
                         .eq("utility_type", "water")\
                         .eq("entity_type", entity_type)\
@@ -1210,6 +1183,7 @@ def batch_update_utility_bills():
                     success_count += 1
                 
                 elif utility_type == 'electricity':
+                    # Find existing electricity bill
                     existing = supabase.table("utility_bills").select("id")\
                         .eq("utility_type", "electricity")\
                         .eq("entity_type", entity_type)\
@@ -1269,7 +1243,7 @@ def batch_update_utility_bills():
         print(traceback.format_exc())
         return jsonify({'error': str(e), 'success': False}), 500
 
-# ============ UTILITY BILLS API (FIXED - NO OR_) ============
+# ============ UTILITY BILLS API (OPTIMIZED) ============
 
 @app.route('/api/utility-bills', methods=['GET'])
 def api_utility_bills():
@@ -1293,7 +1267,7 @@ def api_utility_bills():
             month_val = int(month)
             year_val = int(year)
             
-            # METHOD 1: Query by month and year (regular fields)
+            # Query 1: by month and year
             query1 = supabase.table("utility_bills").select("*")
             if utility_type:
                 query1 = query1.eq("utility_type", utility_type)
@@ -1308,7 +1282,7 @@ def api_utility_bills():
                 all_bills = response1.data
                 print(f"📊 Query 1 (month={month_val}) found {len(all_bills)} bills")
             
-            # METHOD 2: If no results, try by bill_month and bill_year
+            # Query 2: by bill_month and bill_year
             if len(all_bills) == 0:
                 query2 = supabase.table("utility_bills").select("*")
                 if utility_type:
@@ -1324,7 +1298,7 @@ def api_utility_bills():
                     all_bills = response2.data
                     print(f"📊 Query 2 (bill_month={month_val}) found {len(all_bills)} bills")
             
-            # METHOD 3: If still no results, try by year only
+            # Query 3: by year only (fallback)
             if len(all_bills) == 0:
                 query3 = supabase.table("utility_bills").select("*")
                 if utility_type:
@@ -1340,19 +1314,7 @@ def api_utility_bills():
                     all_bills = response3.data
                     print(f"📊 Query 3 (year only) found {len(all_bills)} bills")
             
-            # METHOD 4: If still no results, try without any filters (get all for this utility)
-            if len(all_bills) == 0:
-                query4 = supabase.table("utility_bills").select("*")
-                if utility_type:
-                    query4 = query4.eq("utility_type", utility_type)
-                response4 = query4.execute()
-                
-                if response4.data:
-                    all_bills = response4.data
-                    print(f"📊 Query 4 (utility only) found {len(all_bills)} bills")
-            
         else:
-            # No month/year filter - get all bills
             query = supabase.table("utility_bills").select("*")
             if utility_type:
                 query = query.eq("utility_type", utility_type)
