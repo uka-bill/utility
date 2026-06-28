@@ -398,7 +398,6 @@
             line-height: 1.2;
         }
 
-        /* Column Widths - Adjusted to fit screen better */
         .col-seq { width: 30px; }
         .col-entity { width: 130px; }
         .col-type { width: 50px; }
@@ -424,7 +423,6 @@
             text-align: center;
         }
 
-        /* Override text-align for specific columns that need left alignment */
         .data-table td.text-left {
             text-align: left;
         }
@@ -504,7 +502,6 @@
             border-color: #ffcdd2;
         }
 
-        /* ========== FIX: Phone Number Display - Centered ========== */
         .phone-number-display {
             font-family: 'Inter', monospace;
             font-size: 0.7rem;
@@ -516,7 +513,6 @@
             display: block;
         }
 
-        /* ========== FIX: Account Number Display - Centered ========== */
         .account-number-display {
             font-family: 'Inter', monospace;
             background: var(--primary-glow);
@@ -686,7 +682,6 @@
             background-color: rgba(26, 86, 219, 0.06);
         }
 
-        /* Account Row - shows account summary */
         .account-row {
             background-color: #f8faff;
             border-top: 1px solid var(--gray-light);
@@ -703,7 +698,6 @@
             color: var(--primary-dark);
         }
 
-        /* Phone Row - each phone number gets its own row */
         .phone-row {
             border-left: 3px solid var(--info);
             background-color: var(--white);
@@ -821,7 +815,6 @@
             background: var(--gray);
         }
 
-        /* Account group header */
         .account-group-header {
             background-color: #e8eeff;
             border-top: 1px solid var(--primary-light);
@@ -835,7 +828,6 @@
             color: var(--primary-dark);
         }
 
-        /* Account label cell - centered */
         .account-row .account-label-cell {
             text-align: center;
             padding-left: 4px;
@@ -843,6 +835,33 @@
 
         .account-row .account-number-display {
             font-size: 0.7rem;
+        }
+
+        /* Auto-refresh indicator */
+        .auto-refresh-indicator {
+            font-size: 0.7rem;
+            color: var(--gray);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: var(--gray-50);
+            border-radius: var(--radius-xs);
+        }
+
+        .auto-refresh-indicator .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
         }
 
         @media (max-width: 1024px) {
@@ -966,6 +985,10 @@
                 <select id="globalYear" class="period-select"></select>
             </div>
             <button id="refreshTableBtn" class="btn btn-primary">⟳ Load / Refresh</button>
+            <div class="auto-refresh-indicator">
+                <span class="dot"></span>
+                Auto-loads on month/year change
+            </div>
         </div>
     </div>
 
@@ -1037,6 +1060,7 @@
     let isLoading = false;
     let savingEntities = new Set();
     let activeSavingToast = null;
+    let isAutoLoading = false;
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
@@ -1110,7 +1134,7 @@
             } else {
                 existingBills = [];
             }
-            console.log('📊 Loaded ' + existingBills.length + ' bills');
+            console.log('📊 Loaded ' + existingBills.length + ' bills for month=' + month + ', year=' + year);
         } catch(e) {
             console.error(e);
             existingBills = [];
@@ -1219,7 +1243,6 @@
         return entities;
     }
 
-    // Find a bill by entity ID + account number + month/year
     function findBillByAccount(entityType, entityId, accountNumber, month, year) {
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
@@ -1261,7 +1284,7 @@
         });
     }
 
-    // ============ SAVE FUNCTION - Entity Level ============
+    // ============ SAVE FUNCTION ============
     async function saveEntityData(entityRow, month, year) {
         const startTime = performance.now();
         
@@ -1278,7 +1301,6 @@
         
         showSavingToast(entityName);
         
-        // Collect ALL account rows for this entity
         let accountRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow) {
@@ -1304,11 +1326,9 @@
             saveBtn.disabled = true;
         }
         
-        // Mark all inputs as saving
         accountRows.forEach(row => {
             const inputs = row.querySelectorAll('.inline-input');
             inputs.forEach(input => input.classList.add('saving'));
-            // Also mark phone rows under this account
             let phoneRow = row.nextElementSibling;
             while (phoneRow) {
                 if (phoneRow.classList && phoneRow.classList.contains('account-row')) break;
@@ -1323,27 +1343,23 @@
         
         const batchBills = [];
         
-        // Process each account
         for (let i = 0; i < accountRows.length; i++) {
             const accountRow = accountRows[i];
             const accountNumber = accountRow.getAttribute('data-account') || '';
             
-            // Get account-level data
             const billNoInput = accountRow.querySelector('.account-billno');
             const totalAccountInput = accountRow.querySelector('.account-total-account');
             const prevOutstandingInput = accountRow.querySelector('.account-prev-outstanding');
             const prevPaymentInput = accountRow.querySelector('.account-prev-payment');
-            const totalCurrentInput = accountRow.querySelector('.account-total-current');
             const amountPaidInput = accountRow.querySelector('.account-amount-paid');
             
             const billNo = billNoInput ? billNoInput.value.trim() : '';
             const totalAccountCharges = parseFloat(totalAccountInput ? totalAccountInput.value : 0) || 0;
             const prevOutstanding = parseFloat(prevOutstandingInput ? prevOutstandingInput.value : 0) || 0;
             const prevPayment = parseFloat(prevPaymentInput ? prevPaymentInput.value : 0) || 0;
-            const totalCurrent = parseFloat(totalCurrentInput ? totalCurrentInput.value : 0) || 0;
+            const totalCurrent = totalAccountCharges + prevOutstanding - prevPayment;
             const amountPaid = parseFloat(amountPaidInput ? amountPaidInput.value : 0) || 0;
             
-            // Collect ALL phone rows under this account
             let phoneRows = [];
             let phoneRow = accountRow.nextElementSibling;
             while (phoneRow) {
@@ -1355,7 +1371,6 @@
                 phoneRow = phoneRow.nextElementSibling;
             }
             
-            // Build phones array
             const phones = [];
             for (let p = 0; p < phoneRows.length; p++) {
                 const row = phoneRows[p];
@@ -1376,10 +1391,8 @@
                 });
             }
             
-            // Check if this account already has a bill
             const existingBill = findBillByAccount(entityType, entityId, accountNumber, month, year);
             
-            // Build notes object with ALL data
             const notesObj = {
                 totalAccountCharges: totalAccountCharges,
                 previousPayment: prevPayment,
@@ -1387,7 +1400,6 @@
                 phones: phones
             };
             
-            // Only save if there's data
             if (billNo || totalAccountCharges > 0 || prevOutstanding > 0 || amountPaid > 0 || phones.length > 0) {
                 batchBills.push({
                     id: existingBill ? existingBill.id : null,
@@ -1396,10 +1408,10 @@
                     entity_id: entityId,
                     entity_name: entityName,
                     account_number: accountNumber === '—' ? '' : accountNumber,
-                    phone_number: '',  // Empty - phones stored in notes
+                    phone_number: '',
                     bill_number: billNo,
                     meter_number: billNo,
-                    current_charges: 0,  // Not used for telephone
+                    current_charges: 0,
                     unsettled_charges: prevOutstanding,
                     amount_paid: amountPaid,
                     month: month,
@@ -1426,7 +1438,6 @@
                 const endTime = performance.now();
                 const totalTime = (endTime - startTime).toFixed(0);
                 
-                // Remove saving class from all inputs
                 accountRows.forEach(row => {
                     const inputs = row.querySelectorAll('.inline-input');
                     inputs.forEach(input => {
@@ -1465,7 +1476,6 @@
             }
         } catch (err) {
             console.error('Save error:', err);
-            // Remove saving class from all inputs
             accountRows.forEach(row => {
                 const inputs = row.querySelectorAll('.inline-input');
                 inputs.forEach(input => input.classList.remove('saving'));
@@ -1519,7 +1529,6 @@
     function setupAutoCalculate() {
         document.getElementById('billsTableBody').addEventListener('input', function(e) {
             const target = e.target;
-            // Check if this is an account-level input that triggers calculation
             if (target.classList && (
                 target.classList.contains('account-total-account') || 
                 target.classList.contains('account-prev-outstanding') || 
@@ -1558,6 +1567,8 @@
         const year = parseInt(document.getElementById('globalYear').value);
         currentMonth = month;
         currentYear = year;
+        
+        console.log('🔄 Loading data for month=' + month + ', year=' + year);
         
         const tbody = document.getElementById('billsTableBody');
         tbody.innerHTML = '<tr><td colspan="16" class="no-data">Loading data...</td></tr>';
@@ -1713,6 +1724,7 @@
         
         isLoading = false;
         showLoading(false);
+        console.log('✅ Loaded data for month=' + month + ', year=' + year);
     }
 
     // ============ RENDER ENTITY ============
@@ -1722,14 +1734,12 @@
         let hasVisibleAccounts = false;
         let isPlaceholder = !entity.hasAccounts;
         
-        // First, check if any accounts have visible data
         let accountDataList = [];
         
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             const accountNumber = account.accountNumber || '—';
             
-            // Find existing bill for this account
             const existingBill = findBillByAccount(entity.type, entity.id, accountNumber, month, year);
             
             let parsedNotes = {};
@@ -1737,7 +1747,6 @@
                 try { parsedNotes = JSON.parse(existingBill.notes); } catch(e) {}
             }
             
-            // Account-level data
             const billNo = existingBill ? (existingBill.bill_number || '') : '';
             const totalAccountCharges = parsedNotes.totalAccountCharges || 0;
             const prevOutstanding = existingBill ? (parseFloat(existingBill.unsettled_charges) || 0) : 0;
@@ -1746,9 +1755,7 @@
             const amountPaid = existingBill ? (parseFloat(existingBill.amount_paid) || 0) : 0;
             const billId = existingBill ? existingBill.id : null;
             
-            // Get phones from notes or from account definition
             let phones = parsedNotes.phones || [];
-            // If no phones in notes, use the account's numbers
             if (phones.length === 0 && account.numbers) {
                 phones = account.numbers.map(num => ({
                     phoneNumber: num.phoneNumber || '—',
@@ -1758,7 +1765,6 @@
                 }));
             }
             
-            // Filter by status
             if (statusFilter !== 'all') {
                 if (statusFilter === 'paid' && amountPaid === 0) continue;
                 if (statusFilter === 'pending' && amountPaid > 0) continue;
@@ -1787,7 +1793,6 @@
             return startSerial;
         }
         
-        // --- ENTITY ROW ---
         let entityStatusText = 'Pending';
         let entityStatusClass = 'status-pending';
         if (isPlaceholder) {
@@ -1819,11 +1824,9 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         fragment.appendChild(entityRow);
         
-        // --- ACCOUNT ROWS ---
         for (let a = 0; a < accountDataList.length; a++) {
             const account = accountDataList[a];
             
-            // Account Row - Account number centered
             const totalCurrentClass = account.totalCurrent < 0 ? 'negative' : '';
             
             const accountRow = document.createElement('tr');
@@ -1849,7 +1852,6 @@
                 '<td></td>';
             fragment.appendChild(accountRow);
             
-            // --- PHONE ROWS under this account - Phone numbers centered ---
             for (let p = 0; p < account.phones.length; p++) {
                 const phone = account.phones[p];
                 const phoneNum = phone.phoneNumber || '—';
@@ -1886,6 +1888,7 @@
 
     // ============ EVENT LISTENERS ============
     function attachEventListeners() {
+        // Save button click
         document.getElementById('billsTableBody').addEventListener('click', async function(e) {
             const saveBtn = e.target.closest('.save-entity-btn');
             if (saveBtn && !saveBtn.disabled) {
@@ -1895,6 +1898,22 @@
                 }
                 return;
             }
+        });
+
+        // ============ FIX: Auto-load on month/year change ============
+        const monthSelect = document.getElementById('globalMonth');
+        const yearSelect = document.getElementById('globalYear');
+        
+        monthSelect.addEventListener('change', function() {
+            console.log('📅 Month changed to: ' + this.value);
+            // Auto-load the new month's data
+            renderTelephoneTable();
+        });
+        
+        yearSelect.addEventListener('change', function() {
+            console.log('📅 Year changed to: ' + this.value);
+            // Auto-load the new year's data
+            renderTelephoneTable();
         });
     }
 
