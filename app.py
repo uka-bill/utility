@@ -1248,7 +1248,7 @@ def batch_update_utility_bills():
         print(traceback.format_exc())
         return jsonify({'error': str(e), 'success': False}), 500
 
-# ============ UTILITY BILLS API (OPTIMIZED) ============
+# ============ UTILITY BILLS API (FIXED - NO OR_) ============
 
 @app.route('/api/utility-bills', methods=['GET'])
 def api_utility_bills():
@@ -1266,49 +1266,83 @@ def api_utility_bills():
         
         print(f"📊 API Request - utility_type: {utility_type}, month: {month}, year: {year}, entity_type: {entity_type}, entity_id: {entity_id}")
         
-        # Build optimized query
-        query = supabase.table("utility_bills").select("*")
-        
-        if utility_type:
-            query = query.eq("utility_type", utility_type)
-        
-        if entity_type:
-            query = query.eq("entity_type", entity_type)
-        
-        if entity_id:
-            query = query.eq("entity_id", int(entity_id))
+        all_bills = []
         
         if month and year:
             month_val = int(month)
             year_val = int(year)
             
-            # Use OR condition for month/year and bill_month/bill_year
-            query = query.or_(f"and(month.eq.{month_val},year.eq.{year_val}),and(bill_month.eq.{month_val},bill_year.eq.{year_val})")
-            
-        elif year:
-            query = query.eq("year", int(year))
-        
-        # Execute query with limit to prevent timeout
-        response = query.execute()
-        all_bills = response.data if response.data else []
-        
-        print(f"📊 Query found {len(all_bills)} bills")
-        
-        # If no results with OR, try simpler query
-        if len(all_bills) == 0 and month and year:
-            print(f"🔍 No results with OR, trying simple query...")
-            query2 = supabase.table("utility_bills").select("*")
+            # METHOD 1: Query by month and year (regular fields)
+            query1 = supabase.table("utility_bills").select("*")
             if utility_type:
-                query2 = query2.eq("utility_type", utility_type)
+                query1 = query1.eq("utility_type", utility_type)
             if entity_type:
-                query2 = query2.eq("entity_type", entity_type)
+                query1 = query1.eq("entity_type", entity_type)
             if entity_id:
-                query2 = query2.eq("entity_id", int(entity_id))
-            query2 = query2.eq("year", int(year))
-            response2 = query2.execute()
-            if response2.data:
-                all_bills = response2.data
-                print(f"📊 Simple query found {len(all_bills)} bills")
+                query1 = query1.eq("entity_id", int(entity_id))
+            query1 = query1.eq("month", month_val).eq("year", year_val)
+            response1 = query1.execute()
+            
+            if response1.data:
+                all_bills = response1.data
+                print(f"📊 Query 1 (month={month_val}) found {len(all_bills)} bills")
+            
+            # METHOD 2: If no results, try by bill_month and bill_year
+            if len(all_bills) == 0:
+                query2 = supabase.table("utility_bills").select("*")
+                if utility_type:
+                    query2 = query2.eq("utility_type", utility_type)
+                if entity_type:
+                    query2 = query2.eq("entity_type", entity_type)
+                if entity_id:
+                    query2 = query2.eq("entity_id", int(entity_id))
+                query2 = query2.eq("bill_month", month_val).eq("bill_year", year_val)
+                response2 = query2.execute()
+                
+                if response2.data:
+                    all_bills = response2.data
+                    print(f"📊 Query 2 (bill_month={month_val}) found {len(all_bills)} bills")
+            
+            # METHOD 3: If still no results, try by year only
+            if len(all_bills) == 0:
+                query3 = supabase.table("utility_bills").select("*")
+                if utility_type:
+                    query3 = query3.eq("utility_type", utility_type)
+                if entity_type:
+                    query3 = query3.eq("entity_type", entity_type)
+                if entity_id:
+                    query3 = query3.eq("entity_id", int(entity_id))
+                query3 = query3.eq("year", year_val)
+                response3 = query3.execute()
+                
+                if response3.data:
+                    all_bills = response3.data
+                    print(f"📊 Query 3 (year only) found {len(all_bills)} bills")
+            
+            # METHOD 4: If still no results, try without any filters (get all for this utility)
+            if len(all_bills) == 0:
+                query4 = supabase.table("utility_bills").select("*")
+                if utility_type:
+                    query4 = query4.eq("utility_type", utility_type)
+                response4 = query4.execute()
+                
+                if response4.data:
+                    all_bills = response4.data
+                    print(f"📊 Query 4 (utility only) found {len(all_bills)} bills")
+            
+        else:
+            # No month/year filter - get all bills
+            query = supabase.table("utility_bills").select("*")
+            if utility_type:
+                query = query.eq("utility_type", utility_type)
+            if entity_type:
+                query = query.eq("entity_type", entity_type)
+            if entity_id:
+                query = query.eq("entity_id", int(entity_id))
+            response = query.execute()
+            all_bills = response.data if response.data else []
+        
+        print(f"📊 Total bills found: {len(all_bills)}")
         
         # Enrich bills with entity names
         bills = []
@@ -1352,7 +1386,6 @@ def api_utility_bills():
 
 @app.route('/api/budgets', methods=['GET'])
 def get_budgets():
-    """Get all financial years/budgets"""
     try:
         print("📅 GET /api/budgets called")
         
@@ -1368,7 +1401,6 @@ def get_budgets():
 
 @app.route('/api/budgets', methods=['POST'])
 def create_budget():
-    """Create a new financial year budget"""
     try:
         print("📅 POST /api/budgets called")
         
@@ -1378,7 +1410,6 @@ def create_budget():
         data = request.get_json()
         print(f"📅 Received budget data: {data}")
         
-        # Validate required fields
         required_fields = ['financial_year', 'start_year', 'end_year']
         for field in required_fields:
             if not data.get(field):
@@ -1414,7 +1445,6 @@ def create_budget():
 
 @app.route('/api/budgets/<int:budget_id>', methods=['PUT'])
 def update_budget(budget_id):
-    """Update an existing budget"""
     try:
         print(f"📅 PUT /api/budgets/{budget_id} called")
         
@@ -1460,21 +1490,18 @@ def update_budget(budget_id):
 
 @app.route('/api/budgets/<int:budget_id>', methods=['DELETE'])
 def delete_budget(budget_id):
-    """Delete a budget"""
     try:
         print(f"📅 DELETE /api/budgets/{budget_id} called")
         
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        # Check if there are any bills associated with this financial year
         budget = supabase.table("financial_years").select("*").eq("id", budget_id).execute()
         
         if budget.data and len(budget.data) > 0:
             start_year = budget.data[0].get('start_year')
             end_year = budget.data[0].get('end_year')
             
-            # Check for bills in this financial year
             bills = supabase.table("utility_bills").select("*").eq("year", start_year).execute()
             if bills.data and len(bills.data) > 0:
                 return jsonify({
@@ -1499,14 +1526,12 @@ def delete_budget(budget_id):
 
 @app.route('/api/payment-summary', methods=['GET'])
 def get_payment_summary():
-    """Get payment summary for current financial year"""
     try:
         print("💰 GET /api/payment-summary called")
         
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        # Get current financial year
         current_date = datetime.now()
         current_year = current_date.year
         current_month = current_date.month
@@ -1518,11 +1543,9 @@ def get_payment_summary():
             start_year = current_year - 1
             end_year = current_year
         
-        # Get budget for current financial year
         budget_response = supabase.table("financial_years").select("*").eq("start_year", start_year).eq("end_year", end_year).execute()
         budget = budget_response.data[0] if budget_response.data else None
         
-        # Calculate total payments made (amount_paid from utility_bills)
         payments_response = supabase.table("utility_bills").select("*").execute()
         total_paid_water = 0
         total_paid_electricity = 0
@@ -1539,7 +1562,6 @@ def get_payment_summary():
                     elif bill.get('utility_type') == 'telephone':
                         total_paid_telephone += float(bill.get('amount_paid', 0) or 0)
         
-        # Get SUT Office expenses
         sut_response = supabase.table("sut_office_expenses").select("*").eq("year", start_year).execute()
         sut_total = 0
         if sut_response.data:
@@ -1613,7 +1635,6 @@ def sut_office():
 
 @app.route('/api/entities', methods=['GET'])
 def get_entities():
-    """Get schools or departments for report selection"""
     try:
         print("🔍 GET /api/entities called")
         entity_type = request.args.get('type', 'school')
@@ -1624,7 +1645,6 @@ def get_entities():
         if entity_type == 'school':
             response = supabase.table("schools").select("id, name, cluster_number").execute()
             schools = response.data if response.data else []
-            # Sort by cluster_number (numeric), then by id
             schools.sort(key=lambda x: (int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
             entities = []
             for school in schools:
@@ -1656,7 +1676,6 @@ def get_entities():
 
 @app.route('/api/generate-report', methods=['POST'])
 def generate_report():
-    """Generate report based on filters"""
     try:
         print("📊 POST /api/generate-report called")
         
@@ -1671,34 +1690,25 @@ def generate_report():
         month = data.get('month', 'all')
         year = data.get('year')
         
-        # Build query
         query = supabase.table("utility_bills").select("*")
         
-        # Filter by utility type
         if utility_type != 'all':
             query = query.eq("utility_type", utility_type)
         
-        # Filter by month
         if month != 'all' and month:
             query = query.eq("month", int(month))
         
-        # Filter by year
         if year and year != 'all':
             query = query.eq("year", int(year))
         
-        # Filter by entity selection
         if selection_type == 'entityType':
             entity_type_filter = data.get('entity_type', 'all')
             if entity_type_filter != 'all':
                 query = query.eq("entity_type", entity_type_filter)
-        else:
-            # Specific entities selected - will filter after fetch
-            pass
         
         response = query.execute()
         bills = response.data if response.data else []
         
-        # Apply specific entity filtering if needed
         if selection_type == 'specificEntities':
             school_ids = [int(sid) for sid in data.get('school_ids', [])]
             department_ids = [int(did) for did in data.get('department_ids', [])]
@@ -1711,12 +1721,10 @@ def generate_report():
                     filtered_bills.append(bill)
             bills = filtered_bills
         
-        # Enrich bills with entity names
         enriched_bills = []
         for bill in bills:
             bill_data = dict(bill)
             
-            # Get entity name
             if bill_data['entity_type'] == 'school':
                 school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
                 if school_response.data and len(school_response.data) > 0:
@@ -1732,11 +1740,9 @@ def generate_report():
             else:
                 bill_data['entity_name'] = 'Unknown'
             
-            # Add telephone number if telephone utility
             if bill_data['utility_type'] == 'telephone' and not bill_data.get('phone_number'):
                 bill_data['phone_number'] = bill_data.get('meter_number', '')
             
-            # Ensure numeric values are floats
             bill_data['current_charges'] = float(bill_data.get('current_charges') or 0)
             bill_data['late_charges'] = float(bill_data.get('late_charges') or 0)
             bill_data['unsettled_charges'] = float(bill_data.get('unsettled_charges') or 0)
@@ -1744,7 +1750,6 @@ def generate_report():
             
             enriched_bills.append(bill_data)
         
-        # Sort by entity name
         enriched_bills.sort(key=lambda x: x.get('entity_name', ''))
         
         print(f"📊 Report generated with {len(enriched_bills)} bills")
@@ -1940,7 +1945,6 @@ def delete_financial_year(fy_id):
 
 @app.route('/api/sut-office-expenses', methods=['GET'])
 def get_sut_office_expenses():
-    """Get all SUT Office expenses"""
     try:
         print("💰 GET /api/sut-office-expenses called")
         
@@ -1956,7 +1960,6 @@ def get_sut_office_expenses():
 
 @app.route('/api/sut-office-expenses', methods=['POST'])
 def create_sut_office_expense():
-    """Create a new SUT Office expense"""
     try:
         print("💰 POST /api/sut-office-expenses called")
         
@@ -2006,7 +2009,6 @@ def create_sut_office_expense():
 
 @app.route('/api/sut-office-expenses/<int:expense_id>', methods=['PUT'])
 def update_sut_office_expense(expense_id):
-    """Update a SUT Office expense"""
     try:
         print(f"💰 PUT /api/sut-office-expenses/{expense_id} called")
         
@@ -2054,7 +2056,6 @@ def update_sut_office_expense(expense_id):
 
 @app.route('/api/sut-office-expenses/<int:expense_id>', methods=['DELETE'])
 def delete_sut_office_expense(expense_id):
-    """Delete a SUT Office expense"""
     try:
         print(f"💰 DELETE /api/sut-office-expenses/{expense_id} called")
         
@@ -2079,7 +2080,6 @@ def delete_sut_office_expense(expense_id):
 
 @app.route('/api/dashboard-data')
 def dashboard_data():
-    """Get dashboard data with financial year budget and current usage"""
     try:
         print("📈 GET /api/dashboard-data called")
         
@@ -2165,7 +2165,6 @@ def dashboard_data():
                     total_unsettled += float(bill['unsettled_charges'] or 0)
                     total_paid += float(bill.get('amount_paid') or 0)
         
-        # Get SUT Office expenses for current financial year
         sut_office_used = 0
         try:
             sut_expenses_response = supabase.table("sut_office_expenses").select("*").eq("year", start_year).execute()
@@ -2253,12 +2252,9 @@ def api_schools():
         if not supabase:
             return jsonify([]), 500
         
-        # Get all schools
         response = supabase.table("schools").select("*").execute()
         schools = response.data if response.data else []
         
-        # Sort schools by cluster_number (as integer), then by id
-        # This ensures Cluster 1 comes before Cluster 2, etc.
         def get_cluster_order(school):
             cluster = school.get('cluster_number')
             if cluster is not None:
@@ -2407,7 +2403,6 @@ def api_departments():
         if not supabase:
             return jsonify([]), 500
         
-        # Order by display_order first, then by department_name, then by id
         response = supabase.table("departments").select("*").order("display_order").order("department_name").order("id").execute()
         return jsonify(response.data if response.data else [])
         
@@ -2567,7 +2562,6 @@ def create_utility_bill():
         
         current_date = datetime.now()
         
-        # Check if a bill already exists for this combination
         query = supabase.table("utility_bills").select("*")\
             .eq("utility_type", data.get('utility_type'))\
             .eq("entity_type", data.get('entity_type'))\
@@ -2575,7 +2569,6 @@ def create_utility_bill():
             .eq("month", int(data.get('month', current_date.month)))\
             .eq("year", int(data.get('year', current_date.year)))
         
-        # Only filter by account number if provided and not placeholder
         account_number = data.get('account_number', '')
         if account_number and account_number != '—':
             query = query.eq("account_number", account_number)
@@ -2583,7 +2576,6 @@ def create_utility_bill():
         existing_bill = query.execute()
         
         if existing_bill.data and len(existing_bill.data) > 0:
-            # Update existing bill instead of creating new one
             bill_id = existing_bill.data[0]['id']
             bill_data = {
                 "current_charges": float(data.get('current_charges', 0)),
@@ -2592,17 +2584,14 @@ def create_utility_bill():
                 "amount_paid": float(data.get('amount_paid', 0))
             }
             
-            # Add consumption if provided
             if data.get('consumption_m3') is not None:
                 bill_data["consumption_m3"] = float(data.get('consumption_m3'))
             if data.get('consumption_kwh') is not None:
                 bill_data["consumption_kwh"] = float(data.get('consumption_kwh'))
             
-            # Update meter number if provided
             if data.get('meter_number') and data.get('meter_number') != '—':
                 bill_data["meter_number"] = data.get('meter_number')
             
-            # Update notes if provided
             if data.get('notes') is not None:
                 bill_data["notes"] = data.get('notes')
             
@@ -2617,7 +2606,6 @@ def create_utility_bill():
             else:
                 return jsonify({'error': 'Failed to update utility bill'}), 500
         
-        # Create new bill
         bill_data = {
             "utility_type": data.get('utility_type'),
             "entity_type": data.get('entity_type'),
@@ -2676,13 +2664,11 @@ def update_utility_bill(bill_id):
             "amount_paid": float(data.get('amount_paid', 0))
         }
         
-        # Add consumption if provided
         if data.get('consumption_m3') is not None:
             bill_data["consumption_m3"] = float(data.get('consumption_m3'))
         if data.get('consumption_kwh') is not None:
             bill_data["consumption_kwh"] = float(data.get('consumption_kwh'))
         
-        # Update account/meter information if provided
         if data.get('account_number') is not None and data.get('account_number') != '—':
             bill_data["account_number"] = data.get('account_number')
         if data.get('meter_number') is not None and data.get('meter_number') != '—':
@@ -2690,7 +2676,6 @@ def update_utility_bill(bill_id):
         if data.get('phone_number') is not None:
             bill_data["phone_number"] = data.get('phone_number')
         
-        # Update notes if provided
         if data.get('notes') is not None:
             bill_data["notes"] = data.get('notes')
         
@@ -2722,14 +2707,12 @@ def delete_utility_bill(bill_id):
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        # First, check if the bill exists
         check_response = supabase.table("utility_bills").select("id").eq("id", bill_id).execute()
         
         if not check_response.data or len(check_response.data) == 0:
             print(f"❌ Bill with ID {bill_id} not found")
             return jsonify({'error': 'Bill not found'}), 404
         
-        # Delete the bill
         response = supabase.table("utility_bills").delete().eq("id", bill_id).execute()
         
         if response.data:
