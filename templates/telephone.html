@@ -253,6 +253,11 @@
             border-radius: var(--radius-xs);
         }
 
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
         .period-card {
             background: var(--white);
             border-radius: var(--radius-sm);
@@ -613,6 +618,20 @@
             animation: spin 0.8s linear infinite;
         }
 
+        .warning-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #d97706;
+            color: white;
+            padding: 14px 24px;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            z-index: 2000;
+            box-shadow: var(--shadow-xl);
+            font-weight: 500;
+        }
+
         @keyframes fadeOut {
             0% { opacity: 1; transform: translateY(0); }
             80% { opacity: 1; }
@@ -857,6 +876,15 @@
             animation: pulse 2s infinite;
         }
 
+        .month-switch-warning {
+            font-size: 0.75rem;
+            color: var(--warning);
+            padding: 4px 12px;
+            background: #fef3c7;
+            border-radius: var(--radius-xs);
+            border: 1px solid #f59e0b;
+        }
+
         @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.4; }
@@ -986,7 +1014,10 @@
             <button id="refreshTableBtn" class="btn btn-primary">⟳ Load / Refresh</button>
             <div class="auto-refresh-indicator">
                 <span class="dot"></span>
-                Auto-loads on month/year change
+                Auto-saves on month/year change
+            </div>
+            <div class="month-switch-warning">
+                ⚠️ Data auto-saved when switching months
             </div>
         </div>
     </div>
@@ -1059,6 +1090,8 @@
     let isLoading = false;
     let savingEntities = new Set();
     let activeSavingToast = null;
+    let saveInProgress = false;
+    let isSwitchingMonth = false;
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
@@ -1090,6 +1123,14 @@
         toast.textContent = message;
         document.body.appendChild(toast);
         setTimeout(function() { toast.remove(); }, 4000);
+    }
+
+    function showWarningToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'warning-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(function() { toast.remove(); }, 3000);
     }
 
     function populateYears() {
@@ -1130,7 +1171,6 @@
             if (resp.ok) {
                 existingBills = await resp.json();
                 console.log('📊 Loaded ' + existingBills.length + ' bills for month=' + month + ', year=' + year);
-                // Log the first bill to see its structure
                 if (existingBills.length > 0) {
                     console.log('📋 Sample bill:', existingBills[0]);
                 }
@@ -1246,33 +1286,28 @@
         return entities;
     }
 
-    // ============ FIXED: Find bill by account, with fallback to entity_id + month + year ============
+    // ============ Find bill by entity_id + month + year (PRIMARY) ============
     function findBillByAccount(entityType, entityId, accountNumber, month, year) {
-        // First try: exact match with account number
+        // PRIMARY: Try by entity_id + month + year (MOST RELIABLE)
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
-            // Normalize account numbers for comparison (trim, handle null/undefined)
-            const billAccount = (bill.account_number || '').trim();
-            const searchAccount = (accountNumber || '').trim();
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
-                billAccount === searchAccount &&
                 bill.month == month && 
                 bill.year == year) {
-                console.log('🔍 Found bill by exact account match:', bill.id, 'account:', billAccount);
+                console.log('🔍 Found bill by entity_id+month+year:', bill.id);
                 return bill;
             }
         }
         
-        // Second try: find by entity_id + month + year ONLY (ignore account number)
-        // This handles cases where account number might be empty string vs null vs '—'
+        // SECONDARY: Try by entity_id + bill_month + bill_year
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
-                bill.month == month && 
-                bill.year == year) {
-                console.log('🔍 Found bill by entity+month+year (fallback):', bill.id, 'account:', bill.account_number);
+                (bill.bill_month || bill.month) == month && 
+                (bill.bill_year || bill.year) == year) {
+                console.log('🔍 Found bill by bill_month+bill_year:', bill.id);
                 return bill;
             }
         }
@@ -1308,22 +1343,85 @@
         });
     }
 
-    // ============ SAVE FUNCTION ============
-    async function saveEntityData(entityRow, month, year) {
-        const startTime = performance.now();
+    // ============ SAVE ALL ENTITIES IN CURRENT VIEW ============
+    async function saveAllVisibleData(month, year) {
+        if (saveInProgress) {
+            console.log('⚠️ Save already in progress, skipping...');
+            return;
+        }
         
-        if (isLoading) return;
+        console.log('💾 SAVE ALL: Saving all visible data for month=' + month + ', year=' + year);
+        showWarningToast('💾 Saving all data for ' + getMonthName(month) + ' ' + year + '...');
         
+        // Find all entity rows in the table
+        const entityRows = document.querySelectorAll('#billsTableBody tr.entity-row');
+        if (entityRows.length === 0) {
+            console.log('⚠️ No entity rows found to save');
+            return;
+        }
+        
+        let savedCount = 0;
+        let errorCount = 0;
+        saveInProgress = true;
+        
+        for (let i = 0; i < entityRows.length; i++) {
+            const entityRow = entityRows[i];
+            const entityName = entityRow.getAttribute('data-entity-name') || 'Entity ' + i;
+            
+            try {
+                // Check if this entity has any data to save
+                const hasData = checkEntityHasData(entityRow);
+                if (!hasData) {
+                    console.log('⏭️ Skipping ' + entityName + ' - no data to save');
+                    continue;
+                }
+                
+                console.log('💾 Saving ' + entityName + '...');
+                await saveEntityDataInternal(entityRow, month, year);
+                savedCount++;
+            } catch (err) {
+                console.error('❌ Error saving ' + entityName + ':', err);
+                errorCount++;
+            }
+        }
+        
+        saveInProgress = false;
+        
+        if (savedCount > 0) {
+            showToast('✅ Saved ' + savedCount + ' entit' + (savedCount > 1 ? 'ies' : 'y') + ' successfully');
+        } else if (errorCount > 0) {
+            showToast('⚠️ ' + errorCount + ' entit' + (errorCount > 1 ? 'ies' : 'y') + ' failed to save', true);
+        } else {
+            console.log('📝 No data to save');
+        }
+    }
+
+    function checkEntityHasData(entityRow) {
+        // Check if any input in this entity has a value
+        const inputs = entityRow.querySelectorAll('.inline-input');
+        for (let i = 0; i < inputs.length; i++) {
+            const val = inputs[i].value.trim();
+            if (val && val !== '0' && val !== '0.00' && val !== '') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function getMonthName(month) {
+        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        return months[month - 1] || month;
+    }
+
+    // ============ INTERNAL SAVE FUNCTION ============
+    async function saveEntityDataInternal(entityRow, month, year) {
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityName = entityRow.getAttribute('data-entity-name');
         
         if (savingEntities.has(entityId)) {
-            showToast('Already saving...', true);
             return;
         }
-        
-        showSavingToast(entityName);
         
         let accountRows = [];
         let nextRow = entityRow.nextElementSibling;
@@ -1338,32 +1436,8 @@
         }
         
         if (accountRows.length === 0) {
-            showToast('No accounts to save', true);
-            hideSavingToast();
             return;
         }
-        
-        const saveBtn = entityRow.querySelector('.save-entity-btn');
-        const originalBtnText = saveBtn ? saveBtn.innerHTML : 'Save All';
-        if (saveBtn) {
-            saveBtn.innerHTML = '<span class="saving-indicator"></span> Saving...';
-            saveBtn.disabled = true;
-        }
-        
-        accountRows.forEach(row => {
-            const inputs = row.querySelectorAll('.inline-input');
-            inputs.forEach(input => input.classList.add('saving'));
-            let phoneRow = row.nextElementSibling;
-            while (phoneRow) {
-                if (phoneRow.classList && phoneRow.classList.contains('account-row')) break;
-                if (phoneRow.classList && phoneRow.classList.contains('entity-row')) break;
-                if (phoneRow.classList && phoneRow.classList.contains('phone-row')) {
-                    const phoneInputs = phoneRow.querySelectorAll('.inline-input');
-                    phoneInputs.forEach(input => input.classList.add('saving'));
-                }
-                phoneRow = phoneRow.nextElementSibling;
-            }
-        });
         
         const batchBills = [];
         
@@ -1415,7 +1489,6 @@
                 });
             }
             
-            // Use the improved findBillByAccount function
             const existingBill = findBillByAccount(entityType, entityId, accountNumber, month, year);
             
             const notesObj = {
@@ -1425,10 +1498,11 @@
                 phones: phones
             };
             
-            // Build the bill data - use existing bill's account number if found
             const finalAccountNumber = existingBill ? (existingBill.account_number || accountNumber) : accountNumber;
             
-            if (billNo || totalAccountCharges > 0 || prevOutstanding > 0 || amountPaid > 0 || phones.length > 0) {
+            const hasData = billNo || totalAccountCharges > 0 || prevOutstanding > 0 || amountPaid > 0 || phones.some(p => p.rentalAmount > 0 || p.totalAmount > 0);
+            
+            if (hasData) {
                 batchBills.push({
                     id: existingBill ? existingBill.id : null,
                     utility_type: 'telephone',
@@ -1452,86 +1526,31 @@
             }
         }
         
+        if (batchBills.length === 0) {
+            return;
+        }
+        
         savingEntities.add(entityId);
         
         try {
-            if (batchBills.length > 0) {
-                console.log('📤 Sending batch bills:', JSON.stringify(batchBills, null, 2));
-                const resp = await fetch('/api/utility-bills/batch-update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ bills: batchBills })
-                });
-                
-                const result = await resp.json();
-                const endTime = performance.now();
-                const totalTime = (endTime - startTime).toFixed(0);
-                
-                accountRows.forEach(row => {
-                    const inputs = row.querySelectorAll('.inline-input');
-                    inputs.forEach(input => {
-                        input.classList.remove('saving');
-                        input.classList.add('saved');
-                        setTimeout(() => input.classList.remove('saved'), 2000);
-                    });
-                    let phoneRow = row.nextElementSibling;
-                    while (phoneRow) {
-                        if (phoneRow.classList && phoneRow.classList.contains('account-row')) break;
-                        if (phoneRow.classList && phoneRow.classList.contains('entity-row')) break;
-                        if (phoneRow.classList && phoneRow.classList.contains('phone-row')) {
-                            const phoneInputs = phoneRow.querySelectorAll('.inline-input');
-                            phoneInputs.forEach(input => {
-                                input.classList.remove('saving');
-                                input.classList.add('saved');
-                                setTimeout(() => input.classList.remove('saved'), 2000);
-                            });
-                        }
-                        phoneRow = phoneRow.nextElementSibling;
-                    }
-                });
-                
-                hideSavingToast();
-                
-                if (result.success) {
-                    showToast(entityName + ': Saved ' + result.success_count + ' record(s) (' + totalTime + 'ms)', false);
-                    updateEntityStatus(entityId, batchBills);
-                    // Reload the bills to update the display
-                    await loadExistingBills(month, year);
-                    // Re-render the table to show updated data
-                    await renderTelephoneTable();
-                } else {
-                    showToast(entityName + ': ' + result.error_count + ' failed', true);
-                    console.log('Errors:', result.errors);
-                }
+            const resp = await fetch('/api/utility-bills/batch-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bills: batchBills })
+            });
+            
+            const result = await resp.json();
+            
+            if (result.success) {
+                console.log('✅ Saved ' + entityName + ': ' + result.success_count + ' records');
+                updateEntityStatus(entityId, batchBills);
             } else {
-                hideSavingToast();
-                showToast(entityName + ': No data to save', false);
+                console.log('❌ Failed to save ' + entityName + ': ' + result.error_count + ' errors');
             }
         } catch (err) {
-            console.error('Save error:', err);
-            accountRows.forEach(row => {
-                const inputs = row.querySelectorAll('.inline-input');
-                inputs.forEach(input => input.classList.remove('saving'));
-                let phoneRow = row.nextElementSibling;
-                while (phoneRow) {
-                    if (phoneRow.classList && phoneRow.classList.contains('account-row')) break;
-                    if (phoneRow.classList && phoneRow.classList.contains('entity-row')) break;
-                    if (phoneRow.classList && phoneRow.classList.contains('phone-row')) {
-                        const phoneInputs = phoneRow.querySelectorAll('.inline-input');
-                        phoneInputs.forEach(input => input.classList.remove('saving'));
-                    }
-                    phoneRow = phoneRow.nextElementSibling;
-                }
-            });
-            hideSavingToast();
-            showToast('Network error. Please try again.', true);
+            console.error('❌ Save error for ' + entityName + ':', err);
         } finally {
             savingEntities.delete(entityId);
-            if (saveBtn) {
-                saveBtn.innerHTML = originalBtnText;
-                saveBtn.disabled = false;
-            }
-            isLoading = false;
         }
     }
 
@@ -1595,9 +1614,15 @@
     }
 
     // ============ RENDER TELEPHONE TABLE ============
-    async function renderTelephoneTable() {
-        const month = parseInt(document.getElementById('globalMonth').value);
-        const year = parseInt(document.getElementById('globalYear').value);
+    async function renderTelephoneTable(month, year) {
+        // If month/year not provided, get from dropdown
+        if (month === undefined) {
+            month = parseInt(document.getElementById('globalMonth').value);
+        }
+        if (year === undefined) {
+            year = parseInt(document.getElementById('globalYear').value);
+        }
+        
         currentMonth = month;
         currentYear = year;
         
@@ -1773,7 +1798,6 @@
             const account = entity.accountGroups[a];
             const accountNumber = account.accountNumber || '—';
             
-            // Use the improved findBillByAccount function
             const existingBill = findBillByAccount(entity.type, entity.id, accountNumber, month, year);
             
             let parsedNotes = {};
@@ -1928,24 +1952,52 @@
             if (saveBtn && !saveBtn.disabled) {
                 const entityRow = saveBtn.closest('tr.entity-row');
                 if (entityRow) {
-                    await saveEntityData(entityRow, currentMonth, currentYear);
+                    const month = parseInt(document.getElementById('globalMonth').value);
+                    const year = parseInt(document.getElementById('globalYear').value);
+                    await saveEntityDataInternal(entityRow, month, year);
+                    // Reload after saving
+                    await renderTelephoneTable(month, year);
                 }
                 return;
             }
         });
 
-        // Auto-load on month/year change
+        // ============ AUTO-SAVE ON MONTH/YEAR CHANGE ============
         const monthSelect = document.getElementById('globalMonth');
         const yearSelect = document.getElementById('globalYear');
         
-        monthSelect.addEventListener('change', function() {
+        monthSelect.addEventListener('change', async function() {
             console.log('📅 Month changed to: ' + this.value);
-            renderTelephoneTable();
+            if (isSwitchingMonth) return;
+            isSwitchingMonth = true;
+            
+            const newMonth = parseInt(this.value);
+            const newYear = parseInt(document.getElementById('globalYear').value);
+            
+            // Save current data first
+            await saveAllVisibleData(currentMonth, currentYear);
+            
+            // Load new month data
+            await renderTelephoneTable(newMonth, newYear);
+            
+            isSwitchingMonth = false;
         });
         
-        yearSelect.addEventListener('change', function() {
+        yearSelect.addEventListener('change', async function() {
             console.log('📅 Year changed to: ' + this.value);
-            renderTelephoneTable();
+            if (isSwitchingMonth) return;
+            isSwitchingMonth = true;
+            
+            const newMonth = parseInt(document.getElementById('globalMonth').value);
+            const newYear = parseInt(this.value);
+            
+            // Save current data first
+            await saveAllVisibleData(currentMonth, currentYear);
+            
+            // Load new year data
+            await renderTelephoneTable(newMonth, newYear);
+            
+            isSwitchingMonth = false;
         });
     }
 
@@ -1966,14 +2018,18 @@
         const refreshBtn = document.getElementById('refreshTableBtn');
         if (refreshBtn) {
             refreshBtn.addEventListener('click', async function() {
-                await renderTelephoneTable();
+                const month = parseInt(document.getElementById('globalMonth').value);
+                const year = parseInt(document.getElementById('globalYear').value);
+                await renderTelephoneTable(month, year);
             });
         }
         
         const applyFiltersBtn = document.getElementById('applyFiltersBtn');
         if (applyFiltersBtn) {
             applyFiltersBtn.addEventListener('click', async function() {
-                await renderTelephoneTable();
+                const month = parseInt(document.getElementById('globalMonth').value);
+                const year = parseInt(document.getElementById('globalYear').value);
+                await renderTelephoneTable(month, year);
             });
         }
     });
