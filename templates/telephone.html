@@ -837,7 +837,6 @@
             font-size: 0.7rem;
         }
 
-        /* Auto-refresh indicator */
         .auto-refresh-indicator {
             font-size: 0.7rem;
             color: var(--gray);
@@ -1060,7 +1059,6 @@
     let isLoading = false;
     let savingEntities = new Set();
     let activeSavingToast = null;
-    let isAutoLoading = false;
 
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
@@ -1131,12 +1129,17 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
+                console.log('📊 Loaded ' + existingBills.length + ' bills for month=' + month + ', year=' + year);
+                // Log the first bill to see its structure
+                if (existingBills.length > 0) {
+                    console.log('📋 Sample bill:', existingBills[0]);
+                }
             } else {
                 existingBills = [];
+                console.log('⚠️ Failed to load bills, status:', resp.status);
             }
-            console.log('📊 Loaded ' + existingBills.length + ' bills for month=' + month + ', year=' + year);
         } catch(e) {
-            console.error(e);
+            console.error('Error loading bills:', e);
             existingBills = [];
         }
     }
@@ -1243,17 +1246,38 @@
         return entities;
     }
 
+    // ============ FIXED: Find bill by account, with fallback to entity_id + month + year ============
     function findBillByAccount(entityType, entityId, accountNumber, month, year) {
+        // First try: exact match with account number
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            // Normalize account numbers for comparison (trim, handle null/undefined)
+            const billAccount = (bill.account_number || '').trim();
+            const searchAccount = (accountNumber || '').trim();
+            if (bill.entity_type === entityType &&
+                bill.entity_id == entityId &&
+                billAccount === searchAccount &&
+                bill.month == month && 
+                bill.year == year) {
+                console.log('🔍 Found bill by exact account match:', bill.id, 'account:', billAccount);
+                return bill;
+            }
+        }
+        
+        // Second try: find by entity_id + month + year ONLY (ignore account number)
+        // This handles cases where account number might be empty string vs null vs '—'
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
-                (bill.account_number || '') === (accountNumber || '') &&
                 bill.month == month && 
                 bill.year == year) {
+                console.log('🔍 Found bill by entity+month+year (fallback):', bill.id, 'account:', bill.account_number);
                 return bill;
             }
         }
+        
+        console.log('❌ No bill found for entity_id=' + entityId + ', month=' + month + ', year=' + year);
         return null;
     }
 
@@ -1391,6 +1415,7 @@
                 });
             }
             
+            // Use the improved findBillByAccount function
             const existingBill = findBillByAccount(entityType, entityId, accountNumber, month, year);
             
             const notesObj = {
@@ -1400,6 +1425,9 @@
                 phones: phones
             };
             
+            // Build the bill data - use existing bill's account number if found
+            const finalAccountNumber = existingBill ? (existingBill.account_number || accountNumber) : accountNumber;
+            
             if (billNo || totalAccountCharges > 0 || prevOutstanding > 0 || amountPaid > 0 || phones.length > 0) {
                 batchBills.push({
                     id: existingBill ? existingBill.id : null,
@@ -1407,7 +1435,7 @@
                     entity_type: entityType,
                     entity_id: entityId,
                     entity_name: entityName,
-                    account_number: accountNumber === '—' ? '' : accountNumber,
+                    account_number: finalAccountNumber === '—' ? '' : finalAccountNumber,
                     phone_number: '',
                     bill_number: billNo,
                     meter_number: billNo,
@@ -1428,6 +1456,7 @@
         
         try {
             if (batchBills.length > 0) {
+                console.log('📤 Sending batch bills:', JSON.stringify(batchBills, null, 2));
                 const resp = await fetch('/api/utility-bills/batch-update', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1466,6 +1495,10 @@
                 if (result.success) {
                     showToast(entityName + ': Saved ' + result.success_count + ' record(s) (' + totalTime + 'ms)', false);
                     updateEntityStatus(entityId, batchBills);
+                    // Reload the bills to update the display
+                    await loadExistingBills(month, year);
+                    // Re-render the table to show updated data
+                    await renderTelephoneTable();
                 } else {
                     showToast(entityName + ': ' + result.error_count + ' failed', true);
                     console.log('Errors:', result.errors);
@@ -1740,11 +1773,12 @@
             const account = entity.accountGroups[a];
             const accountNumber = account.accountNumber || '—';
             
+            // Use the improved findBillByAccount function
             const existingBill = findBillByAccount(entity.type, entity.id, accountNumber, month, year);
             
             let parsedNotes = {};
             if (existingBill && existingBill.notes) {
-                try { parsedNotes = JSON.parse(existingBill.notes); } catch(e) {}
+                try { parsedNotes = JSON.parse(existingBill.notes); } catch(e) { console.warn('Failed to parse notes:', e); }
             }
             
             const billNo = existingBill ? (existingBill.bill_number || '') : '';
@@ -1900,19 +1934,17 @@
             }
         });
 
-        // ============ FIX: Auto-load on month/year change ============
+        // Auto-load on month/year change
         const monthSelect = document.getElementById('globalMonth');
         const yearSelect = document.getElementById('globalYear');
         
         monthSelect.addEventListener('change', function() {
             console.log('📅 Month changed to: ' + this.value);
-            // Auto-load the new month's data
             renderTelephoneTable();
         });
         
         yearSelect.addEventListener('change', function() {
             console.log('📅 Year changed to: ' + this.value);
-            // Auto-load the new year's data
             renderTelephoneTable();
         });
     }
