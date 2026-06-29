@@ -115,7 +115,11 @@
             letter-spacing: 0.15px;
         }
         .nav-tabs a:hover { color: var(--primary); background: rgba(26,86,219,0.06); }
-        .nav-tabs a.active { background: var(--primary-gradient); color: white; box-shadow: 0 4px 16px rgba(26,86,219,0.30); }
+        .nav-tabs a.active {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: 0 4px 16px rgba(26,86,219,0.30);
+        }
 
         .container {
             margin-top: 96px;
@@ -266,11 +270,12 @@
             white-space: normal;
             line-height: 1.2;
         }
+
         .col-seq { width: 35px; }
         .col-entity { width: 140px; }
         .col-type { width: 55px; }
         .col-account { width: 100px; }
-        .col-phone { width: 260px; }
+        .col-phone { width: 280px; }
         .col-billno { width: 75px; }
         .col-total-account { width: 75px; }
         .col-prev-outstanding { width: 75px; }
@@ -314,13 +319,30 @@
             cursor: default;
         }
         .inline-input.calculated-field.negative { color: var(--danger); background: #fce4ec; border-color: #ffcdd2; }
-        .inline-input.phone-rental, .inline-input.phone-total {
-            min-width: 50px;
-            width: 60px;
-            padding: 3px 4px;
+
+        /* Phone input fields - expanded for larger numbers */
+        .phone-entry input {
+            width: 80px; /* increased from 60px */
+            padding: 4px 6px;
+            border-radius: var(--radius-xs);
+            border: 1px solid var(--gray-light);
             font-size: 0.7rem;
+            text-align: right;
+            font-family: 'Inter', sans-serif;
+            background: var(--white);
+            color: var(--dark);
+            transition: var(--transition);
         }
-        /* Notes textarea */
+        .phone-entry input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(26,86,219,0.08);
+        }
+        .phone-entry input.phone-rental,
+        .phone-entry input.phone-total {
+            width: 80px; /* increased width */
+        }
+
         .notes-textarea {
             width: 100%;
             min-height: 40px;
@@ -415,11 +437,11 @@
             color: var(--primary-dark);
         }
 
-        .phone-list { font-size: 0.7rem; text-align: left; padding: 2px 4px; line-height: 1.6; }
+        .phone-list { font-size: 0.7rem; text-align: left; padding: 2px 4px; line-height: 1.8; }
         .phone-entry {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
             border-bottom: 1px dashed var(--gray-light);
             padding: 4px 0;
             flex-wrap: wrap;
@@ -427,9 +449,6 @@
         .phone-entry:last-child { border-bottom: none; }
         .phone-entry .phone-number { font-weight: 500; color: var(--dark); min-width: 70px; font-size: 0.7rem; }
         .phone-entry .phone-label { color: var(--gray); font-size: 0.65rem; }
-        .phone-entry .phone-input-group { display: flex; align-items: center; gap: 2px; }
-        .phone-entry input { width: 60px; padding: 2px 4px; border-radius: var(--radius-xs); border: 1px solid var(--gray-light); font-size: 0.65rem; text-align: right; font-family: 'Inter', sans-serif; background: var(--white); color: var(--dark); }
-        .phone-entry input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,86,219,0.08); }
 
         .entity-actions { display: flex; gap: 4px; align-items: center; white-space: nowrap; justify-content: center; }
         .total-due { font-size: 0.6rem; color: var(--gray); margin-left: 4px; display: block; font-weight: 400; }
@@ -469,6 +488,7 @@
             .container { padding: 20px 24px; }
             .data-table { min-width: 1100px; }
             .col-phone { width: 220px; }
+            .phone-entry input { width: 65px; }
         }
         @media (max-width: 768px) {
             .navbar { padding: 0 16px; height: 64px; }
@@ -482,7 +502,7 @@
             .filter-actions { width: 100%; }
             .filter-actions .btn { width: 100%; justify-content: center; }
             .col-phone { width: 180px; }
-            .phone-entry .phone-input-group input { width: 45px; }
+            .phone-entry input { width: 55px; }
         }
         @media (max-width: 480px) {
             .page-title { font-size: 1.3rem; }
@@ -492,7 +512,7 @@
             .data-table th, .data-table td { padding: 4px 4px; }
             .inline-input { min-width: 40px; padding: 3px 4px; font-size: 0.65rem; }
             .col-phone { width: 150px; }
-            .phone-entry .phone-input-group input { width: 38px; }
+            .phone-entry input { width: 48px; }
         }
     </style>
 </head>
@@ -581,7 +601,7 @@
                     <th class="col-phone">Phone Details (Rental / Total)</th>
                     <th class="col-billno">Bill No.</th>
                     <th class="col-total-account">Total Account Charges ($)</th>
-                    <th class="col-prev-outstanding">Previous Outstanding ($)</th>
+                    <th class="col-prev-outstanding">Outstanding ($)</th>
                     <th class="col-prev-payment">Previous Payment ($)</th>
                     <th class="col-total-current">Total Current ($)</th>
                     <th class="col-amount-paid">Amount Paid ($)</th>
@@ -606,7 +626,7 @@
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
     let isLoading = false;
-    let savingRows = new Set(); // track which entity IDs are being saved
+    let savingRows = new Set();
     let activeToast = null;
 
     function showToast(message, type) {
@@ -906,7 +926,6 @@
                         statusSpan.className = 'status-badge status-pending';
                     }
                 }
-                // Optionally, we could refresh the data for this row only, but we keep it simple.
             } else {
                 showToast('Failed to save: ' + (result.error || 'Unknown error'), 'error');
             }
@@ -1100,9 +1119,9 @@
                     <div class="phone-entry" data-phone="${escapeHtml(phoneNum)}">
                         <span class="phone-number">📞 ${escapeHtml(phoneNum)}</span>
                         <span class="phone-label">Rental:</span>
-                        <input type="number" step="0.01" class="inline-input phone-rental" value="${rental.toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}>
+                        <input type="number" step="0.01" class="phone-rental" value="${rental.toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}>
                         <span class="phone-label">Total:</span>
-                        <input type="number" step="0.01" class="inline-input phone-total" value="${totalAmt.toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}>
+                        <input type="number" step="0.01" class="phone-total" value="${totalAmt.toFixed(2)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}>
                     </div>
                 `;
             }
