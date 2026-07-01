@@ -698,7 +698,7 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
-                console.log('📊 Loaded ' + existingBills.length + ' bills');
+                console.log('📊 Loaded ' + existingBills.length + ' bills for month=' + month + ', year=' + year);
             } else {
                 existingBills = [];
             }
@@ -783,13 +783,27 @@
         return entities;
     }
 
-    // ========== FIX: Only exact month+year lookup ==========
+    // ========== FIX: Fallback to bill_month/bill_year if month doesn't match ==========
     function findBillByEntity(entityType, entityId, month, year) {
+        // First try: exact match on month+year
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                bill.month == month && bill.year == year) return bill;
+                bill.month == month && bill.year == year) {
+                console.log('🔍 Found by month+year:', bill.id);
+                return bill;
+            }
         }
+        // Second try: match by bill_month+bill_year (fallback for January issue)
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            if (bill.entity_type === entityType && bill.entity_id == entityId &&
+                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
+                console.log('🔍 Found by bill_month+bill_year:', bill.id);
+                return bill;
+            }
+        }
+        console.log('❌ No bill found for entity_id=' + entityId + ', month=' + month + ', year=' + year);
         return null;
     }
 
@@ -814,7 +828,7 @@
         });
     }
 
-    // ============ SAVE ACCOUNT ROW ============
+    // ============ SAVE ACCOUNT ROW (background, no reload) ============
     async function saveAccountRow(accountRow, month, year) {
         const entityId = parseInt(accountRow.getAttribute('data-entity-id'));
         const entityType = accountRow.getAttribute('data-entity-type');
@@ -825,6 +839,8 @@
             showToast('Already saving...', 'error');
             return;
         }
+
+        console.log('💾 SAVING: entity=' + entityName + ', month=' + month + ', year=' + year);
 
         // Gather data
         const billNoInput = accountRow.querySelector('.account-billno');
@@ -854,7 +870,7 @@
             phoneDetails.push({ phoneNumber, rentalAmount: rental, totalAmount: totalAmt });
         });
 
-        // Find existing bill (exact month+year)
+        // Find existing bill (with fallback)
         const existingBill = findBillByEntity(entityType, entityId, month, year);
 
         const notesObj = {
@@ -932,7 +948,7 @@
                         statusSpan.className = 'status-badge status-pending';
                     }
                 }
-                // Reload the table to reflect the new data
+                // Reload the table to show updated data
                 await renderTelephoneTable(month, year);
             } else {
                 showToast('Failed to save: ' + (result.error || 'Unknown error'), 'error');
