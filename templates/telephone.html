@@ -323,7 +323,6 @@
         }
         .inline-input.calculated-field.negative { color: var(--danger); background: #fce4ec; border-color: #ffcdd2; }
 
-        /* Phone entry - all in one row */
         .phone-entry {
             display: inline-flex;
             align-items: center;
@@ -784,16 +783,12 @@
         return entities;
     }
 
+    // ========== FIX: Only exact month+year lookup ==========
     function findBillByEntity(entityType, entityId, month, year) {
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
                 bill.month == month && bill.year == year) return bill;
-        }
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) return bill;
         }
         return null;
     }
@@ -819,7 +814,7 @@
         });
     }
 
-    // ============ SAVE ACCOUNT ROW (background, no reload) ============
+    // ============ SAVE ACCOUNT ROW ============
     async function saveAccountRow(accountRow, month, year) {
         const entityId = parseInt(accountRow.getAttribute('data-entity-id'));
         const entityType = accountRow.getAttribute('data-entity-type');
@@ -859,7 +854,7 @@
             phoneDetails.push({ phoneNumber, rentalAmount: rental, totalAmount: totalAmt });
         });
 
-        // Find existing bill
+        // Find existing bill (exact month+year)
         const existingBill = findBillByEntity(entityType, entityId, month, year);
 
         const notesObj = {
@@ -937,6 +932,8 @@
                         statusSpan.className = 'status-badge status-pending';
                     }
                 }
+                // Reload the table to reflect the new data
+                await renderTelephoneTable(month, year);
             } else {
                 showToast('Failed to save: ' + (result.error || 'Unknown error'), 'error');
             }
