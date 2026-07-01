@@ -494,7 +494,6 @@
             border-color: #f59e0b !important;
         }
 
-        /* Row saved highlight */
         .row-saved .inline-input, .row-saved .notes-textarea {
             background: #d1fae5 !important;
             border-color: #0d9488 !important;
@@ -645,6 +644,7 @@
     let isLoading = false;
     let savingRows = new Set();
     let activeToast = null;
+    let saveInProgress = false;
 
     function showToast(message, type) {
         if (activeToast) { activeToast.remove(); activeToast = null; }
@@ -791,9 +791,9 @@
         return entities;
     }
 
-    // ========== Find bill by entity_id + month + year with fallback ==========
+    // ========== Find bill with fallbacks ==========
     function findBillByEntity(entityType, entityId, month, year) {
-        // First try: exact match on month+year
+        // First: exact month+year
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
@@ -802,7 +802,7 @@
                 return bill;
             }
         }
-        // Second try: match by bill_month+bill_year (fallback)
+        // Second: bill_month+bill_year
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
@@ -811,7 +811,7 @@
                 return bill;
             }
         }
-        // Third try: match by entity_id + year only (last resort)
+        // Third: entity+year (last resort)
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
@@ -847,6 +847,12 @@
 
     // ============ SAVE ACCOUNT ROW (TRUE BACKGROUND SAVING - NO TABLE RELOAD) ============
     async function saveAccountRow(accountRow, month, year) {
+        if (saveInProgress) {
+            showToast('Save already in progress...', 'error');
+            return;
+        }
+        saveInProgress = true;
+
         const entityId = parseInt(accountRow.getAttribute('data-entity-id'));
         const entityType = accountRow.getAttribute('data-entity-type');
         const entityName = accountRow.getAttribute('data-entity-name');
@@ -854,6 +860,7 @@
 
         if (savingRows.has(entityId)) {
             showToast('Already saving...', 'error');
+            saveInProgress = false;
             return;
         }
 
@@ -901,6 +908,7 @@
         const hasData = billNo || totalAccountCharges > 0 || prevOutstanding > 0 || amountPaid > 0 || phoneDetails.length > 0;
         if (!hasData) {
             showToast('No data to save', 'error');
+            saveInProgress = false;
             return;
         }
 
@@ -943,7 +951,6 @@
 
             hideToast();
             accountRow.classList.remove('row-saving');
-            // Mark as saved (green highlight)
             accountRow.classList.add('row-saved');
             setTimeout(() => {
                 accountRow.classList.remove('row-saved');
@@ -974,15 +981,7 @@
                     }
                 }
                 
-                // Update the bill ID on the row for future saves
-                if (result.success_count > 0) {
-                    // The backend should return the bill ID, but we don't have it.
-                    // We'll rely on findBillByEntity to find it next time.
-                }
-                
-                // IMPORTANT: DO NOT RELOAD THE TABLE - background saving only!
-                // The user can continue entering data while this saves.
-                
+                // Optionally, we could update the bill id on the row, but we'll just rely on next find.
             } else {
                 showToast('Failed to save: ' + (result.error || 'Unknown error'), 'error');
             }
@@ -994,6 +993,7 @@
             showToast('Network error. Please try again.', 'error');
         } finally {
             savingRows.delete(entityId);
+            saveInProgress = false;
         }
     }
 
