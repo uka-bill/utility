@@ -2352,7 +2352,7 @@ def update_school(school_id):
         print(f"❌ Update school error: {e}")
         return jsonify({'success': False, 'error': f'Failed to update school: {str(e)}'}), 500
 
-@app.route('/api/schools/<int:school_id>', methods=['DELETE']
+@app.route('/api/schools/<int:school_id>', methods=['DELETE'])
 def delete_school(school_id):
     try:
         bills_response = supabase.table("utility_bills").select("*").eq("entity_type", "school").eq("entity_id", school_id).execute()
