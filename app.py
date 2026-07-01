@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response 
 import os
 from supabase import create_client, Client
 import uuid
