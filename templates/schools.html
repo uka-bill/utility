@@ -893,7 +893,7 @@
         </div>
     </div>
     <ul class="nav-tabs">
-    <li><a href="/dashboard" >Dashboard</a></li>
+    <li><a href="/dashboard">Dashboard</a></li>
     <li><a href="/departments">Departments</a></li>
     <li><a href="/schools"class="active">Schools</a></li>
     <li><a href="/water">Water</a></li>
@@ -1354,6 +1354,7 @@
         return schoolData;
     }
     
+    // ============= UPDATED saveSchool with debug logging =============
     async function saveSchool() {
         if (!currentEditingSchool) return;
         
@@ -1366,22 +1367,27 @@
         
         showLoading(true);
         try {
+            console.log('📤 Sending school data:', schoolData); // <-- DEBUG: log sent data
             const response = await fetch(`/api/schools/${currentEditingSchool.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(schoolData)
             });
             const result = await response.json();
+            console.log('📥 Server response:', result); // <-- DEBUG: log server reply
+            
             if (response.ok && result.success) {
                 showMessage('School updated successfully');
                 closeEditModal();
                 await loadSchools();
             } else {
+                // Show the actual error from the server
                 showMessage(result.error || 'Failed to update school', true);
+                console.error('❌ Save failed:', result);
             }
         } catch (error) {
             showMessage('Network error', true);
-            console.error(error);
+            console.error('❌ Network error:', error);
         } finally {
             showLoading(false);
         }
