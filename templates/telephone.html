@@ -791,35 +791,59 @@
         return entities;
     }
 
-    // ========== Find bill with fallbacks ==========
+    // ========== FIX: Find bill with multiple fallbacks and pick the latest ==========
     function findBillByEntity(entityType, entityId, month, year) {
+        let matchedBills = [];
+        
         // First: exact month+year
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
                 bill.month == month && bill.year == year) {
-                console.log('🔍 Found by month+year:', bill.id);
-                return bill;
+                matchedBills.push(bill);
             }
         }
-        // Second: bill_month+bill_year
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                console.log('🔍 Found by bill_month+bill_year:', bill.id);
-                return bill;
+        
+        // If no exact match, try bill_month+bill_year
+        if (matchedBills.length === 0) {
+            for (let i = 0; i < existingBills.length; i++) {
+                const bill = existingBills[i];
+                if (bill.entity_type === entityType && bill.entity_id == entityId &&
+                    (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
+                    matchedBills.push(bill);
+                }
             }
         }
-        // Third: entity+year (last resort)
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                bill.year == year) {
-                console.log('🔍 Found by entity+year (last resort):', bill.id, 'month:', bill.month);
-                return bill;
+        
+        // If still no match, try entity+year (last resort)
+        if (matchedBills.length === 0) {
+            for (let i = 0; i < existingBills.length; i++) {
+                const bill = existingBills[i];
+                if (bill.entity_type === entityType && bill.entity_id == entityId &&
+                    bill.year == year) {
+                    matchedBills.push(bill);
+                }
             }
         }
+        
+        // If multiple bills found, pick the one with the latest updated_at
+        if (matchedBills.length > 1) {
+            console.log('⚠️ Multiple bills found for entity_id=' + entityId + ', month=' + month + ', year=' + year + ' (' + matchedBills.length + ' bills)');
+            // Sort by updated_at descending (latest first)
+            matchedBills.sort((a, b) => {
+                const dateA = new Date(a.updated_at || a.created_at || 0);
+                const dateB = new Date(b.updated_at || b.created_at || 0);
+                return dateB - dateA;
+            });
+            console.log('📌 Using latest bill ID:', matchedBills[0].id, 'updated_at:', matchedBills[0].updated_at);
+            return matchedBills[0];
+        }
+        
+        if (matchedBills.length === 1) {
+            console.log('🔍 Found bill for entity_id=' + entityId + ', month=' + month + ', year=' + year + ':', matchedBills[0].id);
+            return matchedBills[0];
+        }
+        
         console.log('❌ No bill found for entity_id=' + entityId + ', month=' + month + ', year=' + year);
         return null;
     }
@@ -894,7 +918,7 @@
             phoneDetails.push({ phoneNumber, rentalAmount: rental, totalAmount: totalAmt });
         });
 
-        // Find existing bill (with fallback)
+        // Find existing bill (with fallback and latest pick)
         const existingBill = findBillByEntity(entityType, entityId, month, year);
 
         const notesObj = {
