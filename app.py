@@ -2289,8 +2289,8 @@ def create_school():
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
-            "display_order": data.get('displayOrder', 0),
             "created_at": datetime.now().isoformat()
+            # display_order removed – column does not exist
         }
         
         response = supabase.table("schools").insert(school_data).execute()
@@ -2312,11 +2312,12 @@ def create_school():
 def update_school(school_id):
     try:
         data = request.get_json()
-        
+        print(f"📥 Updating school ID {school_id} with data: {data}")
+
         water_accounts = data.get('waterAccounts', [])
         electricity_accounts = data.get('electricityAccounts', [])
         telephone_accounts = data.get('telephoneAccounts', [])
-        
+
         school_data = {
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber', ''),
@@ -2333,12 +2334,15 @@ def update_school(school_id):
             "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts and len(electricity_accounts) > 0 else '',
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
-            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
-            "display_order": data.get('displayOrder', 0)
+            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else ''
+            # display_order removed – column does not exist
         }
-        
+
+        print(f"📦 Prepared school_data: {school_data}")
+
         response = supabase.table("schools").update(school_data).eq("id", school_id).execute()
-        
+        print(f"✅ Supabase response: {response}")
+
         if hasattr(response, 'data') and response.data:
             return jsonify({
                 'success': True,
@@ -2347,9 +2351,11 @@ def update_school(school_id):
             })
         else:
             return jsonify({'success': False, 'error': 'Failed to update school'}), 500
-        
+
     except Exception as e:
         print(f"❌ Update school error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': f'Failed to update school: {str(e)}'}), 500
 
 @app.route('/api/schools/<int:school_id>', methods=['DELETE'])
