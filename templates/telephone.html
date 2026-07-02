@@ -848,13 +848,36 @@
         return null;
     }
 
+    // ========== UPDATED matchesSearch - now searches phone numbers and locations ==========
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
+        
+        // Search entity name
         if (entity.name.toLowerCase().includes(term)) return true;
+        
+        // Search through all accounts
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
-            if (account.accountNumber && account.accountNumber !== '—' && account.accountNumber.toLowerCase().includes(term)) return true;
+            
+            // Search account number
+            if (account.accountNumber && account.accountNumber !== '—' && 
+                account.accountNumber.toLowerCase().includes(term)) {
+                return true;
+            }
+            
+            // Search phone numbers and their locations
+            if (account.numbers) {
+                for (let n = 0; n < account.numbers.length; n++) {
+                    const phone = account.numbers[n];
+                    if (phone.phoneNumber && phone.phoneNumber.toLowerCase().includes(term)) {
+                        return true;
+                    }
+                    if (phone.location && phone.location.toLowerCase().includes(term)) {
+                        return true;
+                    }
+                }
+            }
         }
         return false;
     }
