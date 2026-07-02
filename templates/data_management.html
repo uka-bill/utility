@@ -327,7 +327,7 @@
 
         .grid-options {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 20px;
         }
 
@@ -533,6 +533,8 @@
             padding: 8px 12px;
             border-bottom: 1px solid var(--gray-light);
             font-size: 0.82rem;
+            flex-wrap: wrap;
+            gap: 6px;
         }
 
         .backup-history-item:last-child {
@@ -541,6 +543,7 @@
 
         .backup-history-item .file-name {
             font-weight: 500;
+            word-break: break-all;
         }
 
         .backup-history-item .file-date {
@@ -551,6 +554,16 @@
         .backup-history-item .file-size {
             color: var(--gray);
             font-size: 0.75rem;
+        }
+
+        .backup-history-item .file-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .backup-history-item .file-actions .btn-sm {
+            padding: 3px 10px;
+            font-size: 0.7rem;
         }
 
         .supabase-section {
@@ -699,12 +712,19 @@
             color: var(--gray);
         }
 
+        .empty-state {
+            color: var(--gray);
+            font-size: 0.85rem;
+            padding: 12px;
+            text-align: center;
+        }
+
         @media (max-width: 1024px) {
             .container {
                 padding: 20px 24px;
             }
             .grid-options {
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             }
         }
 
@@ -839,31 +859,38 @@
             
             <div class="grid-options">
                 <div class="option-card">
-                    <span class="icon">📦</span>
-                    <h3>All Data</h3>
-                    <p>Export all schools, departments, and utility bills in a single CSV file</p>
-                    <a href="/api/export-data?type=all" class="btn btn-primary">📥 Export All Data</a>
-                </div>
-                
-                <div class="option-card">
                     <span class="icon">🏫</span>
-                    <h3>Schools Only</h3>
-                    <p>Export only school information</p>
-                    <a href="/api/export-data?type=schools" class="btn btn-success">📥 Export Schools</a>
+                    <h3>Schools</h3>
+                    <p>Export all schools</p>
+                    <a href="/api/export-data?type=schools" class="btn btn-success">📥 Export</a>
                 </div>
                 
                 <div class="option-card">
                     <span class="icon">🏛️</span>
-                    <h3>Departments Only</h3>
-                    <p>Export only department information</p>
-                    <a href="/api/export-data?type=departments" class="btn btn-success">📥 Export Departments</a>
+                    <h3>Departments</h3>
+                    <p>Export all departments</p>
+                    <a href="/api/export-data?type=departments" class="btn btn-success">📥 Export</a>
                 </div>
                 
                 <div class="option-card">
-                    <span class="icon">📄</span>
-                    <h3>Utility Bills Only</h3>
-                    <p>Export only utility bill records</p>
-                    <a href="/api/export-data?type=utility_bills" class="btn btn-success">📥 Export Utility Bills</a>
+                    <span class="icon">💧</span>
+                    <h3>Water Bills</h3>
+                    <p>Export water bills</p>
+                    <a href="/api/export-data?type=water_bills" class="btn btn-success">📥 Export</a>
+                </div>
+                
+                <div class="option-card">
+                    <span class="icon">⚡</span>
+                    <h3>Electricity Bills</h3>
+                    <p>Export electricity bills</p>
+                    <a href="/api/export-data?type=electricity_bills" class="btn btn-success">📥 Export</a>
+                </div>
+                
+                <div class="option-card">
+                    <span class="icon">📞</span>
+                    <h3>Telephone Bills</h3>
+                    <p>Export telephone bills</p>
+                    <a href="/api/export-data?type=telephone_bills" class="btn btn-success">📥 Export</a>
                 </div>
             </div>
         </div>
@@ -876,26 +903,25 @@
             <div class="grid-options" style="margin-bottom: 24px;">
                 <div class="option-card">
                     <span class="icon">🔄</span>
-                    <h3>Create Backup</h3>
-                    <p>Create a complete JSON backup of all data in your system</p>
-                    <button class="btn btn-primary" id="createBackupBtn">📥 Create Backup</button>
-                    <div class="file-info" id="backupStatus">Ready to backup</div>
+                    <h3>Create &amp; Download Backup</h3>
+                    <p>Create a full JSON backup and download it immediately</p>
+                    <button class="btn btn-primary" id="createBackupBtn">📥 Create &amp; Download</button>
+                    <div class="file-info" id="backupStatus">Ready</div>
                 </div>
                 
                 <div class="option-card">
-                    <span class="icon">📥</span>
-                    <h3>Download Backup</h3>
-                    <p>Download the most recent backup file from cloud storage</p>
-                    <button class="btn btn-success" id="downloadBackupBtn">📥 Download Backup</button>
-                    <div class="file-info" id="downloadStatus">Check available backups</div>
+                    <span class="icon">📂</span>
+                    <h3>Backup History</h3>
+                    <p>View, download, or delete saved backup files</p>
+                    <button class="btn btn-secondary" id="refreshBackupListBtn">⟳ Refresh List</button>
                 </div>
             </div>
 
             <!-- Backup History -->
-            <div class="backup-history" id="backupHistory" style="display: none;">
+            <div class="backup-history" id="backupHistory">
                 <h4>📂 Recent Backups</h4>
                 <div id="backupHistoryList">
-                    <!-- Backup history items will be populated here -->
+                    <div class="empty-state">No backup files found. Create one above.</div>
                 </div>
             </div>
         </div>
@@ -963,37 +989,25 @@
             setupEventListeners();
         });
 
+        // ---------- DATA STATS ----------
         async function loadDataStats() {
             try {
                 const [schoolsRes, deptsRes, billsRes, budgetsRes] = await Promise.all([
                     fetch('/api/schools'),
                     fetch('/api/departments'),
-                    fetch('/api/utility-bills?limit=1'),
-                    fetch('/api/budgets')
+                    fetch('/api/utility-bills'),
+                    fetch('/api/financial-years')
                 ]);
 
-                let schools = schoolsRes.ok ? await schoolsRes.json() : [];
-                let departments = deptsRes.ok ? await deptsRes.json() : [];
-                let bills = [];
-                let budgets = [];
-
-                if (billsRes.ok) {
-                    const billsData = await billsRes.json();
-                    bills = Array.isArray(billsData) ? billsData : [];
-                }
-
-                if (budgetsRes.ok) {
-                    const budgetsData = await budgetsRes.json();
-                    budgets = Array.isArray(budgetsData) ? budgetsData : [];
-                }
-
-                const totalBills = bills.length || 0;
+                const schools = schoolsRes.ok ? await schoolsRes.json() : [];
+                const departments = deptsRes.ok ? await deptsRes.json() : [];
+                const bills = billsRes.ok ? await billsRes.json() : [];
+                const budgets = budgetsRes.ok ? await budgetsRes.json() : [];
 
                 document.getElementById('statSchools').textContent = schools.length || 0;
                 document.getElementById('statDepartments').textContent = departments.length || 0;
-                document.getElementById('statBills').textContent = totalBills || 0;
+                document.getElementById('statBills').textContent = bills.length || 0;
                 document.getElementById('statBudgets').textContent = budgets.length || 0;
-
             } catch (error) {
                 console.error('Error loading data stats:', error);
                 document.getElementById('statSchools').textContent = 'Error';
@@ -1003,50 +1017,281 @@
             }
         }
 
+        // ---------- BACKUP HISTORY (uses /api/backup/list) ----------
         async function loadBackupHistory() {
+            const listContainer = document.getElementById('backupHistoryList');
+            listContainer.innerHTML = '<div class="empty-state">Loading backups...</div>';
+
             try {
-                const response = await fetch('/api/backup-history');
-                if (response.ok) {
-                    const backups = await response.json();
-                    if (backups && backups.length > 0) {
-                        const container = document.getElementById('backupHistory');
-                        const list = document.getElementById('backupHistoryList');
-                        container.style.display = 'block';
-                        list.innerHTML = '';
-                        
-                        backups.forEach(backup => {
-                            const item = document.createElement('div');
-                            item.className = 'backup-history-item';
-                            const date = new Date(backup.created_at);
-                            const formattedDate = date.toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                            });
-                            const size = backup.size ? (backup.size / 1024).toFixed(1) + ' KB' : 'Unknown';
-                            
-                            item.innerHTML = `
-                                <span class="file-name">${escapeHtml(backup.filename || 'backup.json')}</span>
-                                <span class="file-date">${formattedDate}</span>
-                                <span class="file-size">${size}</span>
-                            `;
-                            list.appendChild(item);
-                        });
-                    }
+                const response = await fetch('/api/backup/list');
+                if (!response.ok) throw new Error('Failed to fetch backup list');
+
+                const data = await response.json();
+                if (!data.success || !data.backups || data.backups.length === 0) {
+                    listContainer.innerHTML = '<div class="empty-state">No backup files found. Create one above.</div>';
+                    return;
                 }
+
+                listContainer.innerHTML = '';
+                data.backups.forEach(backup => {
+                    const item = document.createElement('div');
+                    item.className = 'backup-history-item';
+
+                    const date = new Date(backup.created);
+                    const formattedDate = date.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+
+                    item.innerHTML = `
+                        <span class="file-name">📄 ${escapeHtml(backup.filename)}</span>
+                        <span class="file-date">${formattedDate}</span>
+                        <span class="file-size">${backup.size_formatted || backup.size + ' B'}</span>
+                        <div class="file-actions">
+                            <a href="/api/backup/download/${encodeURIComponent(backup.filename)}" class="btn btn-success btn-sm" download>Download</a>
+                            <button class="btn btn-danger btn-sm delete-backup-btn" data-filename="${escapeHtml(backup.filename)}">Delete</button>
+                        </div>
+                    `;
+                    listContainer.appendChild(item);
+                });
+
+                // Attach delete handlers
+                document.querySelectorAll('.delete-backup-btn').forEach(btn => {
+                    btn.addEventListener('click', async function() {
+                        const filename = this.getAttribute('data-filename');
+                        if (confirm(`Delete backup "${filename}"?`)) {
+                            await deleteBackupFile(filename);
+                        }
+                    });
+                });
+
             } catch (error) {
                 console.error('Error loading backup history:', error);
+                listContainer.innerHTML = '<div class="empty-state">Error loading backup list.</div>';
             }
         }
 
+        // ---------- DELETE BACKUP ----------
+        async function deleteBackupFile(filename) {
+            try {
+                const response = await fetch(`/api/backup/delete/${encodeURIComponent(filename)}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showToast('Backup deleted successfully', 'success');
+                    loadBackupHistory();
+                } else {
+                    showToast('Error: ' + (result.error || 'Delete failed'), 'error');
+                }
+            } catch (error) {
+                showToast('Error deleting backup: ' + error.message, 'error');
+            }
+        }
+
+        // ---------- CREATE & DOWNLOAD BACKUP (uses /api/backup/download-direct) ----------
+        async function createBackup() {
+            const btn = document.getElementById('createBackupBtn');
+            const statusEl = document.getElementById('backupStatus');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Creating...';
+            statusEl.textContent = 'Generating backup...';
+            statusEl.style.color = 'var(--warning)';
+
+            try {
+                // Use the direct-download endpoint – it returns the JSON file directly
+                const response = await fetch('/api/backup/download-direct');
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Backup creation failed');
+                }
+
+                // Get filename from Content-Disposition header or generate one
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'uka_bill_backup.json';
+                if (contentDisposition) {
+                    const match = contentDisposition.match(/filename="?([^"]+)"?/);
+                    if (match) filename = match[1];
+                }
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                statusEl.textContent = '✅ Backup downloaded successfully!';
+                statusEl.style.color = 'var(--success)';
+                showToast('Backup downloaded successfully!', 'success');
+                
+                // Refresh the backup list (new file may have been saved on server)
+                setTimeout(loadBackupHistory, 1000);
+
+            } catch (error) {
+                console.error('Backup error:', error);
+                statusEl.textContent = '❌ Error: ' + error.message;
+                statusEl.style.color = 'var(--danger)';
+                showToast('Error creating backup: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '📥 Create & Download';
+                setTimeout(() => {
+                    if (statusEl.textContent.includes('Error')) {
+                        statusEl.textContent = 'Ready';
+                        statusEl.style.color = '';
+                    }
+                }, 5000);
+            }
+        }
+
+        // ---------- RESTORE (uses /api/backup/restore with FormData) ----------
+        async function performRestore() {
+            if (!selectedBackupFile) {
+                showToast('Please select a backup file first.', 'error');
+                return;
+            }
+
+            const confirmed = confirm(
+                '⚠️ WARNING: This will overwrite ALL current data with the data from the backup file.\n\n' +
+                'This action cannot be undone. Do you want to continue?'
+            );
+
+            if (!confirmed) return;
+
+            const btn = document.getElementById('restoreBtn');
+            const progressContainer = document.getElementById('restoreProgress');
+            const progressFill = document.getElementById('restoreProgressFill');
+            const percentEl = document.getElementById('restorePercent');
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Restoring...';
+            progressContainer.style.display = 'block';
+            progressFill.style.width = '0%';
+            percentEl.textContent = '0%';
+
+            try {
+                // Upload the file via FormData to /api/backup/restore
+                const formData = new FormData();
+                formData.append('backup_file', selectedBackupFile);
+
+                progressFill.style.width = '30%';
+                percentEl.textContent = '30%';
+
+                const response = await fetch('/api/backup/restore', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                progressFill.style.width = '90%';
+                percentEl.textContent = '90%';
+
+                const result = await response.json();
+
+                if (result.success) {
+                    progressFill.style.width = '100%';
+                    percentEl.textContent = '100%';
+                    showToast('✅ Data restored successfully!', 'success');
+                    
+                    setTimeout(() => {
+                        progressContainer.style.display = 'none';
+                        progressFill.style.width = '0%';
+                        percentEl.textContent = '0%';
+                        clearFileSelection();
+                        loadDataStats();
+                        loadBackupHistory();
+                    }, 1500);
+                } else {
+                    throw new Error(result.error || result.errors ? result.errors.join(', ') : 'Restore failed');
+                }
+            } catch (error) {
+                console.error('Restore error:', error);
+                progressFill.style.width = '100%';
+                percentEl.textContent = '100%';
+                progressFill.style.background = 'var(--danger)';
+                showToast('❌ Error restoring data: ' + error.message, 'error');
+                
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    progressFill.style.width = '0%';
+                    progressFill.style.background = '';
+                    percentEl.textContent = '0%';
+                }, 3000);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '⚠️ Restore Data';
+            }
+        }
+
+        // ---------- FILE HANDLING ----------
+        function handleFileSelect() {
+            const file = this.files[0];
+            if (!file) return;
+
+            if (!file.name.endsWith('.json')) {
+                showToast('Please select a valid JSON backup file.', 'error');
+                this.value = '';
+                return;
+            }
+
+            selectedBackupFile = file;
+            document.getElementById('selectedFileName').textContent = file.name;
+            document.getElementById('selectedFileSize').textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
+            document.getElementById('restoreFileInfo').style.display = 'block';
+            document.getElementById('restoreBtn').disabled = false;
+            document.getElementById('clearFileBtn').style.display = 'inline-flex';
+            showToast('File selected: ' + file.name, 'info');
+        }
+
+        function clearFileSelection() {
+            selectedBackupFile = null;
+            document.getElementById('restoreFileInput').value = '';
+            document.getElementById('restoreFileInfo').style.display = 'none';
+            document.getElementById('restoreBtn').disabled = true;
+            document.getElementById('clearFileBtn').style.display = 'none';
+            document.getElementById('restoreProgress').style.display = 'none';
+            document.getElementById('restoreProgressFill').style.width = '0%';
+            document.getElementById('restorePercent').textContent = '0%';
+        }
+
+        // ---------- TOAST ----------
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type;
+            toast.style.display = 'block';
+            
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => {
+                toast.style.display = 'none';
+            }, 4000);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        // ---------- EVENT LISTENERS ----------
         function setupEventListeners() {
             // Create Backup
             document.getElementById('createBackupBtn').addEventListener('click', createBackup);
 
-            // Download Backup
-            document.getElementById('downloadBackupBtn').addEventListener('click', downloadBackup);
+            // Refresh Backup List
+            document.getElementById('refreshBackupListBtn').addEventListener('click', loadBackupHistory);
 
             // Restore - File input
             const fileInput = document.getElementById('restoreFileInput');
@@ -1082,259 +1327,6 @@
 
             // Clear file button
             document.getElementById('clearFileBtn').addEventListener('click', clearFileSelection);
-        }
-
-        function handleFileSelect() {
-            const file = this.files[0];
-            if (!file) return;
-
-            if (!file.name.endsWith('.json')) {
-                showToast('Please select a valid JSON backup file.', 'error');
-                this.value = '';
-                return;
-            }
-
-            selectedBackupFile = file;
-            document.getElementById('selectedFileName').textContent = file.name;
-            document.getElementById('selectedFileSize').textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
-            document.getElementById('restoreFileInfo').style.display = 'block';
-            document.getElementById('restoreBtn').disabled = false;
-            document.getElementById('clearFileBtn').style.display = 'inline-flex';
-            showToast('File selected: ' + file.name, 'info');
-        }
-
-        function clearFileSelection() {
-            selectedBackupFile = null;
-            document.getElementById('restoreFileInput').value = '';
-            document.getElementById('restoreFileInfo').style.display = 'none';
-            document.getElementById('restoreBtn').disabled = true;
-            document.getElementById('clearFileBtn').style.display = 'none';
-            document.getElementById('restoreProgress').style.display = 'none';
-            document.getElementById('restoreProgressFill').style.width = '0%';
-            document.getElementById('restorePercent').textContent = '0%';
-        }
-
-        async function createBackup() {
-            const btn = document.getElementById('createBackupBtn');
-            const statusEl = document.getElementById('backupStatus');
-            
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Creating...';
-            statusEl.textContent = 'Creating backup...';
-            statusEl.style.color = 'var(--warning)';
-
-            try {
-                const response = await fetch('/api/backup-data', {
-                    method: 'POST'
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || 'Backup creation failed');
-                }
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    statusEl.textContent = '✅ Backup created successfully!';
-                    statusEl.style.color = 'var(--success)';
-                    showToast('Backup created successfully!', 'success');
-                    loadBackupHistory();
-                } else {
-                    throw new Error(data.error || 'Backup creation failed');
-                }
-            } catch (error) {
-                console.error('Backup error:', error);
-                statusEl.textContent = '❌ Error: ' + error.message;
-                statusEl.style.color = 'var(--danger)';
-                showToast('Error creating backup: ' + error.message, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '📥 Create Backup';
-                setTimeout(() => {
-                    if (statusEl.textContent.includes('Error')) {
-                        statusEl.textContent = 'Ready to backup';
-                        statusEl.style.color = '';
-                    }
-                }, 5000);
-            }
-        }
-
-        async function downloadBackup() {
-            const btn = document.getElementById('downloadBackupBtn');
-            const statusEl = document.getElementById('downloadStatus');
-            
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Downloading...';
-            statusEl.textContent = 'Fetching backup...';
-            statusEl.style.color = 'var(--warning)';
-
-            try {
-                const response = await fetch('/api/backup-data');
-                
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || 'Download failed');
-                }
-
-                const data = await response.json();
-                
-                if (data.data) {
-                    const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                    a.download = `backup_${timestamp}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
-                    statusEl.textContent = '✅ Download complete!';
-                    statusEl.style.color = 'var(--success)';
-                    showToast('Backup downloaded successfully!', 'success');
-                } else {
-                    throw new Error('No backup data available');
-                }
-            } catch (error) {
-                console.error('Download error:', error);
-                statusEl.textContent = '❌ Error: ' + error.message;
-                statusEl.style.color = 'var(--danger)';
-                showToast('Error downloading backup: ' + error.message, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '📥 Download Backup';
-                setTimeout(() => {
-                    if (statusEl.textContent.includes('Error')) {
-                        statusEl.textContent = 'Check available backups';
-                        statusEl.style.color = '';
-                    }
-                }, 5000);
-            }
-        }
-
-        async function performRestore() {
-            if (!selectedBackupFile) {
-                showToast('Please select a backup file first.', 'error');
-                return;
-            }
-
-            const confirmed = confirm(
-                '⚠️ WARNING: This will overwrite ALL current data with the data from the backup file.\n\n' +
-                'This action cannot be undone. Do you want to continue?'
-            );
-
-            if (!confirmed) return;
-
-            const btn = document.getElementById('restoreBtn');
-            const progressContainer = document.getElementById('restoreProgress');
-            const progressFill = document.getElementById('restoreProgressFill');
-            const percentEl = document.getElementById('restorePercent');
-
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Restoring...';
-            progressContainer.style.display = 'block';
-            progressFill.style.width = '0%';
-            percentEl.textContent = '0%';
-
-            try {
-                const reader = new FileReader();
-                
-                reader.onprogress = function(e) {
-                    if (e.lengthComputable) {
-                        const percent = Math.round((e.loaded / e.total) * 50);
-                        progressFill.style.width = percent + '%';
-                        percentEl.textContent = percent + '%';
-                    }
-                };
-
-                const fileContent = await new Promise((resolve, reject) => {
-                    reader.onload = function(e) {
-                        try {
-                            const content = JSON.parse(e.target.result);
-                            resolve(content);
-                        } catch (err) {
-                            reject(new Error('Invalid JSON file format'));
-                        }
-                    };
-                    reader.onerror = function() {
-                        reject(new Error('Error reading file'));
-                    };
-                    reader.readAsText(selectedBackupFile);
-                });
-
-                progressFill.style.width = '50%';
-                percentEl.textContent = '50%';
-
-                const response = await fetch('/api/restore-data', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ data: fileContent })
-                });
-
-                progressFill.style.width = '90%';
-                percentEl.textContent = '90%';
-
-                const result = await response.json();
-
-                if (result.success) {
-                    progressFill.style.width = '100%';
-                    percentEl.textContent = '100%';
-                    showToast('✅ Data restored successfully!', 'success');
-                    
-                    setTimeout(() => {
-                        progressContainer.style.display = 'none';
-                        progressFill.style.width = '0%';
-                        percentEl.textContent = '0%';
-                        clearFileSelection();
-                        loadDataStats();
-                        loadBackupHistory();
-                    }, 1500);
-                } else {
-                    throw new Error(result.error || 'Restore failed');
-                }
-            } catch (error) {
-                console.error('Restore error:', error);
-                progressFill.style.width = '100%';
-                percentEl.textContent = '100%';
-                progressFill.style.background = 'var(--danger)';
-                showToast('❌ Error restoring data: ' + error.message, 'error');
-                
-                setTimeout(() => {
-                    progressContainer.style.display = 'none';
-                    progressFill.style.width = '0%';
-                    progressFill.style.background = '';
-                    percentEl.textContent = '0%';
-                }, 3000);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '⚠️ Restore Data';
-            }
-        }
-
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast ' + type;
-            toast.style.display = 'block';
-            
-            clearTimeout(toast._timeout);
-            toast._timeout = setTimeout(() => {
-                toast.style.display = 'none';
-            }, 4000);
-        }
-
-        function escapeHtml(str) {
-            if (!str) return '';
-            return String(str).replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            });
         }
     </script>
 </body>
