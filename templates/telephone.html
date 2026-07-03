@@ -700,7 +700,6 @@
         } catch(e) { console.error('Error loading entities:', e); }
     }
 
-    // ========== FIXED: Load bills with cache busting ==========
     async function loadExistingBills(month, year) {
         try {
             // Add a cache-busting parameter to prevent browser caching
@@ -710,7 +709,6 @@
             if (resp.ok) {
                 existingBills = await resp.json();
                 console.log('📊 Loaded ' + existingBills.length + ' bills for month=' + month + ', year=' + year);
-                // Log the first few bills to verify
                 if (existingBills.length > 0) {
                     console.log('📋 Sample bill:', existingBills[0]);
                 }
@@ -799,7 +797,6 @@
         return entities;
     }
 
-    // ========== FIXED: Find bill with multiple fallbacks and pick the latest ==========
     function findBillByEntity(entityType, entityId, month, year) {
         let matchedBills = [];
         
@@ -856,25 +853,16 @@
         return null;
     }
 
-    // ========== FIXED: matchesSearch now searches phone numbers and locations ==========
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
-        
-        // Search entity name
         if (entity.name.toLowerCase().includes(term)) return true;
-        
-        // Search through all accounts
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
-            
-            // Search account number
             if (account.accountNumber && account.accountNumber !== '—' && 
                 account.accountNumber.toLowerCase().includes(term)) {
                 return true;
             }
-            
-            // Search phone numbers and their locations
             if (account.numbers) {
                 for (let n = 0; n < account.numbers.length; n++) {
                     const phone = account.numbers[n];
@@ -921,7 +909,6 @@
 
         console.log('💾 SAVING: entity=' + entityName + ', month=' + month + ', year=' + year);
 
-        // Gather data
         const billNoInput = accountRow.querySelector('.account-billno');
         const totalAccountInput = accountRow.querySelector('.account-total-account');
         const prevOutstandingInput = accountRow.querySelector('.account-prev-outstanding');
@@ -937,7 +924,8 @@
         const amountPaid = parseFloat(amountPaidInput ? amountPaidInput.value : 0) || 0;
         const notes = notesTextarea ? notesTextarea.value : '';
 
-        // Phone details
+        // Phone details from the master data (displayed in the UI)
+        // We capture the rental and total amounts from the UI fields
         const phoneEntries = accountRow.querySelectorAll('.phone-entry');
         let phoneDetails = [];
         phoneEntries.forEach(entry => {
@@ -949,7 +937,6 @@
             phoneDetails.push({ phoneNumber, rentalAmount: rental, totalAmount: totalAmt });
         });
 
-        // Find existing bill (with fallback and latest pick)
         const existingBill = findBillByEntity(entityType, entityId, month, year);
 
         const notesObj = {
@@ -988,7 +975,6 @@
             updated_at: new Date().toISOString()
         };
 
-        // Mark row as saving
         savingRows.add(entityId);
         accountRow.classList.add('row-saving');
         const saveBtn = accountRow.querySelector('.save-account-btn');
@@ -1016,7 +1002,6 @@
             if (result.success) {
                 showToast(entityName + ': Saved successfully', 'success');
                 
-                // Update the total current field
                 const totalCurrentInput = accountRow.querySelector('.account-total-current');
                 if (totalCurrentInput) {
                     totalCurrentInput.value = totalCurrent.toFixed(2);
@@ -1024,7 +1009,6 @@
                     totalCurrentInput.style.background = totalCurrent < 0 ? '#fce4ec' : '#f0f7f0';
                 }
                 
-                // Update status
                 const statusSpan = accountRow.querySelector('.status-badge');
                 if (statusSpan) {
                     if (amountPaid > 0) {
@@ -1036,7 +1020,6 @@
                     }
                 }
                 
-                // Update the bill id on the row for future saves
                 if (result.bills && result.bills.length > 0 && result.bills[0].id) {
                     accountRow.setAttribute('data-bill-id', result.bills[0].id);
                 }
@@ -1207,13 +1190,29 @@
             const amountPaid = existingBill ? (parseFloat(existingBill.amount_paid) || 0) : 0;
             const notes = parsedNotes.notes || '';
 
-            let phones = parsedNotes.phones || [];
-            if (phones.length === 0 && account.numbers) {
-                phones = account.numbers.map(num => ({
-                    phoneNumber: num.phoneNumber || '—',
-                    rentalAmount: 0,
-                    totalAmount: 0
-                }));
+            // ========== FIX: ALWAYS USE MASTER DATA FOR PHONE NUMBERS ==========
+            // Use the master data (account.numbers) for phone numbers
+            let phones = account.numbers.map(num => ({
+                phoneNumber: num.phoneNumber || '—',
+                rentalAmount: 0,
+                totalAmount: 0
+            }));
+
+            // If we have existing notes, use the rental/total amounts from them
+            if (parsedNotes.phones && parsedNotes.phones.length > 0) {
+                const existingPhone = parsedNotes.phones[0];
+                if (existingPhone) {
+                    phones = phones.map((p, idx) => {
+                        if (idx === 0) {
+                            return {
+                                ...p,
+                                rentalAmount: existingPhone.rentalAmount || 0,
+                                totalAmount: existingPhone.totalAmount || 0
+                            };
+                        }
+                        return p;
+                    });
+                }
             }
 
             if (statusFilter !== 'all') {
