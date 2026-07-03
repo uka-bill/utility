@@ -6,6 +6,7 @@
     <title>Telephone Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* All styles remain unchanged – keep your existing CSS */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -699,13 +700,20 @@
         } catch(e) { console.error('Error loading entities:', e); }
     }
 
+    // ========== FIXED: Load bills with cache busting ==========
     async function loadExistingBills(month, year) {
         try {
-            const url = '/api/utility-bills?utility_type=telephone&month=' + month + '&year=' + year;
+            // Add a cache-busting parameter to prevent browser caching
+            const cacheBuster = new Date().getTime();
+            const url = '/api/utility-bills?utility_type=telephone&month=' + month + '&year=' + year + '&_=' + cacheBuster;
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
                 console.log('📊 Loaded ' + existingBills.length + ' bills for month=' + month + ', year=' + year);
+                // Log the first few bills to verify
+                if (existingBills.length > 0) {
+                    console.log('📋 Sample bill:', existingBills[0]);
+                }
             } else {
                 existingBills = [];
                 console.log('⚠️ Failed to load bills, status:', resp.status);
@@ -791,7 +799,7 @@
         return entities;
     }
 
-    // ========== FIX: Find bill with multiple fallbacks and pick the latest ==========
+    // ========== FIXED: Find bill with multiple fallbacks and pick the latest ==========
     function findBillByEntity(entityType, entityId, month, year) {
         let matchedBills = [];
         
@@ -848,7 +856,7 @@
         return null;
     }
 
-    // ========== UPDATED matchesSearch - now searches phone numbers and locations ==========
+    // ========== FIXED: matchesSearch now searches phone numbers and locations ==========
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
@@ -892,7 +900,7 @@
         });
     }
 
-    // ============ SAVE ACCOUNT ROW (TRUE BACKGROUND SAVING - NO TABLE RELOAD) ============
+    // ============ SAVE ACCOUNT ROW ============
     async function saveAccountRow(accountRow, month, year) {
         if (saveInProgress) {
             showToast('Save already in progress...', 'error');
@@ -966,7 +974,7 @@
             entity_id: entityId,
             entity_name: entityName,
             account_number: accountNumber === '—' ? '' : accountNumber,
-            phone_number: '',
+            phone_number: phoneDetails.length > 0 ? phoneDetails[0].phoneNumber : '',
             bill_number: billNo,
             meter_number: billNo,
             current_charges: 0,
@@ -1028,7 +1036,10 @@
                     }
                 }
                 
-                // Optionally, we could update the bill id on the row, but we'll just rely on next find.
+                // Update the bill id on the row for future saves
+                if (result.bills && result.bills.length > 0 && result.bills[0].id) {
+                    accountRow.setAttribute('data-bill-id', result.bills[0].id);
+                }
             } else {
                 showToast('Failed to save: ' + (result.error || 'Unknown error'), 'error');
             }
