@@ -699,7 +699,6 @@
         } catch(e) { console.error('Error loading entities:', e); }
     }
 
-    // ========== LOAD BILLS WITH CACHE BUSTING ==========
     async function loadExistingBills(month, year) {
         try {
             const cacheBuster = new Date().getTime();
@@ -796,11 +795,9 @@
         return entities;
     }
 
-    // ========== FIND BILL WITH FALLBACKS ==========
     function findBillByEntity(entityType, entityId, month, year) {
         let matchedBills = [];
         
-        // First: exact month+year
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
@@ -809,7 +806,6 @@
             }
         }
         
-        // If no exact match, try bill_month+bill_year
         if (matchedBills.length === 0) {
             for (let i = 0; i < existingBills.length; i++) {
                 const bill = existingBills[i];
@@ -820,7 +816,6 @@
             }
         }
         
-        // If still no match, try entity+year (last resort)
         if (matchedBills.length === 0) {
             for (let i = 0; i < existingBills.length; i++) {
                 const bill = existingBills[i];
@@ -831,7 +826,6 @@
             }
         }
         
-        // If multiple bills found, pick the one with the latest updated_at
         if (matchedBills.length > 1) {
             console.log('⚠️ Multiple bills found for entity_id=' + entityId + ', month=' + month + ', year=' + year + ' (' + matchedBills.length + ' bills)');
             matchedBills.sort((a, b) => {
@@ -852,7 +846,6 @@
         return null;
     }
 
-    // ========== SEARCH FUNCTION ==========
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
@@ -939,7 +932,7 @@
             phoneDetails.push({ phoneNumber, rentalAmount: rental, totalAmount: totalAmt });
         });
 
-        // Build account-specific notes
+        // Build account-specific notes - store EVERYTHING per account
         const accountNotes = {
             accountNumber: accountNumber,
             billNumber: billNo,
@@ -966,16 +959,20 @@
         }
         existingNotes.accounts[accountNumber] = accountNotes;
 
-        // Also store summary fields at top level for compatibility (but we'll use account-specific data for rendering)
+        // ===== CRITICAL FIX: Never use top-level fields for summary data =====
+        // We store everything in the accounts map. The top-level fields are only for backward compatibility.
         const updatedNotes = {
             accounts: existingNotes.accounts,
-            // Keep legacy fields for backward compatibility
-            phones: phoneDetails,
-            totalAccountCharges: totalAccountCharges,
-            previousPayment: prevPayment,
-            totalCurrentCharges: totalCurrent,
-            notes: notes
+            // Keep legacy fields for backward compatibility but they will NOT be used for rendering
+            _legacy_phones: phoneDetails,
+            _legacy_totalAccountCharges: totalAccountCharges,
+            _legacy_previousPayment: prevPayment,
+            _legacy_totalCurrentCharges: totalCurrent,
+            _legacy_notes: notes
         };
+
+        // Use the FIRST phone number for the main phone_number field (for backward compatibility)
+        const mainPhone = phoneDetails.length > 0 ? phoneDetails[0].phoneNumber : '';
 
         const billData = {
             id: existingBill ? existingBill.id : null,
@@ -984,7 +981,7 @@
             entity_id: entityId,
             entity_name: entityName,
             account_number: accountNumber === '—' ? '' : accountNumber,
-            phone_number: phoneDetails.length > 0 ? phoneDetails[0].phoneNumber : '',
+            phone_number: mainPhone,
             bill_number: billNo,
             meter_number: billNo,
             current_charges: 0,
@@ -1203,10 +1200,33 @@
                 try { parsedNotes = JSON.parse(existingBill.notes); } catch(e) {}
             }
 
-            // Get account-specific data from the notes
+            // ===== CRITICAL FIX: ALWAYS read from accounts map, NEVER from top-level =====
             let accountData = {};
             if (parsedNotes.accounts && parsedNotes.accounts[accountNumber]) {
                 accountData = parsedNotes.accounts[accountNumber];
+            } else {
+                // If no account data exists, create empty data (not from top-level!)
+                accountData = {
+                    accountNumber: accountNumber,
+                    billNumber: '',
+                    totalAccountCharges: 0,
+                    previousOutstanding: 0,
+                    previousPayment: 0,
+                    totalCurrentCharges: 0,
+                    amountPaid: 0,
+                    phones: [],
+                    notes: ''
+                };
+            }
+
+            // If accountData has no phones, try to use the account's numbers from master data
+            let phones = accountData.phones || [];
+            if (phones.length === 0 && account.numbers) {
+                phones = account.numbers.map(num => ({
+                    phoneNumber: num.phoneNumber || '—',
+                    rentalAmount: 0,
+                    totalAmount: 0
+                }));
             }
 
             const billNo = accountData.billNumber || '';
@@ -1216,15 +1236,6 @@
             const totalCurrent = accountData.totalCurrentCharges || (totalAccountCharges + prevOutstanding - prevPayment);
             const amountPaid = accountData.amountPaid || 0;
             const notes = accountData.notes || '';
-
-            let phones = accountData.phones || [];
-            if (phones.length === 0 && account.numbers) {
-                phones = account.numbers.map(num => ({
-                    phoneNumber: num.phoneNumber || '—',
-                    rentalAmount: 0,
-                    totalAmount: 0
-                }));
-            }
 
             if (statusFilter !== 'all') {
                 if (statusFilter === 'paid' && amountPaid === 0) continue;
