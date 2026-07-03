@@ -6,7 +6,6 @@
     <title>Telephone Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* All styles remain unchanged – keep your existing CSS */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -700,9 +699,9 @@
         } catch(e) { console.error('Error loading entities:', e); }
     }
 
+    // ========== LOAD BILLS WITH CACHE BUSTING ==========
     async function loadExistingBills(month, year) {
         try {
-            // Add a cache-busting parameter to prevent browser caching
             const cacheBuster = new Date().getTime();
             const url = '/api/utility-bills?utility_type=telephone&month=' + month + '&year=' + year + '&_=' + cacheBuster;
             const resp = await fetch(url);
@@ -797,6 +796,7 @@
         return entities;
     }
 
+    // ========== FIND BILL WITH FALLBACKS ==========
     function findBillByEntity(entityType, entityId, month, year) {
         let matchedBills = [];
         
@@ -834,7 +834,6 @@
         // If multiple bills found, pick the one with the latest updated_at
         if (matchedBills.length > 1) {
             console.log('⚠️ Multiple bills found for entity_id=' + entityId + ', month=' + month + ', year=' + year + ' (' + matchedBills.length + ' bills)');
-            // Sort by updated_at descending (latest first)
             matchedBills.sort((a, b) => {
                 const dateA = new Date(a.updated_at || a.created_at || 0);
                 const dateB = new Date(b.updated_at || b.created_at || 0);
@@ -853,10 +852,13 @@
         return null;
     }
 
+    // ========== SEARCH FUNCTION ==========
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
+        
         if (entity.name.toLowerCase().includes(term)) return true;
+        
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             if (account.accountNumber && account.accountNumber !== '—' && 
@@ -888,7 +890,7 @@
         });
     }
 
-    // ============ SAVE ACCOUNT ROW ============
+    // ============ SAVE ACCOUNT ROW - FIXED ============
     async function saveAccountRow(accountRow, month, year) {
         if (saveInProgress) {
             showToast('Save already in progress...', 'error');
@@ -907,8 +909,9 @@
             return;
         }
 
-        console.log('💾 SAVING: entity=' + entityName + ', month=' + month + ', year=' + year);
+        console.log('💾 SAVING: entity=' + entityName + ', account=' + accountNumber + ', month=' + month + ', year=' + year);
 
+        // Gather data from this specific account row
         const billNoInput = accountRow.querySelector('.account-billno');
         const totalAccountInput = accountRow.querySelector('.account-total-account');
         const prevOutstandingInput = accountRow.querySelector('.account-prev-outstanding');
@@ -924,8 +927,7 @@
         const amountPaid = parseFloat(amountPaidInput ? amountPaidInput.value : 0) || 0;
         const notes = notesTextarea ? notesTextarea.value : '';
 
-        // Phone details from the master data (displayed in the UI)
-        // We capture the rental and total amounts from the UI fields
+        // Phone details from this account
         const phoneEntries = accountRow.querySelectorAll('.phone-entry');
         let phoneDetails = [];
         phoneEntries.forEach(entry => {
@@ -937,22 +939,43 @@
             phoneDetails.push({ phoneNumber, rentalAmount: rental, totalAmount: totalAmt });
         });
 
-        const existingBill = findBillByEntity(entityType, entityId, month, year);
+        // Build account-specific notes
+        const accountNotes = {
+            accountNumber: accountNumber,
+            billNumber: billNo,
+            totalAccountCharges: totalAccountCharges,
+            previousOutstanding: prevOutstanding,
+            previousPayment: prevPayment,
+            totalCurrentCharges: totalCurrent,
+            amountPaid: amountPaid,
+            phones: phoneDetails,
+            notes: notes,
+            savedAt: new Date().toISOString()
+        };
 
-        const notesObj = {
+        // Find existing bill for this entity
+        const existingBill = findBillByEntity(entityType, entityId, month, year);
+        let existingNotes = {};
+        if (existingBill && existingBill.notes) {
+            try { existingNotes = JSON.parse(existingBill.notes); } catch(e) {}
+        }
+
+        // Store ALL accounts' data in the notes JSON as a map
+        if (!existingNotes.accounts) {
+            existingNotes.accounts = {};
+        }
+        existingNotes.accounts[accountNumber] = accountNotes;
+
+        // Also store summary fields at top level for compatibility (but we'll use account-specific data for rendering)
+        const updatedNotes = {
+            accounts: existingNotes.accounts,
+            // Keep legacy fields for backward compatibility
+            phones: phoneDetails,
             totalAccountCharges: totalAccountCharges,
             previousPayment: prevPayment,
             totalCurrentCharges: totalCurrent,
-            phones: phoneDetails,
             notes: notes
         };
-
-        const hasData = billNo || totalAccountCharges > 0 || prevOutstanding > 0 || amountPaid > 0 || phoneDetails.length > 0;
-        if (!hasData) {
-            showToast('No data to save', 'error');
-            saveInProgress = false;
-            return;
-        }
 
         const billData = {
             id: existingBill ? existingBill.id : null,
@@ -971,7 +994,7 @@
             year: year,
             bill_month: month,
             bill_year: year,
-            notes: JSON.stringify(notesObj),
+            notes: JSON.stringify(updatedNotes),
             updated_at: new Date().toISOString()
         };
 
@@ -980,7 +1003,7 @@
         const saveBtn = accountRow.querySelector('.save-account-btn');
         if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '💾 Saving...'; }
 
-        const toast = showToast('Saving ' + entityName + '...', 'saving');
+        const toast = showToast('Saving ' + entityName + ' (' + accountNumber + ')...', 'saving');
 
         try {
             const resp = await fetch('/api/utility-bills/batch-update', {
@@ -1000,8 +1023,9 @@
             if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '💾 Save'; }
 
             if (result.success) {
-                showToast(entityName + ': Saved successfully', 'success');
+                showToast(entityName + ' (' + accountNumber + '): Saved successfully', 'success');
                 
+                // Update the total current field
                 const totalCurrentInput = accountRow.querySelector('.account-total-current');
                 if (totalCurrentInput) {
                     totalCurrentInput.value = totalCurrent.toFixed(2);
@@ -1009,6 +1033,7 @@
                     totalCurrentInput.style.background = totalCurrent < 0 ? '#fce4ec' : '#f0f7f0';
                 }
                 
+                // Update status
                 const statusSpan = accountRow.querySelector('.status-badge');
                 if (statusSpan) {
                     if (amountPaid > 0) {
@@ -1018,10 +1043,6 @@
                         statusSpan.innerHTML = 'Pending';
                         statusSpan.className = 'status-badge status-pending';
                     }
-                }
-                
-                if (result.bills && result.bills.length > 0 && result.bills[0].id) {
-                    accountRow.setAttribute('data-bill-id', result.bills[0].id);
                 }
             } else {
                 showToast('Failed to save: ' + (result.error || 'Unknown error'), 'error');
@@ -1038,7 +1059,7 @@
         }
     }
 
-    // Auto-calculate Total Current Charges
+    // ========== AUTO-CALCULATE ==========
     function setupAutoCalculate() {
         document.getElementById('billsTableBody').addEventListener('input', function(e) {
             const target = e.target;
@@ -1067,7 +1088,7 @@
         });
     }
 
-    // ============ RENDER ============
+    // ============ RENDER TELEPHONE TABLE ============
     async function renderTelephoneTable(month, year) {
         if (month === undefined) month = parseInt(document.getElementById('globalMonth').value);
         if (year === undefined) year = parseInt(document.getElementById('globalYear').value);
@@ -1167,7 +1188,7 @@
         console.log('✅ Loaded data for month=' + month + ', year=' + year);
     }
 
-    // ============ RENDER ENTITY ============
+    // ============ RENDER ENTITY - FIXED ============
     function renderEntity(fragment, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let hasVisible = false;
@@ -1182,37 +1203,27 @@
                 try { parsedNotes = JSON.parse(existingBill.notes); } catch(e) {}
             }
 
-            const billNo = existingBill ? (existingBill.bill_number || '') : '';
-            const totalAccountCharges = parsedNotes.totalAccountCharges || 0;
-            const prevOutstanding = existingBill ? (parseFloat(existingBill.unsettled_charges) || 0) : 0;
-            const prevPayment = parsedNotes.previousPayment || 0;
-            const totalCurrent = parsedNotes.totalCurrentCharges || (totalAccountCharges + prevOutstanding - prevPayment);
-            const amountPaid = existingBill ? (parseFloat(existingBill.amount_paid) || 0) : 0;
-            const notes = parsedNotes.notes || '';
+            // Get account-specific data from the notes
+            let accountData = {};
+            if (parsedNotes.accounts && parsedNotes.accounts[accountNumber]) {
+                accountData = parsedNotes.accounts[accountNumber];
+            }
 
-            // ========== FIX: ALWAYS USE MASTER DATA FOR PHONE NUMBERS ==========
-            // Use the master data (account.numbers) for phone numbers
-            let phones = account.numbers.map(num => ({
-                phoneNumber: num.phoneNumber || '—',
-                rentalAmount: 0,
-                totalAmount: 0
-            }));
+            const billNo = accountData.billNumber || '';
+            const totalAccountCharges = accountData.totalAccountCharges || 0;
+            const prevOutstanding = accountData.previousOutstanding || 0;
+            const prevPayment = accountData.previousPayment || 0;
+            const totalCurrent = accountData.totalCurrentCharges || (totalAccountCharges + prevOutstanding - prevPayment);
+            const amountPaid = accountData.amountPaid || 0;
+            const notes = accountData.notes || '';
 
-            // If we have existing notes, use the rental/total amounts from them
-            if (parsedNotes.phones && parsedNotes.phones.length > 0) {
-                const existingPhone = parsedNotes.phones[0];
-                if (existingPhone) {
-                    phones = phones.map((p, idx) => {
-                        if (idx === 0) {
-                            return {
-                                ...p,
-                                rentalAmount: existingPhone.rentalAmount || 0,
-                                totalAmount: existingPhone.totalAmount || 0
-                            };
-                        }
-                        return p;
-                    });
-                }
+            let phones = accountData.phones || [];
+            if (phones.length === 0 && account.numbers) {
+                phones = account.numbers.map(num => ({
+                    phoneNumber: num.phoneNumber || '—',
+                    rentalAmount: 0,
+                    totalAmount: 0
+                }));
             }
 
             if (statusFilter !== 'all') {
