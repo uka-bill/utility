@@ -981,7 +981,7 @@ def format_file_size(size):
         size /= 1024.0
     return f"{size:.1f} TB"
 
-# ============ BATCH UPDATE API (FIXED - ROBUST LOOKUP) ============
+# ============ BATCH UPDATE API ============
 
 @app.route('/api/utility-bills/batch-update', methods=['POST'])
 def batch_update_utility_bills():
@@ -1261,7 +1261,7 @@ def batch_update_utility_bills():
         print(traceback.format_exc())
         return jsonify({'error': str(e), 'success': False}), 500
 
-# ============ UTILITY BILLS API ============
+# ============ OPTIMIZED UTILITY BILLS API ============
 
 @app.route('/api/utility-bills', methods=['GET'])
 def api_utility_bills():
@@ -1327,23 +1327,36 @@ def api_utility_bills():
         
         print(f"📊 Total bills found: {len(all_bills)}")
         
-        # Enrich bills with entity names
+        # ===== OPTIMIZATION: Pre-fetch all schools and departments =====
+        # Fetch all schools and departments once, then build dictionaries
+        school_dict = {}
+        dept_dict = {}
+        
+        try:
+            schools_resp = supabase.table("schools").select("id, name").execute()
+            if schools_resp.data:
+                for school in schools_resp.data:
+                    school_dict[school['id']] = school['name']
+        except Exception as e:
+            print(f"⚠️ Error fetching schools: {e}")
+        
+        try:
+            depts_resp = supabase.table("departments").select("id, name, unit_name").execute()
+            if depts_resp.data:
+                for dept in depts_resp.data:
+                    dept_dict[dept['id']] = dept.get('unit_name') or dept.get('name') or 'Unknown Department'
+        except Exception as e:
+            print(f"⚠️ Error fetching departments: {e}")
+        
+        # Enrich bills with entity names using the dictionaries
         bills = []
         for bill in all_bills:
             bill_data = dict(bill)
             
             if bill_data['entity_type'] == 'school':
-                school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
-                if school_response.data and len(school_response.data) > 0:
-                    bill_data['entity_name'] = school_response.data[0]['name']
-                else:
-                    bill_data['entity_name'] = 'Unknown School'
+                bill_data['entity_name'] = school_dict.get(bill_data['entity_id'], 'Unknown School')
             elif bill_data['entity_type'] == 'department':
-                dept_response = supabase.table("departments").select("name", "unit_name").eq("id", bill_data['entity_id']).execute()
-                if dept_response.data and len(dept_response.data) > 0:
-                    bill_data['entity_name'] = dept_response.data[0].get('unit_name') or dept_response.data[0].get('name') or 'Unknown Department'
-                else:
-                    bill_data['entity_name'] = 'Unknown Department'
+                bill_data['entity_name'] = dept_dict.get(bill_data['entity_id'], 'Unknown Department')
             else:
                 bill_data['entity_name'] = 'Unknown'
             
