@@ -489,12 +489,20 @@
             box-shadow: var(--shadow-xl);
         }
 
-        .row-saving .inline-input, .row-saving .notes-textarea {
+        /* ====== UPDATED: Include phone rental and total inputs ====== */
+        .row-saving .inline-input,
+        .row-saving .notes-textarea,
+        .row-saving .phone-rental,
+        .row-saving .phone-total {
             background: #fef3c7 !important;
             border-color: #f59e0b !important;
+            transition: background 0.2s ease;
         }
 
-        .row-saved .inline-input, .row-saved .notes-textarea {
+        .row-saved .inline-input,
+        .row-saved .notes-textarea,
+        .row-saved .phone-rental,
+        .row-saved .phone-total {
             background: #d1fae5 !important;
             border-color: #0d9488 !important;
             transition: background 0.3s ease;
@@ -960,7 +968,6 @@
         existingNotes.accounts[accountNumber] = accountNotes;
 
         // ===== CRITICAL FIX: Never use top-level fields for summary data =====
-        // We store everything in the accounts map. The top-level fields are only for backward compatibility.
         const updatedNotes = {
             accounts: existingNotes.accounts,
             // Keep legacy fields for backward compatibility but they will NOT be used for rendering
@@ -1000,6 +1007,12 @@
         const saveBtn = accountRow.querySelector('.save-account-btn');
         if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '💾 Saving...'; }
 
+        // ====== ADD: Highlight phone rental and total inputs ======
+        const phoneRentalInputs = accountRow.querySelectorAll('.phone-rental');
+        const phoneTotalInputs = accountRow.querySelectorAll('.phone-total');
+        phoneRentalInputs.forEach(inp => inp.classList.add('saving'));
+        phoneTotalInputs.forEach(inp => inp.classList.add('saving'));
+
         const toast = showToast('Saving ' + entityName + ' (' + accountNumber + ')...', 'saving');
 
         try {
@@ -1018,6 +1031,10 @@
             }, 2000);
             
             if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '💾 Save'; }
+
+            // ====== Remove highlight from phone inputs ======
+            phoneRentalInputs.forEach(inp => inp.classList.remove('saving'));
+            phoneTotalInputs.forEach(inp => inp.classList.remove('saving'));
 
             if (result.success) {
                 showToast(entityName + ' (' + accountNumber + '): Saved successfully', 'success');
@@ -1049,6 +1066,9 @@
             hideToast();
             accountRow.classList.remove('row-saving');
             if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '💾 Save'; }
+            // Remove highlight even on error
+            phoneRentalInputs.forEach(inp => inp.classList.remove('saving'));
+            phoneTotalInputs.forEach(inp => inp.classList.remove('saving'));
             showToast('Network error. Please try again.', 'error');
         } finally {
             savingRows.delete(entityId);
