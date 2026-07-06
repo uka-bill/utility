@@ -859,7 +859,6 @@
             if (resp.ok) {
                 existingBills = await resp.json();
                 console.log('📊 Loaded ' + existingBills.length + ' electricity bills for ' + month + '/' + year);
-                // Log a sample bill to see structure
                 if (existingBills.length > 0) {
                     console.log('📋 Sample bill:', existingBills[0]);
                 }
@@ -888,7 +887,7 @@
                 if (entity.electricity_meter && entity.electricity_meter !== '—') {
                     meters.push({ meterNumber: entity.electricity_meter, location: '', notes: '' });
                 } else {
-                    meters.push({ meterNumber: '—', location: '', notes: '' });
+                    meters.push({ meterNumber: '', location: '', notes: '' });
                 }
                 accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
             }
@@ -911,7 +910,7 @@
             if (!hasAccounts) {
                 accountGroups = [{
                     accountNumber: '—',
-                    meters: [{ meterNumber: '—', location: '', notes: '' }],
+                    meters: [{ meterNumber: '', location: '', notes: '' }],
                     isPlaceholder: true
                 }];
             }
@@ -942,7 +941,7 @@
             if (!hasAccounts) {
                 accountGroups = [{
                     accountNumber: '—',
-                    meters: [{ meterNumber: '—', location: '', notes: '' }],
+                    meters: [{ meterNumber: '', location: '', notes: '' }],
                     isPlaceholder: true
                 }];
             }
@@ -965,49 +964,100 @@
         return entities;
     }
 
-    // ========== FIXED: BILL LOOKUP WITH TRIMMING AND DEBUG LOGS ==========
+    // ========== FIXED: BILL LOOKUP WITH FALLBACK TO ACCOUNT-ONLY IF METER EMPTY ==========
+    function normalizeMeter(m) {
+        if (!m || m === '—' || m.trim() === '—') return '';
+        return m.trim();
+    }
+
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
-        // Trim whitespace from account and meter numbers for comparison
         const cleanAccount = (accountNumber || '').trim();
-        const cleanMeter = (meterNumber || '').trim();
+        const cleanMeter = normalizeMeter(meterNumber);
         
         console.log(`🔍 Looking for: entity=${entityId}, account='${cleanAccount}', meter='${cleanMeter}', month=${month}, year=${year}`);
         
-        // First try: exact match on month/year + account + meter
+        // 1. If meter is empty, try to find any bill with this account (ignore meter)
+        if (cleanMeter === '') {
+            console.log(`ℹ️ Meter is empty, will match on account only for this search.`);
+            // Look for any bill with same entity, account, month, year (ignore meter)
+            for (let i = 0; i < existingBills.length; i++) {
+                const bill = existingBills[i];
+                const billAccount = (bill.account_number || '').trim();
+                if (bill.entity_type === entityType &&
+                    bill.entity_id == entityId &&
+                    billAccount === cleanAccount &&
+                    bill.month == month && 
+                    bill.year == year) {
+                    console.log(`✅ Found match on account only: bill ID=${bill.id}`);
+                    return bill;
+                }
+            }
+            // Try with bill_month/bill_year
+            for (let i = 0; i < existingBills.length; i++) {
+                const bill = existingBills[i];
+                const billAccount = (bill.account_number || '').trim();
+                if (bill.entity_type === entityType &&
+                    bill.entity_id == entityId &&
+                    billAccount === cleanAccount &&
+                    (bill.bill_month || bill.month) == month &&
+                    (bill.bill_year || bill.year) == year) {
+                    console.log(`✅ Found match on account only (bill_month): bill ID=${bill.id}`);
+                    return bill;
+                }
+            }
+        }
+        
+        // 2. If meter is not empty, try exact match on account + meter
+        if (cleanMeter !== '') {
+            // First try: exact match on month/year + account + meter
+            for (let i = 0; i < existingBills.length; i++) {
+                const bill = existingBills[i];
+                const billAccount = (bill.account_number || '').trim();
+                const billMeter = normalizeMeter(bill.meter_number);
+                if (bill.entity_type === entityType &&
+                    bill.entity_id == entityId &&
+                    billAccount === cleanAccount &&
+                    billMeter === cleanMeter &&
+                    bill.month == month && 
+                    bill.year == year) {
+                    console.log(`✅ Found exact match: bill ID=${bill.id}`);
+                    return bill;
+                }
+            }
+            // Second try: use bill_month/bill_year if available
+            for (let i = 0; i < existingBills.length; i++) {
+                const bill = existingBills[i];
+                const billAccount = (bill.account_number || '').trim();
+                const billMeter = normalizeMeter(bill.meter_number);
+                if (bill.entity_type === entityType &&
+                    bill.entity_id == entityId &&
+                    billAccount === cleanAccount &&
+                    billMeter === cleanMeter &&
+                    (bill.bill_month || bill.month) == month &&
+                    (bill.bill_year || bill.year) == year) {
+                    console.log(`✅ Found bill_month match: bill ID=${bill.id}`);
+                    return bill;
+                }
+            }
+        }
+        
+        // 3. If still not found, try account-only as a final fallback (even if meter is not empty)
+        // This handles cases where the meter number changed but we still want to show the bill
+        console.log(`ℹ️ No exact match, trying account-only fallback...`);
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             const billAccount = (bill.account_number || '').trim();
-            const billMeter = (bill.meter_number || '').trim();
-            
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
                 billAccount === cleanAccount &&
-                billMeter === cleanMeter &&
                 bill.month == month && 
                 bill.year == year) {
-                console.log(`✅ Found exact match: bill ID=${bill.id}`);
+                console.log(`✅ Found match on account only (fallback): bill ID=${bill.id}`);
                 return bill;
             }
         }
         
-        // Second try: use bill_month/bill_year if available
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            const billAccount = (bill.account_number || '').trim();
-            const billMeter = (bill.meter_number || '').trim();
-            
-            if (bill.entity_type === entityType &&
-                bill.entity_id == entityId &&
-                billAccount === cleanAccount &&
-                billMeter === cleanMeter &&
-                (bill.bill_month || bill.month) == month &&
-                (bill.bill_year || bill.year) == year) {
-                console.log(`✅ Found bill_month match: bill ID=${bill.id}`);
-                return bill;
-            }
-        }
-        
-        console.log(`❌ No bill found for account='${cleanAccount}', meter='${cleanMeter}'`);
+        console.log(`❌ No bill found for account='${cleanAccount}'`);
         return null;
     }
 
@@ -1299,10 +1349,10 @@
                     const visibleMeters = [];
                     
                     if (meters.length === 0) {
-                        const meterNum = '—';
+                        const meterNum = '';
                         const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                         visibleMeters.push({
-                            meterNumber: meterNum,
+                            meterNumber: '',
                             location: '',
                             notes: '',
                             existing: existing,
@@ -1312,7 +1362,7 @@
                     } else {
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
-                            const meterNum = meter.meterNumber || '—';
+                            const meterNum = meter.meterNumber || '';
                             const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                             
                             if (statusFilter === 'all' || 
@@ -1384,10 +1434,10 @@
                     const visibleMeters = [];
                     
                     if (meters.length === 0) {
-                        const meterNum = '—';
+                        const meterNum = '';
                         const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                         visibleMeters.push({
-                            meterNumber: meterNum,
+                            meterNumber: '',
                             location: '',
                             notes: '',
                             existing: existing,
@@ -1397,7 +1447,7 @@
                     } else {
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
-                            const meterNum = meter.meterNumber || '—';
+                            const meterNum = meter.meterNumber || '';
                             const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                             
                             if (statusFilter === 'all' || 
@@ -1486,10 +1536,14 @@
                 
                 const locationDisplay = meter.location ? '<div style="font-size:0.7rem; color:var(--gray);">📍 ' + escapeHtml(meter.location) + '</div>' : '';
                 
+                // For display, if meterNumber is empty, show '—'
+                const displayMeter = meter.meterNumber || '—';
+                
                 meterRowsData.push({
                     serial: serial,
                     accountNumber: account.accountNumber,
-                    meterNumber: meter.meterNumber,
+                    meterNumber: meter.meterNumber, // keep actual value (could be empty)
+                    displayMeter: displayMeter,
                     locationDisplay: locationDisplay,
                     consumption: consumption,
                     currentCharges: currentCharges,
@@ -1593,7 +1647,7 @@
                 '<td></td>' +
                 '<td></td>' +
                 '<td>' + accountDisplayHtml +
-                    '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.meterNumber) + '</div>' +
+                    '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.displayMeter) + '</div>' +
                     meterData.locationDisplay +
                 '</td>' +
                 '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input consumption-input" value="' + meterData.consumption.toFixed(2) + '" placeholder="kWh"></td>' +
