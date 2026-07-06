@@ -6,7 +6,6 @@
     <title>Water Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* (same as your existing water.html styles – unchanged) */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -599,6 +598,40 @@
             color: var(--gray);
         }
 
+        /* Entity Summary Row Styles */
+        .entity-summary-row {
+            background: #eef2ff !important;
+            border-top: 2px solid var(--primary);
+            border-bottom: 2px solid var(--primary);
+            font-weight: 700;
+        }
+        .entity-summary-row td {
+            padding: 8px 12px;
+            font-weight: 700;
+            color: var(--primary-dark);
+            background-color: #eef2ff !important;
+        }
+        .entity-summary-row td:first-child {
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--primary);
+        }
+        .entity-summary-row .summary-label {
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        .entity-summary-row .summary-total {
+            font-weight: 700;
+            color: #1e3a5f;
+            font-size: 0.85rem;
+            text-align: right;
+        }
+        .summary-dash {
+            color: var(--gray);
+            font-weight: 400;
+            text-align: center;
+        }
+
         @media (max-width: 1024px) {
             .container { padding: 20px 24px; }
             .data-table { min-width: 1200px; }
@@ -701,18 +734,18 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th style="width:40px;">No.</th>
-                    <th style="min-width:160px;">Entity Name</th>
-                    <th style="min-width:80px;">Type</th>
-                    <th style="min-width:150px;">Account / Meter</th>
-                    <th style="min-width:100px;">Consumption (m³)</th>
-                    <th style="min-width:100px;">Bill Amount ($)</th>
-                    <th style="min-width:100px;">Outstanding ($)</th>
-                    <th style="min-width:100px;">Previous Payment ($)</th>
-                    <th style="min-width:100px;">Amount Paid ($)</th>
-                    <th style="min-width:120px;">Notes</th>
-                    <th style="min-width:80px;">Status</th>
-                    <th style="min-width:90px;">Actions</th>
+                    <th style="width:40px; text-align:center;">No.</th>
+                    <th style="min-width:160px; text-align:left;">Entity Name</th>
+                    <th style="min-width:80px; text-align:left;">Type</th>
+                    <th style="min-width:150px; text-align:left;">Account / Meter</th>
+                    <th style="min-width:100px; text-align:right;">Consumption (m³)</th>
+                    <th style="min-width:100px; text-align:right;">Bill Amount ($)</th>
+                    <th style="min-width:100px; text-align:right;">Outstanding ($)</th>
+                    <th style="min-width:100px; text-align:right;">Previous Payment ($)</th>
+                    <th style="min-width:100px; text-align:right;">Amount Paid ($)</th>
+                    <th style="min-width:120px; text-align:left;">Notes</th>
+                    <th style="min-width:80px; text-align:center;">Status</th>
+                    <th style="min-width:90px; text-align:center;">Actions</th>
                 </tr>
             </thead>
             <tbody id="billsTableBody">
@@ -808,9 +841,11 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
+                console.log('🏫 Loaded ' + allSchools.length + ' schools');
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
+                console.log('🏢 Loaded ' + allDepartments.length + ' departments');
             }
         } catch(e) {
             console.error('Error loading entities:', e);
@@ -823,11 +858,16 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
+                console.log('📊 Loaded ' + existingBills.length + ' water bills for ' + month + '/' + year);
+                if (existingBills.length > 0) {
+                    console.log('📋 Sample bill:', existingBills[0]);
+                }
             } else {
                 existingBills = [];
+                console.warn('⚠️ Failed to load bills, status:', resp.status);
             }
         } catch(e) {
-            console.error(e);
+            console.error('Error loading bills:', e);
             existingBills = [];
         }
     }
@@ -847,7 +887,7 @@
                 if (entity.water_meter && entity.water_meter !== '—') {
                     meters.push({ meterNumber: entity.water_meter, location: '', notes: '' });
                 } else {
-                    meters.push({ meterNumber: '—', location: '', notes: '' });
+                    meters.push({ meterNumber: '', location: '', notes: '' });
                 }
                 accounts = [{ accountNumber: entity.water_account, meters: meters }];
             }
@@ -870,7 +910,7 @@
             if (!hasAccounts) {
                 accountGroups = [{
                     accountNumber: '—',
-                    meters: [{ meterNumber: '—', location: '', notes: '' }],
+                    meters: [{ meterNumber: '', location: '', notes: '' }],
                     isPlaceholder: true
                 }];
             }
@@ -901,7 +941,7 @@
             if (!hasAccounts) {
                 accountGroups = [{
                     accountNumber: '—',
-                    meters: [{ meterNumber: '—', location: '', notes: '' }],
+                    meters: [{ meterNumber: '', location: '', notes: '' }],
                     isPlaceholder: true
                 }];
             }
@@ -924,65 +964,95 @@
         return entities;
     }
 
-    // ========== ROBUST BILL LOOKUP (like telephone) ==========
+    // ========== BILL LOOKUP WITH ACCOUNT-ONLY FALLBACK ==========
+    function normalizeMeter(m) {
+        if (!m || m === '—' || m.trim() === '—') return '';
+        return m.trim();
+    }
+
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
-        let matchedBills = [];
+        const cleanAccount = (accountNumber || '').trim();
+        const cleanMeter = normalizeMeter(meterNumber);
         
-        // 1. Exact match on month/year + account + meter
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            if (bill.entity_type === entityType &&
-                bill.entity_id == entityId &&
-                (bill.account_number || '') === (accountNumber || '') &&
-                (bill.meter_number || '') === (meterNumber || '') &&
-                bill.month == month && 
-                bill.year == year) {
-                matchedBills.push(bill);
-            }
-        }
+        console.log(`🔍 Looking for: entity=${entityId}, account='${cleanAccount}', meter='${cleanMeter}', month=${month}, year=${year}`);
         
-        // 2. If none, try bill_month/bill_year
-        if (matchedBills.length === 0) {
+        // 1. If meter is empty, try to find any bill with this account (ignore meter)
+        if (cleanMeter === '') {
+            console.log(`ℹ️ Meter is empty, will match on account only.`);
             for (let i = 0; i < existingBills.length; i++) {
                 const bill = existingBills[i];
+                const billAccount = (bill.account_number || '').trim();
                 if (bill.entity_type === entityType &&
                     bill.entity_id == entityId &&
-                    (bill.account_number || '') === (accountNumber || '') &&
-                    (bill.meter_number || '') === (meterNumber || '') &&
+                    billAccount === cleanAccount &&
+                    bill.month == month && 
+                    bill.year == year) {
+                    console.log(`✅ Found match on account only: bill ID=${bill.id}`);
+                    return bill;
+                }
+            }
+            for (let i = 0; i < existingBills.length; i++) {
+                const bill = existingBills[i];
+                const billAccount = (bill.account_number || '').trim();
+                if (bill.entity_type === entityType &&
+                    bill.entity_id == entityId &&
+                    billAccount === cleanAccount &&
                     (bill.bill_month || bill.month) == month &&
                     (bill.bill_year || bill.year) == year) {
-                    matchedBills.push(bill);
+                    console.log(`✅ Found match on account only (bill_month): bill ID=${bill.id}`);
+                    return bill;
                 }
             }
         }
         
-        // 3. If still none, try entity_id + year (latest updated)
-        if (matchedBills.length === 0) {
+        // 2. If meter is not empty, try exact match on account + meter
+        if (cleanMeter !== '') {
             for (let i = 0; i < existingBills.length; i++) {
                 const bill = existingBills[i];
+                const billAccount = (bill.account_number || '').trim();
+                const billMeter = normalizeMeter(bill.meter_number);
                 if (bill.entity_type === entityType &&
                     bill.entity_id == entityId &&
+                    billAccount === cleanAccount &&
+                    billMeter === cleanMeter &&
+                    bill.month == month && 
                     bill.year == year) {
-                    matchedBills.push(bill);
+                    console.log(`✅ Found exact match: bill ID=${bill.id}`);
+                    return bill;
+                }
+            }
+            for (let i = 0; i < existingBills.length; i++) {
+                const bill = existingBills[i];
+                const billAccount = (bill.account_number || '').trim();
+                const billMeter = normalizeMeter(bill.meter_number);
+                if (bill.entity_type === entityType &&
+                    bill.entity_id == entityId &&
+                    billAccount === cleanAccount &&
+                    billMeter === cleanMeter &&
+                    (bill.bill_month || bill.month) == month &&
+                    (bill.bill_year || bill.year) == year) {
+                    console.log(`✅ Found bill_month match: bill ID=${bill.id}`);
+                    return bill;
                 }
             }
         }
         
-        if (matchedBills.length > 1) {
-            // Sort by updated_at descending (latest first)
-            matchedBills.sort((a, b) => {
-                const dateA = new Date(a.updated_at || a.created_at || 0);
-                const dateB = new Date(b.updated_at || b.created_at || 0);
-                return dateB - dateA;
-            });
-            console.log('📌 Using latest bill for meter', meterNumber, 'ID:', matchedBills[0].id);
-            return matchedBills[0];
+        // 3. Final fallback: account only (safety net)
+        console.log(`ℹ️ No exact match, trying account-only fallback...`);
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            const billAccount = (bill.account_number || '').trim();
+            if (bill.entity_type === entityType &&
+                bill.entity_id == entityId &&
+                billAccount === cleanAccount &&
+                bill.month == month && 
+                bill.year == year) {
+                console.log(`✅ Found match on account only (fallback): bill ID=${bill.id}`);
+                return bill;
+            }
         }
         
-        if (matchedBills.length === 1) {
-            return matchedBills[0];
-        }
-        
+        console.log(`❌ No bill found for account='${cleanAccount}'`);
         return null;
     }
 
@@ -1003,7 +1073,7 @@
         return false;
     }
 
-    // ============ SAVE FUNCTION - UPDATED WITH ROBUST LOOKUP ============
+    // ============ SAVE FUNCTION ============
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         
@@ -1012,7 +1082,6 @@
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
         const entityType = entityRow.getAttribute('data-entity-type');
         const entityName = entityRow.getAttribute('data-entity-name');
-        // We no longer disable saving based on has-accounts; we allow data entry always
         
         if (savingEntities.has(entityId)) {
             showToast('Already saving...', true);
@@ -1021,7 +1090,6 @@
         
         showSavingToast(entityName);
         
-        // Collect all meter rows
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow) {
@@ -1060,7 +1128,6 @@
             const accountNumber = row.getAttribute('data-account') || '';
             const meterNumber = row.getAttribute('data-meter') || '';
             
-            // Use robust lookup
             const existingBill = findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year);
             const existingBillId = existingBill ? existingBill.id : null;
             
@@ -1080,8 +1147,8 @@
             
             batchBills.push({
                 id: existingBillId,
-                account_number: accountNumber === '—' ? '' : accountNumber,
-                meter_number: meterNumber === '—' ? '' : meterNumber,
+                account_number: accountNumber === '—' ? '' : accountNumber.trim(),
+                meter_number: meterNumber === '—' ? '' : meterNumber.trim(),
                 consumption_m3: consumption,
                 current_charges: currentCharges,
                 unsettled_charges: unsettledCharges,
@@ -1098,6 +1165,7 @@
         savingEntities.add(entityId);
         
         try {
+            console.log('📤 Sending batch update for ' + entityName + ' (' + batchBills.length + ' bills)');
             const resp = await fetch('/api/utility-bills/batch-update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1105,6 +1173,7 @@
             });
             
             const result = await resp.json();
+            console.log('📥 Batch update response:', result);
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
             
@@ -1170,7 +1239,7 @@
         }
     }
 
-    // ============ RENDER WATER TABLE (Updated: all inputs enabled) ============
+    // ============ RENDER FUNCTION ============
     async function renderWaterTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1274,10 +1343,10 @@
                     const visibleMeters = [];
                     
                     if (meters.length === 0) {
-                        const meterNum = '—';
+                        const meterNum = '';
                         const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                         visibleMeters.push({
-                            meterNumber: meterNum,
+                            meterNumber: '',
                             location: '',
                             notes: '',
                             existing: existing,
@@ -1287,7 +1356,7 @@
                     } else {
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
-                            const meterNum = meter.meterNumber || '—';
+                            const meterNum = meter.meterNumber || '';
                             const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                             
                             if (statusFilter === 'all' || 
@@ -1359,10 +1428,10 @@
                     const visibleMeters = [];
                     
                     if (meters.length === 0) {
-                        const meterNum = '—';
+                        const meterNum = '';
                         const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                         visibleMeters.push({
-                            meterNumber: meterNum,
+                            meterNumber: '',
                             location: '',
                             notes: '',
                             existing: existing,
@@ -1372,7 +1441,7 @@
                     } else {
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
-                            const meterNum = meter.meterNumber || '—';
+                            const meterNum = meter.meterNumber || '';
                             const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                             
                             if (statusFilter === 'all' || 
@@ -1427,7 +1496,7 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY (ALL INPUTS ENABLED) ============
+    // ============ RENDER ENTITY WITH SUMMARY ROW ============
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1436,7 +1505,6 @@
         
         let meterRowsData = [];
         
-        // --- COLLECT ALL METER ROWS DATA ---
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             let isFirstMeterForAccount = true;
@@ -1456,16 +1524,17 @@
                 let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 let notes = parsedNotes.originalNotes || meter.notes || '';
                 
-                // Always collect paid amounts for status, even if no account
                 entityTotalPaid += amountPaid;
                 if (existing && amountPaid > 0) entityHasBills = true;
                 
                 const locationDisplay = meter.location ? '<div style="font-size:0.7rem; color:var(--gray);">📍 ' + escapeHtml(meter.location) + '</div>' : '';
+                const displayMeter = meter.meterNumber || '—';
                 
                 meterRowsData.push({
                     serial: serial,
                     accountNumber: account.accountNumber,
                     meterNumber: meter.meterNumber,
+                    displayMeter: displayMeter,
                     locationDisplay: locationDisplay,
                     consumption: consumption,
                     currentCharges: currentCharges,
@@ -1475,7 +1544,6 @@
                     notes: notes,
                     billId: meter.billId,
                     isFirstMeterForAccount: isFirstMeterForAccount,
-                    // No disabled flags – all inputs are editable
                 });
                 
                 isFirstMeterForAccount = false;
@@ -1483,7 +1551,7 @@
             }
         }
         
-        // --- ENTITY ROW ---
+        // Entity Row
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
         if (entityHasBills) {
@@ -1501,7 +1569,6 @@
         entityRow.setAttribute('data-entity-type', entity.type);
         entityRow.setAttribute('data-entity-id', entity.id);
         entityRow.setAttribute('data-entity-name', entity.name);
-        // We no longer use data-has-accounts to disable saving
         
         entityRow.innerHTML = '<td class="seq-number">' + startSerial + '</td>' +
             '<td class="entity-header"><span class="entity-name">' + escapeHtml(entity.name) + '</span>' +
@@ -1514,14 +1581,14 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // --- LOOP THROUGH METER ROWS WITH SEPARATORS ---
+        // Meter Rows
         let currentAccount = null;
+        let meterRowElements = [];
         
         for (let i = 0; i < meterRowsData.length; i++) {
             const meterData = meterRowsData[i];
             const accountNum = meterData.accountNumber;
             
-            // --- IF NEW ACCOUNT, ADD SEPARATOR ---
             if (currentAccount !== null && currentAccount !== accountNum) {
                 const accountDisplay = accountNum && accountNum !== '—' ? accountNum : 'No Account';
                 const separatorRow = document.createElement('tr');
@@ -1530,7 +1597,6 @@
                 tbody.appendChild(separatorRow);
             }
             
-            // --- IF FIRST ACCOUNT, ADD SEPARATOR ---
             if (currentAccount === null) {
                 currentAccount = accountNum;
                 const accountDisplay = accountNum && accountNum !== '—' ? accountNum : 'No Account';
@@ -1540,7 +1606,6 @@
                 tbody.appendChild(separatorRow);
             }
             
-            // --- METER ROW (all inputs enabled) ---
             const meterRow = document.createElement('tr');
             meterRow.className = 'meter-row';
             meterRow.setAttribute('data-account', escapeHtml(meterData.accountNumber));
@@ -1564,25 +1629,85 @@
                 }
             }
             
-            meterRow.innerHTML = '<td class="seq-number">' + (meterData.isFirstMeterForAccount ? meterData.serial : '') + '</td>' +
+            meterRow.innerHTML = 
+                '<td class="seq-number">' + (meterData.isFirstMeterForAccount ? meterData.serial : '') + '</td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td>' + accountDisplayHtml +
-                    '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.meterNumber) + '</div>' +
+                    '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.displayMeter) + '</div>' +
                     meterData.locationDisplay +
                 '</td>' +
-                '<td><input type="number" step="0.01" class="inline-input consumption-input" value="' + meterData.consumption.toFixed(2) + '" placeholder="m³"></td>' +
-                '<td><input type="number" step="0.01" class="inline-input current-charge-input" value="' + meterData.currentCharges.toFixed(2) + '" placeholder="$"></td>' +
-                '<td><input type="number" step="0.01" class="inline-input outstanding-input" value="' + meterData.outstandingCharges.toFixed(2) + '" placeholder="$"></td>' +
-                '<td><input type="number" step="0.01" class="inline-input previous-paid-input" value="' + meterData.previousPayment.toFixed(2) + '" placeholder="$"></td>' +
-                '<td class="amount-paid-cell">' + amountPaidHtml + '</td>' +
+                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input consumption-input" value="' + meterData.consumption.toFixed(2) + '" placeholder="m³"></td>' +
+                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input current-charge-input" value="' + meterData.currentCharges.toFixed(2) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input outstanding-input" value="' + meterData.outstandingCharges.toFixed(2) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input previous-paid-input" value="' + meterData.previousPayment.toFixed(2) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;" class="amount-paid-cell">' + amountPaidHtml + '</td>' +
                 '<td class="notes-cell"><input type="text" class="inline-input notes-input" value="' + escapeHtml(meterData.notes) + '" placeholder="Notes..."></td>' +
-                '<td></td>' +
-                '<td></td>';
+                '<td style="text-align:center;"></td>' +
+                '<td style="text-align:center;"></td>';
             tbody.appendChild(meterRow);
+            meterRowElements.push(meterRow);
             
             currentAccount = accountNum;
         }
+        
+        // ========== SUMMARY ROW ==========
+        let totalConsumption = 0;
+        let totalBillAmount = 0;
+        let totalOutstanding = 0;
+        
+        meterRowsData.forEach(m => {
+            totalConsumption += m.consumption;
+            totalBillAmount += m.currentCharges;
+            totalOutstanding += m.outstandingCharges;
+        });
+        
+        const summaryRow = document.createElement('tr');
+        summaryRow.className = 'entity-summary-row';
+        summaryRow.setAttribute('data-entity-id', entity.id);
+        summaryRow.innerHTML = `
+            <td class="summary-label" style="text-align:center;">Total</td>
+            <td colspan="3"></td>
+            <td class="summary-total" id="summary-consumption-${entity.id}" style="text-align:right;">${totalConsumption.toFixed(2)}</td>
+            <td class="summary-total" id="summary-bill-${entity.id}" style="text-align:right;">${totalBillAmount.toFixed(2)}</td>
+            <td class="summary-total" id="summary-outstanding-${entity.id}" style="text-align:right;">${totalOutstanding.toFixed(2)}</td>
+            <td class="summary-dash" style="text-align:center;">—</td>
+            <td class="summary-dash" style="text-align:center;">—</td>
+            <td></td>
+            <td style="text-align:center;"></td>
+            <td style="text-align:center;"></td>
+        `;
+        tbody.appendChild(summaryRow);
+        
+        // Auto-update totals on input
+        meterRowElements.forEach((row) => {
+            const consumptionInput = row.querySelector('.consumption-input');
+            const billInput = row.querySelector('.current-charge-input');
+            const outstandingInput = row.querySelector('.outstanding-input');
+            
+            const updateFunction = function() {
+                let totalCons = 0, totalBill = 0, totalOut = 0;
+                meterRowElements.forEach(mRow => {
+                    const cInput = mRow.querySelector('.consumption-input');
+                    const bInput = mRow.querySelector('.current-charge-input');
+                    const oInput = mRow.querySelector('.outstanding-input');
+                    totalCons += parseFloat(cInput ? cInput.value : 0) || 0;
+                    totalBill += parseFloat(bInput ? bInput.value : 0) || 0;
+                    totalOut += parseFloat(oInput ? oInput.value : 0) || 0;
+                });
+                
+                const summaryCons = document.getElementById(`summary-consumption-${entity.id}`);
+                const summaryBill = document.getElementById(`summary-bill-${entity.id}`);
+                const summaryOut = document.getElementById(`summary-outstanding-${entity.id}`);
+                if (summaryCons) summaryCons.textContent = totalCons.toFixed(2);
+                if (summaryBill) summaryBill.textContent = totalBill.toFixed(2);
+                if (summaryOut) summaryOut.textContent = totalOut.toFixed(2);
+            };
+            
+            if (consumptionInput) consumptionInput.addEventListener('input', updateFunction);
+            if (billInput) billInput.addEventListener('input', updateFunction);
+            if (outstandingInput) outstandingInput.addEventListener('input', updateFunction);
+        });
         
         return serial;
     }
@@ -1598,6 +1723,7 @@
     }
     
     function attachEventListeners() {
+        // Save button click
         document.getElementById('billsTableBody').addEventListener('click', async function(e) {
             const saveBtn = e.target.closest('.save-entity-btn');
             if (saveBtn && !saveBtn.disabled) {
@@ -1607,6 +1733,20 @@
                 }
                 return;
             }
+        });
+        
+        // Auto-refresh on month/year change (like telephone.html)
+        const monthSelect = document.getElementById('globalMonth');
+        const yearSelect = document.getElementById('globalYear');
+        monthSelect.addEventListener('change', function() {
+            const month = parseInt(this.value);
+            const year = parseInt(document.getElementById('globalYear').value);
+            renderWaterTable(month, year);
+        });
+        yearSelect.addEventListener('change', function() {
+            const month = parseInt(document.getElementById('globalMonth').value);
+            const year = parseInt(this.value);
+            renderWaterTable(month, year);
         });
     }
     
