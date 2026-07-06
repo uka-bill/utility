@@ -841,9 +841,11 @@
             ]);
             if (schoolsRes.ok) {
                 allSchools = await schoolsRes.json();
+                console.log('🏫 Loaded ' + allSchools.length + ' schools');
             }
             if (deptsRes.ok) {
                 allDepartments = await deptsRes.json();
+                console.log('🏢 Loaded ' + allDepartments.length + ' departments');
             }
         } catch(e) {
             console.error('Error loading entities:', e);
@@ -856,12 +858,17 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
-                console.log('📊 Loaded ' + existingBills.length + ' electricity bills');
+                console.log('📊 Loaded ' + existingBills.length + ' electricity bills for ' + month + '/' + year);
+                // Log a sample bill to see structure
+                if (existingBills.length > 0) {
+                    console.log('📋 Sample bill:', existingBills[0]);
+                }
             } else {
                 existingBills = [];
+                console.warn('⚠️ Failed to load bills, status:', resp.status);
             }
         } catch(e) {
-            console.error(e);
+            console.error('Error loading bills:', e);
             existingBills = [];
         }
     }
@@ -958,36 +965,49 @@
         return entities;
     }
 
-    // ========== FIXED: ROBUST BILL LOOKUP (NO DANGEROUS FALLBACK) ==========
+    // ========== FIXED: BILL LOOKUP WITH TRIMMING AND DEBUG LOGS ==========
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
-        // Only match by EXACT account + meter + month + year
-        // If no exact match, return null (show zeros)
+        // Trim whitespace from account and meter numbers for comparison
+        const cleanAccount = (accountNumber || '').trim();
+        const cleanMeter = (meterNumber || '').trim();
+        
+        console.log(`🔍 Looking for: entity=${entityId}, account='${cleanAccount}', meter='${cleanMeter}', month=${month}, year=${year}`);
+        
+        // First try: exact match on month/year + account + meter
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
+            const billAccount = (bill.account_number || '').trim();
+            const billMeter = (bill.meter_number || '').trim();
+            
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
-                (bill.account_number || '') === (accountNumber || '') &&
-                (bill.meter_number || '') === (meterNumber || '') &&
+                billAccount === cleanAccount &&
+                billMeter === cleanMeter &&
                 bill.month == month && 
                 bill.year == year) {
+                console.log(`✅ Found exact match: bill ID=${bill.id}`);
                 return bill;
             }
         }
         
-        // Fallback: try bill_month/bill_year if month/year fields don't match
+        // Second try: use bill_month/bill_year if available
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
+            const billAccount = (bill.account_number || '').trim();
+            const billMeter = (bill.meter_number || '').trim();
+            
             if (bill.entity_type === entityType &&
                 bill.entity_id == entityId &&
-                (bill.account_number || '') === (accountNumber || '') &&
-                (bill.meter_number || '') === (meterNumber || '') &&
+                billAccount === cleanAccount &&
+                billMeter === cleanMeter &&
                 (bill.bill_month || bill.month) == month &&
                 (bill.bill_year || bill.year) == year) {
+                console.log(`✅ Found bill_month match: bill ID=${bill.id}`);
                 return bill;
             }
         }
         
-        // NO MORE DANGEROUS FALLBACK - if no exact match, return null
+        console.log(`❌ No bill found for account='${cleanAccount}', meter='${cleanMeter}'`);
         return null;
     }
 
@@ -1064,7 +1084,6 @@
             const accountNumber = row.getAttribute('data-account') || '';
             const meterNumber = row.getAttribute('data-meter') || '';
             
-            // Use the fixed findBillForMeter - no dangerous fallback
             const existingBill = findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year);
             const existingBillId = existingBill ? existingBill.id : null;
             
@@ -1084,8 +1103,8 @@
             
             batchBills.push({
                 id: existingBillId,
-                account_number: accountNumber === '—' ? '' : accountNumber,
-                meter_number: meterNumber === '—' ? '' : meterNumber,
+                account_number: accountNumber === '—' ? '' : accountNumber.trim(),
+                meter_number: meterNumber === '—' ? '' : meterNumber.trim(),
                 consumption_kwh: consumption,
                 current_charges: currentCharges,
                 unsettled_charges: unsettledCharges,
@@ -1102,6 +1121,7 @@
         savingEntities.add(entityId);
         
         try {
+            console.log('📤 Sending batch update for ' + entityName + ' (' + batchBills.length + ' bills)');
             const resp = await fetch('/api/utility-bills/batch-update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1109,6 +1129,7 @@
             });
             
             const result = await resp.json();
+            console.log('📥 Batch update response:', result);
             const endTime = performance.now();
             const totalTime = (endTime - startTime).toFixed(0);
             
