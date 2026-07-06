@@ -598,7 +598,7 @@
             color: var(--gray);
         }
 
-        /* NEW: Entity Summary Row Styles */
+        /* Entity Summary Row Styles */
         .entity-summary-row {
             background: #eef2ff !important;
             border-top: 2px solid var(--primary);
@@ -624,10 +624,12 @@
             font-weight: 700;
             color: #1e3a5f;
             font-size: 0.85rem;
+            text-align: right;
         }
         .summary-dash {
             color: var(--gray);
             font-weight: 400;
+            text-align: center;
         }
 
         @media (max-width: 1024px) {
@@ -732,18 +734,18 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th style="width:40px;">No.</th>
-                    <th style="min-width:160px;">Entity Name</th>
-                    <th style="min-width:80px;">Type</th>
-                    <th style="min-width:150px;">Account / Meter</th>
-                    <th style="min-width:100px;">Consumption (kWh)</th>
-                    <th style="min-width:100px;">Bill Amount ($)</th>
-                    <th style="min-width:100px;">Outstanding ($)</th>
-                    <th style="min-width:100px;">Previous Payment ($)</th>
-                    <th style="min-width:100px;">Amount Paid ($)</th>
-                    <th style="min-width:120px;">Notes</th>
-                    <th style="min-width:80px;">Status</th>
-                    <th style="min-width:90px;">Actions</th>
+                    <th style="width:40px; text-align:center;">No.</th>
+                    <th style="min-width:160px; text-align:left;">Entity Name</th>
+                    <th style="min-width:80px; text-align:left;">Type</th>
+                    <th style="min-width:150px; text-align:left;">Account / Meter</th>
+                    <th style="min-width:100px; text-align:right;">Consumption (kWh)</th>
+                    <th style="min-width:100px; text-align:right;">Bill Amount ($)</th>
+                    <th style="min-width:100px; text-align:right;">Outstanding ($)</th>
+                    <th style="min-width:100px; text-align:right;">Previous Payment ($)</th>
+                    <th style="min-width:100px; text-align:right;">Amount Paid ($)</th>
+                    <th style="min-width:120px; text-align:left;">Notes</th>
+                    <th style="min-width:80px; text-align:center;">Status</th>
+                    <th style="min-width:90px; text-align:center;">Actions</th>
                 </tr>
             </thead>
             <tbody id="billsTableBody">
@@ -854,6 +856,7 @@
             const resp = await fetch(url);
             if (resp.ok) {
                 existingBills = await resp.json();
+                console.log('📊 Loaded ' + existingBills.length + ' electricity bills');
             } else {
                 existingBills = [];
             }
@@ -955,11 +958,10 @@
         return entities;
     }
 
-    // ========== ROBUST BILL LOOKUP ==========
+    // ========== FIXED: ROBUST BILL LOOKUP (NO DANGEROUS FALLBACK) ==========
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
-        let matchedBills = [];
-        
-        // 1. Exact match on month/year + account + meter
+        // Only match by EXACT account + meter + month + year
+        // If no exact match, return null (show zeros)
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             if (bill.entity_type === entityType &&
@@ -968,51 +970,24 @@
                 (bill.meter_number || '') === (meterNumber || '') &&
                 bill.month == month && 
                 bill.year == year) {
-                matchedBills.push(bill);
+                return bill;
             }
         }
         
-        // 2. If none, try bill_month/bill_year
-        if (matchedBills.length === 0) {
-            for (let i = 0; i < existingBills.length; i++) {
-                const bill = existingBills[i];
-                if (bill.entity_type === entityType &&
-                    bill.entity_id == entityId &&
-                    (bill.account_number || '') === (accountNumber || '') &&
-                    (bill.meter_number || '') === (meterNumber || '') &&
-                    (bill.bill_month || bill.month) == month &&
-                    (bill.bill_year || bill.year) == year) {
-                    matchedBills.push(bill);
-                }
+        // Fallback: try bill_month/bill_year if month/year fields don't match
+        for (let i = 0; i < existingBills.length; i++) {
+            const bill = existingBills[i];
+            if (bill.entity_type === entityType &&
+                bill.entity_id == entityId &&
+                (bill.account_number || '') === (accountNumber || '') &&
+                (bill.meter_number || '') === (meterNumber || '') &&
+                (bill.bill_month || bill.month) == month &&
+                (bill.bill_year || bill.year) == year) {
+                return bill;
             }
         }
         
-        // 3. If still none, try entity_id + year (latest updated)
-        if (matchedBills.length === 0) {
-            for (let i = 0; i < existingBills.length; i++) {
-                const bill = existingBills[i];
-                if (bill.entity_type === entityType &&
-                    bill.entity_id == entityId &&
-                    bill.year == year) {
-                    matchedBills.push(bill);
-                }
-            }
-        }
-        
-        if (matchedBills.length > 1) {
-            matchedBills.sort((a, b) => {
-                const dateA = new Date(a.updated_at || a.created_at || 0);
-                const dateB = new Date(b.updated_at || b.created_at || 0);
-                return dateB - dateA;
-            });
-            console.log('📌 Using latest bill for meter', meterNumber, 'ID:', matchedBills[0].id);
-            return matchedBills[0];
-        }
-        
-        if (matchedBills.length === 1) {
-            return matchedBills[0];
-        }
-        
+        // NO MORE DANGEROUS FALLBACK - if no exact match, return null
         return null;
     }
 
@@ -1089,6 +1064,7 @@
             const accountNumber = row.getAttribute('data-account') || '';
             const meterNumber = row.getAttribute('data-meter') || '';
             
+            // Use the fixed findBillForMeter - no dangerous fallback
             const existingBill = findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year);
             const existingBillId = existingBill ? existingBill.id : null;
             
@@ -1590,28 +1566,30 @@
                 }
             }
             
-            meterRow.innerHTML = '<td class="seq-number">' + (meterData.isFirstMeterForAccount ? meterData.serial : '') + '</td>' +
+            // Build the meter row with proper alignment classes
+            meterRow.innerHTML = 
+                '<td class="seq-number">' + (meterData.isFirstMeterForAccount ? meterData.serial : '') + '</td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td>' + accountDisplayHtml +
                     '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.meterNumber) + '</div>' +
                     meterData.locationDisplay +
                 '</td>' +
-                '<td><input type="number" step="0.01" class="inline-input consumption-input" value="' + meterData.consumption.toFixed(2) + '" placeholder="kWh"></td>' +
-                '<td><input type="number" step="0.01" class="inline-input current-charge-input" value="' + meterData.currentCharges.toFixed(2) + '" placeholder="$"></td>' +
-                '<td><input type="number" step="0.01" class="inline-input outstanding-input" value="' + meterData.outstandingCharges.toFixed(2) + '" placeholder="$"></td>' +
-                '<td><input type="number" step="0.01" class="inline-input previous-paid-input" value="' + meterData.previousPayment.toFixed(2) + '" placeholder="$"></td>' +
-                '<td class="amount-paid-cell">' + amountPaidHtml + '</td>' +
+                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input consumption-input" value="' + meterData.consumption.toFixed(2) + '" placeholder="kWh"></td>' +
+                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input current-charge-input" value="' + meterData.currentCharges.toFixed(2) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input outstanding-input" value="' + meterData.outstandingCharges.toFixed(2) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input previous-paid-input" value="' + meterData.previousPayment.toFixed(2) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;" class="amount-paid-cell">' + amountPaidHtml + '</td>' +
                 '<td class="notes-cell"><input type="text" class="inline-input notes-input" value="' + escapeHtml(meterData.notes) + '" placeholder="Notes..."></td>' +
-                '<td></td>' +
-                '<td></td>';
+                '<td style="text-align:center;"></td>' +
+                '<td style="text-align:center;"></td>';
             tbody.appendChild(meterRow);
             meterRowElements.push(meterRow);
             
             currentAccount = accountNum;
         }
         
-        // ==================== NEW: ENTITY SUMMARY ROW ====================
+        // ==================== ENTITY SUMMARY ROW ====================
         // Calculate totals for the summary row
         let totalConsumption = 0;
         let totalBillAmount = 0;
@@ -1627,36 +1605,27 @@
         summaryRow.className = 'entity-summary-row';
         summaryRow.setAttribute('data-entity-id', entity.id);
         summaryRow.innerHTML = `
-            <td class="summary-label">Total</td>
+            <td class="summary-label" style="text-align:center;">Total</td>
             <td colspan="3"></td>
-            <td class="summary-total" id="summary-consumption-${entity.id}">${totalConsumption.toFixed(2)}</td>
-            <td class="summary-total" id="summary-bill-${entity.id}">${totalBillAmount.toFixed(2)}</td>
-            <td class="summary-total" id="summary-outstanding-${entity.id}">${totalOutstanding.toFixed(2)}</td>
-            <td class="summary-dash">—</td>
-            <td class="summary-dash">—</td>
+            <td class="summary-total" id="summary-consumption-${entity.id}" style="text-align:right;">${totalConsumption.toFixed(2)}</td>
+            <td class="summary-total" id="summary-bill-${entity.id}" style="text-align:right;">${totalBillAmount.toFixed(2)}</td>
+            <td class="summary-total" id="summary-outstanding-${entity.id}" style="text-align:right;">${totalOutstanding.toFixed(2)}</td>
+            <td class="summary-dash" style="text-align:center;">—</td>
+            <td class="summary-dash" style="text-align:center;">—</td>
             <td></td>
-            <td></td>
-            <td></td>
+            <td style="text-align:center;"></td>
+            <td style="text-align:center;"></td>
         `;
         tbody.appendChild(summaryRow);
         
         // ==================== AUTO-UPDATE TOTALS ON INPUT ====================
         // Add event listeners to the meter rows to update the summary row
-        meterRowElements.forEach((row, index) => {
+        meterRowElements.forEach((row) => {
             const consumptionInput = row.querySelector('.consumption-input');
             const billInput = row.querySelector('.current-charge-input');
             const outstandingInput = row.querySelector('.outstanding-input');
             
             const updateFunction = function() {
-                // Recalculate totals from ALL meter rows of this entity
-                let cons = 0, bill = 0, out = 0;
-                // Use meterRowsData to avoid re-querying DOM, but we need the current values
-                const allMeterRows = tbody.querySelectorAll(`.meter-row[data-entity-id="${entity.id}"]`);
-                // Wait, we didn't set data-entity-id on meter rows. Let's use a different approach.
-                // Since we have the meterRowsData array and the inputs are in the DOM, we can just query them again.
-                // Better: use a class or attribute on the meter rows to identify them.
-                // Let's add data-entity-id to meter rows.
-                // But we already have them in meterRowElements. We'll just iterate over meterRowElements.
                 let totalCons = 0, totalBill = 0, totalOut = 0;
                 meterRowElements.forEach(mRow => {
                     const cInput = mRow.querySelector('.consumption-input');
@@ -1667,7 +1636,6 @@
                     totalOut += parseFloat(oInput ? oInput.value : 0) || 0;
                 });
                 
-                // Update summary row
                 const summaryCons = document.getElementById(`summary-consumption-${entity.id}`);
                 const summaryBill = document.getElementById(`summary-bill-${entity.id}`);
                 const summaryOut = document.getElementById(`summary-outstanding-${entity.id}`);
