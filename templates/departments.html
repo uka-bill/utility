@@ -1165,6 +1165,7 @@
         document.body.style.overflow = 'hidden';
     }
     
+    // ============ UPDATED renderEditForm with data-type on inputs ============
     function renderEditForm() {
         const container = document.getElementById('modalBody');
         
@@ -1186,8 +1187,8 @@
                     html += `<div class="numbers-list">`;
                     numbers.forEach((num, numIdx) => {
                         html += `<div class="meter-item" data-num-idx="${numIdx}">
-                            <input type="text" class="edit-input phone-number-input" data-acc-idx="${accIdx}" data-num-idx="${numIdx}" value="${escapeHtml(num.phoneNumber || '')}" placeholder="Phone Number">
-                            <input type="text" class="edit-input phone-location-input" data-acc-idx="${accIdx}" data-num-idx="${numIdx}" value="${escapeHtml(num.location || '')}" placeholder="Location">
+                            <input type="text" class="edit-input phone-number-input" data-acc-idx="${accIdx}" data-num-idx="${numIdx}" data-type="${type}" value="${escapeHtml(num.phoneNumber || '')}" placeholder="Phone Number">
+                            <input type="text" class="edit-input phone-location-input" data-acc-idx="${accIdx}" data-num-idx="${numIdx}" data-type="${type}" value="${escapeHtml(num.location || '')}" placeholder="Location">
                             <button type="button" class="remove-btn" onclick="removePhoneNumber(${accIdx}, ${numIdx})">✖</button>
                         </div>`;
                     });
@@ -1198,8 +1199,8 @@
                     html += `<div class="meters-list">`;
                     meters.forEach((meter, meterIdx) => {
                         html += `<div class="meter-item" data-meter-idx="${meterIdx}">
-                            <input type="text" class="edit-input meter-number-input" data-acc-idx="${accIdx}" data-meter-idx="${meterIdx}" value="${escapeHtml(meter.meterNumber || '')}" placeholder="Meter Number">
-                            <input type="text" class="edit-input meter-location-input" data-acc-idx="${accIdx}" data-meter-idx="${meterIdx}" value="${escapeHtml(meter.location || '')}" placeholder="Location">
+                            <input type="text" class="edit-input meter-number-input" data-acc-idx="${accIdx}" data-meter-idx="${meterIdx}" data-type="${type}" value="${escapeHtml(meter.meterNumber || '')}" placeholder="Meter Number">
+                            <input type="text" class="edit-input meter-location-input" data-acc-idx="${accIdx}" data-meter-idx="${meterIdx}" data-type="${type}" value="${escapeHtml(meter.location || '')}" placeholder="Location">
                             <button type="button" class="remove-btn" onclick="removeMeter(${accIdx}, ${meterIdx}, '${type}')">✖</button>
                         </div>`;
                     });
@@ -1319,6 +1320,7 @@
             telephoneAccounts: []
         };
         
+        // Water
         const waterAccounts = currentEditingDept.water_accounts;
         for (let i = 0; i < waterAccounts.length; i++) {
             const accountNumber = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="water"]`)?.value || '';
@@ -1334,6 +1336,7 @@
             deptData.waterAccounts.push({ accountNumber, meters });
         }
         
+        // Electricity
         const electricityAccounts = currentEditingDept.electricity_accounts;
         for (let i = 0; i < electricityAccounts.length; i++) {
             const accountNumber = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="electricity"]`)?.value || '';
@@ -1349,13 +1352,14 @@
             deptData.electricityAccounts.push({ accountNumber, meters });
         }
         
+        // Telephone
         const telephoneAccounts = currentEditingDept.telephone_accounts;
         for (let i = 0; i < telephoneAccounts.length; i++) {
             const accountNumber = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="telephone"]`)?.value || '';
             const numbers = [];
-            const phoneInputs = document.querySelectorAll(`.phone-number-input[data-acc-idx="${i}"]`);
+            const phoneInputs = document.querySelectorAll(`.phone-number-input[data-acc-idx="${i}"][data-type="telephone"]`);
             phoneInputs.forEach((input, pIdx) => {
-                const locationInput = document.querySelector(`.phone-location-input[data-acc-idx="${i}"][data-num-idx="${pIdx}"]`);
+                const locationInput = document.querySelector(`.phone-location-input[data-acc-idx="${i}"][data-type="telephone"][data-num-idx="${pIdx}"]`);
                 numbers.push({
                     phoneNumber: input.value,
                     location: locationInput?.value || ''
@@ -1379,18 +1383,22 @@
         
         showLoading(true);
         try {
+            console.log('📤 Saving department data:', deptData);
             const response = await fetch(`/api/departments/${currentEditingDept.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(deptData)
             });
             const result = await response.json();
+            console.log('📥 Server response:', result);
+            
             if (response.ok && result.success) {
                 showMessage('Department updated successfully');
                 closeEditModal();
                 await loadDepartments();
             } else {
                 showMessage(result.error || 'Failed to update department', true);
+                console.error('❌ Save failed:', result);
             }
         } catch (error) {
             showMessage('Network error', true);
@@ -1418,7 +1426,6 @@
         }
     }
     
-    // ============ UPDATED ADD NEW DEPARTMENT WITH BETTER DEBUGGING ============
     async function addNewDepartment() {
         const deptData = {
             unitName: 'New Unit',
@@ -1457,7 +1464,7 @@
                 setTimeout(() => {
                     const found = allDepartments.find(d => d.id === newDeptId);
                     if (found) {
-                        // Find the row with this ID and highlight it
+                        // Highlight and open edit
                         const rows = document.querySelectorAll('.edit-dept-btn');
                         for (let btn of rows) {
                             if (parseInt(btn.getAttribute('data-id')) === newDeptId) {
@@ -1472,7 +1479,6 @@
                                 }
                             }
                         }
-                        // Also open the edit modal
                         setTimeout(() => openEditModal(newDeptId), 500);
                     } else {
                         showMessage(`Department ID ${newDeptId} created but not found in list. Try refreshing.`, true);
