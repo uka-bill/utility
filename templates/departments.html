@@ -1165,6 +1165,68 @@
         document.body.style.overflow = 'hidden';
     }
     
+    // ========== SYNC FORM DATA TO OBJECT (FIX FOR DISAPPEARING VALUES) ==========
+    function syncFormDataToObject() {
+        if (!currentEditingDept) return;
+        
+        // Sync water accounts
+        const waterAccounts = currentEditingDept.water_accounts || [];
+        for (let i = 0; i < waterAccounts.length; i++) {
+            const accountNumberInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="water"]`);
+            if (accountNumberInput) {
+                waterAccounts[i].accountNumber = accountNumberInput.value || '';
+            }
+            const meterInputs = document.querySelectorAll(`.meter-number-input[data-acc-idx="${i}"][data-type="water"]`);
+            const meters = [];
+            meterInputs.forEach((input, mIdx) => {
+                const locationInput = document.querySelector(`.meter-location-input[data-acc-idx="${i}"][data-type="water"][data-meter-idx="${mIdx}"]`);
+                meters.push({
+                    meterNumber: input.value || '',
+                    location: locationInput?.value || ''
+                });
+            });
+            waterAccounts[i].meters = meters;
+        }
+        
+        // Sync electricity accounts
+        const electricityAccounts = currentEditingDept.electricity_accounts || [];
+        for (let i = 0; i < electricityAccounts.length; i++) {
+            const accountNumberInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="electricity"]`);
+            if (accountNumberInput) {
+                electricityAccounts[i].accountNumber = accountNumberInput.value || '';
+            }
+            const meterInputs = document.querySelectorAll(`.meter-number-input[data-acc-idx="${i}"][data-type="electricity"]`);
+            const meters = [];
+            meterInputs.forEach((input, mIdx) => {
+                const locationInput = document.querySelector(`.meter-location-input[data-acc-idx="${i}"][data-type="electricity"][data-meter-idx="${mIdx}"]`);
+                meters.push({
+                    meterNumber: input.value || '',
+                    location: locationInput?.value || ''
+                });
+            });
+            electricityAccounts[i].meters = meters;
+        }
+        
+        // Sync telephone accounts
+        const telephoneAccounts = currentEditingDept.telephone_accounts || [];
+        for (let i = 0; i < telephoneAccounts.length; i++) {
+            const accountNumberInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="telephone"]`);
+            if (accountNumberInput) {
+                telephoneAccounts[i].accountNumber = accountNumberInput.value || '';
+            }
+            const phoneInputs = document.querySelectorAll(`.phone-number-input[data-acc-idx="${i}"][data-type="telephone"]`);
+            const numbers = [];
+            phoneInputs.forEach((input, pIdx) => {
+                const locationInput = document.querySelector(`.phone-location-input[data-acc-idx="${i}"][data-type="telephone"][data-num-idx="${pIdx}"]`);
+                numbers.push({
+                    phoneNumber: input.value || '',
+                    location: locationInput?.value || ''
+                });
+            });
+            telephoneAccounts[i].numbers = numbers;
+        }
+    }
+    
     // ============ UPDATED renderEditForm with data-type on inputs ============
     function renderEditForm() {
         const container = document.getElementById('modalBody');
@@ -1254,7 +1316,9 @@
         container.innerHTML = html;
     }
     
+    // ========== UPDATED: Add/Remove functions now sync data first ==========
     window.addAccount = function(type) {
+        syncFormDataToObject(); // Save current form data before modifying
         if (type === 'water') {
             currentEditingDept.water_accounts.push({ accountNumber: '', meters: [] });
         } else if (type === 'electricity') {
@@ -1266,6 +1330,7 @@
     };
     
     window.removeAccount = function(accountIndex, type) {
+        syncFormDataToObject(); // Save current form data before modifying
         if (type === 'water') {
             currentEditingDept.water_accounts.splice(accountIndex, 1);
         } else if (type === 'electricity') {
@@ -1277,6 +1342,7 @@
     };
     
     window.addMeter = function(accountIndex, type) {
+        syncFormDataToObject(); // Save current form data before modifying
         if (type === 'water') {
             if (!currentEditingDept.water_accounts[accountIndex].meters) currentEditingDept.water_accounts[accountIndex].meters = [];
             currentEditingDept.water_accounts[accountIndex].meters.push({ meterNumber: '', location: '' });
@@ -1288,6 +1354,7 @@
     };
     
     window.removeMeter = function(accountIndex, meterIndex, type) {
+        syncFormDataToObject(); // Save current form data before modifying
         if (type === 'water') {
             currentEditingDept.water_accounts[accountIndex].meters.splice(meterIndex, 1);
         } else if (type === 'electricity') {
@@ -1297,17 +1364,22 @@
     };
     
     window.addPhoneNumber = function(accountIndex) {
+        syncFormDataToObject(); // Save current form data before modifying
         if (!currentEditingDept.telephone_accounts[accountIndex].numbers) currentEditingDept.telephone_accounts[accountIndex].numbers = [];
         currentEditingDept.telephone_accounts[accountIndex].numbers.push({ phoneNumber: '', location: '' });
         renderEditForm();
     };
     
     window.removePhoneNumber = function(accountIndex, numberIndex) {
+        syncFormDataToObject(); // Save current form data before modifying
         currentEditingDept.telephone_accounts[accountIndex].numbers.splice(numberIndex, 1);
         renderEditForm();
     };
     
     function collectFormData() {
+        // First sync the DOM data to the object to ensure we have the latest values
+        syncFormDataToObject();
+        
         const deptData = {
             unitName: document.getElementById('editUnitName')?.value || '',
             divisionName: document.getElementById('editDivisionName')?.value || '',
@@ -1315,58 +1387,10 @@
             hotlineNumbers: document.getElementById('editHotlineNumbers')?.value || '',
             address: document.getElementById('editAddress')?.value || '',
             notes: document.getElementById('editNotes')?.value || '',
-            waterAccounts: [],
-            electricityAccounts: [],
-            telephoneAccounts: []
+            waterAccounts: currentEditingDept.water_accounts || [],
+            electricityAccounts: currentEditingDept.electricity_accounts || [],
+            telephoneAccounts: currentEditingDept.telephone_accounts || []
         };
-        
-        // Water
-        const waterAccounts = currentEditingDept.water_accounts;
-        for (let i = 0; i < waterAccounts.length; i++) {
-            const accountNumber = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="water"]`)?.value || '';
-            const meters = [];
-            const meterInputs = document.querySelectorAll(`.meter-number-input[data-acc-idx="${i}"][data-type="water"]`);
-            meterInputs.forEach((input, mIdx) => {
-                const locationInput = document.querySelector(`.meter-location-input[data-acc-idx="${i}"][data-type="water"][data-meter-idx="${mIdx}"]`);
-                meters.push({
-                    meterNumber: input.value,
-                    location: locationInput?.value || ''
-                });
-            });
-            deptData.waterAccounts.push({ accountNumber, meters });
-        }
-        
-        // Electricity
-        const electricityAccounts = currentEditingDept.electricity_accounts;
-        for (let i = 0; i < electricityAccounts.length; i++) {
-            const accountNumber = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="electricity"]`)?.value || '';
-            const meters = [];
-            const meterInputs = document.querySelectorAll(`.meter-number-input[data-acc-idx="${i}"][data-type="electricity"]`);
-            meterInputs.forEach((input, mIdx) => {
-                const locationInput = document.querySelector(`.meter-location-input[data-acc-idx="${i}"][data-type="electricity"][data-meter-idx="${mIdx}"]`);
-                meters.push({
-                    meterNumber: input.value,
-                    location: locationInput?.value || ''
-                });
-            });
-            deptData.electricityAccounts.push({ accountNumber, meters });
-        }
-        
-        // Telephone
-        const telephoneAccounts = currentEditingDept.telephone_accounts;
-        for (let i = 0; i < telephoneAccounts.length; i++) {
-            const accountNumber = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="telephone"]`)?.value || '';
-            const numbers = [];
-            const phoneInputs = document.querySelectorAll(`.phone-number-input[data-acc-idx="${i}"][data-type="telephone"]`);
-            phoneInputs.forEach((input, pIdx) => {
-                const locationInput = document.querySelector(`.phone-location-input[data-acc-idx="${i}"][data-type="telephone"][data-num-idx="${pIdx}"]`);
-                numbers.push({
-                    phoneNumber: input.value,
-                    location: locationInput?.value || ''
-                });
-            });
-            deptData.telephoneAccounts.push({ accountNumber, numbers });
-        }
         
         return deptData;
     }
@@ -1460,11 +1484,9 @@
                 }
                 showMessage(`Department created successfully! ID: ${newDeptId}`, false);
                 await loadDepartments();
-                // Try to find and scroll to the new department
                 setTimeout(() => {
                     const found = allDepartments.find(d => d.id === newDeptId);
                     if (found) {
-                        // Highlight and open edit
                         const rows = document.querySelectorAll('.edit-dept-btn');
                         for (let btn of rows) {
                             if (parseInt(btn.getAttribute('data-id')) === newDeptId) {
