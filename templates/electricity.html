@@ -6,7 +6,6 @@
     <title>Electricity Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* (same as your existing electricity.html styles – unchanged, identical to water.css) */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -599,6 +598,38 @@
             color: var(--gray);
         }
 
+        /* NEW: Entity Summary Row Styles */
+        .entity-summary-row {
+            background: #eef2ff !important;
+            border-top: 2px solid var(--primary);
+            border-bottom: 2px solid var(--primary);
+            font-weight: 700;
+        }
+        .entity-summary-row td {
+            padding: 8px 12px;
+            font-weight: 700;
+            color: var(--primary-dark);
+            background-color: #eef2ff !important;
+        }
+        .entity-summary-row td:first-child {
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--primary);
+        }
+        .entity-summary-row .summary-label {
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        .entity-summary-row .summary-total {
+            font-weight: 700;
+            color: #1e3a5f;
+            font-size: 0.85rem;
+        }
+        .summary-dash {
+            color: var(--gray);
+            font-weight: 400;
+        }
+
         @media (max-width: 1024px) {
             .container { padding: 20px 24px; }
             .data-table { min-width: 1200px; }
@@ -1002,7 +1033,7 @@
         return false;
     }
 
-    // ============ SAVE FUNCTION - UPDATED WITH ROBUST LOOKUP ============
+    // ============ SAVE FUNCTION ============
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         
@@ -1167,7 +1198,7 @@
         }
     }
 
-    // ============ RENDER ELECTRICITY TABLE (all inputs enabled) ============
+    // ============ RENDER ELECTRICITY TABLE (with Summary Row) ============
     async function renderElectricityTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1424,7 +1455,7 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY (ALL INPUTS ENABLED) ============
+    // ============ RENDER ENTITY (WITH SUMMARY ROW) ============
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1510,6 +1541,7 @@
         
         // --- LOOP THROUGH METER ROWS WITH SEPARATORS ---
         let currentAccount = null;
+        let meterRowElements = [];
         
         for (let i = 0; i < meterRowsData.length; i++) {
             const meterData = meterRowsData[i];
@@ -1574,9 +1606,80 @@
                 '<td></td>' +
                 '<td></td>';
             tbody.appendChild(meterRow);
+            meterRowElements.push(meterRow);
             
             currentAccount = accountNum;
         }
+        
+        // ==================== NEW: ENTITY SUMMARY ROW ====================
+        // Calculate totals for the summary row
+        let totalConsumption = 0;
+        let totalBillAmount = 0;
+        let totalOutstanding = 0;
+        
+        meterRowsData.forEach(m => {
+            totalConsumption += m.consumption;
+            totalBillAmount += m.currentCharges;
+            totalOutstanding += m.outstandingCharges;
+        });
+        
+        const summaryRow = document.createElement('tr');
+        summaryRow.className = 'entity-summary-row';
+        summaryRow.setAttribute('data-entity-id', entity.id);
+        summaryRow.innerHTML = `
+            <td class="summary-label">Total</td>
+            <td colspan="3"></td>
+            <td class="summary-total" id="summary-consumption-${entity.id}">${totalConsumption.toFixed(2)}</td>
+            <td class="summary-total" id="summary-bill-${entity.id}">${totalBillAmount.toFixed(2)}</td>
+            <td class="summary-total" id="summary-outstanding-${entity.id}">${totalOutstanding.toFixed(2)}</td>
+            <td class="summary-dash">—</td>
+            <td class="summary-dash">—</td>
+            <td></td>
+            <td></td>
+            <td></td>
+        `;
+        tbody.appendChild(summaryRow);
+        
+        // ==================== AUTO-UPDATE TOTALS ON INPUT ====================
+        // Add event listeners to the meter rows to update the summary row
+        meterRowElements.forEach((row, index) => {
+            const consumptionInput = row.querySelector('.consumption-input');
+            const billInput = row.querySelector('.current-charge-input');
+            const outstandingInput = row.querySelector('.outstanding-input');
+            
+            const updateFunction = function() {
+                // Recalculate totals from ALL meter rows of this entity
+                let cons = 0, bill = 0, out = 0;
+                // Use meterRowsData to avoid re-querying DOM, but we need the current values
+                const allMeterRows = tbody.querySelectorAll(`.meter-row[data-entity-id="${entity.id}"]`);
+                // Wait, we didn't set data-entity-id on meter rows. Let's use a different approach.
+                // Since we have the meterRowsData array and the inputs are in the DOM, we can just query them again.
+                // Better: use a class or attribute on the meter rows to identify them.
+                // Let's add data-entity-id to meter rows.
+                // But we already have them in meterRowElements. We'll just iterate over meterRowElements.
+                let totalCons = 0, totalBill = 0, totalOut = 0;
+                meterRowElements.forEach(mRow => {
+                    const cInput = mRow.querySelector('.consumption-input');
+                    const bInput = mRow.querySelector('.current-charge-input');
+                    const oInput = mRow.querySelector('.outstanding-input');
+                    totalCons += parseFloat(cInput ? cInput.value : 0) || 0;
+                    totalBill += parseFloat(bInput ? bInput.value : 0) || 0;
+                    totalOut += parseFloat(oInput ? oInput.value : 0) || 0;
+                });
+                
+                // Update summary row
+                const summaryCons = document.getElementById(`summary-consumption-${entity.id}`);
+                const summaryBill = document.getElementById(`summary-bill-${entity.id}`);
+                const summaryOut = document.getElementById(`summary-outstanding-${entity.id}`);
+                if (summaryCons) summaryCons.textContent = totalCons.toFixed(2);
+                if (summaryBill) summaryBill.textContent = totalBill.toFixed(2);
+                if (summaryOut) summaryOut.textContent = totalOut.toFixed(2);
+            };
+            
+            if (consumptionInput) consumptionInput.addEventListener('input', updateFunction);
+            if (billInput) billInput.addEventListener('input', updateFunction);
+            if (outstandingInput) outstandingInput.addEventListener('input', updateFunction);
+        });
         
         return serial;
     }
