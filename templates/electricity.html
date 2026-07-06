@@ -598,7 +598,7 @@
             color: var(--gray);
         }
 
-        /* Entity Summary Row Styles */
+        /* Entity Summary Row Styles - CENTERED */
         .entity-summary-row {
             background: #eef2ff !important;
             border-top: 2px solid var(--primary);
@@ -610,11 +610,7 @@
             font-weight: 700;
             color: var(--primary-dark);
             background-color: #eef2ff !important;
-        }
-        .entity-summary-row td:first-child {
-            text-align: center;
-            font-size: 0.8rem;
-            color: var(--primary);
+            text-align: center !important;
         }
         .entity-summary-row .summary-label {
             font-weight: 700;
@@ -624,12 +620,10 @@
             font-weight: 700;
             color: #1e3a5f;
             font-size: 0.85rem;
-            text-align: right;
         }
         .summary-dash {
             color: var(--gray);
             font-weight: 400;
-            text-align: center;
         }
 
         @media (max-width: 1024px) {
@@ -760,6 +754,22 @@
 </div>
 
 <script>
+    // ========== NUMBER FORMATTING HELPERS ==========
+    function formatNumberWithCommas(num) {
+        if (num === undefined || num === null || isNaN(num)) return '0.00';
+        return Number(num).toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function parseNumberFromDisplay(str) {
+        if (!str) return 0;
+        const cleaned = String(str).replace(/,/g, '').trim();
+        return parseFloat(cleaned) || 0;
+    }
+
+    // ========== MAIN SCRIPT ==========
     let allSchools = [];
     let allDepartments = [];
     let existingBills = [];
@@ -976,9 +986,7 @@
         
         console.log(`🔍 Looking for: entity=${entityId}, account='${cleanAccount}', meter='${cleanMeter}', month=${month}, year=${year}`);
         
-        // 1. If meter is empty, try to find any bill with this account (ignore meter)
         if (cleanMeter === '') {
-            console.log(`ℹ️ Meter is empty, will match on account only.`);
             for (let i = 0; i < existingBills.length; i++) {
                 const bill = existingBills[i];
                 const billAccount = (bill.account_number || '').trim();
@@ -1005,7 +1013,6 @@
             }
         }
         
-        // 2. If meter is not empty, try exact match on account + meter
         if (cleanMeter !== '') {
             for (let i = 0; i < existingBills.length; i++) {
                 const bill = existingBills[i];
@@ -1037,7 +1044,6 @@
             }
         }
         
-        // 3. Final fallback: account only (safety net)
         console.log(`ℹ️ No exact match, trying account-only fallback...`);
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
@@ -1138,11 +1144,11 @@
             const amountPaidInput = row.querySelector('.amount-paid-input');
             const notesInput = row.querySelector('.notes-input');
             
-            const consumption = parseFloat(consumptionInput ? consumptionInput.value : 0) || 0;
-            const currentCharges = parseFloat(currentInput ? currentInput.value : 0) || 0;
-            const unsettledCharges = parseFloat(outstandingInput ? outstandingInput.value : 0) || 0;
-            const previousPayment = parseFloat(previousPaidInput ? previousPaidInput.value : 0) || 0;
-            const amountPaid = parseFloat(amountPaidInput ? amountPaidInput.value : 0) || 0;
+            const consumption = parseNumberFromDisplay(consumptionInput ? consumptionInput.value : 0);
+            const currentCharges = parseNumberFromDisplay(currentInput ? currentInput.value : 0);
+            const unsettledCharges = parseNumberFromDisplay(outstandingInput ? outstandingInput.value : 0);
+            const previousPayment = parseNumberFromDisplay(previousPaidInput ? previousPaidInput.value : 0);
+            const amountPaid = parseNumberFromDisplay(amountPaidInput ? amountPaidInput.value : 0);
             const notes = notesInput ? notesInput.value : '';
             
             batchBills.push({
@@ -1224,7 +1230,7 @@
         
         const entityTotalSpan = document.getElementById('entity-total-' + entityId);
         if (entityTotalSpan) {
-            entityTotalSpan.innerHTML = '(Total Paid: $' + totalPaid.toFixed(2) + ')';
+            entityTotalSpan.innerHTML = '(Total Paid: $' + formatNumberWithCommas(totalPaid) + ')';
         }
         
         const entityStatusSpan = document.getElementById('entity-status-' + entityId);
@@ -1496,7 +1502,7 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY WITH SUMMARY ROW ============
+    // ============ RENDER ENTITY WITH SUMMARY ROW (CENTERED) ============
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1572,7 +1578,7 @@
         
         entityRow.innerHTML = '<td class="seq-number">' + startSerial + '</td>' +
             '<td class="entity-header"><span class="entity-name">' + escapeHtml(entity.name) + '</span>' +
-            '<span class="total-due" id="entity-total-' + entity.id + '">(Total Paid: $' + entityTotalPaid.toFixed(2) + ')</span>' +
+            '<span class="total-due" id="entity-total-' + entity.id + '">(Total Paid: $' + formatNumberWithCommas(entityTotalPaid) + ')</span>' +
             '</td>' +
             '<td><span class="badge ' + (entity.type === 'school' ? 'badge-school' : 'badge-department') + '">' + entity.typeLabel + '</span></td>' +
             '<td colspan="6"></td>' +
@@ -1614,7 +1620,7 @@
             
             let amountPaidHtml = '';
             if (isFirstMeter) {
-                amountPaidHtml = '<input type="number" step="0.01" class="inline-input amount-paid-input" value="' + meterData.amountPaid.toFixed(2) + '" placeholder="$">';
+                amountPaidHtml = '<input type="number" step="0.01" class="inline-input amount-paid-input" value="' + formatNumberWithCommas(meterData.amountPaid) + '" placeholder="$">';
                 isFirstMeter = false;
             } else {
                 amountPaidHtml = '<div class="amount-paid-disabled">—</div>';
@@ -1637,10 +1643,10 @@
                     '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.displayMeter) + '</div>' +
                     meterData.locationDisplay +
                 '</td>' +
-                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input consumption-input" value="' + meterData.consumption.toFixed(2) + '" placeholder="kWh"></td>' +
-                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input current-charge-input" value="' + meterData.currentCharges.toFixed(2) + '" placeholder="$"></td>' +
-                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input outstanding-input" value="' + meterData.outstandingCharges.toFixed(2) + '" placeholder="$"></td>' +
-                '<td style="text-align:right;"><input type="number" step="0.01" class="inline-input previous-paid-input" value="' + meterData.previousPayment.toFixed(2) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;"><input type="text" class="inline-input consumption-input" value="' + formatNumberWithCommas(meterData.consumption) + '" placeholder="kWh"></td>' +
+                '<td style="text-align:right;"><input type="text" class="inline-input current-charge-input" value="' + formatNumberWithCommas(meterData.currentCharges) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;"><input type="text" class="inline-input outstanding-input" value="' + formatNumberWithCommas(meterData.outstandingCharges) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;"><input type="text" class="inline-input previous-paid-input" value="' + formatNumberWithCommas(meterData.previousPayment) + '" placeholder="$"></td>' +
                 '<td style="text-align:right;" class="amount-paid-cell">' + amountPaidHtml + '</td>' +
                 '<td class="notes-cell"><input type="text" class="inline-input notes-input" value="' + escapeHtml(meterData.notes) + '" placeholder="Notes..."></td>' +
                 '<td style="text-align:center;"></td>' +
@@ -1648,10 +1654,26 @@
             tbody.appendChild(meterRow);
             meterRowElements.push(meterRow);
             
+            // Add blur formatting to numeric inputs
+            const numericInputs = meterRow.querySelectorAll('.inline-input');
+            numericInputs.forEach(inp => {
+                inp.addEventListener('blur', function() {
+                    if (this.value && this.value.trim() !== '') {
+                        const raw = parseNumberFromDisplay(this.value);
+                        this.value = formatNumberWithCommas(raw);
+                    }
+                });
+                // Also format on focus to allow easy editing
+                inp.addEventListener('focus', function() {
+                    const raw = parseNumberFromDisplay(this.value);
+                    this.value = raw.toString();
+                });
+            });
+            
             currentAccount = accountNum;
         }
         
-        // ========== SUMMARY ROW ==========
+        // ========== SUMMARY ROW (CENTERED) ==========
         let totalConsumption = 0;
         let totalBillAmount = 0;
         let totalOutstanding = 0;
@@ -1667,13 +1689,13 @@
         summaryRow.setAttribute('data-entity-id', entity.id);
         summaryRow.innerHTML = `
             <td class="summary-label" style="text-align:center;">Total</td>
-            <td colspan="3"></td>
-            <td class="summary-total" id="summary-consumption-${entity.id}" style="text-align:right;">${totalConsumption.toFixed(2)}</td>
-            <td class="summary-total" id="summary-bill-${entity.id}" style="text-align:right;">${totalBillAmount.toFixed(2)}</td>
-            <td class="summary-total" id="summary-outstanding-${entity.id}" style="text-align:right;">${totalOutstanding.toFixed(2)}</td>
+            <td colspan="3" style="text-align:center;"></td>
+            <td class="summary-total" id="summary-consumption-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalConsumption)}</td>
+            <td class="summary-total" id="summary-bill-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalBillAmount)}</td>
+            <td class="summary-total" id="summary-outstanding-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalOutstanding)}</td>
             <td class="summary-dash" style="text-align:center;">—</td>
             <td class="summary-dash" style="text-align:center;">—</td>
-            <td></td>
+            <td style="text-align:center;"></td>
             <td style="text-align:center;"></td>
             <td style="text-align:center;"></td>
         `;
@@ -1691,17 +1713,17 @@
                     const cInput = mRow.querySelector('.consumption-input');
                     const bInput = mRow.querySelector('.current-charge-input');
                     const oInput = mRow.querySelector('.outstanding-input');
-                    totalCons += parseFloat(cInput ? cInput.value : 0) || 0;
-                    totalBill += parseFloat(bInput ? bInput.value : 0) || 0;
-                    totalOut += parseFloat(oInput ? oInput.value : 0) || 0;
+                    totalCons += parseNumberFromDisplay(cInput ? cInput.value : 0);
+                    totalBill += parseNumberFromDisplay(bInput ? bInput.value : 0);
+                    totalOut += parseNumberFromDisplay(oInput ? oInput.value : 0);
                 });
                 
                 const summaryCons = document.getElementById(`summary-consumption-${entity.id}`);
                 const summaryBill = document.getElementById(`summary-bill-${entity.id}`);
                 const summaryOut = document.getElementById(`summary-outstanding-${entity.id}`);
-                if (summaryCons) summaryCons.textContent = totalCons.toFixed(2);
-                if (summaryBill) summaryBill.textContent = totalBill.toFixed(2);
-                if (summaryOut) summaryOut.textContent = totalOut.toFixed(2);
+                if (summaryCons) summaryCons.textContent = formatNumberWithCommas(totalCons);
+                if (summaryBill) summaryBill.textContent = formatNumberWithCommas(totalBill);
+                if (summaryOut) summaryOut.textContent = formatNumberWithCommas(totalOut);
             };
             
             if (consumptionInput) consumptionInput.addEventListener('input', updateFunction);
@@ -1735,7 +1757,7 @@
             }
         });
         
-        // Auto-refresh on month/year change (like telephone.html)
+        // Auto-refresh on month/year change
         const monthSelect = document.getElementById('globalMonth');
         const yearSelect = document.getElementById('globalYear');
         monthSelect.addEventListener('change', function() {
