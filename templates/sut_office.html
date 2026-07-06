@@ -284,6 +284,24 @@
             border-radius: var(--radius-xs);
         }
 
+        .btn-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--gray);
+            font-size: 1.1rem;
+            transition: var(--transition);
+            padding: 4px 8px;
+            border-radius: var(--radius-xs);
+            line-height: 1;
+        }
+
+        .btn-icon:hover {
+            background: rgba(124, 58, 237, 0.10);
+            color: var(--sut);
+            transform: scale(1.1);
+        }
+
         .budget-summary {
             background: var(--sut-gradient);
             color: white;
@@ -344,12 +362,36 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .budget-card-value {
             font-size: 1.6rem;
             font-weight: 700;
             letter-spacing: -0.3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .budget-card-value .edit-btn-icon {
+            font-size: 1rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            padding: 4px;
+            cursor: pointer;
+            transition: var(--transition);
+            line-height: 1;
+            color: white;
+        }
+
+        .budget-card-value .edit-btn-icon:hover {
+            background: rgba(255,255,255,0.35);
+            transform: scale(1.1);
         }
 
         .budget-card-sub {
@@ -790,16 +832,16 @@
             </div>
         </div>
         <ul class="nav-tabs">
-    <li><a href="/dashboard" >Dashboard</a></li>
-    <li><a href="/departments">Departments</a></li>
-    <li><a href="/schools">Schools</a></li>
-    <li><a href="/water">Water</a></li>
-    <li><a href="/electricity">Electricity</a></li>
-    <li><a href="/telephone">Telephone</a></li>
-    <li><a href="/sut-office" class="active">SUT Office</a></li>
-    <li><a href="/reports">Reports &amp; Print</a></li>
-    <li><a href="/data-management">Data Management</a></li>
-</ul>
+            <li><a href="/dashboard">Dashboard</a></li>
+            <li><a href="/departments">Departments</a></li>
+            <li><a href="/schools">Schools</a></li>
+            <li><a href="/water">Water</a></li>
+            <li><a href="/electricity">Electricity</a></li>
+            <li><a href="/telephone">Telephone</a></li>
+            <li><a href="/sut-office" class="active">SUT Office</a></li>
+            <li><a href="/reports">Reports &amp; Print</a></li>
+            <li><a href="/data-management">Data Management</a></li>
+        </ul>
     </nav>
 
     <div class="container">
@@ -814,7 +856,10 @@
         <!-- Budget Summary -->
         <div class="budget-summary" id="budgetSummary">
             <div class="budget-card">
-                <div class="budget-card-label">Annual Budget</div>
+                <div class="budget-card-label">
+                    Annual Budget
+                    <span class="edit-btn-icon" id="editBudgetBtn" title="Edit budget for this year">✏️</span>
+                </div>
                 <div class="budget-card-value" id="annualBudget">$0.00</div>
                 <div class="budget-card-sub">For current financial year</div>
             </div>
@@ -959,6 +1004,27 @@
             </form>
         </div>
     </div>
+
+    <!-- Edit Budget Modal -->
+    <div class="modal" id="editBudgetModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="editBudgetModalTitle">Edit SUT Office Budget</h3>
+                <button class="close-modal" id="closeEditBudgetModal">&times;</button>
+            </div>
+            <form id="editBudgetForm">
+                <input type="hidden" id="editBudgetId">
+                <div class="form-group">
+                    <label class="form-label required">Annual Budget ($)</label>
+                    <input type="number" step="0.01" class="form-control" id="editBudgetAmount" required placeholder="Enter amount">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelEditBudgetBtn">Cancel</button>
+                    <button type="submit" class="btn btn-sut" id="saveEditBudgetBtn">Save Budget</button>
+                </div>
+            </form>
+        </div>
+    </div>
     
     <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
@@ -1009,6 +1075,10 @@
                     expenseModal.style.display = 'none';
                     document.body.style.overflow = '';
                 }
+                if (e.target === document.getElementById('editBudgetModal')) {
+                    document.getElementById('editBudgetModal').style.display = 'none';
+                    document.body.style.overflow = '';
+                }
             });
             
             document.getElementById('yearFilter').addEventListener('change', filterExpenses);
@@ -1016,6 +1086,18 @@
             document.getElementById('descriptionFilter').addEventListener('input', filterExpenses);
             document.getElementById('sortFilter').addEventListener('change', filterExpenses);
             document.getElementById('clearFiltersBtn').addEventListener('click', clearFilters);
+            
+            // Edit Budget button
+            document.getElementById('editBudgetBtn').addEventListener('click', openEditBudgetModal);
+            document.getElementById('closeEditBudgetModal').addEventListener('click', () => {
+                document.getElementById('editBudgetModal').style.display = 'none';
+                document.body.style.overflow = '';
+            });
+            document.getElementById('cancelEditBudgetBtn').addEventListener('click', () => {
+                document.getElementById('editBudgetModal').style.display = 'none';
+                document.body.style.overflow = '';
+            });
+            document.getElementById('editBudgetForm').addEventListener('submit', saveBudgetEdit);
             
             await loadFinancialYear();
             await loadExpenses();
@@ -1351,6 +1433,51 @@
             setTimeout(() => {
                 toast.style.display = 'none';
             }, 3000);
+        }
+
+        // ============ EDIT BUDGET FUNCTIONS ============
+        function openEditBudgetModal() {
+            if (!currentFinancialYear) {
+                showToast('No financial year loaded', 'error');
+                return;
+            }
+            document.getElementById('editBudgetId').value = currentFinancialYear.id;
+            document.getElementById('editBudgetAmount').value = currentFinancialYear.sut_office_allocated || 0;
+            document.getElementById('editBudgetModalTitle').textContent = 
+                `Edit SUT Office Budget for ${currentFinancialYear.financial_year}`;
+            document.getElementById('editBudgetModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        async function saveBudgetEdit(e) {
+            e.preventDefault();
+            const id = document.getElementById('editBudgetId').value;
+            const newAmount = parseFloat(document.getElementById('editBudgetAmount').value);
+            if (isNaN(newAmount) || newAmount < 0) {
+                showToast('Please enter a valid positive amount', 'error');
+                return;
+            }
+            try {
+                const response = await fetch(`/api/financial-years/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sut_office_allocated: newAmount })
+                });
+                const data = await response.json();
+                if (response.ok && data.financial_year) {
+                    showToast('Budget updated successfully!', 'success');
+                    document.getElementById('editBudgetModal').style.display = 'none';
+                    document.body.style.overflow = '';
+                    // Refresh the current financial year and summary
+                    await loadFinancialYear();
+                    await loadExpenses(); // to refresh totals
+                } else {
+                    showToast('Failed to update budget: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error updating budget:', error);
+                showToast('Error updating budget. Please try again.', 'error');
+            }
         }
     </script>
 </body>
