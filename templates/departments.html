@@ -1007,6 +1007,7 @@
             const res = await fetch('/api/departments');
             if (!res.ok) throw new Error('Fetch failed');
             allDepartments = await res.json();
+            console.log(`✅ Loaded ${allDepartments.length} departments from server`);
             updateFilterDropdowns();
             renderDepartments();
         } catch(err) { 
@@ -1417,6 +1418,7 @@
         }
     }
     
+    // ============ UPDATED ADD NEW DEPARTMENT WITH BETTER DEBUGGING ============
     async function addNewDepartment() {
         const deptData = {
             unitName: 'New Unit',
@@ -1432,21 +1434,58 @@
         
         showLoading(true);
         try {
+            console.log('📤 Sending new department data:', deptData);
             const response = await fetch('/api/departments', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(deptData)
             });
             const result = await response.json();
+            console.log('📥 Server response:', result);
+            
             if (response.ok && result.success) {
-                showMessage('Department created successfully');
+                const newDeptId = result.department?.id;
+                if (!newDeptId) {
+                    showMessage('Department created but no ID returned!', true);
+                    console.error('No ID in response:', result);
+                    await loadDepartments();
+                    return;
+                }
+                showMessage(`Department created successfully! ID: ${newDeptId}`, false);
                 await loadDepartments();
-                setTimeout(() => openEditModal(result.department.id), 500);
+                // Try to find and scroll to the new department
+                setTimeout(() => {
+                    const found = allDepartments.find(d => d.id === newDeptId);
+                    if (found) {
+                        // Find the row with this ID and highlight it
+                        const rows = document.querySelectorAll('.edit-dept-btn');
+                        for (let btn of rows) {
+                            if (parseInt(btn.getAttribute('data-id')) === newDeptId) {
+                                const row = btn.closest('tr');
+                                if (row) {
+                                    row.style.backgroundColor = '#fef3c7';
+                                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    setTimeout(() => {
+                                        row.style.backgroundColor = '';
+                                    }, 3000);
+                                    break;
+                                }
+                            }
+                        }
+                        // Also open the edit modal
+                        setTimeout(() => openEditModal(newDeptId), 500);
+                    } else {
+                        showMessage(`Department ID ${newDeptId} created but not found in list. Try refreshing.`, true);
+                        console.warn('New department not found in allDepartments after reload');
+                    }
+                }, 300);
             } else {
                 showMessage(result.error || 'Failed to create department', true);
+                console.error('Creation error:', result);
             }
         } catch (error) {
             showMessage('Network error', true);
+            console.error('Network error:', error);
         } finally {
             showLoading(false);
         }
