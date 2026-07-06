@@ -964,7 +964,7 @@
         return entities;
     }
 
-    // ========== FIXED: BILL LOOKUP WITH FALLBACK TO ACCOUNT-ONLY IF METER EMPTY ==========
+    // ========== BILL LOOKUP WITH ACCOUNT-ONLY FALLBACK ==========
     function normalizeMeter(m) {
         if (!m || m === '—' || m.trim() === '—') return '';
         return m.trim();
@@ -978,8 +978,7 @@
         
         // 1. If meter is empty, try to find any bill with this account (ignore meter)
         if (cleanMeter === '') {
-            console.log(`ℹ️ Meter is empty, will match on account only for this search.`);
-            // Look for any bill with same entity, account, month, year (ignore meter)
+            console.log(`ℹ️ Meter is empty, will match on account only.`);
             for (let i = 0; i < existingBills.length; i++) {
                 const bill = existingBills[i];
                 const billAccount = (bill.account_number || '').trim();
@@ -992,7 +991,6 @@
                     return bill;
                 }
             }
-            // Try with bill_month/bill_year
             for (let i = 0; i < existingBills.length; i++) {
                 const bill = existingBills[i];
                 const billAccount = (bill.account_number || '').trim();
@@ -1009,7 +1007,6 @@
         
         // 2. If meter is not empty, try exact match on account + meter
         if (cleanMeter !== '') {
-            // First try: exact match on month/year + account + meter
             for (let i = 0; i < existingBills.length; i++) {
                 const bill = existingBills[i];
                 const billAccount = (bill.account_number || '').trim();
@@ -1024,7 +1021,6 @@
                     return bill;
                 }
             }
-            // Second try: use bill_month/bill_year if available
             for (let i = 0; i < existingBills.length; i++) {
                 const bill = existingBills[i];
                 const billAccount = (bill.account_number || '').trim();
@@ -1041,8 +1037,7 @@
             }
         }
         
-        // 3. If still not found, try account-only as a final fallback (even if meter is not empty)
-        // This handles cases where the meter number changed but we still want to show the bill
+        // 3. Final fallback: account only (safety net)
         console.log(`ℹ️ No exact match, trying account-only fallback...`);
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
@@ -1095,7 +1090,6 @@
         
         showSavingToast(entityName);
         
-        // Collect all meter rows
         let meterRows = [];
         let nextRow = entityRow.nextElementSibling;
         while (nextRow) {
@@ -1245,7 +1239,7 @@
         }
     }
 
-    // ============ RENDER ELECTRICITY TABLE (with Summary Row) ============
+    // ============ RENDER FUNCTION ============
     async function renderElectricityTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1502,7 +1496,7 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY (WITH SUMMARY ROW) ============
+    // ============ RENDER ENTITY WITH SUMMARY ROW ============
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1511,7 +1505,6 @@
         
         let meterRowsData = [];
         
-        // --- COLLECT ALL METER ROWS DATA ---
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             let isFirstMeterForAccount = true;
@@ -1535,14 +1528,12 @@
                 if (existing && amountPaid > 0) entityHasBills = true;
                 
                 const locationDisplay = meter.location ? '<div style="font-size:0.7rem; color:var(--gray);">📍 ' + escapeHtml(meter.location) + '</div>' : '';
-                
-                // For display, if meterNumber is empty, show '—'
                 const displayMeter = meter.meterNumber || '—';
                 
                 meterRowsData.push({
                     serial: serial,
                     accountNumber: account.accountNumber,
-                    meterNumber: meter.meterNumber, // keep actual value (could be empty)
+                    meterNumber: meter.meterNumber,
                     displayMeter: displayMeter,
                     locationDisplay: locationDisplay,
                     consumption: consumption,
@@ -1560,7 +1551,7 @@
             }
         }
         
-        // --- ENTITY ROW ---
+        // Entity Row
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
         if (entityHasBills) {
@@ -1590,7 +1581,7 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // --- LOOP THROUGH METER ROWS WITH SEPARATORS ---
+        // Meter Rows
         let currentAccount = null;
         let meterRowElements = [];
         
@@ -1598,7 +1589,6 @@
             const meterData = meterRowsData[i];
             const accountNum = meterData.accountNumber;
             
-            // --- IF NEW ACCOUNT, ADD SEPARATOR ---
             if (currentAccount !== null && currentAccount !== accountNum) {
                 const accountDisplay = accountNum && accountNum !== '—' ? accountNum : 'No Account';
                 const separatorRow = document.createElement('tr');
@@ -1607,7 +1597,6 @@
                 tbody.appendChild(separatorRow);
             }
             
-            // --- IF FIRST ACCOUNT, ADD SEPARATOR ---
             if (currentAccount === null) {
                 currentAccount = accountNum;
                 const accountDisplay = accountNum && accountNum !== '—' ? accountNum : 'No Account';
@@ -1617,7 +1606,6 @@
                 tbody.appendChild(separatorRow);
             }
             
-            // --- METER ROW (all inputs enabled) ---
             const meterRow = document.createElement('tr');
             meterRow.className = 'meter-row';
             meterRow.setAttribute('data-account', escapeHtml(meterData.accountNumber));
@@ -1641,7 +1629,6 @@
                 }
             }
             
-            // Build the meter row with proper alignment classes
             meterRow.innerHTML = 
                 '<td class="seq-number">' + (meterData.isFirstMeterForAccount ? meterData.serial : '') + '</td>' +
                 '<td></td>' +
@@ -1664,8 +1651,7 @@
             currentAccount = accountNum;
         }
         
-        // ==================== ENTITY SUMMARY ROW ====================
-        // Calculate totals for the summary row
+        // ========== SUMMARY ROW ==========
         let totalConsumption = 0;
         let totalBillAmount = 0;
         let totalOutstanding = 0;
@@ -1693,8 +1679,7 @@
         `;
         tbody.appendChild(summaryRow);
         
-        // ==================== AUTO-UPDATE TOTALS ON INPUT ====================
-        // Add event listeners to the meter rows to update the summary row
+        // Auto-update totals on input
         meterRowElements.forEach((row) => {
             const consumptionInput = row.querySelector('.consumption-input');
             const billInput = row.querySelector('.current-charge-input');
@@ -1738,6 +1723,7 @@
     }
     
     function attachEventListeners() {
+        // Save button click
         document.getElementById('billsTableBody').addEventListener('click', async function(e) {
             const saveBtn = e.target.closest('.save-entity-btn');
             if (saveBtn && !saveBtn.disabled) {
@@ -1747,6 +1733,20 @@
                 }
                 return;
             }
+        });
+        
+        // Auto-refresh on month/year change (like telephone.html)
+        const monthSelect = document.getElementById('globalMonth');
+        const yearSelect = document.getElementById('globalYear');
+        monthSelect.addEventListener('change', function() {
+            const month = parseInt(this.value);
+            const year = parseInt(document.getElementById('globalYear').value);
+            renderElectricityTable(month, year);
+        });
+        yearSelect.addEventListener('change', function() {
+            const month = parseInt(document.getElementById('globalMonth').value);
+            const year = parseInt(this.value);
+            renderElectricityTable(month, year);
         });
     }
     
