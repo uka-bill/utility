@@ -697,6 +697,17 @@
             cursor: pointer;
         }
 
+        /* Container for subtotals checkbox - hidden when telephone only selected */
+        #subtotalsContainer {
+            margin-top: 12px;
+            border-top: 1px solid var(--gray-light);
+            padding-top: 10px;
+            display: block;
+        }
+        #subtotalsContainer.hidden {
+            display: none !important;
+        }
+
         .pagination-control {
             display: flex;
             align-items: center;
@@ -1378,8 +1389,8 @@
                 <div class="column-checkboxes" id="printColumnCheckboxes">
                     <!-- Columns will be dynamically populated based on selected utilities -->
                 </div>
-                <!-- NEW CHECKBOX FOR SUBTOTALS -->
-                <div style="margin-top: 12px; border-top: 1px solid var(--gray-light); padding-top: 10px;">
+                <!-- Subtotal container - hidden when telephone only is selected -->
+                <div id="subtotalsContainer">
                     <div class="column-checkbox-item">
                         <input type="checkbox" id="showSubtotals" checked>
                         <label for="showSubtotals">📊 Show Subtotal per Entity (Total Consumption, Total Bill Amount, Total Outstanding)</label>
@@ -1782,6 +1793,7 @@
         function toggleAllUtilities(checked) {
             document.querySelectorAll('.utility-type-checkbox').forEach(cb => cb.checked = checked);
             populateColumnCheckboxes();
+            updateSubtotalsVisibility();
         }
 
         function getSelectedSchoolIds() {
@@ -1840,11 +1852,27 @@
                 `;
                 container.appendChild(div);
             });
+
+            // Update subtotals visibility after column population
+            updateSubtotalsVisibility();
         }
 
+        // ====== NEW: Hide/show subtotals checkbox based on utility selection ======
+        function updateSubtotalsVisibility() {
+            const types = getSelectedUtilityTypes();
+            const container = document.getElementById('subtotalsContainer');
+            // Hide if ONLY telephone is selected (and no water/electricity)
+            if (types.length === 1 && types[0] === 'telephone') {
+                container.classList.add('hidden');
+            } else {
+                container.classList.remove('hidden');
+            }
+        }
+
+        // Listen for changes on utility checkboxes to update subtotals visibility
         document.addEventListener('change', function(e) {
             if (e.target.classList && e.target.classList.contains('utility-type-checkbox')) {
-                populateColumnCheckboxes();
+                populateColumnCheckboxes(); // already calls updateSubtotalsVisibility
             }
         });
 
@@ -1941,8 +1969,12 @@
             const year = document.getElementById('printYear').value;
             const itemsPerPage = parseInt(document.getElementById('itemsPerPage').value) || 10;
 
-            // NEW: read the subtotals checkbox
-            const showSubtotals = document.getElementById('showSubtotals').checked;
+            // Read subtotals checkbox, but only if it's visible (i.e., not telephone only)
+            const subtotalContainer = document.getElementById('subtotalsContainer');
+            let showSubtotals = false;
+            if (!subtotalContainer.classList.contains('hidden')) {
+                showSubtotals = document.getElementById('showSubtotals').checked;
+            }
 
             console.log('📊 Selected schools:', schoolIds.length, 'schools');
             console.log('📊 Selected departments:', departmentIds.length, 'departments');
@@ -2006,7 +2038,6 @@
                 const printRows = [];
                 let serial = 1;
 
-                // Sort by entity name
                 data.sort((a, b) => {
                     const nameA = a.entity_name || '';
                     const nameB = b.entity_name || '';
@@ -2079,7 +2110,6 @@
 
                 const paginateOnlyTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
                 
-                // Pass showSubtotals to the preview generator
                 generatePrintPreview(printRows, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone, showSubtotals);
 
                 updateProcessingStep(2, '✅ Done! Opening print preview...', 100);
@@ -2098,7 +2128,7 @@
             }
         });
 
-        // ============ UPDATED generatePrintPreview with subtotals ============
+        // ============ UPDATED generatePrintPreview with subtotals toggle ============
         function generatePrintPreview(data, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone, showSubtotals) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -2225,7 +2255,7 @@
 
             // ====== GROUP DATA BY ENTITY IF SUBTOTALS ENABLED ======
             let groupedData = [];
-            if (showSubtotals) {
+            if (showSubtotals && !hasTelephone) { // only show subtotals for water/electricity
                 // Group by entityName (and entityType to be safe)
                 const groups = new Map();
                 data.forEach(item => {
@@ -2235,14 +2265,11 @@
                     }
                     groups.get(key).push(item);
                 });
-                // Convert to array of groups
                 groupedData = Array.from(groups.values());
-                // Sort groups by entity name
                 groupedData.sort((a, b) => {
                     return (a[0].entityName || '').localeCompare(b[0].entityName || '');
                 });
             } else {
-                // If no subtotals, treat all data as one group (or just flat)
                 groupedData = [data];
             }
 
@@ -2444,25 +2471,7 @@
                 <body>
             `;
 
-            if (shouldPaginate) {
-                // Paginated version (only for telephone)
-                // For simplicity, we'll keep the existing pagination logic but incorporate subtotals per group.
-                // Since telephone pagination is complex with subtotals, we'll handle it later.
-                // For now, fallback to non-paginated if subtotals are enabled.
-                // Actually, we'll just use the non-paginated version when subtotals are on.
-                // So we'll redirect to non-paginated.
-                // We'll simply call the non-paginated version.
-                // To avoid duplication, we'll just use the non-paginated code below.
-                // So we set shouldPaginate = false if showSubtotals is true.
-                if (showSubtotals) {
-                    // fall through to non-paginated
-                } else {
-                    // existing paginated logic... but we'll skip it for brevity and use non-paginated
-                    // Actually we'll keep the same logic but with groups.
-                }
-            }
-
-            // ====== NON-PAGINATED VERSION (with or without subtotals) ======
+            // ---- NON-PAGINATED VERSION (with or without subtotals) ----
             // Calculate grand totals for all data
             let grandTotalBillAmount = 0;
             let grandTotalAmountPaid = 0;
@@ -2509,8 +2518,8 @@
 
             let globalSerial = 1;
 
-            // If we have subtotals, we group and output subtotal rows
-            if (showSubtotals && groupedData.length > 0) {
+            // If we have subtotals and NOT telephone, we group and output subtotal rows
+            if (showSubtotals && !hasTelephone && groupedData.length > 0) {
                 // Iterate over groups
                 for (let g = 0; g < groupedData.length; g++) {
                     const groupItems = groupedData[g];
@@ -2518,7 +2527,6 @@
 
                     // Output detail rows for this group
                     for (const item of groupItems) {
-                        // Assign sequential number
                         item.no = globalSerial++;
                         printHtml += `<tr>`;
                         for (const col of visibleCols) {
@@ -2551,14 +2559,12 @@
                     }
 
                     // ---- SUBTOTAL ROW for this entity ----
-                    // Calculate group totals
                     let groupConsumption = 0;
                     let groupBillAmount = 0;
                     let groupOutstanding = 0;
                     let groupAmountPaid = 0;
                     let groupPreviousPayment = 0;
                     groupItems.forEach(item => {
-                        // For consumption, we need to parse the string if it's not a number
                         let consVal = 0;
                         if (hasWaterElectricity) {
                             if (item.consumption && typeof item.consumption === 'string') {
@@ -2576,7 +2582,6 @@
                     });
 
                     // Determine which columns to show for the subtotal row
-                    // We'll reuse the visibleCols, but fill appropriately
                     printHtml += `<tr class="entity-subtotal-row">`;
                     for (let ci = 0; ci < visibleCols.length; ci++) {
                         const col = visibleCols[ci];
@@ -2584,23 +2589,20 @@
                         if (col.key === 'no') {
                             cellContent = 'Total';
                         } else if (col.key === 'entityName' || col.key === 'entityType' || col.key === 'utilityType' || col.key === 'accountNumber' || col.key === 'meterTelNo' || col.key === 'billNumber' || col.key === 'period') {
-                            // Leave these columns empty (or show dash)
                             if (col.key === 'entityName') {
                                 cellContent = '';
                             } else {
                                 cellContent = '—';
                             }
                         } else if (col.key === 'consumption') {
-                            // Show total consumption with unit
                             let unit = hasWater ? 'm³' : 'kWh';
-                            if (hasTelephone) unit = '';
                             cellContent = groupConsumption.toFixed(2) + (unit ? ' ' + unit : '');
                         } else if (col.key === 'billAmount') {
                             cellContent = '$' + groupBillAmount.toFixed(2);
                         } else if (col.key === 'outstanding') {
                             cellContent = '$' + groupOutstanding.toFixed(2);
                         } else if (col.key === 'amountPaid') {
-                            cellContent = '—'; // We don't sum amount paid per entity
+                            cellContent = '—';
                         } else if (col.key === 'previousPayment') {
                             cellContent = '—';
                         } else if (col.key === 'rentalAmount') {
@@ -2647,8 +2649,8 @@
                     }
                 }
 
-                const remainingCols = visibleCols.length - summaryColIndex - 1;
-                for (let i = 0; i < remainingCols; i++) {
+                const remainingCols2 = visibleCols.length - summaryColIndex - 1;
+                for (let i = 0; i < remainingCols2; i++) {
                     printHtml += `<td></td>`;
                 }
 
@@ -2759,7 +2761,7 @@
             }
         }
 
-        // ============ GENERATE REPORT ============
+        // ============ GENERATE REPORT (unchanged) ============
         document.getElementById('generateReport').addEventListener('click', async function() {
             const selectionType = document.querySelector('input[name="selectionType"]:checked').value;
             const entityType = document.getElementById('entityType').value;
@@ -2990,7 +2992,7 @@
             resultsDiv.scrollIntoView({ behavior: 'smooth' });
         }
 
-        // ============ PRINT REPORT ============
+        // ============ PRINT REPORT (unchanged) ============
         document.getElementById('printReport').addEventListener('click', function() {
             const data = window.reportData || [];
             const title = window.reportTitleText || 'Utility Bills Report';
@@ -3248,7 +3250,7 @@
             }
         });
 
-        // ============ EXPORT PDF ============
+        // ============ EXPORT PDF (unchanged) ============
         document.getElementById('exportPDF').addEventListener('click', function() {
             if (!window.reportData || window.reportData.length === 0) {
                 alert('No data to export. Please generate a report first.');
@@ -3264,7 +3266,7 @@
             }, 100);
         });
 
-        // ============ EXPORT EXCEL ============
+        // ============ EXPORT EXCEL (unchanged) ============
         document.getElementById('exportExcel').addEventListener('click', function() {
             if (!window.reportData || window.reportData.length === 0) {
                 alert('No data to export. Please generate a report first.');
@@ -3449,6 +3451,8 @@
         loadEntitiesForSelection();
         loadCheckboxLists();
         populateColumnCheckboxes();
+        // Initial subtotals visibility
+        updateSubtotalsVisibility();
 
         document.querySelectorAll('.utility-type-checkbox').forEach(cb => {
             cb.addEventListener('change', populateColumnCheckboxes);
