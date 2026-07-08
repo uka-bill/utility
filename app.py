@@ -649,7 +649,7 @@ def export_multiple():
         return jsonify({'error': str(e)}), 500
 
 def export_schools_csv():
-    """Export schools as CSV"""
+    """Export schools as CSV - matches frontend order (cluster_number then id)"""
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['ID', 'Name', 'Cluster Number', 'School Number', 'BMO Name', 'BMO Phone', 'Address', 
@@ -659,7 +659,7 @@ def export_schools_csv():
     response = supabase.table("schools").select("*").execute()
     schools = response.data if response.data else []
     
-    # Sort by cluster_number (numeric), then by id
+    # Sort by cluster_number (numeric), then by id (matching frontend)
     schools.sort(key=lambda x: (int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
     
     for school in schools:
@@ -689,18 +689,37 @@ def export_schools_csv():
     response.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return response
 
+# ============ UPDATED: EXPORT DEPARTMENTS (matches frontend order) ============
 def export_departments_csv():
-    """Export departments as CSV"""
+    """Export departments as CSV - matching the frontend order (grouped by department_name, sorted by min id)"""
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['ID', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address', 
                      'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
                      'Telephone Account', 'Telephone Number', 'Notes'])
     
-    response = supabase.table("departments").select("*").order("display_order").order("department_name").order("id").execute()
+    response = supabase.table("departments").select("*").execute()
     departments = response.data if response.data else []
     
+    # --- GROUP BY department_name (matching frontend logic) ---
+    grouped = {}
     for dept in departments:
+        key = dept.get('department_name') or 'Other'
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append(dept)
+    
+    # Sort groups by the minimum id in each group
+    group_order = sorted(grouped.keys(), key=lambda k: min(d.get('id', 999999) for d in grouped[k]))
+    
+    # Flatten the groups in that order, and within each group sort by id
+    sorted_departments = []
+    for key in group_order:
+        depts = grouped[key]
+        depts.sort(key=lambda d: d.get('id', 0))
+        sorted_departments.extend(depts)
+    
+    for dept in sorted_departments:
         writer.writerow([
             dept.get('id', ''),
             dept.get('unit_name', ''),
@@ -829,7 +848,7 @@ def export_telephone_bills_csv():
     return response
 
 def export_schools_csv_to_string():
-    """Export schools to CSV string"""
+    """Export schools to CSV string - matches frontend order"""
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['ID', 'Name', 'Cluster Number', 'School Number', 'BMO Name', 'BMO Phone', 'Address', 
@@ -839,7 +858,7 @@ def export_schools_csv_to_string():
     response = supabase.table("schools").select("*").execute()
     schools = response.data if response.data else []
     
-    # Sort by cluster_number (numeric), then by id
+    # Sort by cluster_number (numeric), then by id (matching frontend)
     schools.sort(key=lambda x: (int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
     
     for school in schools:
@@ -862,18 +881,37 @@ def export_schools_csv_to_string():
     
     return output.getvalue()
 
+# ============ UPDATED: EXPORT DEPARTMENTS TO STRING (matches frontend order) ============
 def export_departments_csv_to_string():
-    """Export departments to CSV string"""
+    """Export departments to CSV string - matching the frontend order (grouped by department_name, sorted by min id)"""
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['ID', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address', 
                      'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
                      'Telephone Account', 'Telephone Number', 'Notes'])
     
-    response = supabase.table("departments").select("*").order("display_order").order("department_name").order("id").execute()
+    response = supabase.table("departments").select("*").execute()
     departments = response.data if response.data else []
     
+    # --- GROUP BY department_name (matching frontend logic) ---
+    grouped = {}
     for dept in departments:
+        key = dept.get('department_name') or 'Other'
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append(dept)
+    
+    # Sort groups by the minimum id in each group
+    group_order = sorted(grouped.keys(), key=lambda k: min(d.get('id', 999999) for d in grouped[k]))
+    
+    # Flatten the groups in that order, and within each group sort by id
+    sorted_departments = []
+    for key in group_order:
+        depts = grouped[key]
+        depts.sort(key=lambda d: d.get('id', 0))
+        sorted_departments.extend(depts)
+    
+    for dept in sorted_departments:
         writer.writerow([
             dept.get('id', ''),
             dept.get('unit_name', ''),
@@ -2303,7 +2341,6 @@ def create_school():
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
             "created_at": datetime.now().isoformat()
-            # display_order removed – column does not exist
         }
         
         response = supabase.table("schools").insert(school_data).execute()
@@ -2348,7 +2385,6 @@ def update_school(school_id):
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else ''
-            # display_order removed – column does not exist
         }
 
         print(f"📦 Prepared school_data: {school_data}")
