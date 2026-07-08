@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* (same CSS as before – kept unchanged except for minor print adjustments) */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -2050,6 +2051,34 @@
                         try { parsedNotes = JSON.parse(bill.notes); } catch(e) {}
                     }
 
+                    // For telephone, extract data from account-specific notes
+                    let accountNumber = bill.account_number || '';
+                    let totalAccountCharges = 0;
+                    let previousPayment = 0;
+                    let totalCurrentCharges = 0;
+                    let phones = [];
+                    let totalAmount = 0;
+                    let billNumber = bill.bill_number || bill.meter_number || '';
+
+                    if (bill.utility_type === 'telephone' && parsedNotes.accounts && accountNumber) {
+                        const accountData = parsedNotes.accounts[accountNumber];
+                        if (accountData) {
+                            totalAccountCharges = accountData.totalAccountCharges || 0;
+                            previousPayment = accountData.previousPayment || 0;
+                            totalCurrentCharges = accountData.totalCurrentCharges || 0;
+                            phones = accountData.phones || [];
+                            totalAmount = phones.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+                            billNumber = accountData.billNumber || bill.bill_number || bill.meter_number || '';
+                        }
+                    } else if (bill.utility_type === 'telephone') {
+                        // Fallback: use legacy fields
+                        totalAccountCharges = parsedNotes._legacy_totalAccountCharges || 0;
+                        previousPayment = parsedNotes._legacy_previousPayment || 0;
+                        totalCurrentCharges = parsedNotes._legacy_totalCurrentCharges || 0;
+                        phones = parsedNotes._legacy_phones || [];
+                        totalAmount = phones.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+                    }
+
                     if (bill.utility_type === 'telephone' && bill.notes && bill.notes.includes('isSummary')) {
                         continue;
                     }
@@ -2077,14 +2106,13 @@
                         accountNumber: bill.account_number || '—',
                         meterNumber: bill.utility_type === 'telephone' ? '—' : (bill.meter_number || '—'),
                         phoneNumber: bill.utility_type === 'telephone' ? (bill.phone_number || '—') : '—',
-                        billNumber: bill.utility_type === 'telephone' ? (bill.bill_number || bill.meter_number || '—') : '—',
+                        billNumber: bill.utility_type === 'telephone' ? (billNumber || bill.bill_number || bill.meter_number || '—') : '—',
                         rentalAmount: bill.utility_type === 'telephone' ? (parseFloat(bill.current_charges) || 0) : 0,
-                        totalAmount: bill.utility_type === 'telephone' ? (parsedNotes.totalAmount || 0) : 0,
-                        totalAccountCharges: bill.utility_type === 'telephone' ? (parsedNotes.totalAccountCharges || 0) : 0,
+                        totalAmount: bill.utility_type === 'telephone' ? totalAmount : 0,
+                        totalAccountCharges: bill.utility_type === 'telephone' ? totalAccountCharges : 0,
                         previousOutstanding: bill.utility_type === 'telephone' ? (parseFloat(bill.unsettled_charges) || 0) : 0,
-                        previousPayment: bill.utility_type === 'telephone' ? (parsedNotes.previousPayment || 0) : 0,
-                        totalCurrentCharges: bill.utility_type === 'telephone' ? 
-                            ((parseFloat(bill.unsettled_charges) || 0) + (parsedNotes.totalAccountCharges || 0) - (parsedNotes.previousPayment || 0)) : 0,
+                        previousPayment: bill.utility_type === 'telephone' ? previousPayment : 0,
+                        totalCurrentCharges: bill.utility_type === 'telephone' ? totalCurrentCharges : 0,
                         consumption: consumption,
                         meterTelNo: meterTelNo,
                         billAmount: parseFloat(bill.current_charges) || 0,
@@ -2128,7 +2156,7 @@
             }
         });
 
-        // ============ UPDATED generatePrintPreview with subtotals toggle ============
+        // ============ UPDATED generatePrintPreview with fixed blank page and telephone data ============
         function generatePrintPreview(data, month, year, selectedColumns, itemsPerPage, utilityTypes, paginateOnlyTelephone, showSubtotals) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -2256,7 +2284,6 @@
             // ====== GROUP DATA BY ENTITY IF SUBTOTALS ENABLED ======
             let groupedData = [];
             if (showSubtotals && !hasTelephone) { // only show subtotals for water/electricity
-                // Group by entityName (and entityType to be safe)
                 const groups = new Map();
                 data.forEach(item => {
                     const key = item.entityName + '|' + item.entityType;
@@ -2273,6 +2300,7 @@
                 groupedData = [data];
             }
 
+            // Remove the attachment-header div to avoid blank page
             let printHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -2296,12 +2324,6 @@
                         }
                         .print-page:not(:last-child) {
                             page-break-after: always;
-                        }
-                        .attachment-header { 
-                            text-align: right; 
-                            font-size: 10pt; 
-                            margin-bottom: 20px; 
-                            font-weight: bold; 
                         }
                         .print-header { 
                             text-align: center; 
@@ -2497,9 +2519,6 @@
 
             printHtml += `
                 <div class="print-page">
-                    <div class="attachment-header">
-                        &nbsp;
-                    </div>
                     <div class="print-header">
                         <div class="report-title-print">KEMENTERIAN PENDIDIKAN</div>
                         <div class="report-subtitle-print">${titleText}</div>
