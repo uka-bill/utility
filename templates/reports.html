@@ -8,7 +8,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* (same CSS as before – unchanged) */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -35,11 +34,7 @@
             --radius-xs: 8px;
             --transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--gray-50);
@@ -498,16 +493,18 @@
             color: var(--dark);
         }
         .column-checkboxes {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 14px;
-            align-items: center;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 8px 16px;
+            align-items: start;
+            padding: 4px 0;
         }
         .column-checkbox-item {
             display: flex;
             align-items: center;
             font-size: 0.78rem;
             font-weight: 500;
+            padding: 2px 0;
         }
         .column-checkbox-item input[type="checkbox"] {
             margin-right: 5px;
@@ -1096,6 +1093,7 @@
             .approval-footer .approval-grid { grid-template-columns: 1fr; gap: 15px; }
             .approval-details-grid { grid-template-columns: 1fr; }
             #entityDisplayOptions { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .column-checkboxes { grid-template-columns: 1fr; }
         }
         @media (max-width: 480px) {
             .page-title { font-size: 1.3rem; }
@@ -1212,7 +1210,7 @@
                 <div class="column-checkboxes" id="printColumnCheckboxes"></div>
                 <!-- Subtotal options - individual checkboxes -->
                 <div id="subtotalsContainer">
-                    <div style="margin-top: 8px;">
+                    <div style="margin-top: 8px; border-top: 1px solid var(--gray-light); padding-top: 10px;">
                         <label style="font-size:0.82rem; font-weight:600; color:var(--dark); display:block; margin-bottom:4px;">📊 Subtotal Columns to Display:</label>
                         <div id="subtotalOptions">
                             <div class="column-checkbox-item">
@@ -1646,6 +1644,7 @@
             const primaryType = selectedTypes[0];
             const columns = COLUMN_DEFINITIONS[primaryType] || [];
             container.innerHTML = '';
+            // Group columns in a grid layout
             columns.forEach(col => {
                 const div = document.createElement('div');
                 div.className = 'column-checkbox-item';
@@ -1662,7 +1661,6 @@
         function updateSubtotalsVisibility() {
             const types = getSelectedUtilityTypes();
             const container = document.getElementById('subtotalsContainer');
-            // Hide the entire subtotal section for Telephone only
             if (types.length === 1 && types[0] === 'telephone') {
                 container.classList.add('hidden');
             } else {
@@ -2189,7 +2187,6 @@
                             printHtml += `<tr class="entity-subtotal-row">`;
                             printHtml += `<td colspan="${subSpan}" style="text-align:right; font-weight:700;">Subtotal</td>`;
                             visibleCols.forEach((col, idx) => {
-                                // Skip columns that are not the subtotal columns
                                 if (col.key === 'consumption') {
                                     if (showConsumption) {
                                         printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityConsumption)}</td>`;
@@ -2380,15 +2377,23 @@
 
             const isTelephoneOnly = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
 
-            // Read subtotal options
-            const subtotalOptions = {
-                showConsumption: document.getElementById('subtotalConsumption').checked,
-                showBillAmount: document.getElementById('subtotalBillAmount').checked,
-                showOutstanding: document.getElementById('subtotalOutstanding').checked
-            };
+            // Read subtotal options safely - only if elements exist
+            let showConsumption = false;
+            let showBillAmount = false;
+            let showOutstanding = false;
+
+            if (!isTelephoneOnly) {
+                const consumptionEl = document.getElementById('subtotalConsumption');
+                const billAmountEl = document.getElementById('subtotalBillAmount');
+                const outstandingEl = document.getElementById('subtotalOutstanding');
+
+                if (consumptionEl) showConsumption = consumptionEl.checked;
+                if (billAmountEl) showBillAmount = billAmountEl.checked;
+                if (outstandingEl) showOutstanding = outstandingEl.checked;
+            }
 
             // Determine if any subtotal column is selected
-            const showSubtotals = !isTelephoneOnly && (subtotalOptions.showConsumption || subtotalOptions.showBillAmount || subtotalOptions.showOutstanding);
+            const showSubtotals = !isTelephoneOnly && (showConsumption || showBillAmount || showOutstanding);
 
             const showAllEntities = document.getElementById('showAllEntities').checked;
             const groupByEntity = document.getElementById('groupByEntity').checked;
@@ -2521,6 +2526,13 @@
                     const rowCount = groupByEntity ? allEntitiesData.length : allEntitiesData.reduce((sum, e) => sum + e.bills.length, 0);
                     shouldPaginate = rowCount > effectiveItemsPerPage;
                 }
+
+                // Build subtotal options object for the print function
+                const subtotalOptions = {
+                    showConsumption: showConsumption,
+                    showBillAmount: showBillAmount,
+                    showOutstanding: showOutstanding
+                };
 
                 generatePrintPreviewWithEntities(
                     allEntitiesData, month, year, selectedColumns, effectiveItemsPerPage,
