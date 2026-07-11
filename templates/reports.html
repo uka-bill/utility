@@ -988,8 +988,8 @@
         }
         .approval-footer .approval-item .signature-line {
             margin-top: 10px;
-            padding-bottom: 4px;
-            min-height: 40px;
+            padding-bottom: 2px;
+            min-height: 22px;
             color: #000;
             font-size: 8.5pt;
             text-align: left;
@@ -997,9 +997,9 @@
             font-style: normal;
         }
         .approval-footer .approval-item .date-line {
-            margin-top: 2px;
+            margin-top: 0px;
             padding-bottom: 4px;
-            min-height: 20px;
+            min-height: 18px;
             color: #000;
             font-size: 8.5pt;
             text-align: left;
@@ -1644,7 +1644,6 @@
             const primaryType = selectedTypes[0];
             const columns = COLUMN_DEFINITIONS[primaryType] || [];
             container.innerHTML = '';
-            // Group columns in a grid layout
             columns.forEach(col => {
                 const div = document.createElement('div');
                 div.className = 'column-checkbox-item';
@@ -1722,7 +1721,7 @@
             });
         });
 
-        // ====== GENERATE PRINT PREVIEW ======
+        // ====== GENERATE PRINT PREVIEW (FIXED: pagination only for telephone, running numbers) ======
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1881,9 +1880,10 @@
                 totalValueForSummary = grandTotalBillAmount;
             }
 
-            // Pagination
+            // ====== PAGINATION: ONLY FOR TELEPHONE ======
             let pages = [];
             if (shouldPaginate) {
+                // Only paginate for telephone
                 const rowsPerPage = itemsPerPage;
                 let currentPage = [], currentRowCount = 0;
                 for (let i = 0; i < entityInfo.length; i++) {
@@ -1905,6 +1905,8 @@
             let totalPages = pages.length;
             let pageIndex = 0;
             let cumulativeTotal = 0;
+            // ====== RUNNING NUMBER: persists across pages ======
+            let globalSerial = 1;
 
             // Helper: render a data row using visibleCols – ensures exact column count
             function renderDataRow(row, serial, isFirst, rowspan, isGrouped, groupByEntity, hasTelephone, hasWaterElectricity, visibleCols, entityName, entityType) {
@@ -2020,8 +2022,8 @@
                         .approval-footer .approval-item .field .field-value { font-weight: 500; color: #1e293b; padding-left: 8px; }
                         .approval-footer .approval-item .signature-line {
                             margin-top: 10px;
-                            padding-bottom: 4px;
-                            min-height: 40px;
+                            padding-bottom: 2px;
+                            min-height: 22px;
                             color: #000;
                             font-size: 8.5pt;
                             text-align: left;
@@ -2029,9 +2031,9 @@
                             font-style: normal;
                         }
                         .approval-footer .approval-item .date-line {
-                            margin-top: 2px;
+                            margin-top: 0px;
                             padding-bottom: 4px;
-                            min-height: 20px;
+                            min-height: 18px;
                             color: #000;
                             font-size: 8.5pt;
                             text-align: left;
@@ -2115,8 +2117,7 @@
                     `;
                 }
 
-                // Render data rows
-                let serial = 1;
+                // Render data rows - using globalSerial for running numbers
                 for (let eIdx = 0; eIdx < pageEntityInfo.length; eIdx++) {
                     const info = pageEntityInfo[eIdx];
                     const rowCount = info.rowCount;
@@ -2144,9 +2145,9 @@
                             totalAccountCharges: 0, previousOutstanding: 0, previousPayment: 0,
                             totalCurrentCharges: 0, utilityType: utilityTypes[0]
                         };
-                        printHtml += renderDataRow(rowData, serial, true, 1, groupByEntity, groupByEntity,
+                        printHtml += renderDataRow(rowData, globalSerial, true, 1, groupByEntity, groupByEntity,
                             hasTelephone, hasWaterElectricity, visibleCols, entityName, entityType);
-                        serial++;
+                        globalSerial++;
                         continue;
                     }
 
@@ -2173,14 +2174,13 @@
                             totalCurrentCharges: bill.totalCurrentCharges || 0,
                             utilityType: bill.utilityType || utilityTypes[0]
                         };
-                        printHtml += renderDataRow(rowData, serial, isFirst, rowspan, groupByEntity, groupByEntity,
+                        printHtml += renderDataRow(rowData, globalSerial, isFirst, rowspan, groupByEntity, groupByEntity,
                             hasTelephone, hasWaterElectricity, visibleCols, entityName, entityType);
-                        if (isFirst) serial++;
+                        if (isFirst) globalSerial++;
                     }
 
                     // ====== ENTITY SUBTOTAL ROW (only for Water/Electricity) ======
                     if (showSubtotals && !hasTelephone && groupByEntity && bills.length > 1) {
-                        // Check if at least one subtotal column is selected
                         if (showConsumption || showBillAmount || showOutstanding) {
                             const subCols = visibleCols.filter(c => ['entityName', 'entityType', 'accountNumber', 'meterTelNo', 'phoneNumber', 'period'].includes(c.key));
                             const subSpan = subCols.length + 1;
@@ -2377,7 +2377,7 @@
 
             const isTelephoneOnly = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
 
-            // Read subtotal options safely - only if elements exist
+            // Read subtotal options safely
             let showConsumption = false;
             let showBillAmount = false;
             let showOutstanding = false;
@@ -2392,7 +2392,6 @@
                 if (outstandingEl) showOutstanding = outstandingEl.checked;
             }
 
-            // Determine if any subtotal column is selected
             const showSubtotals = !isTelephoneOnly && (showConsumption || showBillAmount || showOutstanding);
 
             const showAllEntities = document.getElementById('showAllEntities').checked;
@@ -2520,14 +2519,16 @@
 
                 const isWaterElectricity = utilityTypes.length === 1 && (utilityTypes[0] === 'water' || utilityTypes[0] === 'electricity');
                 const isTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
+
+                // ====== FIX: Pagination ONLY for Telephone ======
                 let shouldPaginate = false;
                 let effectiveItemsPerPage = itemsPerPage;
-                if (isWaterElectricity || isTelephone) {
+                if (isTelephone) {
                     const rowCount = groupByEntity ? allEntitiesData.length : allEntitiesData.reduce((sum, e) => sum + e.bills.length, 0);
                     shouldPaginate = rowCount > effectiveItemsPerPage;
                 }
+                // Water and Electricity: NO pagination (shouldPaginate stays false)
 
-                // Build subtotal options object for the print function
                 const subtotalOptions = {
                     showConsumption: showConsumption,
                     showBillAmount: showBillAmount,
