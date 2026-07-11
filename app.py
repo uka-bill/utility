@@ -1019,7 +1019,7 @@ def format_file_size(size):
         size /= 1024.0
     return f"{size:.1f} TB"
 
-# ============ BATCH UPDATE API ============
+# ============ BATCH UPDATE API (FIXED) ============
 
 @app.route('/api/utility-bills/batch-update', methods=['POST'])
 def batch_update_utility_bills():
@@ -1083,14 +1083,13 @@ def batch_update_utility_bills():
                     account_number = bill_data.get('account_number', '')
                     bill_number = bill_data.get('bill_number', '')
                     
-                    # ========== ROBUST LOOKUP ==========
-                    existing = None
+                    # ========== FIX: ONLY EXACT MONTH/YEAR MATCH ==========
                     existing_id = None
                     existing_record = None
                     
                     print(f"🔍 Looking for bill: entity_id={entity_id}, entity={entity_name}, month={month_val}, year={year_val}")
                     
-                    # METHOD 1: Try entity_id + month + year (exact)
+                    # Try exact month + year match
                     try:
                         query = supabase.table("utility_bills").select("id, *")\
                             .eq("utility_type", "telephone")\
@@ -1102,12 +1101,11 @@ def batch_update_utility_bills():
                         if check_response.data and len(check_response.data) > 0:
                             existing_id = check_response.data[0]['id']
                             existing_record = check_response.data[0]
-                            existing = check_response
-                            print(f"📍 Found by entity_id + month + year: {existing_id}")
+                            print(f"📍 Found by month + year: {existing_id}")
                     except Exception as e:
-                        print(f"⚠️ Error: {e}")
+                        print(f"⚠️ Error in exact match: {e}")
                     
-                    # METHOD 2: Try entity_id + bill_month + bill_year
+                    # If not found, try bill_month + bill_year
                     if not existing_id:
                         try:
                             query = supabase.table("utility_bills").select("id, *")\
@@ -1120,30 +1118,15 @@ def batch_update_utility_bills():
                             if check_response.data and len(check_response.data) > 0:
                                 existing_id = check_response.data[0]['id']
                                 existing_record = check_response.data[0]
-                                existing = check_response
                                 print(f"📍 Found by bill_month + bill_year: {existing_id}")
                         except Exception as e:
-                            print(f"⚠️ Error: {e}")
+                            print(f"⚠️ Error in bill_month match: {e}")
                     
-                    # METHOD 3: Try entity_id + year (last resort) – pick the latest updated
+                    # If still not found, we will create a new bill – DO NOT use year-only fallback
                     if not existing_id:
-                        try:
-                            query = supabase.table("utility_bills").select("id, *")\
-                                .eq("utility_type", "telephone")\
-                                .eq("entity_type", entity_type)\
-                                .eq("entity_id", entity_id)\
-                                .eq("year", year_val)\
-                                .order("updated_at", desc=True)
-                            check_response = query.execute()
-                            if check_response.data and len(check_response.data) > 0:
-                                existing_id = check_response.data[0]['id']
-                                existing_record = check_response.data[0]
-                                existing = check_response
-                                print(f"📍 Found by entity_id + year (last resort): {existing_id} (updated_at={existing_record.get('updated_at')})")
-                        except Exception as e:
-                            print(f"⚠️ Error: {e}")
+                        print(f"📝 No existing bill for month={month_val}, year={year_val}. Will insert new.")
                     
-                    # Parse notes
+                    # Parse notes from frontend
                     notes_data = {}
                     try:
                         if bill_data.get('notes'):
@@ -1154,16 +1137,9 @@ def batch_update_utility_bills():
                     if not notes_data.get('phones'):
                         notes_data['phones'] = []
                     
-                    # Determine final month/year – prefer existing if found by year-only fallback
+                    # Use the provided month/year (no fallback)
                     final_month = month_val
                     final_year = year_val
-                    if existing_record:
-                        # Keep the existing month/year to avoid creating new month
-                        final_month = existing_record.get('month', month_val)
-                        final_year = existing_record.get('year', year_val)
-                        print(f"📌 Using existing month={final_month}, year={final_year} from record {existing_id}")
-                    else:
-                        print(f"📌 No existing bill found, creating new with month={final_month}, year={final_year}")
                     
                     record = {
                         "utility_type": "telephone",
@@ -1200,7 +1176,7 @@ def batch_update_utility_bills():
                     success_count += 1
                 
                 elif utility_type == 'water':
-                    # Find existing water bill
+                    # Find existing water bill (exact match on account and meter)
                     existing = supabase.table("utility_bills").select("id")\
                         .eq("utility_type", "water")\
                         .eq("entity_type", entity_type)\
