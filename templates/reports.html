@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* ===== CSS (same as before, unchanged) ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -1111,6 +1112,7 @@
     </style>
 </head>
 <body>
+    <!-- === NAVBAR (unchanged) === -->
     <nav class="navbar">
         <div class="logo">
             <div class="logo-icon">⚡</div>
@@ -1133,6 +1135,7 @@
     </nav>
 
     <div class="container">
+        <!-- === PAGE HEADER === -->
         <div class="page-header">
             <div>
                 <h1 class="page-title">📊 Reports & Print Center</h1>
@@ -1140,7 +1143,7 @@
             </div>
         </div>
 
-        <!-- ===== PRINT SECTION (top) ===== -->
+        <!-- === PRINT SECTION === -->
         <div class="print-section no-print">
             <h3>🖨️ Print Utility Bills</h3>
             <div class="utility-selector">
@@ -1208,7 +1211,7 @@
             <div class="column-selection-section">
                 <h4>Select Columns to Print:</h4>
                 <div class="column-checkboxes" id="printColumnCheckboxes"></div>
-                <!-- Subtotal options - individual checkboxes -->
+                <!-- Subtotal options -->
                 <div id="subtotalsContainer">
                     <div style="margin-top: 8px; border-top: 1px solid var(--gray-light); padding-top: 10px;">
                         <label style="font-size:0.82rem; font-weight:600; color:var(--dark); display:block; margin-bottom:4px;">📊 Subtotal Columns to Display:</label>
@@ -1267,7 +1270,7 @@
             </div>
         </div>
 
-        <!-- ===== GENERATE REPORT SECTION (bottom) ===== -->
+        <!-- === GENERATE REPORT SECTION === -->
         <div class="info-note no-print">
             <span>📄</span>
             <div><strong>Generate Reports</strong> — Select filters below to generate utility bills reports. You can print, export as PDF, or export as Excel/CSV for further analysis.</div>
@@ -1385,7 +1388,7 @@
         </div>
     </div>
 
-    <!-- ===== PROCESSING OVERLAY ===== -->
+    <!-- === PROCESSING OVERLAY === -->
     <div class="processing-overlay" id="processingOverlay">
         <div class="processing-box">
             <div class="processing-spinner"></div>
@@ -1727,7 +1730,7 @@
             });
         });
 
-        // ====== GENERATE PRINT PREVIEW (FIXED) ======
+        // ====== GENERATE PRINT PREVIEW ======
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1912,7 +1915,7 @@
             let cumulativeTotal = 0;
             let globalSerial = 1;
 
-            // Helper: render a data row - ensures exact column count matching header
+            // Helper: render a data row
             function renderDataRow(row, serial, isFirst, rowspan, isGrouped, groupByEntity, hasTelephone, hasWaterElectricity, visibleCols, entityName, entityType) {
                 let html = '';
                 const isZero = row.isZeroBill;
@@ -2121,7 +2124,7 @@
                     `;
                 }
 
-                // Render data rows - using globalSerial for running numbers
+                // Render data rows
                 for (let eIdx = 0; eIdx < pageEntityInfo.length; eIdx++) {
                     const info = pageEntityInfo[eIdx];
                     const rowCount = info.rowCount;
@@ -2183,60 +2186,54 @@
                         if (isFirst) globalSerial++;
                     }
 
-                    // ====== ENTITY SUBTOTAL ROW (only for Water/Electricity) ======
-                    // Show subtotal when at least one subtotal checkbox is checked AND (entity has multiple bills OR showSubtotals is true)
-                    if (showSubtotals && !hasTelephone && groupByEntity) {
-                        // Only show subtotal if there are bills to subtotal (multiple bills)
-                        // Or if the user explicitly wants to see subtotal even with one bill (we'll show it)
-                        if (bills.length > 1 || (bills.length === 1 && showSubtotals)) {
-                            // Check if at least one subtotal column is selected and has a value to display
-                            const hasConsumption = showConsumption && entityConsumption > 0;
-                            const hasBillAmount = showBillAmount && entityBillAmount > 0;
-                            const hasOutstanding = showOutstanding && entityOutstanding > 0;
+                    // ====== ENTITY SUBTOTAL ROW (always show if showSubtotals is true and entity has at least one bill) ======
+                    if (showSubtotals && !hasTelephone && groupByEntity && bills.length > 0) {
+                        // Check if at least one subtotal column is selected and has a value to display (or we want to show it anyway)
+                        const hasConsumption = showConsumption;
+                        const hasBillAmount = showBillAmount;
+                        const hasOutstanding = showOutstanding;
 
-                            // Only show subtotal if there's at least one column with a value to display
-                            if (hasConsumption || hasBillAmount || hasOutstanding || bills.length > 1) {
-                                // Find columns before the subtotal columns
-                                const subCols = visibleCols.filter(c => ['entityName', 'entityType', 'accountNumber', 'meterTelNo', 'phoneNumber', 'period'].includes(c.key));
-                                const subSpan = subCols.length + 1; // +1 for No. column
-                                printHtml += `<tr class="entity-subtotal-row">`;
-                                printHtml += `<td colspan="${subSpan}" style="text-align:right; font-weight:700;">Subtotal</td>`;
+                        if (hasConsumption || hasBillAmount || hasOutstanding) {
+                            // Find columns before the subtotal columns
+                            const subCols = visibleCols.filter(c => ['entityName', 'entityType', 'accountNumber', 'meterTelNo', 'phoneNumber', 'period'].includes(c.key));
+                            const subSpan = subCols.length + 1; // +1 for No. column
+                            printHtml += `<tr class="entity-subtotal-row">`;
+                            printHtml += `<td colspan="${subSpan}" style="text-align:right; font-weight:700;">Subtotal</td>`;
 
-                                // Now output the remaining columns
-                                visibleCols.forEach((col, idx) => {
-                                    if (col.key === 'consumption') {
-                                        if (showConsumption) {
-                                            printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityConsumption)}</td>`;
-                                        } else {
-                                            printHtml += `<td></td>`;
-                                        }
-                                    } else if (col.key === 'billAmount') {
-                                        if (showBillAmount) {
-                                            printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityBillAmount)}</td>`;
-                                        } else {
-                                            printHtml += `<td></td>`;
-                                        }
-                                    } else if (col.key === 'outstanding') {
-                                        if (showOutstanding) {
-                                            printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityOutstanding)}</td>`;
-                                        } else {
-                                            printHtml += `<td></td>`;
-                                        }
-                                    } else if (col.key === 'amountPaid') {
-                                        printHtml += `<td style="text-align:center;">—</td>`;
-                                    } else if (col.key === 'accountNumber' || col.key === 'meterTelNo' || col.key === 'phoneNumber') {
-                                        // Skip - already handled by colspan
-                                    } else if (col.key !== 'no' && col.key !== 'entityName' && col.key !== 'entityType' && col.key !== 'period') {
+                            // Output the subtotal columns
+                            visibleCols.forEach((col, idx) => {
+                                if (col.key === 'consumption') {
+                                    if (showConsumption) {
+                                        printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityConsumption)}</td>`;
+                                    } else {
                                         printHtml += `<td></td>`;
                                     }
-                                });
-                                printHtml += `</tr>`;
-                            }
+                                } else if (col.key === 'billAmount') {
+                                    if (showBillAmount) {
+                                        printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityBillAmount)}</td>`;
+                                    } else {
+                                        printHtml += `<td></td>`;
+                                    }
+                                } else if (col.key === 'outstanding') {
+                                    if (showOutstanding) {
+                                        printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityOutstanding)}</td>`;
+                                    } else {
+                                        printHtml += `<td></td>`;
+                                    }
+                                } else if (col.key === 'amountPaid') {
+                                    printHtml += `<td style="text-align:center;">—</td>`;
+                                } else if (col.key === 'accountNumber' || col.key === 'meterTelNo' || col.key === 'phoneNumber') {
+                                    // Skip - already handled by colspan
+                                } else if (col.key !== 'no' && col.key !== 'entityName' && col.key !== 'entityType' && col.key !== 'period') {
+                                    printHtml += `<td></td>`;
+                                }
+                            });
+                            printHtml += `</tr>`;
                         }
                     }
                 }
 
-                // Page Total – exact column count
+                // Page Total
                 let pageTotalValue = pageTotalCurrent;
                 if (hasTelephone) {
                     if (visibleCols.some(c => c.key === 'totalCurrentCharges')) pageTotalValue = pageTotalCurrent;
@@ -2276,7 +2273,7 @@
                     `;
                 }
 
-                // Grand Total (last page only)
+                // Grand Total
                 if (isLastPage) {
                     printHtml += `<tr class="total-sum-row">`;
                     visibleCols.forEach((col, idx) => {
@@ -2301,7 +2298,7 @@
                         </div>
                 `;
 
-                // ====== APPROVAL FOOTER (left-aligned) ======
+                // Approval footer
                 if (isLastPage) {
                     printHtml += `
                         <div class="approval-footer">
@@ -2368,7 +2365,6 @@
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
             console.log('🖨️ Print Selected button clicked');
 
-            // Get selected school and department IDs
             const schoolIds = getSelectedSchoolIds();
             const departmentIds = getSelectedDepartmentIds();
 
@@ -2401,7 +2397,7 @@
 
             const isTelephoneOnly = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
 
-            // Read subtotal options safely
+            // Read subtotal options
             let showConsumption = false;
             let showBillAmount = false;
             let showOutstanding = false;
@@ -2460,8 +2456,7 @@
                 updateProcessingBillsCount(billsData.length);
                 updateProcessingStep(0, `Fetched ${billsData.length} bills`, 30);
 
-                // --- FILTERING LOGIC (FIXED) ---
-                // Step 1: Build entity list from billsMap (entities with bills)
+                // --- BUILD ENTITY LIST FROM BILLS MAP ---
                 let entityList = [];
                 const billsMap = {};
 
@@ -2471,7 +2466,7 @@
                     billsMap[key].push(bill);
                 });
 
-                // Add entities with bills to entityList
+                // Add entities with bills
                 for (const key in billsMap) {
                     const parts = key.split('_');
                     const eType = parts[0];
@@ -2480,7 +2475,6 @@
                     const entityName = entityBills[0].entity_name || (eType === 'school' ? 'School #' + eId : 'Dept #' + eId);
                     const entityObj = { id: eId, name: entityName };
 
-                    // Try to get proper name from stored data
                     if (eType === 'school') {
                         const school = allSchoolsData.find(s => s.id === eId);
                         if (school) entityObj.name = school.name;
@@ -2499,7 +2493,19 @@
                     });
                 }
 
-                // Step 2: If showAllEntities is true, add entities without bills (that were selected)
+                // --- FILTER BY SELECTED IDs (always apply) ---
+                if (schoolIds.length > 0 || departmentIds.length > 0) {
+                    entityList = entityList.filter(e => {
+                        if (e.type === 'school') {
+                            return schoolIds.length === 0 || schoolIds.includes(e.entity.id);
+                        } else if (e.type === 'department') {
+                            return departmentIds.length === 0 || departmentIds.includes(e.entity.id);
+                        }
+                        return false;
+                    });
+                }
+
+                // If showAllEntities is true, add entities without bills that are selected
                 if (showAllEntities) {
                     // Fetch all schools and departments
                     const [schoolsRes, deptsRes] = await Promise.all([
@@ -2517,10 +2523,9 @@
                         allDepts = allDepts.filter(d => departmentIds.includes(d.id));
                     }
 
-                    // Add schools that are not already in entityList
+                    // Add schools not already present
                     allSchools.forEach(school => {
                         if (!entityList.some(e => e.type === 'school' && e.entity.id === school.id)) {
-                            // Ensure the school has a cluster_number for sorting
                             entityList.push({
                                 entity: school,
                                 type: 'school',
@@ -2530,7 +2535,7 @@
                         }
                     });
 
-                    // Add departments that are not already in entityList
+                    // Add departments not already present
                     allDepts.forEach(dept => {
                         if (!entityList.some(e => e.type === 'department' && e.entity.id === dept.id)) {
                             entityList.push({
@@ -2543,22 +2548,7 @@
                     });
                 }
 
-                // Step 3: Apply final filtering by selected IDs (ensures only selected entities remain)
-                // This is the critical fix - proper filtering for both schools AND departments
-                if (schoolIds.length > 0 || departmentIds.length > 0) {
-                    entityList = entityList.filter(e => {
-                        if (e.type === 'school') {
-                            // Keep school if schoolIds is empty OR school is in schoolIds
-                            return schoolIds.length === 0 || schoolIds.includes(e.entity.id);
-                        } else if (e.type === 'department') {
-                            // Keep department if departmentIds is empty OR department is in departmentIds
-                            return departmentIds.length === 0 || departmentIds.includes(e.entity.id);
-                        }
-                        return false;
-                    });
-                }
-
-                // Step 4: Sort the final entity list
+                // Sort final list
                 entityList.sort((a, b) => {
                     if (a.type !== b.type) return a.type === 'school' ? -1 : 1;
                     if (a.type === 'school') {
@@ -2585,7 +2575,7 @@
                 const isWaterElectricity = utilityTypes.length === 1 && (utilityTypes[0] === 'water' || utilityTypes[0] === 'electricity');
                 const isTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
 
-                // Pagination ONLY for Telephone
+                // Pagination only for Telephone
                 let shouldPaginate = false;
                 let effectiveItemsPerPage = itemsPerPage;
                 if (isTelephone) {
