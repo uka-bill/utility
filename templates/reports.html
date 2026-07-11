@@ -1614,12 +1614,18 @@
         }
         function getSelectedSchoolIds() {
             const ids = [];
-            document.querySelectorAll('.school-checkbox:checked').forEach(cb => ids.push(parseInt(cb.value)));
+            document.querySelectorAll('.school-checkbox:checked').forEach(cb => {
+                const val = parseInt(cb.value);
+                if (!isNaN(val)) ids.push(val);
+            });
             return ids;
         }
         function getSelectedDepartmentIds() {
             const ids = [];
-            document.querySelectorAll('.department-checkbox:checked').forEach(cb => ids.push(parseInt(cb.value)));
+            document.querySelectorAll('.department-checkbox:checked').forEach(cb => {
+                const val = parseInt(cb.value);
+                if (!isNaN(val)) ids.push(val);
+            });
             return ids;
         }
         function getSelectedUtilityTypes() {
@@ -1721,7 +1727,7 @@
             });
         });
 
-        // ====== GENERATE PRINT PREVIEW (FIXED: pagination only for telephone, running numbers) ======
+        // ====== GENERATE PRINT PREVIEW (FIXED) ======
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1883,7 +1889,6 @@
             // ====== PAGINATION: ONLY FOR TELEPHONE ======
             let pages = [];
             if (shouldPaginate) {
-                // Only paginate for telephone
                 const rowsPerPage = itemsPerPage;
                 let currentPage = [], currentRowCount = 0;
                 for (let i = 0; i < entityInfo.length; i++) {
@@ -1905,10 +1910,9 @@
             let totalPages = pages.length;
             let pageIndex = 0;
             let cumulativeTotal = 0;
-            // ====== RUNNING NUMBER: persists across pages ======
             let globalSerial = 1;
 
-            // Helper: render a data row using visibleCols – ensures exact column count
+            // Helper: render a data row - ensures exact column count matching header
             function renderDataRow(row, serial, isFirst, rowspan, isGrouped, groupByEntity, hasTelephone, hasWaterElectricity, visibleCols, entityName, entityType) {
                 let html = '';
                 const isZero = row.isZeroBill;
@@ -2182,10 +2186,12 @@
                     // ====== ENTITY SUBTOTAL ROW (only for Water/Electricity) ======
                     if (showSubtotals && !hasTelephone && groupByEntity && bills.length > 1) {
                         if (showConsumption || showBillAmount || showOutstanding) {
+                            // Find columns before the subtotal columns
                             const subCols = visibleCols.filter(c => ['entityName', 'entityType', 'accountNumber', 'meterTelNo', 'phoneNumber', 'period'].includes(c.key));
-                            const subSpan = subCols.length + 1;
+                            const subSpan = subCols.length + 1; // +1 for No. column
                             printHtml += `<tr class="entity-subtotal-row">`;
                             printHtml += `<td colspan="${subSpan}" style="text-align:right; font-weight:700;">Subtotal</td>`;
+                            // Now output the remaining columns
                             visibleCols.forEach((col, idx) => {
                                 if (col.key === 'consumption') {
                                     if (showConsumption) {
@@ -2208,8 +2214,8 @@
                                 } else if (col.key === 'amountPaid') {
                                     printHtml += `<td style="text-align:center;">—</td>`;
                                 } else if (col.key === 'accountNumber' || col.key === 'meterTelNo' || col.key === 'phoneNumber') {
-                                    printHtml += `<td></td>`;
-                                } else {
+                                    // Skip - already handled by colspan
+                                } else if (col.key !== 'no' && col.key !== 'entityName' && col.key !== 'entityType' && col.key !== 'period') {
                                     printHtml += `<td></td>`;
                                 }
                             });
@@ -2349,8 +2355,14 @@
         // ====== PRINT SELECTED BUTTON ======
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
             console.log('🖨️ Print Selected button clicked');
+
+            // Get selected school and department IDs
             const schoolIds = getSelectedSchoolIds();
             const departmentIds = getSelectedDepartmentIds();
+
+            console.log('📊 Selected schools:', schoolIds);
+            console.log('📊 Selected departments:', departmentIds);
+
             const utilityTypes = getSelectedUtilityTypes();
             const selectedColumns = getSelectedPrintColumns();
             const month = document.getElementById('printMonth').value;
@@ -2397,6 +2409,7 @@
             const showAllEntities = document.getElementById('showAllEntities').checked;
             const groupByEntity = document.getElementById('groupByEntity').checked;
 
+            // Validate selections
             if (schoolIds.length === 0 && departmentIds.length === 0) {
                 alert('⚠️ Please select at least one school or department.');
                 return;
@@ -2419,6 +2432,8 @@
                     department_ids: departmentIds
                 };
 
+                console.log('📡 API Request:', requestData);
+
                 updateProcessingStep(0, 'Fetching bills from server...', 20);
                 const response = await fetch('/api/generate-report', {
                     method: 'POST',
@@ -2429,11 +2444,14 @@
                 if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
                 let billsData = await response.json();
+                console.log('📊 API returned', billsData.length, 'bills');
                 updateProcessingBillsCount(billsData.length);
                 updateProcessingStep(0, `Fetched ${billsData.length} bills`, 30);
 
                 let allEntitiesData = [];
                 const billsMap = {};
+
+                // Group bills by entity
                 billsData.forEach(bill => {
                     const key = bill.entity_type + '_' + bill.entity_id;
                     if (!billsMap[key]) billsMap[key] = [];
@@ -2449,36 +2467,62 @@
                     let allSchools = schoolsRes.ok ? await schoolsRes.json() : [];
                     let allDepts = deptsRes.ok ? await deptsRes.json() : [];
 
-                    if (schoolIds.length > 0) allSchools = allSchools.filter(s => schoolIds.includes(s.id));
-                    if (departmentIds.length > 0) allDepts = allDepts.filter(d => departmentIds.includes(d.id));
+                    // Filter by selected IDs
+                    if (schoolIds.length > 0) {
+                        allSchools = allSchools.filter(s => schoolIds.includes(s.id));
+                    }
+                    if (departmentIds.length > 0) {
+                        allDepts = allDepts.filter(d => departmentIds.includes(d.id));
+                    }
 
                     allSchools.sort((a,b) => (parseInt(a.cluster_number)||999) - (parseInt(b.cluster_number)||999) || a.id - b.id);
                     allDepts.sort((a,b) => a.id - b.id);
 
+                    // Add schools with or without bills
                     allSchools.forEach(school => {
                         const key = 'school_' + school.id;
                         const existingBills = billsMap[key] || [];
                         existingBills.forEach(bill => bill.entity_name = school.name || bill.entity_name);
-                        allEntitiesData.push({ entity: school, type: 'school', bills: existingBills, hasBills: existingBills.length > 0 });
+                        allEntitiesData.push({
+                            entity: school,
+                            type: 'school',
+                            bills: existingBills,
+                            hasBills: existingBills.length > 0
+                        });
                         delete billsMap[key];
                     });
+
+                    // Add departments with or without bills
                     allDepts.forEach(dept => {
                         const key = 'department_' + dept.id;
                         const existingBills = billsMap[key] || [];
                         existingBills.forEach(bill => bill.entity_name = dept.unit_name || dept.name || bill.entity_name);
-                        allEntitiesData.push({ entity: dept, type: 'department', bills: existingBills, hasBills: existingBills.length > 0 });
+                        allEntitiesData.push({
+                            entity: dept,
+                            type: 'department',
+                            bills: existingBills,
+                            hasBills: existingBills.length > 0
+                        });
                         delete billsMap[key];
                     });
+
+                    // Add any remaining entities from billsMap that weren't found in the entity lists
                     for (const key in billsMap) {
                         const parts = key.split('_');
                         const eType = parts[0];
                         const eId = parseInt(parts[1]);
                         const firstBill = billsMap[key][0];
                         const entityName = firstBill.entity_name || (eType === 'school' ? 'School #' + eId : 'Dept #' + eId);
-                        allEntitiesData.push({ entity: { id: eId, name: entityName }, type: eType, bills: billsMap[key], hasBills: true });
+                        allEntitiesData.push({
+                            entity: { id: eId, name: entityName },
+                            type: eType,
+                            bills: billsMap[key],
+                            hasBills: true
+                        });
                     }
                     updateProcessingStep(0, `Prepared ${allEntitiesData.length} entities`, 45);
                 } else {
+                    // Only include entities that have bills
                     for (const key in billsMap) {
                         const parts = key.split('_');
                         const eType = parts[0];
@@ -2486,6 +2530,8 @@
                         const entityBills = billsMap[key];
                         const entityName = entityBills[0].entity_name || (eType === 'school' ? 'School #' + eId : 'Dept #' + eId);
                         const entityObj = { id: eId, name: entityName };
+
+                        // Try to get proper name from stored data
                         if (eType === 'school') {
                             const school = allSchoolsData.find(s => s.id === eId);
                             if (school) entityObj.name = school.name;
@@ -2493,10 +2539,34 @@
                             const dept = allDepartmentsData.find(d => d.id === eId);
                             if (dept) entityObj.name = dept.unit_name || dept.name || entityObj.name;
                         }
-                        allEntitiesData.push({ entity: entityObj, type: eType, bills: entityBills, hasBills: true });
+                        allEntitiesData.push({
+                            entity: entityObj,
+                            type: eType,
+                            bills: entityBills,
+                            hasBills: true
+                        });
                     }
+
+                    // Filter by selected IDs when showAllEntities is OFF
+                    if (schoolIds.length > 0) {
+                        allEntitiesData = allEntitiesData.filter(e => {
+                            if (e.type === 'school' && schoolIds.includes(e.entity.id)) return true;
+                            if (e.type === 'department' && !schoolIds.length) return true;
+                            return false;
+                        });
+                    }
+                    if (departmentIds.length > 0) {
+                        allEntitiesData = allEntitiesData.filter(e => {
+                            if (e.type === 'department' && departmentIds.includes(e.entity.id)) return true;
+                            if (e.type === 'school' && !departmentIds.length) return true;
+                            return false;
+                        });
+                    }
+
+                    updateProcessingStep(0, `Prepared ${allEntitiesData.length} entities with bills`, 45);
                 }
 
+                // Final sort
                 allEntitiesData.sort((a,b) => {
                     if (a.type !== b.type) return a.type === 'school' ? -1 : 1;
                     if (a.type === 'school') {
@@ -2507,11 +2577,12 @@
                     return a.entity.id - b.entity.id;
                 });
 
+                console.log('📄 Final entities for printing:', allEntitiesData.length);
                 updateProcessingStep(0, `Processed ${allEntitiesData.length} entities`, 60);
 
                 if (allEntitiesData.length === 0) {
                     updateProcessingStep(1, 'No data to print', 100);
-                    setTimeout(() => { hideProcessingOverlay(); alert('⚠️ No data to print.'); }, 800);
+                    setTimeout(() => { hideProcessingOverlay(); alert('⚠️ No data to print for the selected entities.'); }, 800);
                     return;
                 }
 
@@ -2520,14 +2591,13 @@
                 const isWaterElectricity = utilityTypes.length === 1 && (utilityTypes[0] === 'water' || utilityTypes[0] === 'electricity');
                 const isTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
 
-                // ====== FIX: Pagination ONLY for Telephone ======
+                // Pagination ONLY for Telephone
                 let shouldPaginate = false;
                 let effectiveItemsPerPage = itemsPerPage;
                 if (isTelephone) {
                     const rowCount = groupByEntity ? allEntitiesData.length : allEntitiesData.reduce((sum, e) => sum + e.bills.length, 0);
                     shouldPaginate = rowCount > effectiveItemsPerPage;
                 }
-                // Water and Electricity: NO pagination (shouldPaginate stays false)
 
                 const subtotalOptions = {
                     showConsumption: showConsumption,
