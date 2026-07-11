@@ -2184,42 +2184,54 @@
                     }
 
                     // ====== ENTITY SUBTOTAL ROW (only for Water/Electricity) ======
-                    if (showSubtotals && !hasTelephone && groupByEntity && bills.length > 1) {
-                        if (showConsumption || showBillAmount || showOutstanding) {
-                            // Find columns before the subtotal columns
-                            const subCols = visibleCols.filter(c => ['entityName', 'entityType', 'accountNumber', 'meterTelNo', 'phoneNumber', 'period'].includes(c.key));
-                            const subSpan = subCols.length + 1; // +1 for No. column
-                            printHtml += `<tr class="entity-subtotal-row">`;
-                            printHtml += `<td colspan="${subSpan}" style="text-align:right; font-weight:700;">Subtotal</td>`;
-                            // Now output the remaining columns
-                            visibleCols.forEach((col, idx) => {
-                                if (col.key === 'consumption') {
-                                    if (showConsumption) {
-                                        printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityConsumption)}</td>`;
-                                    } else {
+                    // Show subtotal when at least one subtotal checkbox is checked AND (entity has multiple bills OR showSubtotals is true)
+                    if (showSubtotals && !hasTelephone && groupByEntity) {
+                        // Only show subtotal if there are bills to subtotal (multiple bills)
+                        // Or if the user explicitly wants to see subtotal even with one bill (we'll show it)
+                        if (bills.length > 1 || (bills.length === 1 && showSubtotals)) {
+                            // Check if at least one subtotal column is selected and has a value to display
+                            const hasConsumption = showConsumption && entityConsumption > 0;
+                            const hasBillAmount = showBillAmount && entityBillAmount > 0;
+                            const hasOutstanding = showOutstanding && entityOutstanding > 0;
+
+                            // Only show subtotal if there's at least one column with a value to display
+                            if (hasConsumption || hasBillAmount || hasOutstanding || bills.length > 1) {
+                                // Find columns before the subtotal columns
+                                const subCols = visibleCols.filter(c => ['entityName', 'entityType', 'accountNumber', 'meterTelNo', 'phoneNumber', 'period'].includes(c.key));
+                                const subSpan = subCols.length + 1; // +1 for No. column
+                                printHtml += `<tr class="entity-subtotal-row">`;
+                                printHtml += `<td colspan="${subSpan}" style="text-align:right; font-weight:700;">Subtotal</td>`;
+
+                                // Now output the remaining columns
+                                visibleCols.forEach((col, idx) => {
+                                    if (col.key === 'consumption') {
+                                        if (showConsumption) {
+                                            printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityConsumption)}</td>`;
+                                        } else {
+                                            printHtml += `<td></td>`;
+                                        }
+                                    } else if (col.key === 'billAmount') {
+                                        if (showBillAmount) {
+                                            printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityBillAmount)}</td>`;
+                                        } else {
+                                            printHtml += `<td></td>`;
+                                        }
+                                    } else if (col.key === 'outstanding') {
+                                        if (showOutstanding) {
+                                            printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityOutstanding)}</td>`;
+                                        } else {
+                                            printHtml += `<td></td>`;
+                                        }
+                                    } else if (col.key === 'amountPaid') {
+                                        printHtml += `<td style="text-align:center;">—</td>`;
+                                    } else if (col.key === 'accountNumber' || col.key === 'meterTelNo' || col.key === 'phoneNumber') {
+                                        // Skip - already handled by colspan
+                                    } else if (col.key !== 'no' && col.key !== 'entityName' && col.key !== 'entityType' && col.key !== 'period') {
                                         printHtml += `<td></td>`;
                                     }
-                                } else if (col.key === 'billAmount') {
-                                    if (showBillAmount) {
-                                        printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityBillAmount)}</td>`;
-                                    } else {
-                                        printHtml += `<td></td>`;
-                                    }
-                                } else if (col.key === 'outstanding') {
-                                    if (showOutstanding) {
-                                        printHtml += `<td style="text-align:right; font-weight:700;">${formatNumberWithCommas(entityOutstanding)}</td>`;
-                                    } else {
-                                        printHtml += `<td></td>`;
-                                    }
-                                } else if (col.key === 'amountPaid') {
-                                    printHtml += `<td style="text-align:center;">—</td>`;
-                                } else if (col.key === 'accountNumber' || col.key === 'meterTelNo' || col.key === 'phoneNumber') {
-                                    // Skip - already handled by colspan
-                                } else if (col.key !== 'no' && col.key !== 'entityName' && col.key !== 'entityType' && col.key !== 'period') {
-                                    printHtml += `<td></td>`;
-                                }
-                            });
-                            printHtml += `</tr>`;
+                                });
+                                printHtml += `</tr>`;
+                            }
                         }
                     }
                 }
@@ -2448,18 +2460,48 @@
                 updateProcessingBillsCount(billsData.length);
                 updateProcessingStep(0, `Fetched ${billsData.length} bills`, 30);
 
-                let allEntitiesData = [];
+                // --- FILTERING LOGIC (FIXED) ---
+                // Step 1: Build entity list from billsMap (entities with bills)
+                let entityList = [];
                 const billsMap = {};
 
-                // Group bills by entity
                 billsData.forEach(bill => {
                     const key = bill.entity_type + '_' + bill.entity_id;
                     if (!billsMap[key]) billsMap[key] = [];
                     billsMap[key].push(bill);
                 });
 
+                // Add entities with bills to entityList
+                for (const key in billsMap) {
+                    const parts = key.split('_');
+                    const eType = parts[0];
+                    const eId = parseInt(parts[1]);
+                    const entityBills = billsMap[key];
+                    const entityName = entityBills[0].entity_name || (eType === 'school' ? 'School #' + eId : 'Dept #' + eId);
+                    const entityObj = { id: eId, name: entityName };
+
+                    // Try to get proper name from stored data
+                    if (eType === 'school') {
+                        const school = allSchoolsData.find(s => s.id === eId);
+                        if (school) entityObj.name = school.name;
+                        if (school) entityObj.cluster_number = school.cluster_number;
+                    } else {
+                        const dept = allDepartmentsData.find(d => d.id === eId);
+                        if (dept) entityObj.name = dept.unit_name || dept.name || entityObj.name;
+                        if (dept) entityObj.department_name = dept.department_name;
+                    }
+
+                    entityList.push({
+                        entity: entityObj,
+                        type: eType,
+                        bills: entityBills,
+                        hasBills: true
+                    });
+                }
+
+                // Step 2: If showAllEntities is true, add entities without bills (that were selected)
                 if (showAllEntities) {
-                    updateProcessingStep(0, 'Fetching all entities...', 35);
+                    // Fetch all schools and departments
                     const [schoolsRes, deptsRes] = await Promise.all([
                         fetch('/api/schools'),
                         fetch('/api/departments')
@@ -2475,99 +2517,49 @@
                         allDepts = allDepts.filter(d => departmentIds.includes(d.id));
                     }
 
-                    allSchools.sort((a,b) => (parseInt(a.cluster_number)||999) - (parseInt(b.cluster_number)||999) || a.id - b.id);
-                    allDepts.sort((a,b) => a.id - b.id);
-
-                    // Add schools with or without bills
+                    // Add schools that are not already in entityList
                     allSchools.forEach(school => {
-                        const key = 'school_' + school.id;
-                        const existingBills = billsMap[key] || [];
-                        existingBills.forEach(bill => bill.entity_name = school.name || bill.entity_name);
-                        allEntitiesData.push({
-                            entity: school,
-                            type: 'school',
-                            bills: existingBills,
-                            hasBills: existingBills.length > 0
-                        });
-                        delete billsMap[key];
-                    });
-
-                    // Add departments with or without bills
-                    allDepts.forEach(dept => {
-                        const key = 'department_' + dept.id;
-                        const existingBills = billsMap[key] || [];
-                        existingBills.forEach(bill => bill.entity_name = dept.unit_name || dept.name || bill.entity_name);
-                        allEntitiesData.push({
-                            entity: dept,
-                            type: 'department',
-                            bills: existingBills,
-                            hasBills: existingBills.length > 0
-                        });
-                        delete billsMap[key];
-                    });
-
-                    // Add any remaining entities from billsMap that weren't found in the entity lists
-                    for (const key in billsMap) {
-                        const parts = key.split('_');
-                        const eType = parts[0];
-                        const eId = parseInt(parts[1]);
-                        const firstBill = billsMap[key][0];
-                        const entityName = firstBill.entity_name || (eType === 'school' ? 'School #' + eId : 'Dept #' + eId);
-                        allEntitiesData.push({
-                            entity: { id: eId, name: entityName },
-                            type: eType,
-                            bills: billsMap[key],
-                            hasBills: true
-                        });
-                    }
-                    updateProcessingStep(0, `Prepared ${allEntitiesData.length} entities`, 45);
-                } else {
-                    // Only include entities that have bills
-                    for (const key in billsMap) {
-                        const parts = key.split('_');
-                        const eType = parts[0];
-                        const eId = parseInt(parts[1]);
-                        const entityBills = billsMap[key];
-                        const entityName = entityBills[0].entity_name || (eType === 'school' ? 'School #' + eId : 'Dept #' + eId);
-                        const entityObj = { id: eId, name: entityName };
-
-                        // Try to get proper name from stored data
-                        if (eType === 'school') {
-                            const school = allSchoolsData.find(s => s.id === eId);
-                            if (school) entityObj.name = school.name;
-                        } else {
-                            const dept = allDepartmentsData.find(d => d.id === eId);
-                            if (dept) entityObj.name = dept.unit_name || dept.name || entityObj.name;
+                        if (!entityList.some(e => e.type === 'school' && e.entity.id === school.id)) {
+                            // Ensure the school has a cluster_number for sorting
+                            entityList.push({
+                                entity: school,
+                                type: 'school',
+                                bills: [],
+                                hasBills: false
+                            });
                         }
-                        allEntitiesData.push({
-                            entity: entityObj,
-                            type: eType,
-                            bills: entityBills,
-                            hasBills: true
-                        });
-                    }
+                    });
 
-                    // Filter by selected IDs when showAllEntities is OFF
-                    if (schoolIds.length > 0) {
-                        allEntitiesData = allEntitiesData.filter(e => {
-                            if (e.type === 'school' && schoolIds.includes(e.entity.id)) return true;
-                            if (e.type === 'department' && !schoolIds.length) return true;
-                            return false;
-                        });
-                    }
-                    if (departmentIds.length > 0) {
-                        allEntitiesData = allEntitiesData.filter(e => {
-                            if (e.type === 'department' && departmentIds.includes(e.entity.id)) return true;
-                            if (e.type === 'school' && !departmentIds.length) return true;
-                            return false;
-                        });
-                    }
-
-                    updateProcessingStep(0, `Prepared ${allEntitiesData.length} entities with bills`, 45);
+                    // Add departments that are not already in entityList
+                    allDepts.forEach(dept => {
+                        if (!entityList.some(e => e.type === 'department' && e.entity.id === dept.id)) {
+                            entityList.push({
+                                entity: dept,
+                                type: 'department',
+                                bills: [],
+                                hasBills: false
+                            });
+                        }
+                    });
                 }
 
-                // Final sort
-                allEntitiesData.sort((a,b) => {
+                // Step 3: Apply final filtering by selected IDs (ensures only selected entities remain)
+                // This is the critical fix - proper filtering for both schools AND departments
+                if (schoolIds.length > 0 || departmentIds.length > 0) {
+                    entityList = entityList.filter(e => {
+                        if (e.type === 'school') {
+                            // Keep school if schoolIds is empty OR school is in schoolIds
+                            return schoolIds.length === 0 || schoolIds.includes(e.entity.id);
+                        } else if (e.type === 'department') {
+                            // Keep department if departmentIds is empty OR department is in departmentIds
+                            return departmentIds.length === 0 || departmentIds.includes(e.entity.id);
+                        }
+                        return false;
+                    });
+                }
+
+                // Step 4: Sort the final entity list
+                entityList.sort((a, b) => {
                     if (a.type !== b.type) return a.type === 'school' ? -1 : 1;
                     if (a.type === 'school') {
                         const cA = parseInt(a.entity.cluster_number) || 999;
@@ -2577,12 +2569,14 @@
                     return a.entity.id - b.entity.id;
                 });
 
-                console.log('📄 Final entities for printing:', allEntitiesData.length);
-                updateProcessingStep(0, `Processed ${allEntitiesData.length} entities`, 60);
+                console.log('📄 Final entities after filtering:', entityList.length);
 
-                if (allEntitiesData.length === 0) {
+                if (entityList.length === 0) {
                     updateProcessingStep(1, 'No data to print', 100);
-                    setTimeout(() => { hideProcessingOverlay(); alert('⚠️ No data to print for the selected entities.'); }, 800);
+                    setTimeout(() => {
+                        hideProcessingOverlay();
+                        alert('⚠️ No data to print for the selected entities.');
+                    }, 800);
                     return;
                 }
 
@@ -2595,7 +2589,7 @@
                 let shouldPaginate = false;
                 let effectiveItemsPerPage = itemsPerPage;
                 if (isTelephone) {
-                    const rowCount = groupByEntity ? allEntitiesData.length : allEntitiesData.reduce((sum, e) => sum + e.bills.length, 0);
+                    const rowCount = groupByEntity ? entityList.length : entityList.reduce((sum, e) => sum + e.bills.length, 0);
                     shouldPaginate = rowCount > effectiveItemsPerPage;
                 }
 
@@ -2606,7 +2600,7 @@
                 };
 
                 generatePrintPreviewWithEntities(
-                    allEntitiesData, month, year, selectedColumns, effectiveItemsPerPage,
+                    entityList, month, year, selectedColumns, effectiveItemsPerPage,
                     utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions
                 );
 
