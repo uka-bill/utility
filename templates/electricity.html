@@ -381,6 +381,11 @@
             background: var(--gray-50);
         }
 
+        /* Notes input - text-align left, no numeric formatting */
+        .notes-input {
+            text-align: left !important;
+        }
+
         .account-number {
             font-family: 'Inter', monospace;
             background: var(--gray-50);
@@ -526,7 +531,7 @@
         .account-separator .account-label .acct-num { color: var(--primary-dark); font-weight: 600; }
 
         .meter-row {
-            border-left: 3px solid var(--warning);
+            border-left: 3px solid var(--success);
             background-color: var(--white);
         }
         .meter-row td:first-child { padding-left: 35px; text-align: center; vertical-align: middle; }
@@ -729,9 +734,9 @@
             <thead>
                 <tr>
                     <th style="width:40px; text-align:center;">No.</th>
-                    <th style="min-width:160px; text-align:center;">Entity Name</th>
-                    <th style="min-width:80px; text-align:center;">Type</th>
-                    <th style="min-width:150px; text-align:center;">Account / Meter</th>
+                    <th style="min-width:160px; text-align:left;">Entity Name</th>
+                    <th style="min-width:80px; text-align:left;">Type</th>
+                    <th style="min-width:150px; text-align:left;">Account / Meter</th>
                     <th style="min-width:100px; text-align:center;">Consumption (kWh)</th>
                     <th style="min-width:100px; text-align:center;">Bill Amount ($)</th>
                     <th style="min-width:100px; text-align:center;">Outstanding ($)</th>
@@ -1502,7 +1507,7 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY WITH SUMMARY ROW (CENTERED) ============
+    // ============ RENDER ENTITY WITH SUMMARY ROW ============
     async function renderEntity(tbody, entity, month, year, startSerial) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1654,8 +1659,9 @@
             tbody.appendChild(meterRow);
             meterRowElements.push(meterRow);
             
-            // Add blur formatting to numeric inputs
-            const numericInputs = meterRow.querySelectorAll('.inline-input');
+            // ========== FIX: EXCLUDE .notes-input FROM NUMERIC FORMATTING ==========
+            // Only numeric fields should be formatted – notes-input is excluded
+            const numericInputs = meterRow.querySelectorAll('.inline-input:not(.notes-input)');
             numericInputs.forEach(inp => {
                 inp.addEventListener('blur', function() {
                     if (this.value && this.value.trim() !== '') {
@@ -1663,7 +1669,6 @@
                         this.value = formatNumberWithCommas(raw);
                     }
                 });
-                // Also format on focus to allow easy editing
                 inp.addEventListener('focus', function() {
                     const raw = parseNumberFromDisplay(this.value);
                     this.value = raw.toString();
@@ -1673,7 +1678,7 @@
             currentAccount = accountNum;
         }
         
-        // ========== SUMMARY ROW (CENTERED) ==========
+        // ========== SUMMARY ROW ==========
         let totalConsumption = 0;
         let totalBillAmount = 0;
         let totalOutstanding = 0;
