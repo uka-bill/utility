@@ -382,7 +382,7 @@
                     <div class="pagination-control">
                         <label>Items per page:</label>
                         <input type="number" id="itemsPerPage" value="10" min="5" max="50">
-                        <span class="info-text">(for pagination)</span>
+                        <span class="info-text">(for Telephone only)</span>
                     </div>
                 </div>
             </div>
@@ -908,7 +908,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (paginate for all utilities) ==========
+        // ========== generatePrintPreviewWithEntities (pagination only for telephone, balance b/f c/f) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1017,11 +1017,10 @@
             let grandTotalPrevOutstanding = 0, grandTotalPrevPayment = 0, grandTotalCurrentCharges = 0;
             let grandTotalConsumption = 0;
 
-            // Pagination for all utilities (if itemsPerPage is set and row count exceeds)
-            // Now 'shouldPaginate' is passed from the button logic based on row count.
-            // We will paginate regardless of utility type.
+            // Pagination only for Telephone
             let pages = [];
             if (shouldPaginate) {
+                // Only paginate if telephone
                 const rowsPerPage = itemsPerPage;
                 let currentPage = [], currentRowCount = 0;
                 for (let i = 0; i < entityInfo.length; i++) {
@@ -1037,6 +1036,7 @@
                 }
                 if (currentPage.length > 0) pages.push(currentPage);
             } else {
+                // One page for all entities
                 pages = [entityInfo];
             }
 
@@ -1100,7 +1100,7 @@
                 return html;
             }
 
-            // Helper: render detail row
+            // Helper: render detail row (each account)
             function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType) {
                 let html = '';
                 const isZero = row.isZeroBill;
@@ -1246,6 +1246,9 @@
                 <body>
             `;
 
+            let balanceBfAdded = false;
+            let balanceCfAdded = false;
+
             pages.forEach((pageEntityInfo, idx) => {
                 pageIndex++;
                 const isLastPage = (pageIndex === totalPages);
@@ -1294,14 +1297,16 @@
                                 <tbody>
                 `;
 
-                // Balance b/f (Water/Electricity only)
-                if (!isFirstPage && hasWaterElectricity && balanceColIndex !== -1) {
+                // Balance b/f (Water/Electricity only) – at start of first page
+                if (hasWaterElectricity && !balanceBfAdded) {
+                    balanceBfAdded = true;
+                    const bfAmount = 0;
                     printHtml += `
                         <tr class="balance-row">
                             <td colspan="${balanceColIndex}" style="text-align:right; font-weight:700;">
                                 <span class="balance-label">Balance b/f</span>
                             </td>
-                            <td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(previousCumulative)}</td>
+                            <td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(bfAmount)}</td>
                             ${visibleCols.slice(balanceColIndex + 1).map(() => '<td></td>').join('')}
                         </tr>
                     `;
@@ -1392,20 +1397,22 @@
                     printHtml += `</tr>`;
                 }
 
-                // Balance c/f (Water/Electricity only)
-                if (!isLastPage && hasWaterElectricity && balanceColIndex !== -1) {
+                // Balance c/f (Water/Electricity only) – at end of last page
+                if (hasWaterElectricity && isLastPage && !balanceCfAdded) {
+                    balanceCfAdded = true;
+                    const cfAmount = grandTotalBillAmount;
                     printHtml += `
                         <tr class="balance-row">
                             <td colspan="${balanceColIndex}" style="text-align:right; font-weight:700;">
                                 <span class="balance-label">Balance c/f</span>
                             </td>
-                            <td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(cumulativeTotal)}</td>
+                            <td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(cfAmount)}</td>
                             ${visibleCols.slice(balanceColIndex + 1).map(() => '<td></td>').join('')}
                         </tr>
                     `;
                 }
 
-                // Grand Total
+                // Grand Total (last page only)
                 if (isLastPage) {
                     let totalValueForSummary = grandTotalCurrentCharges;
                     if (hasTelephone) {
@@ -1441,7 +1448,7 @@
                         </div>
                 `;
 
-                // Approval footer
+                // Approval footer (last page only)
                 if (isLastPage) {
                     printHtml += `
                         <div class="approval-footer">
@@ -1717,13 +1724,13 @@
 
                 updateProcessingStep(2, 'Generating print preview...', 75);
 
-                // Determine if we should paginate (based on row count exceeding itemsPerPage)
-                let rowCount = 0;
-                const isAggregated = groupByEntity && hasSubtotal && !isTelephoneOnly;
-                entityList.forEach(e => {
-                    rowCount += isAggregated ? 1 : Math.max(e.bills.length, 1);
-                });
-                const shouldPaginate = rowCount > itemsPerPage;
+                // Determine if we should paginate: ONLY for Telephone
+                const isTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
+                let shouldPaginate = false;
+                if (isTelephone) {
+                    const rowCount = groupByEntity ? entityList.length : entityList.reduce((sum, e) => sum + e.bills.length, 0);
+                    shouldPaginate = rowCount > itemsPerPage;
+                }
 
                 const subtotalOptions = {
                     showConsumption: showConsumption,
