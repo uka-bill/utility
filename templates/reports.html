@@ -908,7 +908,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (FINAL - DYNAMIC COLUMNS) ==========
+        // ========== generatePrintPreviewWithEntities (FIXED COLUMNS) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -925,23 +925,31 @@
             });
             const currentDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-            // --- DYNAMIC COLUMN BUILDING ---
-            // Start with base columns that are checked
+            // --- DYNAMIC COLUMN BUILDING (FIXED) ---
+            // Always include required base columns
             let colConfig = [];
             colConfig.push({ key: 'no', label: 'No.', show: true, required: true });
 
+            // Add selected print columns (always)
             if (selectedColumns.entityName !== false) colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
             if (selectedColumns.entityType !== false) colConfig.push({ key: 'entityType', label: 'Type', show: true });
 
-            // For Water/Electricity: show account/meter columns
+            // For Water/Electricity
             if (hasWaterElectricity) {
                 if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
                 if (selectedColumns.meterNumber !== false) colConfig.push({ key: 'meterTelNo', label: 'Meter No.', show: true });
-                // The subtotal columns replace the detail columns when aggregated
-                // But we still need to know if they were selected for detail mode
+                // Detail columns (always add if selected)
+                if (selectedColumns.consumption !== false) colConfig.push({ key: 'consumption', label: hasWater ? 'Consumption (m³)' : 'Consumption (kWh)', show: true });
+                if (selectedColumns.billAmount !== false) colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
+                if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
+                if (selectedColumns.outstanding !== false) colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
+                // Subtotal columns (add if selected and subtotal options are checked)
+                if (subtotalOptions.showConsumption) colConfig.push({ key: 'totalConsumption', label: 'Total Consumption', show: true });
+                if (subtotalOptions.showBillAmount) colConfig.push({ key: 'totalBillAmount', label: 'Total Bill Amount ($)', show: true });
+                if (subtotalOptions.showOutstanding) colConfig.push({ key: 'totalOutstanding', label: 'Total Outstanding ($)', show: true });
             }
 
-            // For Telephone: show account and phone columns
+            // For Telephone
             if (hasTelephone) {
                 if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
                 if (selectedColumns.phoneNumber !== false) colConfig.push({ key: 'meterTelNo', label: 'Phone No.', show: true });
@@ -952,35 +960,13 @@
                 if (selectedColumns.previousOutstanding !== false) colConfig.push({ key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true });
                 if (selectedColumns.previousPayment !== false) colConfig.push({ key: 'previousPayment', label: 'Previous Payment ($)', show: true });
                 if (selectedColumns.totalCurrentCharges !== false) colConfig.push({ key: 'totalCurrentCharges', label: 'Total Current Charges ($)', show: true });
-            }
-
-            // For Water/Electricity: add the detail columns (consumption, billAmount, amountPaid, outstanding) ONLY if subtotal is NOT checked OR groupByEntity is NOT checked
-            // When subtotal is checked AND groupByEntity is checked, we replace detail columns with aggregated subtotal columns
-            const hasSubtotal = subtotalOptions.showConsumption || subtotalOptions.showBillAmount || subtotalOptions.showOutstanding;
-
-            if (hasWaterElectricity) {
-                const isAggregated = groupByEntity && hasSubtotal;
-
-                if (isAggregated) {
-                    // Aggregated mode: show subtotal columns instead of detail columns
-                    if (subtotalOptions.showConsumption) colConfig.push({ key: 'totalConsumption', label: 'Total Consumption', show: true });
-                    if (subtotalOptions.showBillAmount) colConfig.push({ key: 'totalBillAmount', label: 'Total Bill Amount ($)', show: true });
-                    if (subtotalOptions.showOutstanding) colConfig.push({ key: 'totalOutstanding', label: 'Total Outstanding ($)', show: true });
-                    // Amount Paid is not a subtotal column, but we may still show it if selected
-                    if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
-                } else {
-                    // Detail mode: show individual account columns
-                    if (selectedColumns.consumption !== false) colConfig.push({ key: 'consumption', label: hasWater ? 'Consumption (m³)' : 'Consumption (kWh)', show: true });
-                    if (selectedColumns.billAmount !== false) colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
-                    if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
-                    if (selectedColumns.outstanding !== false) colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
-                }
+                if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
             }
 
             // Period column
             if (selectedColumns.period !== false) colConfig.push({ key: 'period', label: 'Period', show: true });
 
-            // Filter out any columns that are not shown
+            // Filter out columns not shown
             const visibleCols = colConfig.filter(c => c.show !== false);
 
             const utilityTypeLabels = utilityTypes.map(u => {
@@ -1000,8 +986,13 @@
                     if (totalAccountIdx !== -1) summaryColIndex = totalAccountIdx;
                 }
             } else if (hasWaterElectricity) {
-                const billAmountIdx = visibleCols.findIndex(c => c.key === 'billAmount' || c.key === 'totalBillAmount');
-                if (billAmountIdx !== -1) summaryColIndex = billAmountIdx;
+                // Prefer billAmount or totalBillAmount
+                const billIdx = visibleCols.findIndex(c => c.key === 'billAmount' || c.key === 'totalBillAmount');
+                if (billIdx !== -1) summaryColIndex = billIdx;
+                else {
+                    const consIdx = visibleCols.findIndex(c => c.key === 'consumption' || c.key === 'totalConsumption');
+                    if (consIdx !== -1) summaryColIndex = consIdx;
+                }
             }
             if (summaryColIndex < 0) summaryColIndex = 0;
 
@@ -1009,11 +1000,10 @@
             if (hasTelephone) tableClass = 'print-table-telephone';
             else if (hasElectricity) tableClass = 'print-table-electricity';
 
-            // Determine if we are in aggregated mode (for rendering rows)
-            const isAggregated = groupByEntity && hasSubtotal && !hasTelephone;
+            // Determine if aggregated mode (groupByEntity and subtotal selected) – but this affects only rendering (show "--" for account/meter and totals)
+            const isAggregated = groupByEntity && hasWaterElectricity && (subtotalOptions.showConsumption || subtotalOptions.showBillAmount || subtotalOptions.showOutstanding);
 
             // Prepare row data
-            let allRows = [];
             let entityInfo = [];
             entityData.forEach(entityGroup => {
                 const entity = entityGroup.entity;
@@ -1066,7 +1056,6 @@
             // Helper: render an aggregated row (one per entity)
             function renderAggregatedRow(info, serial, visibleCols, hasWaterElectricity, hasTelephone) {
                 const bills = info.bills;
-                const isZero = bills.length === 0;
                 const entityName = info.entityName;
                 const entityType = info.entityType;
 
@@ -1167,6 +1156,14 @@
                     } else if (col.key === 'amountPaid') {
                         html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(row.amountPaid)}</td>`;
                     } else if (col.key === 'outstanding') {
+                        html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(row.outstanding)}</td>`;
+                    } else if (col.key === 'totalConsumption') {
+                        // In detail mode, we shouldn't have total columns, but if present, show the row's value (not summed)
+                        const unit = hasWater ? 'm³' : 'kWh';
+                        html += `<td style="text-align:center; font-size:8pt;">${formatNumberWithCommas(row.consumption)} ${unit}</td>`;
+                    } else if (col.key === 'totalBillAmount') {
+                        html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(row.billAmount)}</td>`;
+                    } else if (col.key === 'totalOutstanding') {
                         html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(row.outstanding)}</td>`;
                     } else if (col.key === 'period') {
                         html += `<td class="period-column" style="font-size:8pt;">${row.period || '—'}</td>`;
@@ -1308,7 +1305,7 @@
                                 <tbody>
                 `;
 
-                // Balance b/f (for water/electricity only)
+                // Balance b/f
                 if (!isFirstPage && hasWaterElectricity && balanceColIndex !== -1) {
                     printHtml += `
                         <tr class="balance-row">
@@ -1337,7 +1334,6 @@
                         // Individual account rows
                         const rowspan = bills.length > 0 ? bills.length : 1;
                         if (bills.length === 0) {
-                            // Zero bill entity
                             const row = {
                                 entityName, entityType, isZeroBill: true,
                                 accountNumber: '—', meterTelNo: '—', phoneNumber: '—',
@@ -1423,7 +1419,7 @@
                     `;
                 }
 
-                // Grand Total (last page only)
+                // Grand Total
                 if (isLastPage) {
                     let totalValueForSummary = grandTotalCurrentCharges;
                     if (hasTelephone) {
@@ -1459,7 +1455,7 @@
                         </div>
                 `;
 
-                // Approval footer (last page only)
+                // Approval footer
                 if (isLastPage) {
                     printHtml += `
                         <div class="approval-footer">
@@ -1665,7 +1661,7 @@
                     });
                 }
 
-                // If showAllEntities is true, add entities without bills that are selected
+                // If showAllEntities is true, add selected zero-bill entities
                 if (showAllEntities) {
                     const [schoolsRes, deptsRes] = await Promise.all([
                         fetch('/api/schools'),
