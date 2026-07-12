@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response 
 import os
 from supabase import create_client, Client
@@ -1682,7 +1683,7 @@ def get_entities():
         print(f"❌ Entities GET error: {e}")
         return jsonify([]), 500
 
-# ============ GENERATE REPORT API (FIXED) ============
+# ============ GENERATE REPORT API (UPDATED with fallback) ============
 
 @app.route('/api/generate-report', methods=['POST'])
 def generate_report():
@@ -1700,53 +1701,63 @@ def generate_report():
         month = data.get('month', 'all')
         year = data.get('year')
         
+        # Build initial query (without month/year yet)
         query = supabase.table("utility_bills").select("*")
         
         if utility_type != 'all':
             query = query.eq("utility_type", utility_type)
         
-        if month != 'all' and month:
-            query = query.eq("month", int(month))
+        # First try with month/year
+        bills = []
+        if month != 'all' and month and year and year != 'all':
+            query_month_year = query.eq("month", int(month)).eq("year", int(year))
+            response = query_month_year.execute()
+            if response.data:
+                bills = response.data
+                print(f"📊 Found {len(bills)} bills with month={month}, year={year}")
+            else:
+                # Fallback: try bill_month/bill_year
+                query_bill_month = supabase.table("utility_bills").select("*")
+                if utility_type != 'all':
+                    query_bill_month = query_bill_month.eq("utility_type", utility_type)
+                query_bill_month = query_bill_month.eq("bill_month", int(month)).eq("bill_year", int(year))
+                response2 = query_bill_month.execute()
+                if response2.data:
+                    bills = response2.data
+                    print(f"📊 Found {len(bills)} bills with bill_month={month}, bill_year={year} (fallback)")
+        else:
+            # No month/year filter: return all bills matching utility and entity type
+            response = query.execute()
+            bills = response.data if response.data else []
         
-        if year and year != 'all':
-            query = query.eq("year", int(year))
-        
+        # Apply entity type filter if selection_type == 'entityType'
         if selection_type == 'entityType':
             entity_type_filter = data.get('entity_type', 'all')
             if entity_type_filter != 'all':
-                query = query.eq("entity_type", entity_type_filter)
+                bills = [b for b in bills if b.get('entity_type') == entity_type_filter]
         
-        response = query.execute()
-        bills = response.data if response.data else []
-        
+        # Apply specific entity filters if selection_type == 'specificEntities'
         if selection_type == 'specificEntities':
             school_ids = [int(sid) for sid in data.get('school_ids', [])]
             department_ids = [int(did) for did in data.get('department_ids', [])]
-            
-            # If both lists are empty, return no bills (or all bills? frontend will handle)
-            # We'll return only bills that match the selected entities.
             filtered_bills = []
             
-            # If school_ids is provided, keep only school bills that match
             if school_ids:
                 for bill in bills:
                     if bill['entity_type'] == 'school' and bill['entity_id'] in school_ids:
                         filtered_bills.append(bill)
-            
-            # If department_ids is provided, keep only department bills that match
             if department_ids:
                 for bill in bills:
                     if bill['entity_type'] == 'department' and bill['entity_id'] in department_ids:
                         filtered_bills.append(bill)
             
-            # If no IDs provided, return all bills (fallback)
             if not school_ids and not department_ids:
                 filtered_bills = bills
             
             bills = filtered_bills
             print(f"📊 After specific entity filter: {len(bills)} bills")
         
-        # Enrich bills with entity names
+        # Enrich bills with entity names (same as before)
         enriched_bills = []
         for bill in bills:
             bill_data = dict(bill)
