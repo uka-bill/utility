@@ -1682,7 +1682,7 @@ def get_entities():
         print(f"❌ Entities GET error: {e}")
         return jsonify([]), 500
 
-# ============ GENERATE REPORT API ============
+# ============ GENERATE REPORT API (FIXED) ============
 
 @app.route('/api/generate-report', methods=['POST'])
 def generate_report():
@@ -1723,14 +1723,30 @@ def generate_report():
             school_ids = [int(sid) for sid in data.get('school_ids', [])]
             department_ids = [int(did) for did in data.get('department_ids', [])]
             
+            # If both lists are empty, return no bills (or all bills? frontend will handle)
+            # We'll return only bills that match the selected entities.
             filtered_bills = []
-            for bill in bills:
-                if bill['entity_type'] == 'school' and bill['entity_id'] in school_ids:
-                    filtered_bills.append(bill)
-                elif bill['entity_type'] == 'department' and bill['entity_id'] in department_ids:
-                    filtered_bills.append(bill)
+            
+            # If school_ids is provided, keep only school bills that match
+            if school_ids:
+                for bill in bills:
+                    if bill['entity_type'] == 'school' and bill['entity_id'] in school_ids:
+                        filtered_bills.append(bill)
+            
+            # If department_ids is provided, keep only department bills that match
+            if department_ids:
+                for bill in bills:
+                    if bill['entity_type'] == 'department' and bill['entity_id'] in department_ids:
+                        filtered_bills.append(bill)
+            
+            # If no IDs provided, return all bills (fallback)
+            if not school_ids and not department_ids:
+                filtered_bills = bills
+            
             bills = filtered_bills
+            print(f"📊 After specific entity filter: {len(bills)} bills")
         
+        # Enrich bills with entity names
         enriched_bills = []
         for bill in bills:
             bill_data = dict(bill)
