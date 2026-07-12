@@ -8,7 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== CSS (unchanged) ===== */
+        /* ===== CSS (same as before, unchanged) ===== */
         :root { --primary: #1a56db; --primary-light: #3b82f6; --primary-dark: #1e3a5f; --primary-gradient: linear-gradient(145deg, #1a56db 0%, #1e3a5f 100%); --primary-glow: linear-gradient(135deg, rgba(26,86,219,0.12) 0%, rgba(30,58,95,0.06) 100%); --secondary: #0f172a; --success: #0d9488; --success-light: #ccfbf1; --danger: #dc2626; --warning: #d97706; --info: #0891b2; --light: #f8fafc; --dark: #0f172a; --gray: #64748b; --gray-light: #e2e8f0; --gray-50: #f1f5f9; --white: #ffffff; --shadow: 0 4px 24px rgba(15,23,42,0.06); --shadow-lg: 0 12px 48px rgba(15,23,42,0.10); --shadow-xl: 0 20px 60px rgba(15,23,42,0.15); --radius: 20px; --radius-sm: 12px; --radius-xs: 8px; --transition: all 0.4s cubic-bezier(0.25,0.46,0.45,0.94); }
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background:var(--gray-50); color:var(--dark); font-size:15px; line-height:1.6; font-weight:400; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
@@ -908,7 +908,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (FIXED COLUMNS) ==========
+        // ========== generatePrintPreviewWithEntities (FIXED: showAllEntities only adds selected entities) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -925,31 +925,25 @@
             });
             const currentDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-            // --- DYNAMIC COLUMN BUILDING (FIXED) ---
-            // Always include required base columns
+            // --- DYNAMIC COLUMN BUILDING ---
             let colConfig = [];
             colConfig.push({ key: 'no', label: 'No.', show: true, required: true });
 
-            // Add selected print columns (always)
             if (selectedColumns.entityName !== false) colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
             if (selectedColumns.entityType !== false) colConfig.push({ key: 'entityType', label: 'Type', show: true });
 
-            // For Water/Electricity
             if (hasWaterElectricity) {
                 if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
                 if (selectedColumns.meterNumber !== false) colConfig.push({ key: 'meterTelNo', label: 'Meter No.', show: true });
-                // Detail columns (always add if selected)
                 if (selectedColumns.consumption !== false) colConfig.push({ key: 'consumption', label: hasWater ? 'Consumption (m³)' : 'Consumption (kWh)', show: true });
                 if (selectedColumns.billAmount !== false) colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
                 if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
                 if (selectedColumns.outstanding !== false) colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
-                // Subtotal columns (add if selected and subtotal options are checked)
                 if (subtotalOptions.showConsumption) colConfig.push({ key: 'totalConsumption', label: 'Total Consumption', show: true });
                 if (subtotalOptions.showBillAmount) colConfig.push({ key: 'totalBillAmount', label: 'Total Bill Amount ($)', show: true });
                 if (subtotalOptions.showOutstanding) colConfig.push({ key: 'totalOutstanding', label: 'Total Outstanding ($)', show: true });
             }
 
-            // For Telephone
             if (hasTelephone) {
                 if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
                 if (selectedColumns.phoneNumber !== false) colConfig.push({ key: 'meterTelNo', label: 'Phone No.', show: true });
@@ -963,10 +957,8 @@
                 if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
             }
 
-            // Period column
             if (selectedColumns.period !== false) colConfig.push({ key: 'period', label: 'Period', show: true });
 
-            // Filter out columns not shown
             const visibleCols = colConfig.filter(c => c.show !== false);
 
             const utilityTypeLabels = utilityTypes.map(u => {
@@ -986,7 +978,6 @@
                     if (totalAccountIdx !== -1) summaryColIndex = totalAccountIdx;
                 }
             } else if (hasWaterElectricity) {
-                // Prefer billAmount or totalBillAmount
                 const billIdx = visibleCols.findIndex(c => c.key === 'billAmount' || c.key === 'totalBillAmount');
                 if (billIdx !== -1) summaryColIndex = billIdx;
                 else {
@@ -1000,7 +991,6 @@
             if (hasTelephone) tableClass = 'print-table-telephone';
             else if (hasElectricity) tableClass = 'print-table-electricity';
 
-            // Determine if aggregated mode (groupByEntity and subtotal selected) – but this affects only rendering (show "--" for account/meter and totals)
             const isAggregated = groupByEntity && hasWaterElectricity && (subtotalOptions.showConsumption || subtotalOptions.showBillAmount || subtotalOptions.showOutstanding);
 
             // Prepare row data
@@ -1053,20 +1043,18 @@
             let cumulativeTotal = 0;
             let globalSerial = 1;
 
-            // Helper: render an aggregated row (one per entity)
+            // Helper: render aggregated row
             function renderAggregatedRow(info, serial, visibleCols, hasWaterElectricity, hasTelephone) {
                 const bills = info.bills;
                 const entityName = info.entityName;
                 const entityType = info.entityType;
 
-                // Compute totals
                 const consumption = bills.reduce((sum, b) => sum + (b.consumption || 0), 0);
                 const billAmount = bills.reduce((sum, b) => sum + (b.billAmount || 0), 0);
                 const outstanding = bills.reduce((sum, b) => sum + (b.outstanding || 0), 0);
                 const amountPaid = bills.reduce((sum, b) => sum + (b.amountPaid || 0), 0);
                 const period = bills.length > 0 ? bills[0].period : '—';
 
-                // Update grand totals
                 grandTotalConsumption += consumption;
                 grandTotalBillAmount += billAmount;
                 grandTotalAmountPaid += amountPaid;
@@ -1110,7 +1098,7 @@
                 return html;
             }
 
-            // Helper: render detail rows (one per account)
+            // Helper: render detail row
             function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType) {
                 let html = '';
                 const isZero = row.isZeroBill;
@@ -1158,7 +1146,6 @@
                     } else if (col.key === 'outstanding') {
                         html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(row.outstanding)}</td>`;
                     } else if (col.key === 'totalConsumption') {
-                        // In detail mode, we shouldn't have total columns, but if present, show the row's value (not summed)
                         const unit = hasWater ? 'm³' : 'kWh';
                         html += `<td style="text-align:center; font-size:8pt;">${formatNumberWithCommas(row.consumption)} ${unit}</td>`;
                     } else if (col.key === 'totalBillAmount') {
@@ -1305,7 +1292,7 @@
                                 <tbody>
                 `;
 
-                // Balance b/f
+                // Balance b/f (Water/Electricity only)
                 if (!isFirstPage && hasWaterElectricity && balanceColIndex !== -1) {
                     printHtml += `
                         <tr class="balance-row">
@@ -1327,11 +1314,9 @@
                     const entityType = info.entityType;
 
                     if (isAggregated) {
-                        // One row per entity with totals
                         printHtml += renderAggregatedRow(info, globalSerial, visibleCols, hasWaterElectricity, hasTelephone);
                         globalSerial++;
                     } else {
-                        // Individual account rows
                         const rowspan = bills.length > 0 ? bills.length : 1;
                         if (bills.length === 0) {
                             const row = {
@@ -1380,7 +1365,6 @@
                     if (visibleCols.some(c => c.key === 'totalCurrentCharges')) pageTotalValue = pageTotalCurrent;
                     else if (visibleCols.some(c => c.key === 'totalAccountCharges')) pageTotalValue = pageTotalAccount;
                 } else if (hasWaterElectricity) {
-                    // Use the page total for the column at summaryColIndex
                     if (visibleCols.some(c => c.key === 'totalBillAmount')) pageTotalValue = pageTotalBillAmount;
                     else if (visibleCols.some(c => c.key === 'billAmount')) pageTotalValue = pageTotalBillAmount;
                     else if (visibleCols.some(c => c.key === 'totalConsumption')) pageTotalValue = pageTotalConsumption;
@@ -1406,7 +1390,7 @@
                     printHtml += `</tr>`;
                 }
 
-                // Balance c/f
+                // Balance c/f (Water/Electricity only)
                 if (!isLastPage && hasWaterElectricity && balanceColIndex !== -1) {
                     printHtml += `
                         <tr class="balance-row">
@@ -1661,7 +1645,7 @@
                     });
                 }
 
-                // If showAllEntities is true, add selected zero-bill entities
+                // --- FIXED: showAllEntities only adds selected entities ---
                 if (showAllEntities) {
                     const [schoolsRes, deptsRes] = await Promise.all([
                         fetch('/api/schools'),
@@ -1670,13 +1654,19 @@
                     let allSchools = schoolsRes.ok ? await schoolsRes.json() : [];
                     let allDepts = deptsRes.ok ? await deptsRes.json() : [];
 
+                    // Filter to only selected IDs
                     if (schoolIds.length > 0) {
                         allSchools = allSchools.filter(s => schoolIds.includes(s.id));
+                    } else {
+                        allSchools = []; // No schools selected, so don't add any
                     }
                     if (departmentIds.length > 0) {
                         allDepts = allDepts.filter(d => departmentIds.includes(d.id));
+                    } else {
+                        allDepts = []; // No departments selected, so don't add any
                     }
 
+                    // Add schools not already present
                     allSchools.forEach(school => {
                         if (!entityList.some(e => e.type === 'school' && e.entity.id === school.id)) {
                             entityList.push({
@@ -1688,6 +1678,7 @@
                         }
                     });
 
+                    // Add departments not already present
                     allDepts.forEach(dept => {
                         if (!entityList.some(e => e.type === 'department' && e.entity.id === dept.id)) {
                             entityList.push({
