@@ -314,7 +314,7 @@
     </style>
 </head>
 <body>
-    <!-- ===== NAVBAR (unchanged) ===== -->
+    <!-- ===== NAVBAR ===== -->
     <nav class="navbar">
         <div class="logo">
             <div class="logo-icon">⚡</div>
@@ -938,7 +938,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (pagination + balance) ==========
+        // ========== generatePrintPreviewWithEntities (UPDATED) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -955,10 +955,9 @@
             });
             const currentDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-            // --- DYNAMIC COLUMN BUILDING ---
+            // --- Build column configuration (same as before) ---
             let colConfig = [];
             colConfig.push({ key: 'no', label: 'No.', show: true, required: true });
-
             if (selectedColumns.entityName !== false) colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
             if (selectedColumns.entityType !== false) colConfig.push({ key: 'entityType', label: 'Type', show: true });
 
@@ -998,7 +997,7 @@
                 return u;
             }).join(', ');
 
-            // Determine summary column index (for page totals)
+            // --- Determine summary column index (prioritise totalBillAmount) ---
             let summaryColIndex = visibleCols.length - 1;
             if (hasTelephone) {
                 const totalCurrentIdx = visibleCols.findIndex(c => c.key === 'totalCurrentCharges');
@@ -1008,14 +1007,31 @@
                     if (totalAccountIdx !== -1) summaryColIndex = totalAccountIdx;
                 }
             } else if (hasWaterElectricity) {
-                const billIdx = visibleCols.findIndex(c => c.key === 'billAmount' || c.key === 'totalBillAmount');
-                if (billIdx !== -1) summaryColIndex = billIdx;
-                else {
-                    const consIdx = visibleCols.findIndex(c => c.key === 'consumption' || c.key === 'totalConsumption');
-                    if (consIdx !== -1) summaryColIndex = consIdx;
+                const totalBillIdx = visibleCols.findIndex(c => c.key === 'totalBillAmount');
+                if (totalBillIdx !== -1) {
+                    summaryColIndex = totalBillIdx;
+                } else {
+                    const billIdx = visibleCols.findIndex(c => c.key === 'billAmount');
+                    if (billIdx !== -1) summaryColIndex = billIdx;
+                    else {
+                        const consIdx = visibleCols.findIndex(c => c.key === 'consumption' || c.key === 'totalConsumption');
+                        if (consIdx !== -1) summaryColIndex = consIdx;
+                    }
                 }
             }
             if (summaryColIndex < 0) summaryColIndex = 0;
+
+            // --- Determine balance column index (same prioritisation) ---
+            let balanceColIndex = -1;
+            if (hasWaterElectricity) {
+                const totalBillIdx = visibleCols.findIndex(c => c.key === 'totalBillAmount');
+                if (totalBillIdx !== -1) {
+                    balanceColIndex = totalBillIdx;
+                } else {
+                    const billIdx = visibleCols.findIndex(c => c.key === 'billAmount');
+                    if (billIdx !== -1) balanceColIndex = billIdx;
+                }
+            }
 
             let tableClass = 'print-table-water';
             if (hasTelephone) tableClass = 'print-table-telephone';
@@ -1023,7 +1039,7 @@
 
             const isAggregated = groupByEntity && hasWaterElectricity && (subtotalOptions.showConsumption || subtotalOptions.showBillAmount || subtotalOptions.showOutstanding);
 
-            // Prepare row data
+            // Prepare row data (with entity objects for fallback)
             let entityInfo = [];
             entityData.forEach(entityGroup => {
                 const entity = entityGroup.entity;
@@ -1037,11 +1053,11 @@
                     entityType: entityType,
                     bills: bills,
                     isZeroBill: isZeroBill,
-                    entity: entity
+                    entity: entity  // store the full entity object
                 });
             });
 
-            // Compute grand totals
+            // Compute grand totals (as before)
             let grandTotalBillAmount = 0, grandTotalAmountPaid = 0, grandTotalOutstanding = 0;
             let grandTotalRentalAmount = 0, grandTotalTotalAmount = 0, grandTotalAccountCharges = 0;
             let grandTotalPrevOutstanding = 0, grandTotalPrevPayment = 0, grandTotalCurrentCharges = 0;
@@ -1073,11 +1089,12 @@
             let cumulativeTotal = 0;
             let globalSerial = 1;
 
-            // Helper: render aggregated row
+            // Helper: render aggregated row (unchanged except for entity fallback)
             function renderAggregatedRow(info, serial, visibleCols, hasWaterElectricity, hasTelephone) {
                 const bills = info.bills;
                 const entityName = info.entityName;
                 const entityType = info.entityType;
+                const entity = info.entity;
 
                 const consumption = bills.reduce((sum, b) => sum + (b.consumption || 0), 0);
                 const billAmount = bills.reduce((sum, b) => sum + (b.billAmount || 0), 0);
@@ -1099,7 +1116,11 @@
                     } else if (col.key === 'entityType') {
                         html += `<td style="vertical-align:middle;">${entityType === 'school' ? '🏫 School' : '🏛️ Department'}</td>`;
                     } else if (col.key === 'accountNumber') {
-                        html += `<td class="mono-cell" style="font-size:8pt;">—</td>`;
+                        // Fallback to entity's account
+                        let acc = '—';
+                        if (hasWater) acc = entity.water_account || '—';
+                        else if (hasElectricity) acc = entity.electricity_account || '—';
+                        html += `<td class="mono-cell" style="font-size:8pt;">${escapeHtml(acc)}</td>`;
                     } else if (col.key === 'meterTelNo') {
                         html += `<td class="mono-cell" style="font-size:8pt;">—</td>`;
                     } else if (col.key === 'consumption') {
@@ -1128,8 +1149,8 @@
                 return html;
             }
 
-            // Helper: render detail row – now with correct account/meter mapping
-            function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType) {
+            // Helper: render detail row – with entity fallback for account number
+            function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity) {
                 let html = '';
                 const isZero = row.isZeroBill;
                 const rowClass = isZero ? 'entity-zero-bill' : '';
@@ -1159,8 +1180,13 @@
                             html += `<td></td>`;
                         }
                     } else if (col.key === 'accountNumber') {
-                        // Try both field names
-                        const acc = row.accountNumber !== undefined ? row.accountNumber : (row.account_number || '—');
+                        // Use bill's account_number if available, otherwise fallback to entity's account
+                        let acc = row.accountNumber || row.account_number;
+                        if (!acc || acc === '—' || acc === '') {
+                            if (hasWater) acc = entity.water_account || '—';
+                            else if (hasElectricity) acc = entity.electricity_account || '—';
+                            else if (hasTelephone) acc = entity.telephone_account || '—';
+                        }
                         html += `<td class="mono-cell" style="font-size:8pt;">${escapeHtml(acc)}</td>`;
                     } else if (col.key === 'meterTelNo') {
                         let meter = '—';
@@ -1196,7 +1222,7 @@
                 return html;
             }
 
-            // ========== BUILD HTML ==========
+            // ========== BUILD HTML (with corrected balance logic) ==========
             let printHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -1283,7 +1309,7 @@
                 const isLastPage = (pageIndex === totalPages);
                 const isFirstPage = (pageIndex === 1);
 
-                // Compute page totals
+                // Compute page totals (same as before)
                 let pageTotalBillAmount = 0, pageTotalAmountPaid = 0, pageTotalOutstanding = 0;
                 let pageTotalCurrent = 0, pageTotalAccount = 0, pageTotalConsumption = 0;
                 pageEntityInfo.forEach(info => {
@@ -1305,7 +1331,6 @@
                 const pageBillAmountTotal = pageTotalBillAmount;
                 const previousCumulative = cumulativeTotal;
                 cumulativeTotal += pageBillAmountTotal;
-                const balanceColIndex = hasWaterElectricity ? visibleCols.findIndex(c => c.key === 'billAmount' || c.key === 'totalBillAmount') : -1;
 
                 printHtml += `
                     <div class="print-page">
@@ -1326,8 +1351,8 @@
                                 <tbody>
                 `;
 
-                // Balance b/f (Water/Electricity only) – at top of each page if paginated, otherwise only once
-                if (hasWaterElectricity && (shouldPaginate || isFirstPage)) {
+                // ---- BALANCE b/f (only on page 2+ when paginated) ----
+                if (hasWaterElectricity && shouldPaginate && pageIndex > 1) {
                     const bfAmount = previousCumulative;
                     printHtml += `
                         <tr class="balance-row">
@@ -1340,13 +1365,14 @@
                     `;
                 }
 
-                // Render rows
+                // Render rows (using entity fallback for account numbers)
                 for (let eIdx = 0; eIdx < pageEntityInfo.length; eIdx++) {
                     const info = pageEntityInfo[eIdx];
                     const bills = info.bills;
                     const isZeroBill = info.isZeroBill;
                     const entityName = info.entityName;
                     const entityType = info.entityType;
+                    const entity = info.entity;
 
                     if (isAggregated) {
                         printHtml += renderAggregatedRow(info, globalSerial, visibleCols, hasWaterElectricity, hasTelephone);
@@ -1362,13 +1388,12 @@
                                 totalAccountCharges: 0, previousOutstanding: 0, previousPayment: 0,
                                 totalCurrentCharges: 0, utilityType: utilityTypes[0]
                             };
-                            printHtml += renderDetailRow(row, globalSerial, true, 1, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType);
+                            printHtml += renderDetailRow(row, globalSerial, true, 1, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity);
                             globalSerial++;
                         } else {
                             for (let b = 0; b < bills.length; b++) {
                                 const bill = bills[b];
                                 const isFirst = (b === 0);
-                                // Build row with proper field mapping
                                 const rowData = {
                                     entityName, entityType, isZeroBill: false,
                                     accountNumber: bill.accountNumber || bill.account_number || '—',
@@ -1388,7 +1413,7 @@
                                     totalCurrentCharges: bill.totalCurrentCharges || bill.total_current_charges || 0,
                                     utilityType: bill.utilityType || utilityTypes[0]
                                 };
-                                printHtml += renderDetailRow(rowData, globalSerial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType);
+                                printHtml += renderDetailRow(rowData, globalSerial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity);
                                 if (isFirst) globalSerial++;
                             }
                         }
@@ -1426,8 +1451,9 @@
                     printHtml += `</tr>`;
                 }
 
-                // Balance c/f (Water/Electricity only) – at bottom of each page if paginated, otherwise only once at the end
-                if (hasWaterElectricity && (shouldPaginate || isLastPage)) {
+                // ---- BALANCE c/f ----
+                // Show c/f on every page (including last) if paginated, otherwise only once
+                if (hasWaterElectricity) {
                     const cfAmount = cumulativeTotal;
                     printHtml += `
                         <tr class="balance-row">
@@ -1476,7 +1502,7 @@
                         </div>
                 `;
 
-                // Approval footer (last page only)
+                // Approval footer (last page only) – unchanged
                 if (isLastPage) {
                     printHtml += `
                         <div class="approval-footer">
@@ -1742,7 +1768,30 @@
                     return a.entity.id - b.entity.id;
                 });
 
-                console.log('📄 Final entities after filtering:', entityList.length);
+                console.log('📄 Final entities before fallback:', entityList.length);
+
+                // --- FALLBACK: ensure account_number is set from entity if missing ---
+                entityList = entityList.map(item => {
+                    const entity = item.entity;
+                    const type = item.type;
+                    // Determine which account field to use based on utility type
+                    let accountField = '';
+                    if (utilityTypes.includes('water')) accountField = 'water_account';
+                    else if (utilityTypes.includes('electricity')) accountField = 'electricity_account';
+                    else if (utilityTypes.includes('telephone')) accountField = 'telephone_account';
+                    // If we have a valid account field, set it on each bill if missing
+                    if (accountField && entity[accountField]) {
+                        item.bills = item.bills.map(bill => {
+                            if (!bill.account_number || bill.account_number === '—' || bill.account_number === '') {
+                                bill.account_number = entity[accountField];
+                            }
+                            return bill;
+                        });
+                    }
+                    return item;
+                });
+
+                console.log('📄 Final entities after fallback:', entityList.length);
 
                 if (entityList.length === 0) {
                     updateProcessingStep(1, 'No data to print', 100);
