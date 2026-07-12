@@ -567,7 +567,8 @@
                                 <th>Entity Name</th><th>Type</th><th>Utility</th>
                                 <th>Account No.</th><th>Meter / Phone No.</th>
                                 <th>Consumption</th><th>Bill Amount</th>
-                                <th>Amount Paid</th><th>Outstanding</th>
+                                <th>Amount Paid</th>
+                                <th>Outstanding</th>
                                 <th class="period-column">Period</th>
                             </tr>
                         </thead>
@@ -921,7 +922,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (UPDATED) ==========
+        // ========== generatePrintPreviewWithEntities (FINAL FIXED VERSION) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -951,7 +952,6 @@
                 if (selectedColumns.billAmount !== false) colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
                 if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
                 if (selectedColumns.outstanding !== false) colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
-                // Add subtotal columns if selected
                 if (subtotalOptions.showConsumption) colConfig.push({ key: 'totalConsumption', label: 'Total Consumption', show: true });
                 if (subtotalOptions.showBillAmount) colConfig.push({ key: 'totalBillAmount', label: 'Total Bill Amount ($)', show: true });
                 if (subtotalOptions.showOutstanding) colConfig.push({ key: 'totalOutstanding', label: 'Total Outstanding ($)', show: true });
@@ -1234,9 +1234,9 @@
                 pageEntityInfo.forEach(info => {
                     const bills = info.bills;
                     const consumption = bills.reduce((sum, b) => sum + (b.consumption || 0), 0);
-                    const billAmount = bills.reduce((sum, b) => sum + (b.billAmount || 0), 0);
-                    const outstanding = bills.reduce((sum, b) => sum + (b.outstanding || 0), 0);
-                    const amountPaid = bills.reduce((sum, b) => sum + (b.amountPaid || 0), 0);
+                    const billAmount = bills.reduce((sum, b) => sum + (b.current_charges || b.bill_amount || 0), 0);
+                    const outstanding = bills.reduce((sum, b) => sum + (b.unsettled_charges || b.outstanding || 0), 0);
+                    const amountPaid = bills.reduce((sum, b) => sum + (b.amount_paid || 0), 0);
                     const totalCurrent = bills.reduce((sum, b) => sum + (b.totalCurrentCharges || 0), 0);
                     const totalAccount = bills.reduce((sum, b) => sum + (b.totalAccountCharges || 0), 0);
                     pageTotalConsumption += consumption;
@@ -1273,25 +1273,27 @@
                 // ---- BALANCE b/f (only on page 2+ when paginated) ----
                 if (hasWaterElectricity && shouldPaginate && pageIndex > 1) {
                     const bfAmount = previousCumulative;
-                    let balanceRowHtml = `<tr class="balance-row">`;
+                    printHtml += `<tr class="balance-row">`;
                     visibleCols.forEach((col, idx) => {
                         if (idx === balanceColIndex) {
-                            balanceRowHtml += `<td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(bfAmount)}</td>`;
+                            printHtml += `<td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(bfAmount)}</td>`;
                         } else if (idx < balanceColIndex) {
                             if (idx === 0) {
-                                balanceRowHtml += `<td colspan="${balanceColIndex}" style="text-align:right; font-weight:700;"><span class="balance-label">Balance b/f</span></td>`;
+                                printHtml += `<td colspan="${balanceColIndex}" style="text-align:right; font-weight:700;"><span class="balance-label">Balance b/f</span></td>`;
                             }
                         } else {
-                            balanceRowHtml += `<td></td>`;
+                            printHtml += `<td></td>`;
                         }
                     });
                     if (balanceColIndex === 0) {
-                        balanceRowHtml = `<tr class="balance-row">
-                            <td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(bfAmount)}</td>
-                            ${visibleCols.slice(1).map(() => '<td></td>').join('')}
-                        </tr>`;
+                        printHtml = printHtml.replace(/<tr class="balance-row">/, `<tr class="balance-row"><td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(bfAmount)}</td>`);
+                        for (let i = 1; i < visibleCols.length; i++) {
+                            printHtml += `<td></td>`;
+                        }
+                        printHtml += `</tr>`;
+                    } else {
+                        printHtml += `</tr>`;
                     }
-                    printHtml += balanceRowHtml;
                 }
 
                 // ---- Render entities ----
@@ -1308,8 +1310,8 @@
                     if (bills.length > 0) {
                         bills.forEach(b => {
                             entityTotals.consumption += b.consumption || 0;
-                            entityTotals.billAmount += b.billAmount || 0;
-                            entityTotals.outstanding += b.outstanding || 0;
+                            entityTotals.billAmount += b.current_charges || b.bill_amount || 0;
+                            entityTotals.outstanding += b.unsettled_charges || b.outstanding || 0;
                         });
                     }
 
@@ -1332,21 +1334,21 @@
                             const isFirst = (b === 0);
                             const rowData = {
                                 entityName, entityType, isZeroBill: false,
-                                accountNumber: bill.accountNumber || bill.account_number || '—',
-                                meterTelNo: bill.meterTelNo || bill.meter_number || '—',
-                                phoneNumber: bill.phoneNumber || bill.phone_number || '—',
-                                consumption: bill.consumption || 0,
-                                billAmount: bill.billAmount || bill.bill_amount || 0,
-                                amountPaid: bill.amountPaid || bill.amount_paid || 0,
-                                outstanding: bill.outstanding || bill.unsettled_charges || 0,
+                                accountNumber: bill.account_number || '—',
+                                meterTelNo: bill.meter_number || '—',
+                                phoneNumber: bill.phone_number || '—',
+                                consumption: bill.consumption_kwh || bill.consumption || 0,
+                                billAmount: bill.current_charges || bill.bill_amount || 0,
+                                amountPaid: bill.amount_paid || 0,
+                                outstanding: bill.unsettled_charges || bill.outstanding || 0,
                                 period: bill.period || '—',
-                                billNumber: bill.billNumber || bill.bill_number || '—',
-                                rentalAmount: bill.rentalAmount || bill.rental_amount || 0,
-                                totalAmount: bill.totalAmount || bill.total_amount || 0,
-                                totalAccountCharges: bill.totalAccountCharges || bill.total_account_charges || 0,
-                                previousOutstanding: bill.previousOutstanding || bill.previous_outstanding || 0,
-                                previousPayment: bill.previousPayment || bill.previous_payment || 0,
-                                totalCurrentCharges: bill.totalCurrentCharges || bill.total_current_charges || 0,
+                                billNumber: bill.bill_number || '—',
+                                rentalAmount: bill.rental_amount || 0,
+                                totalAmount: bill.total_amount || 0,
+                                totalAccountCharges: bill.total_account_charges || 0,
+                                previousOutstanding: bill.previous_outstanding || 0,
+                                previousPayment: bill.previous_payment || 0,
+                                totalCurrentCharges: bill.total_current_charges || 0,
                                 utilityType: bill.utilityType || utilityTypes[0]
                             };
                             printHtml += renderDetailRow(rowData, globalSerial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals);
@@ -1389,25 +1391,27 @@
                 // ---- BALANCE c/f (only on pages before the last) ----
                 if (hasWaterElectricity && pageIndex < totalPages) {
                     const cfAmount = cumulativeTotal;
-                    let balanceRowHtml = `<tr class="balance-row">`;
+                    printHtml += `<tr class="balance-row">`;
                     visibleCols.forEach((col, idx) => {
                         if (idx === balanceColIndex) {
-                            balanceRowHtml += `<td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(cfAmount)}</td>`;
+                            printHtml += `<td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(cfAmount)}</td>`;
                         } else if (idx < balanceColIndex) {
                             if (idx === 0) {
-                                balanceRowHtml += `<td colspan="${balanceColIndex}" style="text-align:right; font-weight:700;"><span class="balance-label">Balance c/f</span></td>`;
+                                printHtml += `<td colspan="${balanceColIndex}" style="text-align:right; font-weight:700;"><span class="balance-label">Balance c/f</span></td>`;
                             }
                         } else {
-                            balanceRowHtml += `<td></td>`;
+                            printHtml += `<td></td>`;
                         }
                     });
                     if (balanceColIndex === 0) {
-                        balanceRowHtml = `<tr class="balance-row">
-                            <td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(cfAmount)}</td>
-                            ${visibleCols.slice(1).map(() => '<td></td>').join('')}
-                        </tr>`;
+                        printHtml = printHtml.replace(/<tr class="balance-row">/, `<tr class="balance-row"><td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(cfAmount)}</td>`);
+                        for (let i = 1; i < visibleCols.length; i++) {
+                            printHtml += `<td></td>`;
+                        }
+                        printHtml += `</tr>`;
+                    } else {
+                        printHtml += `</tr>`;
                     }
-                    printHtml += balanceRowHtml;
                 }
 
                 // ---- Grand Total (only on last page) ----
