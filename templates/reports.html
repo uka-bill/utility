@@ -8,7 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== CSS (unchanged except print table column widths) ===== */
+        /* ===== CSS (unchanged) ===== */
         :root { --primary: #1a56db; --primary-light: #3b82f6; --primary-dark: #1e3a5f; --primary-gradient: linear-gradient(145deg, #1a56db 0%, #1e3a5f 100%); --primary-glow: linear-gradient(135deg, rgba(26,86,219,0.12) 0%, rgba(30,58,95,0.06) 100%); --secondary: #0f172a; --success: #0d9488; --success-light: #ccfbf1; --danger: #dc2626; --warning: #d97706; --info: #0891b2; --light: #f8fafc; --dark: #0f172a; --gray: #64748b; --gray-light: #e2e8f0; --gray-50: #f1f5f9; --white: #ffffff; --shadow: 0 4px 24px rgba(15,23,42,0.06); --shadow-lg: 0 12px 48px rgba(15,23,42,0.10); --shadow-xl: 0 20px 60px rgba(15,23,42,0.15); --radius: 20px; --radius-sm: 12px; --radius-xs: 8px; --transition: all 0.4s cubic-bezier(0.25,0.46,0.45,0.94); }
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background:var(--gray-50); color:var(--dark); font-size:15px; line-height:1.6; font-weight:400; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
@@ -908,7 +908,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (with aggregation) ==========
+        // ========== generatePrintPreviewWithEntities (FINAL - DYNAMIC COLUMNS) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -925,21 +925,23 @@
             });
             const currentDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-            // Build column config
+            // --- DYNAMIC COLUMN BUILDING ---
+            // Start with base columns that are checked
             let colConfig = [];
-            colConfig.push({ key: 'no', label: 'No.', show: true });
+            colConfig.push({ key: 'no', label: 'No.', show: true, required: true });
+
             if (selectedColumns.entityName !== false) colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
             if (selectedColumns.entityType !== false) colConfig.push({ key: 'entityType', label: 'Type', show: true });
 
+            // For Water/Electricity: show account/meter columns
             if (hasWaterElectricity) {
                 if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
                 if (selectedColumns.meterNumber !== false) colConfig.push({ key: 'meterTelNo', label: 'Meter No.', show: true });
-                if (selectedColumns.consumption !== false) colConfig.push({ key: 'consumption', label: hasWater ? 'Consumption (m³)' : 'Consumption (kWh)', show: true });
-                if (selectedColumns.billAmount !== false) colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
-                if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
-                if (selectedColumns.outstanding !== false) colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
+                // The subtotal columns replace the detail columns when aggregated
+                // But we still need to know if they were selected for detail mode
             }
 
+            // For Telephone: show account and phone columns
             if (hasTelephone) {
                 if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
                 if (selectedColumns.phoneNumber !== false) colConfig.push({ key: 'meterTelNo', label: 'Phone No.', show: true });
@@ -950,12 +952,37 @@
                 if (selectedColumns.previousOutstanding !== false) colConfig.push({ key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true });
                 if (selectedColumns.previousPayment !== false) colConfig.push({ key: 'previousPayment', label: 'Previous Payment ($)', show: true });
                 if (selectedColumns.totalCurrentCharges !== false) colConfig.push({ key: 'totalCurrentCharges', label: 'Total Current Charges ($)', show: true });
-                if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
             }
 
+            // For Water/Electricity: add the detail columns (consumption, billAmount, amountPaid, outstanding) ONLY if subtotal is NOT checked OR groupByEntity is NOT checked
+            // When subtotal is checked AND groupByEntity is checked, we replace detail columns with aggregated subtotal columns
+            const hasSubtotal = subtotalOptions.showConsumption || subtotalOptions.showBillAmount || subtotalOptions.showOutstanding;
+
+            if (hasWaterElectricity) {
+                const isAggregated = groupByEntity && hasSubtotal;
+
+                if (isAggregated) {
+                    // Aggregated mode: show subtotal columns instead of detail columns
+                    if (subtotalOptions.showConsumption) colConfig.push({ key: 'totalConsumption', label: 'Total Consumption', show: true });
+                    if (subtotalOptions.showBillAmount) colConfig.push({ key: 'totalBillAmount', label: 'Total Bill Amount ($)', show: true });
+                    if (subtotalOptions.showOutstanding) colConfig.push({ key: 'totalOutstanding', label: 'Total Outstanding ($)', show: true });
+                    // Amount Paid is not a subtotal column, but we may still show it if selected
+                    if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
+                } else {
+                    // Detail mode: show individual account columns
+                    if (selectedColumns.consumption !== false) colConfig.push({ key: 'consumption', label: hasWater ? 'Consumption (m³)' : 'Consumption (kWh)', show: true });
+                    if (selectedColumns.billAmount !== false) colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
+                    if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
+                    if (selectedColumns.outstanding !== false) colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
+                }
+            }
+
+            // Period column
             if (selectedColumns.period !== false) colConfig.push({ key: 'period', label: 'Period', show: true });
 
+            // Filter out any columns that are not shown
             const visibleCols = colConfig.filter(c => c.show !== false);
+
             const utilityTypeLabels = utilityTypes.map(u => {
                 if (u === 'water') return '💧 Water';
                 if (u === 'electricity') return '⚡ Electricity';
@@ -973,7 +1000,7 @@
                     if (totalAccountIdx !== -1) summaryColIndex = totalAccountIdx;
                 }
             } else if (hasWaterElectricity) {
-                const billAmountIdx = visibleCols.findIndex(c => c.key === 'billAmount');
+                const billAmountIdx = visibleCols.findIndex(c => c.key === 'billAmount' || c.key === 'totalBillAmount');
                 if (billAmountIdx !== -1) summaryColIndex = billAmountIdx;
             }
             if (summaryColIndex < 0) summaryColIndex = 0;
@@ -982,16 +1009,11 @@
             if (hasTelephone) tableClass = 'print-table-telephone';
             else if (hasElectricity) tableClass = 'print-table-electricity';
 
-            // Subtotal options
-            const showConsumption = subtotalOptions && subtotalOptions.showConsumption !== false;
-            const showBillAmount = subtotalOptions && subtotalOptions.showBillAmount !== false;
-            const showOutstanding = subtotalOptions && subtotalOptions.showOutstanding !== false;
-            const anySubtotal = showConsumption || showBillAmount || showOutstanding;
-
-            // Determine if we should aggregate: when groupByEntity is true and any subtotal checkbox is checked
-            const aggregate = groupByEntity && anySubtotal && !hasTelephone;
+            // Determine if we are in aggregated mode (for rendering rows)
+            const isAggregated = groupByEntity && hasSubtotal && !hasTelephone;
 
             // Prepare row data
+            let allRows = [];
             let entityInfo = [];
             entityData.forEach(entityGroup => {
                 const entity = entityGroup.entity;
@@ -1009,23 +1031,20 @@
                 });
             });
 
-            // Compute grand totals (for page totals and sum)
+            // Compute grand totals
             let grandTotalBillAmount = 0, grandTotalAmountPaid = 0, grandTotalOutstanding = 0;
             let grandTotalRentalAmount = 0, grandTotalTotalAmount = 0, grandTotalAccountCharges = 0;
             let grandTotalPrevOutstanding = 0, grandTotalPrevPayment = 0, grandTotalCurrentCharges = 0;
             let grandTotalConsumption = 0;
 
-            // We'll compute totals later per entity
-
             // Pagination logic (only for Telephone)
             let pages = [];
             if (shouldPaginate) {
-                // For pagination, we need to split entityInfo
                 const rowsPerPage = itemsPerPage;
                 let currentPage = [], currentRowCount = 0;
                 for (let i = 0; i < entityInfo.length; i++) {
                     const info = entityInfo[i];
-                    const rowsForEntity = aggregate ? 1 : info.bills.length;
+                    const rowsForEntity = isAggregated ? 1 : Math.max(info.bills.length, 1);
                     if (currentRowCount + rowsForEntity > rowsPerPage && currentPage.length > 0) {
                         pages.push(currentPage);
                         currentPage = [];
@@ -1044,10 +1063,14 @@
             let cumulativeTotal = 0;
             let globalSerial = 1;
 
-            // Helper: render a single row with aggregated data
-            function renderAggregatedRow(info, serial, entityName, entityType, visibleCols, hasWaterElectricity, hasTelephone) {
+            // Helper: render an aggregated row (one per entity)
+            function renderAggregatedRow(info, serial, visibleCols, hasWaterElectricity, hasTelephone) {
                 const bills = info.bills;
                 const isZero = bills.length === 0;
+                const entityName = info.entityName;
+                const entityType = info.entityType;
+
+                // Compute totals
                 const consumption = bills.reduce((sum, b) => sum + (b.consumption || 0), 0);
                 const billAmount = bills.reduce((sum, b) => sum + (b.billAmount || 0), 0);
                 const outstanding = bills.reduce((sum, b) => sum + (b.outstanding || 0), 0);
@@ -1070,7 +1093,7 @@
                         html += `<td style="vertical-align:middle;">${entityType === 'school' ? '🏫 School' : '🏛️ Department'}</td>`;
                     } else if (col.key === 'accountNumber') {
                         html += `<td class="mono-cell" style="font-size:8pt;">—</td>`;
-                    } else if (col.key === 'meterTelNo' || col.key === 'phoneNumber') {
+                    } else if (col.key === 'meterTelNo') {
                         html += `<td class="mono-cell" style="font-size:8pt;">—</td>`;
                     } else if (col.key === 'consumption') {
                         const unit = hasWater ? 'm³' : 'kWh';
@@ -1080,6 +1103,13 @@
                     } else if (col.key === 'amountPaid') {
                         html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(amountPaid)}</td>`;
                     } else if (col.key === 'outstanding') {
+                        html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(outstanding)}</td>`;
+                    } else if (col.key === 'totalConsumption') {
+                        const unit = hasWater ? 'm³' : 'kWh';
+                        html += `<td style="text-align:center; font-size:8pt;">${formatNumberWithCommas(consumption)} ${unit}</td>`;
+                    } else if (col.key === 'totalBillAmount') {
+                        html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(billAmount)}</td>`;
+                    } else if (col.key === 'totalOutstanding') {
                         html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(outstanding)}</td>`;
                     } else if (col.key === 'period') {
                         html += `<td class="period-column" style="font-size:8pt;">${period}</td>`;
@@ -1091,7 +1121,7 @@
                 return html;
             }
 
-            // Helper: render individual bill rows (when not aggregated)
+            // Helper: render detail rows (one per account)
             function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType) {
                 let html = '';
                 const isZero = row.isZeroBill;
@@ -1123,7 +1153,7 @@
                         }
                     } else if (col.key === 'accountNumber') {
                         html += `<td class="mono-cell" style="font-size:8pt;">${escapeHtml(row.accountNumber || '—')}</td>`;
-                    } else if (col.key === 'meterTelNo' || col.key === 'phoneNumber') {
+                    } else if (col.key === 'meterTelNo') {
                         if (hasTelephone) {
                             html += `<td class="mono-cell" style="font-size:8pt;">${escapeHtml(row.phoneNumber || '—')}</td>`;
                         } else {
@@ -1235,11 +1265,10 @@
                 const isLastPage = (pageIndex === totalPages);
                 const isFirstPage = (pageIndex === 1);
 
-                // Compute page totals (for the summary row)
+                // Compute page totals
                 let pageTotalBillAmount = 0, pageTotalAmountPaid = 0, pageTotalOutstanding = 0;
                 let pageTotalCurrent = 0, pageTotalAccount = 0, pageTotalConsumption = 0;
                 pageEntityInfo.forEach(info => {
-                    // Compute per entity totals
                     const bills = info.bills;
                     const consumption = bills.reduce((sum, b) => sum + (b.consumption || 0), 0);
                     const billAmount = bills.reduce((sum, b) => sum + (b.billAmount || 0), 0);
@@ -1258,7 +1287,7 @@
                 const pageBillAmountTotal = pageTotalBillAmount;
                 const previousCumulative = cumulativeTotal;
                 cumulativeTotal += pageBillAmountTotal;
-                const balanceColIndex = hasWaterElectricity ? visibleCols.findIndex(c => c.key === 'billAmount') : -1;
+                const balanceColIndex = hasWaterElectricity ? visibleCols.findIndex(c => c.key === 'billAmount' || c.key === 'totalBillAmount') : -1;
 
                 printHtml += `
                     <div class="print-page">
@@ -1300,10 +1329,9 @@
                     const entityName = info.entityName;
                     const entityType = info.entityType;
 
-                    if (aggregate) {
+                    if (isAggregated) {
                         // One row per entity with totals
-                        printHtml += renderAggregatedRow(info, globalSerial, entityName, entityType, visibleCols, hasWaterElectricity, hasTelephone);
-                        // Update grand totals (already done in helper)
+                        printHtml += renderAggregatedRow(info, globalSerial, visibleCols, hasWaterElectricity, hasTelephone);
                         globalSerial++;
                     } else {
                         // Individual account rows
@@ -1356,7 +1384,12 @@
                     if (visibleCols.some(c => c.key === 'totalCurrentCharges')) pageTotalValue = pageTotalCurrent;
                     else if (visibleCols.some(c => c.key === 'totalAccountCharges')) pageTotalValue = pageTotalAccount;
                 } else if (hasWaterElectricity) {
-                    pageTotalValue = pageTotalBillAmount;
+                    // Use the page total for the column at summaryColIndex
+                    if (visibleCols.some(c => c.key === 'totalBillAmount')) pageTotalValue = pageTotalBillAmount;
+                    else if (visibleCols.some(c => c.key === 'billAmount')) pageTotalValue = pageTotalBillAmount;
+                    else if (visibleCols.some(c => c.key === 'totalConsumption')) pageTotalValue = pageTotalConsumption;
+                    else if (visibleCols.some(c => c.key === 'consumption')) pageTotalValue = pageTotalConsumption;
+                    else pageTotalValue = pageTotalBillAmount;
                 }
 
                 if (pageEntityInfo.length > 0) {
@@ -1397,7 +1430,11 @@
                         if (visibleCols.some(c => c.key === 'totalCurrentCharges')) totalValueForSummary = grandTotalCurrentCharges;
                         else if (visibleCols.some(c => c.key === 'totalAccountCharges')) totalValueForSummary = grandTotalAccountCharges;
                     } else if (hasWaterElectricity) {
-                        totalValueForSummary = grandTotalBillAmount;
+                        if (visibleCols.some(c => c.key === 'totalBillAmount')) totalValueForSummary = grandTotalBillAmount;
+                        else if (visibleCols.some(c => c.key === 'billAmount')) totalValueForSummary = grandTotalBillAmount;
+                        else if (visibleCols.some(c => c.key === 'totalConsumption')) totalValueForSummary = grandTotalConsumption;
+                        else if (visibleCols.some(c => c.key === 'consumption')) totalValueForSummary = grandTotalConsumption;
+                        else totalValueForSummary = grandTotalBillAmount;
                     }
                     printHtml += `<tr class="total-sum-row">`;
                     visibleCols.forEach((col, idx) => {
@@ -1422,7 +1459,7 @@
                         </div>
                 `;
 
-                // Approval footer
+                // Approval footer (last page only)
                 if (isLastPage) {
                     printHtml += `
                         <div class="approval-footer">
@@ -1459,7 +1496,7 @@
 
                 printHtml += `
                         <div class="footer-note">
-                            ${totalPages > 1 ? `Page ${pageIndex} of ${totalPages} | ` : ''}Total Bills: ${entityData.reduce((sum, e) => sum + (aggregate ? 1 : e.bills.length), 0)} | This is a computer-generated document.
+                            ${totalPages > 1 ? `Page ${pageIndex} of ${totalPages} | ` : ''}Total Bills: ${entityData.reduce((sum, e) => sum + (isAggregated ? 1 : e.bills.length), 0)} | This is a computer-generated document.
                         </div>
                     </div>
                 `;
@@ -1536,7 +1573,7 @@
                 if (outstandingEl) showOutstanding = outstandingEl.checked;
             }
 
-            const showSubtotals = !isTelephoneOnly && (showConsumption || showBillAmount || showOutstanding);
+            const hasSubtotal = showConsumption || showBillAmount || showOutstanding;
             const showAllEntities = document.getElementById('showAllEntities').checked;
             const groupByEntity = document.getElementById('groupByEntity').checked;
 
@@ -1710,7 +1747,7 @@
 
                 generatePrintPreviewWithEntities(
                     entityList, month, year, selectedColumns, effectiveItemsPerPage,
-                    utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions
+                    utilityTypes, shouldPaginate, hasSubtotal, groupByEntity, showAllEntities, approvalDetails, subtotalOptions
                 );
 
                 updateProcessingStep(2, '✅ Done! Opening print preview...', 100);
