@@ -202,12 +202,6 @@
         .print-table-electricity th:first-child,
         .print-table-telephone th:first-child { text-align:center; width:30px; }
 
-        .entity-subtotal-row { background:#eef2ff !important; border-top:2px solid #000; border-bottom:2px solid #000; font-weight:700; }
-        .entity-subtotal-row td { padding:6px 8px; font-weight:700; color:#1e3a5f; background-color:#eef2ff !important; border-top:1px solid #000; border-bottom:1px solid #000; }
-        .entity-subtotal-row .summary-label { font-weight:700; letter-spacing:0.3px; }
-        .entity-subtotal-row .currency-cell { text-align:right; font-weight:700; color:#1e3a5f; }
-        .entity-subtotal-row .dash-cell { text-align:center; color:#94a3b8; }
-
         .entity-group-header td { border-top:2px solid #000; background:#f8faff; }
         .entity-group-header .entity-name-cell { font-weight:700; font-size:8.5pt; }
         .entity-group-detail td { background:white; }
@@ -256,7 +250,6 @@
             .print-table-electricity td,
             .print-table-telephone td { border-color:#000 !important; }
             .data-table-wrapper { overflow-x:visible !important; }
-            .entity-subtotal-row { background:#eef2ff !important; }
             .entity-group-header td { background:#f8faff !important; }
             .entity-zero-bill td { color:#9ca3af !important; }
             .balance-row { background:#fef3c7 !important; }
@@ -958,12 +951,14 @@
                 if (selectedColumns.billAmount !== false) colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
                 if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
                 if (selectedColumns.outstanding !== false) colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
+                // Add subtotal columns if selected
                 if (subtotalOptions.showConsumption) colConfig.push({ key: 'totalConsumption', label: 'Total Consumption', show: true });
                 if (subtotalOptions.showBillAmount) colConfig.push({ key: 'totalBillAmount', label: 'Total Bill Amount ($)', show: true });
                 if (subtotalOptions.showOutstanding) colConfig.push({ key: 'totalOutstanding', label: 'Total Outstanding ($)', show: true });
             }
 
             if (hasTelephone) {
+                // For telephone, we don't have subtotal columns currently; keep as before
                 if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
                 if (selectedColumns.phoneNumber !== false) colConfig.push({ key: 'meterTelNo', label: 'Phone No.', show: true });
                 if (selectedColumns.billNumber !== false) colConfig.push({ key: 'billNumber', label: 'Bill No.', show: true });
@@ -1058,11 +1053,7 @@
                 let currentPage = [], currentRowCount = 0;
                 for (let i = 0; i < entityInfo.length; i++) {
                     const info = entityInfo[i];
-                    // For pagination, count each bill as a row (detail) + possibly a subtotal row
                     let rowsForEntity = Math.max(info.bills.length, 1);
-                    // Add one extra row for subtotal if any subtotal option is selected
-                    const hasSubtotal = subtotalOptions.showConsumption || subtotalOptions.showBillAmount || subtotalOptions.showOutstanding;
-                    if (hasSubtotal && info.bills.length > 0) rowsForEntity += 1;
                     if (currentRowCount + rowsForEntity > rowsPerPage && currentPage.length > 0) {
                         pages.push(currentPage);
                         currentPage = [];
@@ -1081,8 +1072,8 @@
             let cumulativeTotal = 0;
             let globalSerial = 1;
 
-            // Helper: render detail row – with entity fallback for account number
-            function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity) {
+            // Helper: render detail row – with entity fallback for account number and subtotal columns
+            function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals) {
                 let html = '';
                 const isZero = row.isZeroBill;
                 const rowClass = isZero ? 'entity-zero-bill' : '';
@@ -1138,62 +1129,14 @@
                         html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(row.outstanding)}</td>`;
                     } else if (col.key === 'totalConsumption') {
                         const unit = hasWater ? 'm³' : 'kWh';
-                        html += `<td style="text-align:center; font-size:8pt;">${formatNumberWithCommas(row.consumption)} ${unit}</td>`;
+                        // Show entity total for this column
+                        html += `<td style="text-align:center; font-size:8pt;">${formatNumberWithCommas(entityTotals.consumption)} ${unit}</td>`;
                     } else if (col.key === 'totalBillAmount') {
-                        html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(row.billAmount)}</td>`;
+                        html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(entityTotals.billAmount)}</td>`;
                     } else if (col.key === 'totalOutstanding') {
-                        html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(row.outstanding)}</td>`;
+                        html += `<td class="currency-cell" style="font-size:8pt;">${formatNumberWithCommas(entityTotals.outstanding)}</td>`;
                     } else if (col.key === 'period') {
                         html += `<td class="period-column" style="font-size:8pt;">${row.period || '—'}</td>`;
-                    } else {
-                        html += `<td></td>`;
-                    }
-                });
-                html += '</tr>';
-                return html;
-            }
-
-            // Helper: render entity subtotal row
-            function renderEntitySubtotal(entityBills, visibleCols, hasWaterElectricity, hasTelephone, entityName) {
-                let consumption = 0, billAmount = 0, outstanding = 0, amountPaid = 0;
-                let totalCurrent = 0, totalAccount = 0;
-                entityBills.forEach(b => {
-                    consumption += b.consumption || 0;
-                    billAmount += b.billAmount || 0;
-                    outstanding += b.outstanding || 0;
-                    amountPaid += b.amountPaid || 0;
-                    totalCurrent += b.totalCurrentCharges || 0;
-                    totalAccount += b.totalAccountCharges || 0;
-                });
-                // Update grand totals (we'll accumulate later)
-                grandTotalConsumption += consumption;
-                grandTotalBillAmount += billAmount;
-                grandTotalOutstanding += outstanding;
-                grandTotalAmountPaid += amountPaid;
-
-                let html = `<tr class="entity-subtotal-row">`;
-                visibleCols.forEach((col, idx) => {
-                    if (idx === 0) {
-                        html += `<td class="summary-label" style="text-align:center;">Subtotal</td>`;
-                    } else if (col.key === 'entityName') {
-                        html += `<td></td>`;
-                    } else if (col.key === 'entityType') {
-                        html += `<td></td>`;
-                    } else if (col.key === 'accountNumber') {
-                        html += `<td></td>`;
-                    } else if (col.key === 'meterTelNo') {
-                        html += `<td></td>`;
-                    } else if (col.key === 'consumption' || col.key === 'totalConsumption') {
-                        const unit = hasWater ? 'm³' : 'kWh';
-                        html += `<td style="text-align:center; font-size:8pt;">${formatNumberWithCommas(consumption)} ${unit}</td>`;
-                    } else if (col.key === 'billAmount' || col.key === 'totalBillAmount') {
-                        html += `<td class="currency-cell" style="font-weight:600;">${formatNumberWithCommas(billAmount)}</td>`;
-                    } else if (col.key === 'outstanding' || col.key === 'totalOutstanding') {
-                        html += `<td class="currency-cell" style="font-weight:600;">${formatNumberWithCommas(outstanding)}</td>`;
-                    } else if (col.key === 'amountPaid') {
-                        html += `<td class="currency-cell">${formatNumberWithCommas(amountPaid)}</td>`;
-                    } else if (col.key === 'period') {
-                        html += `<td></td>`;
                     } else {
                         html += `<td></td>`;
                     }
@@ -1225,16 +1168,14 @@
                         .entity-name-cell { font-weight: 600; max-width: 120px; word-break: break-word; }
                         .entity-group-header td { border-top: 2px solid #000; background: #f8faff; }
                         .entity-group-detail td { background: white; }
-                        .entity-subtotal-row { background: #eef2ff !important; border-top: 2px solid #000; border-bottom: 2px solid #000; font-weight: 700; }
-                        .entity-subtotal-row td { background: #eef2ff !important; font-weight: 700; color: #1e3a5f; border-color: #000; }
+                        .entity-zero-bill td { color: #9ca3af; }
+                        .entity-zero-bill .currency-cell { color: #9ca3af; }
+                        .balance-row { background: #fef3c7 !important; font-weight: 700; }
+                        .balance-row td { background: #fef3c7 !important; border-top: 2px solid #000; border-bottom: 2px solid #000; }
                         .summary-row { background: #f8fafc; font-weight: 600; }
                         .summary-row td { border-top: 2px solid #000; }
                         .total-sum-row { background: #e8f4fd; font-weight: 700; }
                         .total-sum-row td { border-top: 3px double #000; }
-                        .balance-row { background: #fef3c7 !important; font-weight: 700; }
-                        .balance-row td { background: #fef3c7 !important; border-top: 2px solid #000; border-bottom: 2px solid #000; }
-                        .entity-zero-bill td { color: #9ca3af; }
-                        .entity-zero-bill .currency-cell { color: #9ca3af; }
                         .period-column { white-space: nowrap; }
                         .approval-footer { margin-top: 30px; padding-top: 20px; border-top: 2px solid #1a56db; }
                         .approval-footer .approval-grid { display: flex; flex-direction: column; gap: 20px; margin-top: 12px; align-items: flex-start; }
@@ -1346,8 +1287,6 @@
                 }
 
                 // ---- Render entities ----
-                const hasSubtotal = subtotalOptions.showConsumption || subtotalOptions.showBillAmount || subtotalOptions.showOutstanding;
-
                 for (let eIdx = 0; eIdx < pageEntityInfo.length; eIdx++) {
                     const info = pageEntityInfo[eIdx];
                     const bills = info.bills;
@@ -1355,6 +1294,16 @@
                     const entityName = info.entityName;
                     const entityType = info.entityType;
                     const entity = info.entity;
+
+                    // Compute entity totals for subtotal columns
+                    let entityTotals = { consumption: 0, billAmount: 0, outstanding: 0 };
+                    if (bills.length > 0) {
+                        bills.forEach(b => {
+                            entityTotals.consumption += b.consumption || 0;
+                            entityTotals.billAmount += b.billAmount || 0;
+                            entityTotals.outstanding += b.outstanding || 0;
+                        });
+                    }
 
                     // Detail rows
                     const rowspan = bills.length > 0 ? bills.length : 1;
@@ -1368,7 +1317,7 @@
                             totalAccountCharges: 0, previousOutstanding: 0, previousPayment: 0,
                             totalCurrentCharges: 0, utilityType: utilityTypes[0]
                         };
-                        printHtml += renderDetailRow(row, globalSerial, true, 1, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity);
+                        printHtml += renderDetailRow(row, globalSerial, true, 1, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals);
                         globalSerial++;
                     } else {
                         for (let b = 0; b < bills.length; b++) {
@@ -1393,14 +1342,9 @@
                                 totalCurrentCharges: bill.totalCurrentCharges || bill.total_current_charges || 0,
                                 utilityType: bill.utilityType || utilityTypes[0]
                             };
-                            printHtml += renderDetailRow(rowData, globalSerial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity);
+                            printHtml += renderDetailRow(rowData, globalSerial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals);
                             if (isFirst) globalSerial++;
                         }
-                    }
-
-                    // ---- Entity Subtotal Row (if subtotals are enabled and there are bills) ----
-                    if (hasSubtotal && bills.length > 0) {
-                        printHtml += renderEntitySubtotal(bills, visibleCols, hasWaterElectricity, hasTelephone, entityName);
                     }
                 }
 
