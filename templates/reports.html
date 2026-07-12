@@ -382,7 +382,7 @@
                     <div class="pagination-control">
                         <label>Items per page:</label>
                         <input type="number" id="itemsPerPage" value="10" min="5" max="50">
-                        <span class="info-text">(for Telephone only)</span>
+                        <span class="info-text">(for pagination)</span>
                     </div>
                 </div>
             </div>
@@ -908,7 +908,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (FIXED: showAllEntities only adds selected entities) ==========
+        // ========== generatePrintPreviewWithEntities (paginate for all utilities) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1017,7 +1017,9 @@
             let grandTotalPrevOutstanding = 0, grandTotalPrevPayment = 0, grandTotalCurrentCharges = 0;
             let grandTotalConsumption = 0;
 
-            // Pagination logic (only for Telephone)
+            // Pagination for all utilities (if itemsPerPage is set and row count exceeds)
+            // Now 'shouldPaginate' is passed from the button logic based on row count.
+            // We will paginate regardless of utility type.
             let pages = [];
             if (shouldPaginate) {
                 const rowsPerPage = itemsPerPage;
@@ -1645,7 +1647,7 @@
                     });
                 }
 
-                // --- FIXED: showAllEntities only adds selected entities ---
+                // --- showAllEntities only adds selected zero-bill entities ---
                 if (showAllEntities) {
                     const [schoolsRes, deptsRes] = await Promise.all([
                         fetch('/api/schools'),
@@ -1658,12 +1660,12 @@
                     if (schoolIds.length > 0) {
                         allSchools = allSchools.filter(s => schoolIds.includes(s.id));
                     } else {
-                        allSchools = []; // No schools selected, so don't add any
+                        allSchools = [];
                     }
                     if (departmentIds.length > 0) {
                         allDepts = allDepts.filter(d => departmentIds.includes(d.id));
                     } else {
-                        allDepts = []; // No departments selected, so don't add any
+                        allDepts = [];
                     }
 
                     // Add schools not already present
@@ -1715,16 +1717,13 @@
 
                 updateProcessingStep(2, 'Generating print preview...', 75);
 
-                const isWaterElectricity = utilityTypes.length === 1 && (utilityTypes[0] === 'water' || utilityTypes[0] === 'electricity');
-                const isTelephone = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
-
-                // Pagination only for Telephone
-                let shouldPaginate = false;
-                let effectiveItemsPerPage = itemsPerPage;
-                if (isTelephone) {
-                    const rowCount = groupByEntity ? entityList.length : entityList.reduce((sum, e) => sum + e.bills.length, 0);
-                    shouldPaginate = rowCount > effectiveItemsPerPage;
-                }
+                // Determine if we should paginate (based on row count exceeding itemsPerPage)
+                let rowCount = 0;
+                const isAggregated = groupByEntity && hasSubtotal && !isTelephoneOnly;
+                entityList.forEach(e => {
+                    rowCount += isAggregated ? 1 : Math.max(e.bills.length, 1);
+                });
+                const shouldPaginate = rowCount > itemsPerPage;
 
                 const subtotalOptions = {
                     showConsumption: showConsumption,
@@ -1733,7 +1732,7 @@
                 };
 
                 generatePrintPreviewWithEntities(
-                    entityList, month, year, selectedColumns, effectiveItemsPerPage,
+                    entityList, month, year, selectedColumns, itemsPerPage,
                     utilityTypes, shouldPaginate, hasSubtotal, groupByEntity, showAllEntities, approvalDetails, subtotalOptions
                 );
 
