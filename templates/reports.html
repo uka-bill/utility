@@ -922,7 +922,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (FIXED - column alignment + merged subtotals) ==========
+        // ========== generatePrintPreviewWithEntities (FINAL FIXED) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1027,7 +1027,7 @@
             if (hasTelephone) tableClass = 'print-table-telephone';
             else if (hasElectricity) tableClass = 'print-table-electricity';
 
-            // Prepare row data (with entity objects for fallback)
+            // --- DEDUPLICATE bills per entity ---
             let entityInfo = [];
             entityData.forEach(entityGroup => {
                 const entity = entityGroup.entity;
@@ -1035,17 +1035,29 @@
                 const bills = entityGroup.bills;
                 const isZeroBill = !entityGroup.hasBills;
                 const entityName = entity.name || (entityType === 'school' ? 'School #' + entity.id : 'Dept #' + entity.id);
+
+                // Deduplicate bills by account_number + meter_number
+                const uniqueBills = [];
+                const seen = new Set();
+                bills.forEach(bill => {
+                    const key = (bill.account_number || '') + '|' + (bill.meter_number || '');
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniqueBills.push(bill);
+                    }
+                });
+
                 entityInfo.push({
                     entityId: entity.id,
                     entityName: entityName,
                     entityType: entityType,
-                    bills: bills,
-                    isZeroBill: isZeroBill,
+                    bills: uniqueBills,
+                    isZeroBill: isZeroBill || uniqueBills.length === 0,
                     entity: entity,
                     totals: {
-                        consumption: bills.reduce((sum, b) => sum + (b.consumption || 0), 0),
-                        billAmount: bills.reduce((sum, b) => sum + (b.current_charges || b.bill_amount || 0), 0),
-                        outstanding: bills.reduce((sum, b) => sum + (b.unsettled_charges || b.outstanding || 0), 0)
+                        consumption: uniqueBills.reduce((sum, b) => sum + (b.consumption || 0), 0),
+                        billAmount: uniqueBills.reduce((sum, b) => sum + (b.current_charges || b.bill_amount || 0), 0),
+                        outstanding: uniqueBills.reduce((sum, b) => sum + (b.unsettled_charges || b.outstanding || 0), 0)
                     }
                 });
             });
@@ -1090,33 +1102,31 @@
                 const detailClass = isFirst ? 'entity-group-header' : 'entity-group-detail';
                 html += `<tr class="${rowClass} ${detailClass}">`;
 
-                // We need to generate exactly visibleCols.length cells
+                // Generate exactly visibleCols.length cells
                 for (let i = 0; i < visibleCols.length; i++) {
                     const col = visibleCols[i];
                     const colKey = col.key;
-                    
-                    // If this is a subtotal column and not the first row, we still need an empty cell to maintain column count
                     const isSubtotal = subtotalKeys.includes(colKey);
                     const rowspanAttr = (isSubtotal && isFirst) ? ` rowspan="${rowspan}"` : '';
-                    
+
                     if (colKey === 'no') {
                         if (isFirst) {
-                            const rowspanAttr2 = (rowspan > 1) ? ` rowspan="${rowspan}"` : '';
-                            html += `<td style="text-align:center; vertical-align:middle;"${rowspanAttr2}>${serial}</td>`;
+                            const rspan = (rowspan > 1) ? ` rowspan="${rowspan}"` : '';
+                            html += `<td style="text-align:center; vertical-align:middle;"${rspan}>${serial}</td>`;
                         } else {
                             html += `<td></td>`;
                         }
                     } else if (colKey === 'entityName') {
                         if (isFirst) {
-                            const rowspanAttr2 = (rowspan > 1) ? ` rowspan="${rowspan}"` : '';
-                            html += `<td class="entity-name-cell" style="vertical-align:middle; max-width:120px; word-break:break-word; font-size:8.5pt;"${rowspanAttr2}>${escapeHtml(entityName)}</td>`;
+                            const rspan = (rowspan > 1) ? ` rowspan="${rowspan}"` : '';
+                            html += `<td class="entity-name-cell" style="vertical-align:middle; max-width:120px; word-break:break-word; font-size:8.5pt;"${rspan}>${escapeHtml(entityName)}</td>`;
                         } else {
                             html += `<td></td>`;
                         }
                     } else if (colKey === 'entityType') {
                         if (isFirst) {
-                            const rowspanAttr2 = (rowspan > 1) ? ` rowspan="${rowspan}"` : '';
-                            html += `<td style="vertical-align:middle;"${rowspanAttr2}>${entityType === 'school' ? '🏫 School' : '🏛️ Department'}</td>`;
+                            const rspan = (rowspan > 1) ? ` rowspan="${rowspan}"` : '';
+                            html += `<td style="vertical-align:middle;"${rspan}>${entityType === 'school' ? '🏫 School' : '🏛️ Department'}</td>`;
                         } else {
                             html += `<td></td>`;
                         }
@@ -1127,7 +1137,7 @@
                             else if (hasElectricity) acc = entity.electricity_account || '—';
                             else if (hasTelephone) acc = entity.telephone_account || '—';
                         }
-                        html += `<td class="mono-cell" style="font-size:8pt;">${escapeHtml(acc)}</td>`;
+                        html += `<td class="mono-cell" style="font-size:8pt; word-break:break-word;">${escapeHtml(acc)}</td>`;
                     } else if (colKey === 'meterTelNo') {
                         let meter = '—';
                         if (hasTelephone) {
@@ -1150,7 +1160,7 @@
                         if (isFirst) {
                             html += `<td style="text-align:center; font-size:8pt;"${rowspanAttr}>${formatNumberWithCommas(entityTotals.consumption)} ${unit}</td>`;
                         } else {
-                            html += `<td></td>`; // empty cell to maintain column count
+                            html += `<td></td>`;
                         }
                     } else if (colKey === 'totalBillAmount') {
                         if (isFirst) {
