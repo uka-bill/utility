@@ -666,14 +666,14 @@
     let allSchools = [];
     let allDepartments = [];
     let existingBills = [];
-    let januaryBills = []; // Stores bills for January (for termination commands)
+    let januaryBills = [];
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
     let isLoading = false;
     let savingRows = new Set();
     let activeToast = null;
     let saveInProgress = false;
-    let terminatedNumbers = {}; // Map: entityId -> Set of terminated phone numbers
+    let terminatedNumbers = {};
 
     function showToast(message, type) {
         if (activeToast) { activeToast.remove(); activeToast = null; }
@@ -736,9 +736,6 @@
             if (resp.ok) {
                 existingBills = await resp.json();
                 console.log('📊 Loaded ' + existingBills.length + ' bills for month=' + month + ', year=' + year);
-                if (existingBills.length > 0) {
-                    console.log('📋 Sample bill:', existingBills[0]);
-                }
             } else {
                 existingBills = [];
                 console.log('⚠️ Failed to load bills, status:', resp.status);
@@ -746,25 +743,15 @@
         } catch(e) { console.error(e); existingBills = []; }
     }
 
-    /**
-     * Parse termination commands from January's note.
-     * Looks for "terminate -" followed by numbers (comma or space separated).
-     * Returns a Set of phone numbers to terminate.
-     */
     function parseTerminationCommands(noteText) {
         if (!noteText || typeof noteText !== 'string') return new Set();
-        
         const terminated = new Set();
-        // Case-insensitive match for "terminate -" followed by numbers
-        // Pattern: terminate - 111111, 22222, 33333 (comma or space separated)
         const regex = /terminate\s*-\s*([\d\s,]+)/gi;
         let match;
         while ((match = regex.exec(noteText)) !== null) {
             const numbersPart = match[1];
-            // Split by commas or spaces, filter out empty strings, and clean
             const numbers = numbersPart.split(/[\s,]+/).filter(s => s.trim().length > 0);
             numbers.forEach(num => {
-                // Only add if it looks like a phone number (digits only)
                 const cleaned = num.trim().replace(/[^0-9]/g, '');
                 if (cleaned.length > 0) {
                     terminated.add(cleaned);
@@ -774,20 +761,11 @@
         return terminated;
     }
 
-    /**
-     * Load January's bills for the same entities to parse termination commands.
-     * This is called once when the page loads for any month.
-     */
     async function loadJanuaryBillsForTermination(entityList) {
         if (!entityList || entityList.length === 0) return;
-        
         try {
-            // Fetch January bills for all entities in one go
-            const entityIds = entityList.map(e => e.id);
-            const month = 1; // January
+            const month = 1;
             const year = currentYear;
-            
-            // Build a query that fetches bills for all these entities for January
             const cacheBuster = new Date().getTime();
             const url = '/api/utility-bills?utility_type=telephone&month=' + month + '&year=' + year + '&_=' + cacheBuster;
             const resp = await fetch(url);
@@ -795,20 +773,15 @@
                 const bills = await resp.json();
                 januaryBills = bills;
                 console.log('📊 Loaded ' + bills.length + ' January bills for termination parsing');
-                
-                // Parse termination commands from January's notes
                 terminatedNumbers = {};
                 bills.forEach(bill => {
                     const entityId = bill.entity_id;
                     const note = bill.notes || '';
-                    // Try to parse the note as JSON (if stored as JSON)
                     let noteText = note;
                     try {
                         if (note && note.startsWith('{')) {
                             const parsed = JSON.parse(note);
-                            // Check for accounts object
                             if (parsed.accounts) {
-                                // For each account in the notes, check its notes field
                                 for (const accountKey in parsed.accounts) {
                                     const accountData = parsed.accounts[accountKey];
                                     const accountNote = accountData.notes || '';
@@ -819,7 +792,6 @@
                                     }
                                 }
                             }
-                            // Also check the legacy notes field
                             if (parsed._legacy_notes) {
                                 const terminatedSet = parseTerminationCommands(parsed._legacy_notes);
                                 if (terminatedSet.size > 0) {
@@ -828,7 +800,6 @@
                                 }
                             }
                         } else {
-                            // Plain text note
                             const terminatedSet = parseTerminationCommands(note);
                             if (terminatedSet.size > 0) {
                                 if (!terminatedNumbers[entityId]) terminatedNumbers[entityId] = new Set();
@@ -836,7 +807,6 @@
                             }
                         }
                     } catch (e) {
-                        // If parsing fails, treat as plain text
                         const terminatedSet = parseTerminationCommands(note);
                         if (terminatedSet.size > 0) {
                             if (!terminatedNumbers[entityId]) terminatedNumbers[entityId] = new Set();
@@ -844,12 +814,32 @@
                         }
                     }
                 });
-                
                 console.log('🔍 Terminated numbers:', terminatedNumbers);
+                // Now apply the strikethrough to the current table
+                applyStrikethroughToCurrentTable();
             }
         } catch (e) {
             console.error('Error loading January bills for termination:', e);
         }
+    }
+
+    // ===== NEW FUNCTION: apply strikethrough based on current terminatedNumbers =====
+    function applyStrikethroughToCurrentTable() {
+        const phoneSpans = document.querySelectorAll('.phone-entry .phone-number');
+        phoneSpans.forEach(span => {
+            const entityRow = span.closest('.account-row');
+            if (!entityRow) return;
+            const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
+            if (isNaN(entityId)) return;
+            const phoneText = span.textContent.replace(/[📞\s]/g, '').trim();
+            const cleanedPhone = phoneText.replace(/[^0-9]/g, '');
+            const isTerminated = terminatedNumbers[entityId] && terminatedNumbers[entityId].has(cleanedPhone);
+            if (isTerminated) {
+                span.classList.add('terminated');
+            } else {
+                span.classList.remove('terminated');
+            }
+        });
     }
 
     function extractTelephoneAccounts(entity) {
@@ -996,15 +986,13 @@
         });
     }
 
-    // Check if a phone number is terminated for a given entity
     function isPhoneTerminated(entityId, phoneNumber) {
         if (!terminatedNumbers[entityId]) return false;
-        // Clean the phone number for comparison (remove spaces, etc.)
         const cleaned = String(phoneNumber).replace(/[^0-9]/g, '');
         return terminatedNumbers[entityId].has(cleaned);
     }
 
-    // ============ SAVE ACCOUNT ROW ============
+    // ============ SAVE ACCOUNT ROW (UPDATED) ============
     async function saveAccountRow(accountRow, month, year) {
         if (saveInProgress) {
             showToast('Save already in progress...', 'error');
@@ -1158,6 +1146,21 @@
                         statusSpan.className = 'status-badge status-pending';
                     }
                 }
+
+                // ====== FIX: Refresh termination list and apply strikethrough ======
+                // Get all entities currently displayed (we need their IDs to fetch January bills)
+                const currentEntities = [];
+                document.querySelectorAll('.account-row').forEach(row => {
+                    const id = parseInt(row.getAttribute('data-entity-id'));
+                    if (!isNaN(id) && !currentEntities.includes(id)) {
+                        currentEntities.push(id);
+                    }
+                });
+                // Build a list of entity objects (just IDs and names) for the termination fetcher
+                const entityListForRefresh = currentEntities.map(id => ({ id: id, name: '' }));
+                await loadJanuaryBillsForTermination(entityListForRefresh);
+                // applyStrikethroughToCurrentTable() is called inside loadJanuaryBillsForTermination
+
             } else {
                 showToast('Failed to save: ' + (result.error || 'Unknown error'), 'error');
             }
@@ -1218,13 +1221,7 @@
         await loadExistingBills(month, year);
 
         let allEntities = buildEntityList();
-        
-        // Build entity list for termination parsing (only need entity IDs and names)
         const entityListForTermination = allEntities.map(e => ({ id: e.id, name: e.name }));
-        
-        // Load January bills and parse termination commands (if not already loaded)
-        // Only do this if the current month is not January (or we want to apply strikethrough to January too)
-        // We'll load January bills regardless, and apply strikethrough to all months including January.
         if (Object.keys(terminatedNumbers).length === 0) {
             await loadJanuaryBillsForTermination(entityListForTermination);
         }
@@ -1378,8 +1375,6 @@
                 const phoneNum = phone.phoneNumber || '—';
                 const rental = phone.rentalAmount || 0;
                 const totalAmt = phone.totalAmount || 0;
-                
-                // Check if this phone number is terminated (from January's note)
                 const isTerminated = isPhoneTerminated(entity.id, phoneNum);
                 const terminatedClass = isTerminated ? 'terminated' : '';
                 
@@ -1447,7 +1442,6 @@
             `;
             fragment.appendChild(row);
 
-            // Numeric inputs formatting (exclude notes and billno)
             const numericInputs = row.querySelectorAll('.inline-input:not(.account-total-current):not(.calculated-field):not(.account-billno), .phone-rental, .phone-total');
             numericInputs.forEach(inp => {
                 inp.addEventListener('blur', function() {
@@ -1487,7 +1481,6 @@
         monthSelect.addEventListener('change', function() {
             const month = parseInt(this.value);
             const year = parseInt(document.getElementById('globalYear').value);
-            // Reset terminated numbers cache when month changes so we re-fetch January
             terminatedNumbers = {};
             januaryBills = [];
             renderTelephoneTable(month, year);
