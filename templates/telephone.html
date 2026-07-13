@@ -11,7 +11,7 @@
             --primary-light: #3b82f6;
             --primary-dark: #1e3a5f;
             --primary-gradient: linear-gradient(145deg, #1a56db 0%, #1e3a5f 100%);
-            --primary-glow: linear-gradient(135deg, rgba(26, 86, 219, 0.12) 0%, rgba(30, 58, 95, 0.06) 100%);
+            --primary-glow: linear-gradient(135deg, rgba(26,86,219,0.12) 0%, rgba(30,58,95,0.06) 100%);
             --secondary: #0f172a;
             --success: #0d9488;
             --danger: #dc2626;
@@ -23,13 +23,13 @@
             --gray-light: #e2e8f0;
             --gray-50: #f1f5f9;
             --white: #ffffff;
-            --shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
-            --shadow-lg: 0 12px 48px rgba(15, 23, 42, 0.10);
-            --shadow-xl: 0 20px 60px rgba(15, 23, 42, 0.15);
+            --shadow: 0 4px 24px rgba(15,23,42,0.06);
+            --shadow-lg: 0 12px 48px rgba(15,23,42,0.10);
+            --shadow-xl: 0 20px 60px rgba(15,23,42,0.15);
             --radius: 20px;
             --radius-sm: 12px;
             --radius-xs: 8px;
-            --transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            --transition: all 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -339,6 +339,10 @@
             min-width: 70px;
             font-size: 0.7rem;
             flex-shrink: 0;
+        }
+        .phone-entry .phone-number.terminated {
+            text-decoration: line-through;
+            color: #999;
         }
         .phone-entry .phone-label {
             color: var(--gray);
@@ -662,12 +666,14 @@
     let allSchools = [];
     let allDepartments = [];
     let existingBills = [];
+    let januaryBills = []; // Stores bills for January (for termination commands)
     let currentMonth = new Date().getMonth() + 1;
     let currentYear = new Date().getFullYear();
     let isLoading = false;
     let savingRows = new Set();
     let activeToast = null;
     let saveInProgress = false;
+    let terminatedNumbers = {}; // Map: entityId -> Set of terminated phone numbers
 
     function showToast(message, type) {
         if (activeToast) { activeToast.remove(); activeToast = null; }
@@ -738,6 +744,112 @@
                 console.log('⚠️ Failed to load bills, status:', resp.status);
             }
         } catch(e) { console.error(e); existingBills = []; }
+    }
+
+    /**
+     * Parse termination commands from January's note.
+     * Looks for "terminate -" followed by numbers (comma or space separated).
+     * Returns a Set of phone numbers to terminate.
+     */
+    function parseTerminationCommands(noteText) {
+        if (!noteText || typeof noteText !== 'string') return new Set();
+        
+        const terminated = new Set();
+        // Case-insensitive match for "terminate -" followed by numbers
+        // Pattern: terminate - 111111, 22222, 33333 (comma or space separated)
+        const regex = /terminate\s*-\s*([\d\s,]+)/gi;
+        let match;
+        while ((match = regex.exec(noteText)) !== null) {
+            const numbersPart = match[1];
+            // Split by commas or spaces, filter out empty strings, and clean
+            const numbers = numbersPart.split(/[\s,]+/).filter(s => s.trim().length > 0);
+            numbers.forEach(num => {
+                // Only add if it looks like a phone number (digits only)
+                const cleaned = num.trim().replace(/[^0-9]/g, '');
+                if (cleaned.length > 0) {
+                    terminated.add(cleaned);
+                }
+            });
+        }
+        return terminated;
+    }
+
+    /**
+     * Load January's bills for the same entities to parse termination commands.
+     * This is called once when the page loads for any month.
+     */
+    async function loadJanuaryBillsForTermination(entityList) {
+        if (!entityList || entityList.length === 0) return;
+        
+        try {
+            // Fetch January bills for all entities in one go
+            const entityIds = entityList.map(e => e.id);
+            const month = 1; // January
+            const year = currentYear;
+            
+            // Build a query that fetches bills for all these entities for January
+            const cacheBuster = new Date().getTime();
+            const url = '/api/utility-bills?utility_type=telephone&month=' + month + '&year=' + year + '&_=' + cacheBuster;
+            const resp = await fetch(url);
+            if (resp.ok) {
+                const bills = await resp.json();
+                januaryBills = bills;
+                console.log('📊 Loaded ' + bills.length + ' January bills for termination parsing');
+                
+                // Parse termination commands from January's notes
+                terminatedNumbers = {};
+                bills.forEach(bill => {
+                    const entityId = bill.entity_id;
+                    const note = bill.notes || '';
+                    // Try to parse the note as JSON (if stored as JSON)
+                    let noteText = note;
+                    try {
+                        if (note && note.startsWith('{')) {
+                            const parsed = JSON.parse(note);
+                            // Check for accounts object
+                            if (parsed.accounts) {
+                                // For each account in the notes, check its notes field
+                                for (const accountKey in parsed.accounts) {
+                                    const accountData = parsed.accounts[accountKey];
+                                    const accountNote = accountData.notes || '';
+                                    const terminatedSet = parseTerminationCommands(accountNote);
+                                    if (terminatedSet.size > 0) {
+                                        if (!terminatedNumbers[entityId]) terminatedNumbers[entityId] = new Set();
+                                        terminatedSet.forEach(num => terminatedNumbers[entityId].add(num));
+                                    }
+                                }
+                            }
+                            // Also check the legacy notes field
+                            if (parsed._legacy_notes) {
+                                const terminatedSet = parseTerminationCommands(parsed._legacy_notes);
+                                if (terminatedSet.size > 0) {
+                                    if (!terminatedNumbers[entityId]) terminatedNumbers[entityId] = new Set();
+                                    terminatedSet.forEach(num => terminatedNumbers[entityId].add(num));
+                                }
+                            }
+                        } else {
+                            // Plain text note
+                            const terminatedSet = parseTerminationCommands(note);
+                            if (terminatedSet.size > 0) {
+                                if (!terminatedNumbers[entityId]) terminatedNumbers[entityId] = new Set();
+                                terminatedSet.forEach(num => terminatedNumbers[entityId].add(num));
+                            }
+                        }
+                    } catch (e) {
+                        // If parsing fails, treat as plain text
+                        const terminatedSet = parseTerminationCommands(note);
+                        if (terminatedSet.size > 0) {
+                            if (!terminatedNumbers[entityId]) terminatedNumbers[entityId] = new Set();
+                            terminatedSet.forEach(num => terminatedNumbers[entityId].add(num));
+                        }
+                    }
+                });
+                
+                console.log('🔍 Terminated numbers:', terminatedNumbers);
+            }
+        } catch (e) {
+            console.error('Error loading January bills for termination:', e);
+        }
     }
 
     function extractTelephoneAccounts(entity) {
@@ -882,6 +994,14 @@
             if (m === '>') return '&gt;';
             return m;
         });
+    }
+
+    // Check if a phone number is terminated for a given entity
+    function isPhoneTerminated(entityId, phoneNumber) {
+        if (!terminatedNumbers[entityId]) return false;
+        // Clean the phone number for comparison (remove spaces, etc.)
+        const cleaned = String(phoneNumber).replace(/[^0-9]/g, '');
+        return terminatedNumbers[entityId].has(cleaned);
     }
 
     // ============ SAVE ACCOUNT ROW ============
@@ -1098,6 +1218,17 @@
         await loadExistingBills(month, year);
 
         let allEntities = buildEntityList();
+        
+        // Build entity list for termination parsing (only need entity IDs and names)
+        const entityListForTermination = allEntities.map(e => ({ id: e.id, name: e.name }));
+        
+        // Load January bills and parse termination commands (if not already loaded)
+        // Only do this if the current month is not January (or we want to apply strikethrough to January too)
+        // We'll load January bills regardless, and apply strikethrough to all months including January.
+        if (Object.keys(terminatedNumbers).length === 0) {
+            await loadJanuaryBillsForTermination(entityListForTermination);
+        }
+
         const entityFilter = document.getElementById('entityTypeFilter').value;
         const searchTerm = document.getElementById('searchFilter').value;
         const statusFilter = document.getElementById('statusFilter').value;
@@ -1247,9 +1378,14 @@
                 const phoneNum = phone.phoneNumber || '—';
                 const rental = phone.rentalAmount || 0;
                 const totalAmt = phone.totalAmount || 0;
+                
+                // Check if this phone number is terminated (from January's note)
+                const isTerminated = isPhoneTerminated(entity.id, phoneNum);
+                const terminatedClass = isTerminated ? 'terminated' : '';
+                
                 phoneHtml += `
                     <div class="phone-entry" data-phone="${escapeHtml(phoneNum)}">
-                        <span class="phone-number">📞 ${escapeHtml(phoneNum)}</span>
+                        <span class="phone-number ${terminatedClass}">📞 ${escapeHtml(phoneNum)}</span>
                         <span class="phone-label">Rental:</span>
                         <input type="text" class="phone-rental" value="${formatNumberWithCommas(rental)}" placeholder="0.00" ${isPlaceholder ? 'disabled' : ''}>
                         <span class="phone-label">Total:</span>
@@ -1311,7 +1447,7 @@
             `;
             fragment.appendChild(row);
 
-            // ========== FIX: EXCLUDE .account-billno FROM NUMERIC FORMATTING ==========
+            // Numeric inputs formatting (exclude notes and billno)
             const numericInputs = row.querySelectorAll('.inline-input:not(.account-total-current):not(.calculated-field):not(.account-billno), .phone-rental, .phone-total');
             numericInputs.forEach(inp => {
                 inp.addEventListener('blur', function() {
@@ -1351,11 +1487,16 @@
         monthSelect.addEventListener('change', function() {
             const month = parseInt(this.value);
             const year = parseInt(document.getElementById('globalYear').value);
+            // Reset terminated numbers cache when month changes so we re-fetch January
+            terminatedNumbers = {};
+            januaryBills = [];
             renderTelephoneTable(month, year);
         });
         yearSelect.addEventListener('change', function() {
             const month = parseInt(document.getElementById('globalMonth').value);
             const year = parseInt(this.value);
+            terminatedNumbers = {};
+            januaryBills = [];
             renderTelephoneTable(month, year);
         });
     }
@@ -1372,6 +1513,8 @@
         document.getElementById('refreshTableBtn').addEventListener('click', async function() {
             const month = parseInt(document.getElementById('globalMonth').value);
             const year = parseInt(document.getElementById('globalYear').value);
+            terminatedNumbers = {};
+            januaryBills = [];
             await renderTelephoneTable(month, year);
         });
         document.getElementById('applyFiltersBtn').addEventListener('click', async function() {
