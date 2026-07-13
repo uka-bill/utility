@@ -924,7 +924,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (UPDATED: inline widths for each cell) ==========
+        // ========== generatePrintPreviewWithEntities (REVERTED: full page width, no fixed columns) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1096,7 +1096,7 @@
             let cumulativeTotal = 0;
             let globalSerial = 1;
 
-            // ---- Helper: render a detail row with correct rowspan handling and inline styles ----
+            // ---- Helper: render a detail row with correct rowspan handling ----
             function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals, subtotalKeys) {
                 // Determine which columns have rowspan
                 const rowspanColumns = ['no', 'entityName', 'entityType', ...subtotalKeys];
@@ -1117,33 +1117,26 @@
                     // For rowspan columns: only output a cell if it's the first row
                     if (isRowspanCol) {
                         if (isFirst) {
-                            // Output with rowspan and inline width for first column
+                            // Output with rowspan
                             const rowspanAttr = (rowspan > 1) ? ` rowspan="${rowspan}"` : '';
-                            // Set width for first column: fixed 35px, others: auto
-                            let widthStyle = '';
                             if (colKey === 'no') {
-                                widthStyle = ' style="width:35px; min-width:35px; max-width:35px;"';
-                            } else {
-                                widthStyle = ' style="width:1%; min-width:80px;"';
-                            }
-                            if (colKey === 'no') {
-                                html += `<td style="text-align:center; vertical-align:middle; width:35px; min-width:35px; max-width:35px;"${rowspanAttr}>${serial}</td>`;
+                                html += `<td style="text-align:center; vertical-align:middle;"${rowspanAttr}>${serial}</td>`;
                             } else if (colKey === 'entityName') {
-                                html += `<td class="entity-name-cell" style="vertical-align:middle; max-width:120px; word-break:break-word; font-size:8.5pt; text-align:left; width:1%; min-width:80px;"${rowspanAttr}>${escapeHtml(entityName)}</td>`;
+                                html += `<td class="entity-name-cell" style="vertical-align:middle; max-width:120px; word-break:break-word; font-size:8.5pt; text-align:left;"${rowspanAttr}>${escapeHtml(entityName)}</td>`;
                             } else if (colKey === 'entityType') {
-                                html += `<td style="text-align:center; width:1%; min-width:80px;"${rowspanAttr}>${entityType === 'school' ? '🏫 School' : '🏛️ Department'}</td>`;
+                                html += `<td style="text-align:center;"${rowspanAttr}>${entityType === 'school' ? '🏫 School' : '🏛️ Department'}</td>`;
                             } else if (colKey === 'totalConsumption') {
                                 const unit = hasWater ? 'm³' : 'kWh';
-                                html += `<td style="text-align:center; font-size:8pt; width:1%; min-width:80px;"${rowspanAttr}>${formatNumberWithCommas(entityTotals.consumption)} ${unit}</td>`;
+                                html += `<td style="text-align:center; font-size:8pt;"${rowspanAttr}>${formatNumberWithCommas(entityTotals.consumption)} ${unit}</td>`;
                             } else if (colKey === 'totalBillAmount') {
-                                html += `<td class="currency-cell" style="font-size:8pt; text-align:center; width:1%; min-width:80px;"${rowspanAttr}>${formatNumberWithCommas(entityTotals.billAmount)}</td>`;
+                                html += `<td class="currency-cell" style="font-size:8pt; text-align:center;"${rowspanAttr}>${formatNumberWithCommas(entityTotals.billAmount)}</td>`;
                             } else if (colKey === 'totalOutstanding') {
-                                html += `<td class="currency-cell" style="font-size:8pt; text-align:center; width:1%; min-width:80px;"${rowspanAttr}>${formatNumberWithCommas(entityTotals.outstanding)}</td>`;
+                                html += `<td class="currency-cell" style="font-size:8pt; text-align:center;"${rowspanAttr}>${formatNumberWithCommas(entityTotals.outstanding)}</td>`;
                             }
                         }
                         // else: skip completely (do not output any cell)
                     } else {
-                        // Non-rowspan column: output a cell every row with inline width
+                        // Non-rowspan column: output a cell every row
                         if (colKey === 'accountNumber') {
                             let acc = row.accountNumber || row.account_number;
                             if (!acc || acc === '—' || acc === '') {
@@ -1151,7 +1144,7 @@
                                 else if (hasElectricity) acc = entity.electricity_account || '—';
                                 else if (hasTelephone) acc = entity.telephone_account || '—';
                             }
-                            html += `<td class="mono-cell" style="font-size:8pt; word-break:break-word; text-align:center; width:1%; min-width:80px;">${escapeHtml(acc)}</td>`;
+                            html += `<td class="mono-cell" style="font-size:8pt; word-break:break-word; text-align:center;">${escapeHtml(acc)}</td>`;
                         } else if (colKey === 'meterTelNo') {
                             let meter = '—';
                             if (hasTelephone) {
@@ -1159,21 +1152,21 @@
                             } else {
                                 meter = row.meterTelNo || row.meter_number || '—';
                             }
-                            html += `<td class="mono-cell" style="font-size:8pt; text-align:center; width:1%; min-width:80px;">${escapeHtml(meter)}</td>`;
+                            html += `<td class="mono-cell" style="font-size:8pt; text-align:center;">${escapeHtml(meter)}</td>`;
                         } else if (colKey === 'consumption') {
                             const unit = hasWater ? 'm³' : 'kWh';
-                            html += `<td style="text-align:center; font-size:8pt; width:1%; min-width:80px;">${formatNumberWithCommas(row.consumption)} ${unit}</td>`;
+                            html += `<td style="text-align:center; font-size:8pt;">${formatNumberWithCommas(row.consumption)} ${unit}</td>`;
                         } else if (colKey === 'billAmount') {
-                            html += `<td class="currency-cell" style="font-size:8pt; text-align:center; width:1%; min-width:80px;">${formatNumberWithCommas(row.billAmount)}</td>`;
+                            html += `<td class="currency-cell" style="font-size:8pt; text-align:center;">${formatNumberWithCommas(row.billAmount)}</td>`;
                         } else if (colKey === 'amountPaid') {
-                            html += `<td class="currency-cell" style="font-size:8pt; text-align:center; width:1%; min-width:80px;">${formatNumberWithCommas(row.amountPaid)}</td>`;
+                            html += `<td class="currency-cell" style="font-size:8pt; text-align:center;">${formatNumberWithCommas(row.amountPaid)}</td>`;
                         } else if (colKey === 'outstanding') {
-                            html += `<td class="currency-cell" style="font-size:8pt; text-align:center; width:1%; min-width:80px;">${formatNumberWithCommas(row.outstanding)}</td>`;
+                            html += `<td class="currency-cell" style="font-size:8pt; text-align:center;">${formatNumberWithCommas(row.outstanding)}</td>`;
                         } else if (colKey === 'period') {
-                            html += `<td class="period-column" style="font-size:8pt; text-align:center; width:1%; min-width:80px;">${row.period || '—'}</td>`;
+                            html += `<td class="period-column" style="font-size:8pt; text-align:center;">${row.period || '—'}</td>`;
                         } else {
                             // Fallback: empty cell with non-breaking space
-                            html += `<td style="width:1%; min-width:80px;">&nbsp;</td>`;
+                            html += `<td>&nbsp;</td>`;
                         }
                     }
                 }
@@ -1182,12 +1175,6 @@
             }
 
             // ========== BUILD HTML ==========
-            // Build header row with inline widths
-            const headerCellsHtml = visibleCols.map((col, index) => {
-                const widthStyle = index === 0 ? 'width:35px; min-width:35px; max-width:35px;' : 'width:1%; min-width:80px;';
-                return `<th style="font-size:8pt; white-space:nowrap; text-align:center; ${widthStyle}">${col.label}</th>`;
-            }).join('');
-
             let printHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -1203,13 +1190,13 @@
                         .report-subtitle-print { font-size: 12pt; font-weight: 600; color: #1e3a5f; margin-top: 4px; }
                         .report-date-print { font-size: 8.5pt; color: #475569; margin-top: 4px; }
 
-                        /* === TABLE: 100% WIDTH, FIXED LAYOUT === */
+                        /* === TABLE: FULL PAGE WIDTH, NO FIXED COLUMNS === */
                         table {
                             width: 100%;
                             border-collapse: collapse;
                             font-size: 8pt;
                             border-color: #000;
-                            table-layout: fixed;
+                            table-layout: auto;
                         }
                         th, td {
                             border: 1px solid #000;
@@ -1224,6 +1211,7 @@
                             background: #dbeafe;
                             color: #000;
                             font-weight: 600;
+                            white-space: nowrap;
                             border-color: #000;
                         }
                         .currency-cell { font-weight: 500; }
@@ -1324,7 +1312,7 @@
                             <table class="print-table ${tableClass}">
                                 <thead>
                                     <tr>
-                                        ${headerCellsHtml}
+                                        ${visibleCols.map(c => `<th style="font-size:8pt; white-space:nowrap; text-align:center;">${c.label}</th>`).join('')}
                                     </tr>
                                 </thead>
                                 <tbody>
