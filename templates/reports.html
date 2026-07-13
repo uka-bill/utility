@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* ===== (unchanged) ===== */
         :root { --primary: #1a56db; --primary-light: #3b82f6; --primary-dark: #1e3a5f; --primary-gradient: linear-gradient(145deg, #1a56db 0%, #1e3a5f 100%); --primary-glow: linear-gradient(135deg, rgba(26,86,219,0.12) 0%, rgba(30,58,95,0.06) 100%); --secondary: #0f172a; --success: #0d9488; --success-light: #ccfbf1; --danger: #dc2626; --warning: #d97706; --info: #0891b2; --light: #f8fafc; --dark: #0f172a; --gray: #64748b; --gray-light: #e2e8f0; --gray-50: #f1f5f9; --white: #ffffff; --shadow: 0 4px 24px rgba(15,23,42,0.06); --shadow-lg: 0 12px 48px rgba(15,23,42,0.10); --shadow-xl: 0 20px 60px rgba(15,23,42,0.15); --radius: 20px; --radius-sm: 12px; --radius-xs: 8px; --transition: all 0.4s cubic-bezier(0.25,0.46,0.45,0.94); }
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background:var(--gray-50); color:var(--dark); font-size:15px; line-height:1.6; font-weight:400; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
@@ -333,6 +334,7 @@
             </div>
         </div>
 
+        <!-- ===== PRINT SECTION ===== -->
         <div class="print-section no-print">
             <h3>🖨️ Print Utility Bills</h3>
             <div class="utility-selector">
@@ -463,6 +465,7 @@
             </div>
         </div>
 
+        <!-- ===== GENERATE REPORT SECTION ===== -->
         <div class="info-note no-print">
             <span>📄</span>
             <div><strong>Generate Reports</strong> — Select filters below to generate utility bills reports. You can print, export as PDF, or export as Excel/CSV for further analysis.</div>
@@ -922,7 +925,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities ==========
+        // ========== generatePrintPreviewWithEntities (UPDATED: with colgroup for fixed widths) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1173,6 +1176,14 @@
             }
 
             // ========== BUILD HTML ==========
+            // Build colgroup
+            const colgroupHtml = `
+                <colgroup>
+                    <col style="width: 35px; min-width: 35px; max-width: 35px;">
+                    ${visibleCols.slice(1).map(() => `<col style="width: 1%; min-width: 80px;">`).join('')}
+                </colgroup>
+            `;
+
             let printHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -1204,18 +1215,6 @@
                             word-wrap: break-word;
                             overflow-wrap: break-word;
                             word-break: break-word;
-                        }
-                        /* No. column: fixed narrow width */
-                        th:first-child, td:first-child {
-                            width: 35px;
-                            min-width: 35px;
-                            max-width: 35px;
-                            text-align: center;
-                        }
-                        /* All other columns: evenly distributed with minimum width */
-                        th:not(:first-child), td:not(:first-child) {
-                            width: 1%;
-                            min-width: 80px;
                         }
                         th {
                             background: #dbeafe;
@@ -1320,6 +1319,7 @@
                         </div>
                         <div class="table-wrapper-scroll">
                             <table class="print-table ${tableClass}">
+                                ${colgroupHtml}
                                 <thead>
                                     <tr>
                                         ${visibleCols.map(c => `<th style="font-size:8pt; white-space:nowrap; text-align:center;">${c.label}</th>`).join('')}
