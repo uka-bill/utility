@@ -8,8 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== All your existing CSS ===== */
-        /* (I've kept the existing styles unchanged, only the print CSS inside the generatePrintPreviewWithEntities function is modified) */
+        /* ===== Existing CSS (unchanged) ===== */
         :root { --primary: #1a56db; --primary-light: #3b82f6; --primary-dark: #1e3a5f; --primary-gradient: linear-gradient(145deg, #1a56db 0%, #1e3a5f 100%); --primary-glow: linear-gradient(135deg, rgba(26,86,219,0.12) 0%, rgba(30,58,95,0.06) 100%); --secondary: #0f172a; --success: #0d9488; --success-light: #ccfbf1; --danger: #dc2626; --warning: #d97706; --info: #0891b2; --light: #f8fafc; --dark: #0f172a; --gray: #64748b; --gray-light: #e2e8f0; --gray-50: #f1f5f9; --white: #ffffff; --shadow: 0 4px 24px rgba(15,23,42,0.06); --shadow-lg: 0 12px 48px rgba(15,23,42,0.10); --shadow-xl: 0 20px 60px rgba(15,23,42,0.15); --radius: 20px; --radius-sm: 12px; --radius-xs: 8px; --transition: all 0.4s cubic-bezier(0.25,0.46,0.45,0.94); }
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background:var(--gray-50); color:var(--dark); font-size:15px; line-height:1.6; font-weight:400; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
@@ -306,7 +305,7 @@
     </style>
 </head>
 <body>
-    <!-- ===== NAVBAR AND PAGE CONTENT (unchanged) ===== -->
+    <!-- ===== NAVBAR AND PAGE CONTENT ===== -->
     <nav class="navbar">
         <div class="logo">
             <div class="logo-icon">⚡</div>
@@ -616,7 +615,7 @@
     <div id="printPreviewContainer" style="display:none;"></div>
 
     <script>
-        // ====== GLOBALS (unchanged) ======
+        // ====== GLOBALS ======
         let allSchoolsData = [];
         let allDepartmentsData = [];
         let allSchools = [];
@@ -676,7 +675,7 @@
             telephone: { title: 'Master Invoice Pembayaran Bil Telefon', subtitle: 'Telephone Bill Payment' }
         };
 
-        // ====== HELPERS (unchanged) ======
+        // ====== HELPERS ======
         function showProcessingOverlay() {
             document.getElementById('processingOverlay').classList.add('active');
             document.body.style.overflow = 'hidden';
@@ -752,7 +751,7 @@
             return UTILITY_HEADERS[utilityTypes[0]] || UTILITY_HEADERS.water;
         }
 
-        // ====== LOAD CHECKBOX LISTS (unchanged) ======
+        // ====== LOAD CHECKBOX LISTS ======
         async function loadCheckboxLists() {
             try {
                 const schoolsRes = await fetch('/api/schools');
@@ -879,7 +878,7 @@
             }
         });
 
-        // ====== LOAD ENTITIES FOR SPECIFIC SELECTION (unchanged) ======
+        // ====== LOAD ENTITIES FOR SPECIFIC SELECTION ======
         async function loadEntitiesForSelection() {
             try {
                 const schoolsRes = await fetch('/api/entities?type=school');
@@ -928,7 +927,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (UPDATED with column-specific widths) ==========
+        // ========== generatePrintPreviewWithEntities (UPDATED with header thick border only) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -951,7 +950,7 @@
             if (subtotalOptions.showBillAmount) subtotalKeys.push('totalBillAmount');
             if (subtotalOptions.showOutstanding) subtotalKeys.push('totalOutstanding');
 
-            // --- Build column configuration (unchanged) ---
+            // --- Build column configuration ---
             let colConfig = [];
             colConfig.push({ key: 'no', label: 'No.', show: true, required: true });
             if (selectedColumns.entityName !== false) colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
@@ -993,7 +992,7 @@
                 return u;
             }).join(', ');
 
-            // --- Determine summary and balance column indices (unchanged) ---
+            // --- Determine summary and balance column indices ---
             let summaryColIndex = visibleCols.length - 1;
             if (hasTelephone) {
                 const totalCurrentIdx = visibleCols.findIndex(c => c.key === 'totalCurrentCharges');
@@ -1032,7 +1031,7 @@
             if (hasTelephone) tableClass = 'print-table-telephone';
             else if (hasElectricity) tableClass = 'print-table-electricity';
 
-            // --- DEDUPLICATE bills per entity (unchanged) ---
+            // --- DEDUPLICATE bills per entity ---
             let entityInfo = [];
             entityData.forEach(entityGroup => {
                 const entity = entityGroup.entity;
@@ -1066,13 +1065,13 @@
                 });
             });
 
-            // Compute grand totals (unchanged)
+            // Compute grand totals
             let grandTotalBillAmount = 0, grandTotalAmountPaid = 0, grandTotalOutstanding = 0;
             let grandTotalRentalAmount = 0, grandTotalTotalAmount = 0, grandTotalAccountCharges = 0;
             let grandTotalPrevOutstanding = 0, grandTotalPrevPayment = 0, grandTotalCurrentCharges = 0;
             let grandTotalConsumption = 0;
 
-            // Pagination (unchanged)
+            // Pagination
             let pages = [];
             if (shouldPaginate) {
                 const rowsPerPage = Math.max(1, itemsPerPage);
@@ -1098,7 +1097,7 @@
             let cumulativeTotal = 0;
             let globalSerial = 1;
 
-            // ---- Helper: render a detail row (unchanged) ----
+            // ---- Helper: render a detail row ----
             function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals, subtotalKeys) {
                 const rowspanColumns = ['no', 'entityName', 'entityType', ...subtotalKeys];
                 let html = '';
@@ -1205,13 +1204,24 @@
                             table-layout: fixed;
                         }
                         th, td {
-                            border: 2px solid #000;  /* thicker border */
                             padding: 6px 10px;
                             text-align: center;
                             vertical-align: middle;
                             word-wrap: break-word;
                             overflow-wrap: break-word;
                             word-break: break-word;
+                        }
+                        /* Header: thick border, light blue background */
+                        th {
+                            background: #dbeafe;
+                            color: #000;
+                            font-weight: 600;
+                            white-space: nowrap;
+                            border: 2px solid #000;
+                        }
+                        /* Data cells: normal thin border */
+                        td {
+                            border: 1px solid #000;
                         }
                         /* No. column: fixed narrow width */
                         th:first-child, td:first-child {
@@ -1222,29 +1232,21 @@
                         }
                         /* Entity Name column: left-aligned, wider */
                         th:nth-child(2), td:nth-child(2) {
-                            width: 40%;
+                            width: 20%;
                             min-width: 120px;
                             text-align: left;
                         }
                         /* Account Number column: centered, moderate width */
                         th:nth-child(4), td:nth-child(4) {
-                            width: 25%;
+                            width: 12%;
                             min-width: 100px;
                             text-align: center;
                         }
-                        /* All other columns: evenly distribute remaining space */
+                        /* All other columns: evenly distributed */
                         th:not(:first-child):not(:nth-child(2)):not(:nth-child(4)),
                         td:not(:first-child):not(:nth-child(2)):not(:nth-child(4)) {
-                            width: 20%;
+                            width: 1%;
                             min-width: 60px;
-                        }
-                        /* Header background: light blue, thick border already set */
-                        th {
-                            background: #dbeafe;
-                            color: #000;
-                            font-weight: 600;
-                            white-space: nowrap;
-                            border-color: #000;
                         }
                         .currency-cell { font-weight: 500; }
                         .mono-cell { font-family: monospace; }
@@ -1303,7 +1305,7 @@
                 <body>
             `;
 
-            // ---- Render pages (same as before) ----
+            // ---- Render pages ----
             pages.forEach((pageEntityInfo, idx) => {
                 pageIndex++;
                 const isLastPage = (pageIndex === totalPages);
@@ -1567,21 +1569,24 @@
             }
         }
 
-        // ====== PRINT SELECTED BUTTON (unchanged) ======
+        // ====== PRINT SELECTED BUTTON ======
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
-            // ... (identical to previous version)
-            // I've kept it the same; you already have the full function earlier.
             console.log('🖨️ Print Selected button clicked');
+
             const schoolIds = getSelectedSchoolIds();
             const departmentIds = getSelectedDepartmentIds();
+
             console.log('📊 Selected schools:', schoolIds);
             console.log('📊 Selected departments:', departmentIds);
+
             const utilityTypes = getSelectedUtilityTypes();
             const selectedColumns = getSelectedPrintColumns();
             const month = document.getElementById('printMonth').value;
             const year = document.getElementById('printYear').value;
+
             const enablePagination = document.getElementById('enablePagination').checked;
             const itemsPerPage = parseInt(document.getElementById('itemsPerPage').value) || 10;
+
             const approvalDetails = {
                 prepared: {
                     name: document.getElementById('preparedName').value || 'Md Adilah Hayatulisham Bin Metussin',
@@ -1599,19 +1604,27 @@
                     position: document.getElementById('verifiedPosition').value || 'Pegawai Tugas-Tugas Khas Tingkat I'
                 }
             };
+
             const isTelephoneOnly = utilityTypes.length === 1 && utilityTypes[0] === 'telephone';
-            let showConsumption = false, showBillAmount = false, showOutstanding = false;
+
+            let showConsumption = false;
+            let showBillAmount = false;
+            let showOutstanding = false;
+
             if (!isTelephoneOnly) {
                 const consumptionEl = document.getElementById('subtotalConsumption');
                 const billAmountEl = document.getElementById('subtotalBillAmount');
                 const outstandingEl = document.getElementById('subtotalOutstanding');
+
                 if (consumptionEl) showConsumption = consumptionEl.checked;
                 if (billAmountEl) showBillAmount = billAmountEl.checked;
                 if (outstandingEl) showOutstanding = outstandingEl.checked;
             }
+
             const hasSubtotal = showConsumption || showBillAmount || showOutstanding;
             const showAllEntities = document.getElementById('showAllEntities').checked;
             const groupByEntity = document.getElementById('groupByEntity').checked;
+
             if (schoolIds.length === 0 && departmentIds.length === 0) {
                 alert('⚠️ Please select at least one school or department.');
                 return;
@@ -1620,8 +1633,10 @@
                 alert('⚠️ Please select at least one utility type.');
                 return;
             }
+
             showProcessingOverlay();
             updateProcessingStep(0, 'Fetching bills and entities...', 10);
+
             try {
                 const requestData = {
                     selection_type: 'specificEntities',
@@ -1631,25 +1646,32 @@
                     school_ids: schoolIds,
                     department_ids: departmentIds
                 };
+
                 console.log('📡 API Request:', requestData);
+
                 updateProcessingStep(0, 'Fetching bills from server...', 20);
                 const response = await fetch('/api/generate-report', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(requestData)
                 });
+
                 if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
                 let billsData = await response.json();
                 console.log('📊 API returned', billsData.length, 'bills');
                 updateProcessingBillsCount(billsData.length);
                 updateProcessingStep(0, `Fetched ${billsData.length} bills`, 30);
+
                 let entityList = [];
                 const billsMap = {};
+
                 billsData.forEach(bill => {
                     const key = bill.entity_type + '_' + bill.entity_id;
                     if (!billsMap[key]) billsMap[key] = [];
                     billsMap[key].push(bill);
                 });
+
                 for (const key in billsMap) {
                     const parts = key.split('_');
                     const eType = parts[0];
@@ -1657,6 +1679,7 @@
                     const entityBills = billsMap[key];
                     const entityName = entityBills[0].entity_name || (eType === 'school' ? 'School #' + eId : 'Dept #' + eId);
                     const entityObj = { id: eId, name: entityName };
+
                     if (eType === 'school') {
                         const school = allSchoolsData.find(s => s.id === eId);
                         if (school) entityObj.name = school.name;
@@ -1666,6 +1689,7 @@
                         if (dept) entityObj.name = dept.unit_name || dept.name || entityObj.name;
                         if (dept) entityObj.department_name = dept.department_name;
                     }
+
                     entityList.push({
                         entity: entityObj,
                         type: eType,
@@ -1673,6 +1697,7 @@
                         hasBills: true
                     });
                 }
+
                 if (schoolIds.length > 0 || departmentIds.length > 0) {
                     entityList = entityList.filter(e => {
                         if (e.type === 'school') {
@@ -1683,6 +1708,7 @@
                         return false;
                     });
                 }
+
                 if (showAllEntities) {
                     const [schoolsRes, deptsRes] = await Promise.all([
                         fetch('/api/schools'),
@@ -1690,6 +1716,7 @@
                     ]);
                     let allSchools = schoolsRes.ok ? await schoolsRes.json() : [];
                     let allDepts = deptsRes.ok ? await deptsRes.json() : [];
+
                     if (schoolIds.length > 0) {
                         allSchools = allSchools.filter(s => schoolIds.includes(s.id));
                     } else {
@@ -1700,6 +1727,7 @@
                     } else {
                         allDepts = [];
                     }
+
                     allSchools.forEach(school => {
                         if (!entityList.some(e => e.type === 'school' && e.entity.id === school.id)) {
                             entityList.push({
@@ -1710,6 +1738,7 @@
                             });
                         }
                     });
+
                     allDepts.forEach(dept => {
                         if (!entityList.some(e => e.type === 'department' && e.entity.id === dept.id)) {
                             entityList.push({
@@ -1721,6 +1750,7 @@
                         }
                     });
                 }
+
                 entityList.sort((a, b) => {
                     if (a.type !== b.type) return a.type === 'school' ? -1 : 1;
                     if (a.type === 'school') {
@@ -1730,7 +1760,10 @@
                     }
                     return a.entity.id - b.entity.id;
                 });
+
                 console.log('📄 Final entities before fallback:', entityList.length);
+
+                // ---- FALLBACK: ensure account_number is set from entity if missing ----
                 entityList = entityList.map(item => {
                     const entity = item.entity;
                     const type = item.type;
@@ -1748,7 +1781,9 @@
                     }
                     return item;
                 });
+
                 console.log('📄 Final entities after fallback:', entityList.length);
+
                 if (entityList.length === 0) {
                     updateProcessingStep(1, 'No data to print', 100);
                     setTimeout(() => {
@@ -1757,23 +1792,29 @@
                     }, 800);
                     return;
                 }
+
                 updateProcessingStep(2, 'Generating print preview...', 75);
+
                 let shouldPaginate = false;
                 if (enablePagination) {
                     const rowCount = groupByEntity ? entityList.length : entityList.reduce((sum, e) => sum + e.bills.length, 0);
                     shouldPaginate = rowCount > itemsPerPage;
                 }
+
                 const subtotalOptions = {
                     showConsumption: showConsumption,
                     showBillAmount: showBillAmount,
                     showOutstanding: showOutstanding
                 };
+
                 generatePrintPreviewWithEntities(
                     entityList, month, year, selectedColumns, itemsPerPage,
                     utilityTypes, shouldPaginate, hasSubtotal, groupByEntity, showAllEntities, approvalDetails, subtotalOptions
                 );
+
                 updateProcessingStep(2, '✅ Done! Opening print preview...', 100);
                 setTimeout(() => hideProcessingOverlay(), 800);
+
             } catch (error) {
                 console.error('❌ Error in print flow:', error);
                 updateProcessingStep(2, '❌ Error: ' + error.message, 100);
@@ -1784,7 +1825,6 @@
             }
         });
 
-        // ====== OTHER EVENT LISTENERS (unchanged) ======
         document.getElementById('generateReport').addEventListener('click', function() {
             alert('Generate Report function is integrated with the Print flow. Please use "Print Selected" above.');
         });
