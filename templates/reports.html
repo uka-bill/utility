@@ -924,7 +924,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities ==========
+        // ========== generatePrintPreviewWithEntities (FIXED) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, showAllEntities, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1163,7 +1163,7 @@
                 return html;
             }
 
-            // ========== BUILD HTML with fixed @page ==========
+            // ========== BUILD HTML ==========
             let printHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -1220,9 +1220,9 @@
                         }
                         /* No. column: fixed narrow width */
                         th:first-child, td:first-child {
-                            width: 25px;
-                            min-width: 25px;
-                            max-width: 25px;
+                            width: 15px;
+                            min-width: 15px;
+                            max-width: 15px;
                             text-align: center;
                         }
                         /* Entity Name column: left-aligned, wider */
@@ -1250,8 +1250,9 @@
                         .entity-group-detail td { background: white; }
                         .entity-zero-bill td { color: #9ca3af; }
                         .entity-zero-bill .currency-cell { color: #9ca3af; }
-                        .balance-row { background: #fef3c7 !important; font-weight: 700; }
-                        .balance-row td { background: #fef3c7 !important; border-top: 2px solid #000; border-bottom: 2px solid #000; }
+                        /* Balance rows inside table: label right, amount center */
+                        .balance-row td:first-child { text-align: right; }
+                        .balance-row td:last-child { text-align: center; }
                         .balance-row .balance-label { font-weight: 700; color: #92400e; }
                         .balance-row .currency-cell { font-weight: 700; color: #92400e; }
                         .summary-row { background: #f8fafc; font-weight: 600; }
@@ -1259,6 +1260,31 @@
                         .total-sum-row { background: #e8f4fd; font-weight: 700; }
                         .total-sum-row td { border-top: 3px double #000; }
                         .period-column { white-space: nowrap; }
+
+                        /* Balance b/f above table */
+                        .balance-bf-wrapper {
+                            text-align: right;
+                            padding: 4px 10px;
+                            margin-bottom: 4px;
+                            font-weight: 700;
+                            font-size: 8.5pt;
+                            border: 2px solid #000;
+                            background: #fef3c7;
+                            display: flex;
+                            justify-content: flex-end;
+                            align-items: center;
+                            gap: 20px;
+                            padding-right: 20px;
+                        }
+                        .balance-bf-wrapper .bf-label {
+                            color: #92400e;
+                        }
+                        .balance-bf-wrapper .bf-amount {
+                            font-weight: 700;
+                            color: #92400e;
+                            min-width: 80px;
+                            text-align: center;
+                        }
 
                         .approval-footer { margin-top: 20px; padding-top: 15px; border-top: 2px solid #1a56db; }
                         .approval-footer .approval-grid { display: flex; flex-direction: column; gap: 15px; margin-top: 10px; align-items: flex-start; }
@@ -1305,6 +1331,7 @@
                 pageIndex++;
                 const isLastPage = (pageIndex === totalPages);
                 const isFirstPage = (pageIndex === 1);
+                const isSecondOrLater = pageIndex > 1;
 
                 // Compute page totals
                 let pageTotalBillAmount = 0, pageTotalAmountPaid = 0, pageTotalOutstanding = 0;
@@ -1329,6 +1356,18 @@
                 const previousCumulative = cumulativeTotal;
                 cumulativeTotal += pageBillAmountTotal;
 
+                // ---- Balance b/f (outside table, only on pages > 1) ----
+                let bfHtml = '';
+                if (hasWaterElectricity && shouldPaginate && pageIndex > 1) {
+                    const bfAmount = previousCumulative;
+                    bfHtml = `
+                        <div class="balance-bf-wrapper">
+                            <span class="bf-label">Balance b/f</span>
+                            <span class="bf-amount">${formatNumberWithCommas(bfAmount)}</span>
+                        </div>
+                    `;
+                }
+
                 printHtml += `
                     <div class="print-page">
                         <div class="print-header">
@@ -1338,6 +1377,7 @@
                             <p style="font-size:8pt; margin-top:2px;">Utilities: ${utilityTypeLabels}</p>
                             ${totalPages > 1 ? `<p style="font-size:8pt;">Page ${pageIndex} of ${totalPages}</p>` : ''}
                         </div>
+                        ${bfHtml}
                         <div class="table-wrapper-scroll">
                             <table class="print-table ${tableClass}">
                                 <thead>
@@ -1348,20 +1388,8 @@
                                 <tbody>
                 `;
 
-                // ---- BALANCE b/f (only on page 2+ when paginated) ----
-                if (hasWaterElectricity && shouldPaginate && pageIndex > 1) {
-                    const bfAmount = previousCumulative;
-                    let balanceHtml = `<tr class="balance-row">`;
-                    if (balanceColIndex > 0) {
-                        balanceHtml += `<td colspan="${balanceColIndex}" style="font-weight:700;"><span class="balance-label">Balance b/f</span></td>`;
-                    }
-                    balanceHtml += `<td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(bfAmount)}</td>`;
-                    for (let i = balanceColIndex + 1; i < visibleCols.length; i++) {
-                        balanceHtml += `<td>&nbsp;</td>`;
-                    }
-                    balanceHtml += `</tr>`;
-                    printHtml += balanceHtml;
-                }
+                // ---- BALANCE c/f (inside table, only if not last page) ----
+                // We'll place it at the end of the table body later.
 
                 // ---- Render entities ----
                 for (let eIdx = 0; eIdx < pageEntityInfo.length; eIdx++) {
@@ -1450,14 +1478,17 @@
                     printHtml += `</tr>`;
                 }
 
-                // ---- BALANCE c/f (only on pages before the last) ----
+                // ---- BALANCE c/f (inside table, only on pages before the last) ----
                 if (hasWaterElectricity && pageIndex < totalPages) {
                     const cfAmount = cumulativeTotal;
                     let balanceHtml = `<tr class="balance-row">`;
+                    // Label: first cell with colspan to the balance column
+                    // We want label right-aligned, amount centered.
+                    // We'll use two cells: label with colspan covering all columns before the balance column, and amount cell.
                     if (balanceColIndex > 0) {
-                        balanceHtml += `<td colspan="${balanceColIndex}" style="font-weight:700;"><span class="balance-label">Balance c/f</span></td>`;
+                        balanceHtml += `<td colspan="${balanceColIndex}" style="text-align:right; font-weight:700;"><span class="balance-label">Balance c/f</span></td>`;
                     }
-                    balanceHtml += `<td class="currency-cell" style="font-weight:700;">${formatNumberWithCommas(cfAmount)}</td>`;
+                    balanceHtml += `<td class="currency-cell" style="font-weight:700; text-align:center;">${formatNumberWithCommas(cfAmount)}</td>`;
                     for (let i = balanceColIndex + 1; i < visibleCols.length; i++) {
                         balanceHtml += `<td>&nbsp;</td>`;
                     }
