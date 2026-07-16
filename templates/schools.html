@@ -618,16 +618,6 @@
             100% { opacity: 0; visibility: hidden; transform: translateY(20px); }
         }
 
-        .scroll-hint {
-            text-align: right;
-            font-size: 0.72rem;
-            color: var(--gray);
-            margin-bottom: 12px;
-            padding: 8px 16px;
-            background: var(--gray-50);
-            border-radius: var(--radius-xs);
-        }
-
         .seq-cell {
             font-weight: 700;
             color: var(--primary);
@@ -924,10 +914,9 @@
             <select id="clusterFilter" class="filter-select"></select>
         </div>
         <div class="filter-group" style="justify-content: flex-end; padding-bottom: 1px;">
-    <button id="refreshBtn" class="btn btn-secondary" style="width:100%;">⟳ Refresh</button>
+            <button id="refreshBtn" class="btn btn-secondary" style="width:100%;">⟳ Refresh</button>
+        </div>
     </div>
-
-    <div class="scroll-hint">↔️ Scroll horizontally | ✏️ Click Edit to modify all school details including accounts</div>
 
     <div class="table-wrapper">
         <table class="data-table" id="schoolsTable">
@@ -1146,11 +1135,9 @@
         document.body.style.overflow = 'hidden';
     }
     
-    // ========== SYNC FORM DATA TO OBJECT (FIX FOR DISAPPEARING VALUES) ==========
     function syncFormDataToObject() {
         if (!currentEditingSchool) return;
         
-        // Sync water accounts
         const waterAccounts = currentEditingSchool.water_accounts || [];
         for (let i = 0; i < waterAccounts.length; i++) {
             const accountNumberInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="water"]`);
@@ -1169,7 +1156,6 @@
             waterAccounts[i].meters = meters;
         }
         
-        // Sync electricity accounts
         const electricityAccounts = currentEditingSchool.electricity_accounts || [];
         for (let i = 0; i < electricityAccounts.length; i++) {
             const accountNumberInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="electricity"]`);
@@ -1188,7 +1174,6 @@
             electricityAccounts[i].meters = meters;
         }
         
-        // Sync telephone accounts
         const telephoneAccounts = currentEditingSchool.telephone_accounts || [];
         for (let i = 0; i < telephoneAccounts.length; i++) {
             const accountNumberInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="telephone"]`);
@@ -1208,7 +1193,6 @@
         }
     }
     
-    // ============ UPDATED renderEditForm with data-type on inputs ============
     function renderEditForm() {
         const container = document.getElementById('modalBody');
         
@@ -1303,9 +1287,8 @@
         container.innerHTML = html;
     }
     
-    // ========== UPDATED: Add/Remove functions now sync data first ==========
     window.addAccount = function(type) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         if (type === 'water') {
             currentEditingSchool.water_accounts.push({ accountNumber: '', meters: [] });
         } else if (type === 'electricity') {
@@ -1317,7 +1300,7 @@
     };
     
     window.removeAccount = function(accountIndex, type) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         if (type === 'water') {
             currentEditingSchool.water_accounts.splice(accountIndex, 1);
         } else if (type === 'electricity') {
@@ -1329,7 +1312,7 @@
     };
     
     window.addMeter = function(accountIndex, type) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         if (type === 'water') {
             if (!currentEditingSchool.water_accounts[accountIndex].meters) currentEditingSchool.water_accounts[accountIndex].meters = [];
             currentEditingSchool.water_accounts[accountIndex].meters.push({ meterNumber: '', location: '' });
@@ -1341,7 +1324,7 @@
     };
     
     window.removeMeter = function(accountIndex, meterIndex, type) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         if (type === 'water') {
             currentEditingSchool.water_accounts[accountIndex].meters.splice(meterIndex, 1);
         } else if (type === 'electricity') {
@@ -1351,20 +1334,19 @@
     };
     
     window.addPhoneNumber = function(accountIndex) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         if (!currentEditingSchool.telephone_accounts[accountIndex].numbers) currentEditingSchool.telephone_accounts[accountIndex].numbers = [];
         currentEditingSchool.telephone_accounts[accountIndex].numbers.push({ phoneNumber: '', location: '' });
         renderEditForm();
     };
     
     window.removePhoneNumber = function(accountIndex, numberIndex) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         currentEditingSchool.telephone_accounts[accountIndex].numbers.splice(numberIndex, 1);
         renderEditForm();
     };
     
     function collectFormData() {
-        // First sync the DOM data to the object to ensure we have the latest values
         syncFormDataToObject();
         
         const schoolData = {
@@ -1383,7 +1365,6 @@
         return schoolData;
     }
     
-    // ============ UPDATED saveSchool ============
     async function saveSchool() {
         if (!currentEditingSchool) return;
         
