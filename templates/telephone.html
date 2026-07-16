@@ -815,7 +815,6 @@
                     }
                 });
                 console.log('🔍 Terminated numbers:', terminatedNumbers);
-                // Now apply the strikethrough to the current table
                 applyStrikethroughToCurrentTable();
             }
         } catch (e) {
@@ -823,7 +822,6 @@
         }
     }
 
-    // ===== NEW FUNCTION: apply strikethrough based on current terminatedNumbers =====
     function applyStrikethroughToCurrentTable() {
         const phoneSpans = document.querySelectorAll('.phone-entry .phone-number');
         phoneSpans.forEach(span => {
@@ -992,7 +990,7 @@
         return terminatedNumbers[entityId].has(cleaned);
     }
 
-    // ============ SAVE ACCOUNT ROW (UPDATED) ============
+    // ============ SAVE ACCOUNT ROW ============
     async function saveAccountRow(accountRow, month, year) {
         if (saveInProgress) {
             showToast('Save already in progress...', 'error');
@@ -1028,6 +1026,10 @@
         const amountPaid = parseNumberFromDisplay(amountPaidInput ? amountPaidInput.value : 0);
         const notes = notesTextarea ? notesTextarea.value : '';
 
+        // Get phone numbers from the master list (the account row's data-account is the account number)
+        // We need to find the phone numbers from the entity's master data, not from the bill notes.
+        // We'll get them from the entity object stored in the account row.
+        // But we don't have the entity object easily. We can read the phone entries from the DOM.
         const phoneEntries = accountRow.querySelectorAll('.phone-entry');
         let phoneDetails = [];
         phoneEntries.forEach(entry => {
@@ -1047,6 +1049,9 @@
             previousPayment: prevPayment,
             totalCurrentCharges: totalCurrent,
             amountPaid: amountPaid,
+            // IMPORTANT: We do NOT store phone numbers in notes anymore.
+            // They come from the master data. So we only store amounts.
+            // Keep phones array for backward compatibility, but it won't be used for display.
             phones: phoneDetails,
             notes: notes,
             savedAt: new Date().toISOString()
@@ -1064,7 +1069,7 @@
 
         const updatedNotes = {
             accounts: existingNotes.accounts,
-            _legacy_phones: phoneDetails,
+            _legacy_phones: phoneDetails, // keep for compatibility
             _legacy_totalAccountCharges: totalAccountCharges,
             _legacy_previousPayment: prevPayment,
             _legacy_totalCurrentCharges: totalCurrent,
@@ -1147,8 +1152,7 @@
                     }
                 }
 
-                // ====== FIX: Refresh termination list and apply strikethrough ======
-                // Get all entities currently displayed (we need their IDs to fetch January bills)
+                // Refresh termination list and apply strikethrough
                 const currentEntities = [];
                 document.querySelectorAll('.account-row').forEach(row => {
                     const id = parseInt(row.getAttribute('data-entity-id'));
@@ -1156,10 +1160,9 @@
                         currentEntities.push(id);
                     }
                 });
-                // Build a list of entity objects (just IDs and names) for the termination fetcher
                 const entityListForRefresh = currentEntities.map(id => ({ id: id, name: '' }));
                 await loadJanuaryBillsForTermination(entityListForRefresh);
-                // applyStrikethroughToCurrentTable() is called inside loadJanuaryBillsForTermination
+                applyStrikethroughToCurrentTable();
 
             } else {
                 showToast('Failed to save: ' + (result.error || 'Unknown error'), 'error');
@@ -1312,7 +1315,7 @@
         console.log('✅ Loaded data for month=' + month + ', year=' + year);
     }
 
-    // ============ RENDER ENTITY ============
+    // ============ RENDER ENTITY (FIXED: ALWAYS USE MASTER FOR PHONE NUMBERS) ============
     function renderEntity(fragment, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let hasVisible = false;
@@ -1339,18 +1342,59 @@
                     previousPayment: 0,
                     totalCurrentCharges: 0,
                     amountPaid: 0,
-                    phones: [],
+                    // phones array not used anymore for display
                     notes: ''
                 };
             }
 
-            let phones = accountData.phones || [];
-            if (phones.length === 0 && account.numbers) {
-                phones = account.numbers.map(num => ({
-                    phoneNumber: num.phoneNumber || '—',
-                    rentalAmount: 0,
-                    totalAmount: 0
-                }));
+            // ===== FIX: ALWAYS use master data for phone numbers =====
+            // Do NOT use accountData.phones from the bill notes.
+            // Always take phones from account.numbers (the master list).
+            let phones = [];
+            if (account.numbers && account.numbers.length > 0) {
+                // Filter out placeholder numbers if there are real ones
+                const realNumbers = account.numbers.filter(n => n.phoneNumber && n.phoneNumber !== '—');
+                if (realNumbers.length > 0) {
+                    phones = realNumbers.map(num => ({
+                        phoneNumber: num.phoneNumber || '—',
+                        rentalAmount: 0,
+                        totalAmount: 0,
+                        location: num.location || ''
+                    }));
+                } else {
+                    // If only placeholder, keep it
+                    phones = account.numbers.map(num => ({
+                        phoneNumber: num.phoneNumber || '—',
+                        rentalAmount: 0,
+                        totalAmount: 0,
+                        location: num.location || ''
+                    }));
+                }
+            }
+
+            // Now, for each phone, try to load amounts from the bill notes if they exist.
+            // We'll match by phone number.
+            if (accountData.phones && accountData.phones.length > 0) {
+                // Map phone numbers from bill notes to amounts
+                const notePhoneMap = {};
+                accountData.phones.forEach(p => {
+                    const key = p.phoneNumber ? p.phoneNumber.replace(/[^0-9]/g, '') : '';
+                    if (key) {
+                        notePhoneMap[key] = { rental: p.rentalAmount || 0, total: p.totalAmount || 0 };
+                    }
+                });
+                // Apply amounts to the master phones
+                phones = phones.map(p => {
+                    const key = p.phoneNumber ? p.phoneNumber.replace(/[^0-9]/g, '') : '';
+                    if (notePhoneMap[key]) {
+                        return {
+                            ...p,
+                            rentalAmount: notePhoneMap[key].rental || 0,
+                            totalAmount: notePhoneMap[key].total || 0
+                        };
+                    }
+                    return p;
+                });
             }
 
             const billNo = accountData.billNumber || '';
@@ -1361,9 +1405,18 @@
             const amountPaid = accountData.amountPaid || 0;
             const notes = accountData.notes || '';
 
+            // Filter by status
             if (statusFilter !== 'all') {
                 if (statusFilter === 'paid' && amountPaid === 0) continue;
                 if (statusFilter === 'pending' && amountPaid > 0) continue;
+            }
+
+            // If there are no phones in master, but we have a bill, we might want to show it? 
+            // No, we only show phones that exist in master. If master has no phones, we show nothing.
+            if (phones.length === 0) {
+                // Still show the account row with a placeholder? 
+                // We'll show "No phone numbers" placeholder.
+                phones = [{ phoneNumber: '—', rentalAmount: 0, totalAmount: 0, isPlaceholder: true }];
             }
 
             const isPlaceholder = account.isPlaceholder || accountNumber === '—';
