@@ -1286,6 +1286,7 @@
         
         tbody.innerHTML = '';
         let globalSerial = 1;
+        let entityNumber = 1;
         
         let schoolsList = filteredEntities.filter(function(e) { return e.type === 'school'; });
         let departmentsList = filteredEntities.filter(function(e) { return e.type === 'department'; });
@@ -1417,7 +1418,8 @@
                 tbody.appendChild(separatorRow);
                 
                 for (let i = 0; i < visibleClusterEntities.length; i++) {
-                    globalSerial = await renderEntity(tbody, visibleClusterEntities[i], month, year, globalSerial);
+                    globalSerial = await renderEntity(tbody, visibleClusterEntities[i], month, year, globalSerial, entityNumber);
+                    entityNumber++;
                 }
             }
         }
@@ -1497,7 +1499,8 @@
                 tbody.appendChild(deptSeparator);
                 
                 for (let i = 0; i < visibleGroupEntities.length; i++) {
-                    globalSerial = await renderEntity(tbody, visibleGroupEntities[i], month, year, globalSerial);
+                    globalSerial = await renderEntity(tbody, visibleGroupEntities[i], month, year, globalSerial, entityNumber);
+                    entityNumber++;
                 }
             }
         }
@@ -1507,8 +1510,8 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY WITH SUMMARY ROW ============
-    async function renderEntity(tbody, entity, month, year, startSerial) {
+    // ============ RENDER ENTITY WITH SUMMARY ROW (UPDATED: No. column shows number only on entity row) ============
+    async function renderEntity(tbody, entity, month, year, startSerial, entityNumber) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
@@ -1581,7 +1584,8 @@
         entityRow.setAttribute('data-entity-id', entity.id);
         entityRow.setAttribute('data-entity-name', entity.name);
         
-        entityRow.innerHTML = '<td class="seq-number">' + startSerial + '</td>' +
+        // UPDATED: Entity row shows entityNumber instead of startSerial
+        entityRow.innerHTML = '<td class="seq-number">' + entityNumber + '</td>' +
             '<td class="entity-header"><span class="entity-name">' + escapeHtml(entity.name) + '</span>' +
             '<span class="total-due" id="entity-total-' + entity.id + '">(Total Paid: $' + formatNumberWithCommas(entityTotalPaid) + ')</span>' +
             '</td>' +
@@ -1640,8 +1644,9 @@
                 }
             }
             
+            // UPDATED: Meter rows show — in the No. column
             meterRow.innerHTML = 
-                '<td class="seq-number">' + (meterData.isFirstMeterForAccount ? meterData.serial : '') + '</td>' +
+                '<td class="seq-number">—</td>' +
                 '<td></td>' +
                 '<td></td>' +
                 '<td>' + accountDisplayHtml +
@@ -1659,7 +1664,6 @@
             tbody.appendChild(meterRow);
             meterRowElements.push(meterRow);
             
-            // ========== FIX: EXCLUDE .notes-input FROM NUMERIC FORMATTING ==========
             // Only numeric fields should be formatted – notes-input is excluded
             const numericInputs = meterRow.querySelectorAll('.inline-input:not(.notes-input)');
             numericInputs.forEach(inp => {
