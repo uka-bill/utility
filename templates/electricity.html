@@ -768,6 +768,14 @@
         });
     }
 
+    function formatConsumption(num) {
+        if (num === undefined || num === null || isNaN(num)) return '0';
+        return Number(num).toLocaleString('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        });
+    }
+
     function parseNumberFromDisplay(str) {
         if (!str) return 0;
         const cleaned = String(str).replace(/,/g, '').trim();
@@ -1510,7 +1518,7 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY WITH SUMMARY ROW (UPDATED: No. column shows number only on entity row) ============
+    // ============ RENDER ENTITY WITH SUMMARY ROW ============
     async function renderEntity(tbody, entity, month, year, startSerial, entityNumber) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1584,7 +1592,6 @@
         entityRow.setAttribute('data-entity-id', entity.id);
         entityRow.setAttribute('data-entity-name', entity.name);
         
-        // UPDATED: Entity row shows entityNumber instead of startSerial
         entityRow.innerHTML = '<td class="seq-number">' + entityNumber + '</td>' +
             '<td class="entity-header"><span class="entity-name">' + escapeHtml(entity.name) + '</span>' +
             '<span class="total-due" id="entity-total-' + entity.id + '">(Total Paid: $' + formatNumberWithCommas(entityTotalPaid) + ')</span>' +
@@ -1644,7 +1651,6 @@
                 }
             }
             
-            // UPDATED: Meter rows show — in the No. column
             meterRow.innerHTML = 
                 '<td class="seq-number">—</td>' +
                 '<td></td>' +
@@ -1653,7 +1659,8 @@
                     '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.displayMeter) + '</div>' +
                     meterData.locationDisplay +
                 '</td>' +
-                '<td style="text-align:right;"><input type="text" class="inline-input consumption-input" value="' + formatNumberWithCommas(meterData.consumption) + '" placeholder="kWh"></td>' +
+                // UPDATED: Consumption uses formatConsumption (removes .00)
+                '<td style="text-align:right;"><input type="text" class="inline-input consumption-input" value="' + formatConsumption(meterData.consumption) + '" placeholder="kWh"></td>' +
                 '<td style="text-align:right;"><input type="text" class="inline-input current-charge-input" value="' + formatNumberWithCommas(meterData.currentCharges) + '" placeholder="$"></td>' +
                 '<td style="text-align:right;"><input type="text" class="inline-input outstanding-input" value="' + formatNumberWithCommas(meterData.outstandingCharges) + '" placeholder="$"></td>' +
                 '<td style="text-align:right;"><input type="text" class="inline-input previous-paid-input" value="' + formatNumberWithCommas(meterData.previousPayment) + '" placeholder="$"></td>' +
@@ -1664,9 +1671,24 @@
             tbody.appendChild(meterRow);
             meterRowElements.push(meterRow);
             
-            // Only numeric fields should be formatted – notes-input is excluded
-            const numericInputs = meterRow.querySelectorAll('.inline-input:not(.notes-input)');
-            numericInputs.forEach(inp => {
+            // Formatting: separate blur/focus for consumption vs other numeric fields
+            const consumptionInput = meterRow.querySelector('.consumption-input');
+            if (consumptionInput) {
+                consumptionInput.addEventListener('blur', function() {
+                    if (this.value && this.value.trim() !== '') {
+                        const raw = parseNumberFromDisplay(this.value);
+                        this.value = formatConsumption(raw);
+                    }
+                });
+                consumptionInput.addEventListener('focus', function() {
+                    const raw = parseNumberFromDisplay(this.value);
+                    this.value = raw.toString();
+                });
+            }
+            
+            // Other numeric fields (current charges, outstanding, previous paid, amount paid) use formatNumberWithCommas
+            const otherNumericInputs = meterRow.querySelectorAll('.inline-input:not(.notes-input):not(.consumption-input)');
+            otherNumericInputs.forEach(inp => {
                 inp.addEventListener('blur', function() {
                     if (this.value && this.value.trim() !== '') {
                         const raw = parseNumberFromDisplay(this.value);
@@ -1699,7 +1721,8 @@
         summaryRow.innerHTML = `
             <td class="summary-label" style="text-align:center;">Total</td>
             <td colspan="3" style="text-align:center;"></td>
-            <td class="summary-total" id="summary-consumption-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalConsumption)}</td>
+            <!-- UPDATED: Summary consumption uses formatConsumption -->
+            <td class="summary-total" id="summary-consumption-${entity.id}" style="text-align:center;">${formatConsumption(totalConsumption)}</td>
             <td class="summary-total" id="summary-bill-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalBillAmount)}</td>
             <td class="summary-total" id="summary-outstanding-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalOutstanding)}</td>
             <td class="summary-dash" style="text-align:center;">—</td>
@@ -1730,7 +1753,7 @@
                 const summaryCons = document.getElementById(`summary-consumption-${entity.id}`);
                 const summaryBill = document.getElementById(`summary-bill-${entity.id}`);
                 const summaryOut = document.getElementById(`summary-outstanding-${entity.id}`);
-                if (summaryCons) summaryCons.textContent = formatNumberWithCommas(totalCons);
+                if (summaryCons) summaryCons.textContent = formatConsumption(totalCons);
                 if (summaryBill) summaryBill.textContent = formatNumberWithCommas(totalBill);
                 if (summaryOut) summaryOut.textContent = formatNumberWithCommas(totalOut);
             };
