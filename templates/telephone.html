@@ -322,8 +322,6 @@
             cursor: default;
         }
         .inline-input.calculated-field.negative { color: var(--danger); background: #fce4ec; border-color: #ffcdd2; }
-
-        /* NEW: auto-sum field style */
         .inline-input.auto-sum-field {
             background: #e8f4fd;
             font-weight: 700;
@@ -1281,17 +1279,36 @@
             return (a.displayOrder || 999) - (b.displayOrder || 999) || (a.originalId || a.id) - (b.originalId || b.id);
         });
 
+        // ========== DEPARTMENT GROUPING – FIXED ORDER ==========
         const deptGroups = new Map();
         departmentsList.forEach(d => {
             const key = d.departmentName || 'Other';
             if (!deptGroups.has(key)) deptGroups.set(key, []);
             deptGroups.get(key).push(d);
         });
-        const sortedDeptGroups = Array.from(deptGroups.entries()).sort((a,b) => {
-            const minA = Math.min(...a[1].map(d => d.originalId || d.id));
-            const minB = Math.min(...b[1].map(d => d.originalId || d.id));
-            return minA - minB;
+
+        // Sort groups by the same order as the Departments tab:
+        // 1. minimum display_order in each group
+        // 2. minimum id (as fallback)
+        const sortedDeptGroups = Array.from(deptGroups.entries()).sort((a, b) => {
+            const orderA = Math.min(...a[1].map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+            const orderB = Math.min(...b[1].map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+            if (orderA !== orderB) return orderA - orderB;
+            const minIdA = Math.min(...a[1].map(d => d.originalId || d.id));
+            const minIdB = Math.min(...b[1].map(d => d.originalId || d.id));
+            return minIdA - minIdB;
         });
+
+        // Also sort departments within each group by display_order then id
+        sortedDeptGroups.forEach(([deptName, deptsInGroup]) => {
+            deptsInGroup.sort((a, b) => {
+                const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
+                const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
+                if (orderA !== orderB) return orderA - orderB;
+                return (a.originalId || a.id) - (b.originalId || b.id);
+            });
+        });
+        // ========== END DEPARTMENT GROUPING FIX ==========
 
         const clusterMap = new Map();
         schoolsList.forEach(s => {
