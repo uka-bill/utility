@@ -323,6 +323,15 @@
         }
         .inline-input.calculated-field.negative { color: var(--danger); background: #fce4ec; border-color: #ffcdd2; }
 
+        /* NEW: auto-sum field style */
+        .inline-input.auto-sum-field {
+            background: #e8f4fd;
+            font-weight: 700;
+            color: #1a56db;
+            border-color: #93c5fd;
+            cursor: default;
+        }
+
         .phone-entry {
             display: inline-flex;
             align-items: center;
@@ -990,6 +999,23 @@
         return terminatedNumbers[entityId].has(cleaned);
     }
 
+    // ============ AUTO-SUM: Calculate Total Account Charges from Phone Totals ============
+    function calculateAndUpdateTotalAccountCharges(accountRow) {
+        const phoneTotalInputs = accountRow.querySelectorAll('.phone-total');
+        let sum = 0;
+        phoneTotalInputs.forEach(input => {
+            sum += parseNumberFromDisplay(input.value);
+        });
+        const totalAccountInput = accountRow.querySelector('.account-total-account');
+        if (totalAccountInput) {
+            totalAccountInput.value = formatNumberWithCommas(sum);
+            // Trigger auto-calculate for Total Current
+            const event = new Event('input', { bubbles: true });
+            totalAccountInput.dispatchEvent(event);
+        }
+        return sum;
+    }
+
     // ============ SAVE ACCOUNT ROW ============
     async function saveAccountRow(accountRow, month, year) {
         if (saveInProgress) {
@@ -1018,18 +1044,16 @@
         const amountPaidInput = accountRow.querySelector('.account-amount-paid');
         const notesTextarea = accountRow.querySelector('.account-notes');
 
+        // Calculate Total Account Charges from Phone Totals (auto-sum)
+        const totalAccountCharges = calculateAndUpdateTotalAccountCharges(accountRow);
+
         const billNo = billNoInput ? billNoInput.value.trim() : '';
-        const totalAccountCharges = parseNumberFromDisplay(totalAccountInput ? totalAccountInput.value : 0);
         const prevOutstanding = parseNumberFromDisplay(prevOutstandingInput ? prevOutstandingInput.value : 0);
         const prevPayment = parseNumberFromDisplay(prevPaymentInput ? prevPaymentInput.value : 0);
         const totalCurrent = totalAccountCharges + prevOutstanding - prevPayment;
         const amountPaid = parseNumberFromDisplay(amountPaidInput ? amountPaidInput.value : 0);
         const notes = notesTextarea ? notesTextarea.value : '';
 
-        // Get phone numbers from the master list (the account row's data-account is the account number)
-        // We need to find the phone numbers from the entity's master data, not from the bill notes.
-        // We'll get them from the entity object stored in the account row.
-        // But we don't have the entity object easily. We can read the phone entries from the DOM.
         const phoneEntries = accountRow.querySelectorAll('.phone-entry');
         let phoneDetails = [];
         phoneEntries.forEach(entry => {
@@ -1049,9 +1073,6 @@
             previousPayment: prevPayment,
             totalCurrentCharges: totalCurrent,
             amountPaid: amountPaid,
-            // IMPORTANT: We do NOT store phone numbers in notes anymore.
-            // They come from the master data. So we only store amounts.
-            // Keep phones array for backward compatibility, but it won't be used for display.
             phones: phoneDetails,
             notes: notes,
             savedAt: new Date().toISOString()
@@ -1069,7 +1090,7 @@
 
         const updatedNotes = {
             accounts: existingNotes.accounts,
-            _legacy_phones: phoneDetails, // keep for compatibility
+            _legacy_phones: phoneDetails,
             _legacy_totalAccountCharges: totalAccountCharges,
             _legacy_previousPayment: prevPayment,
             _legacy_totalCurrentCharges: totalCurrent,
@@ -1134,6 +1155,7 @@
             if (result.success) {
                 showToast(entityName + ' (' + accountNumber + '): Saved successfully', 'success');
                 
+                // Update Total Current display
                 const totalCurrentInput = accountRow.querySelector('.account-total-current');
                 if (totalCurrentInput) {
                     totalCurrentInput.value = formatNumberWithCommas(totalCurrent);
@@ -1315,7 +1337,7 @@
         console.log('✅ Loaded data for month=' + month + ', year=' + year);
     }
 
-    // ============ RENDER ENTITY (FIXED: ALWAYS USE MASTER FOR PHONE NUMBERS) ============
+    // ============ RENDER ENTITY (UPDATED: Auto-sum Total Account Charges from Phone Totals) ============
     function renderEntity(fragment, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let hasVisible = false;
@@ -1342,17 +1364,13 @@
                     previousPayment: 0,
                     totalCurrentCharges: 0,
                     amountPaid: 0,
-                    // phones array not used anymore for display
                     notes: ''
                 };
             }
 
-            // ===== FIX: ALWAYS use master data for phone numbers =====
-            // Do NOT use accountData.phones from the bill notes.
-            // Always take phones from account.numbers (the master list).
+            // Always use master data for phone numbers
             let phones = [];
             if (account.numbers && account.numbers.length > 0) {
-                // Filter out placeholder numbers if there are real ones
                 const realNumbers = account.numbers.filter(n => n.phoneNumber && n.phoneNumber !== '—');
                 if (realNumbers.length > 0) {
                     phones = realNumbers.map(num => ({
@@ -1362,7 +1380,6 @@
                         location: num.location || ''
                     }));
                 } else {
-                    // If only placeholder, keep it
                     phones = account.numbers.map(num => ({
                         phoneNumber: num.phoneNumber || '—',
                         rentalAmount: 0,
@@ -1372,10 +1389,8 @@
                 }
             }
 
-            // Now, for each phone, try to load amounts from the bill notes if they exist.
-            // We'll match by phone number.
+            // Load amounts from bill notes by matching phone number
             if (accountData.phones && accountData.phones.length > 0) {
-                // Map phone numbers from bill notes to amounts
                 const notePhoneMap = {};
                 accountData.phones.forEach(p => {
                     const key = p.phoneNumber ? p.phoneNumber.replace(/[^0-9]/g, '') : '';
@@ -1383,7 +1398,6 @@
                         notePhoneMap[key] = { rental: p.rentalAmount || 0, total: p.totalAmount || 0 };
                     }
                 });
-                // Apply amounts to the master phones
                 phones = phones.map(p => {
                     const key = p.phoneNumber ? p.phoneNumber.replace(/[^0-9]/g, '') : '';
                     if (notePhoneMap[key]) {
@@ -1398,10 +1412,12 @@
             }
 
             const billNo = accountData.billNumber || '';
-            const totalAccountCharges = accountData.totalAccountCharges || 0;
+            // Total Account Charges will be auto-summed from phone totals, not from saved data
+            // But we use the saved total as initial value if no phone totals exist
+            let totalAccountCharges = accountData.totalAccountCharges || 0;
             const prevOutstanding = accountData.previousOutstanding || 0;
             const prevPayment = accountData.previousPayment || 0;
-            const totalCurrent = accountData.totalCurrentCharges || (totalAccountCharges + prevOutstanding - prevPayment);
+            const totalCurrent = totalAccountCharges + prevOutstanding - prevPayment;
             const amountPaid = accountData.amountPaid || 0;
             const notes = accountData.notes || '';
 
@@ -1411,11 +1427,7 @@
                 if (statusFilter === 'pending' && amountPaid > 0) continue;
             }
 
-            // If there are no phones in master, but we have a bill, we might want to show it? 
-            // No, we only show phones that exist in master. If master has no phones, we show nothing.
             if (phones.length === 0) {
-                // Still show the account row with a placeholder? 
-                // We'll show "No phone numbers" placeholder.
                 phones = [{ phoneNumber: '—', rentalAmount: 0, totalAmount: 0, isPlaceholder: true }];
             }
 
@@ -1455,7 +1467,8 @@
                 phoneHtml,
                 entityName: entity.name,
                 entityType: entity.type,
-                entityId: entity.id
+                entityId: entity.id,
+                phones: phones // store for auto-sum calculation
             });
         }
 
@@ -1475,6 +1488,7 @@
             row.setAttribute('data-entity-name', acc.entityName);
             row.setAttribute('data-account', escapeHtml(acc.accountNumber));
 
+            // UPDATED: Total Account Charges is now a calculated field (auto-sum)
             row.innerHTML = `
                 <td class="seq-number">${serial}</td>
                 <td class="entity-header"><span class="entity-name">${escapeHtml(acc.entityName)}</span></td>
@@ -1482,7 +1496,7 @@
                 <td><span class="account-number-display">${escapeHtml(acc.accountNumber)}</span></td>
                 <td><div class="phone-list">${acc.phoneHtml}</div></td>
                 <td><input type="text" class="inline-input account-billno ${placeholderClass}" value="${escapeHtml(acc.billNo)}" placeholder="Bill No." ${acc.isPlaceholder ? 'disabled' : ''}></td>
-                <td><input type="text" class="inline-input account-total-account ${placeholderClass}" value="${formatNumberWithCommas(acc.totalAccountCharges)}" placeholder="$" ${acc.isPlaceholder ? 'disabled' : ''}></td>
+                <td><input type="text" class="inline-input account-total-account auto-sum-field" value="${formatNumberWithCommas(acc.totalAccountCharges)}" readonly ${acc.isPlaceholder ? 'disabled' : ''}></td>
                 <td><input type="text" class="inline-input account-prev-outstanding ${placeholderClass}" value="${formatNumberWithCommas(acc.prevOutstanding)}" placeholder="$" ${acc.isPlaceholder ? 'disabled' : ''}></td>
                 <td><input type="text" class="inline-input account-prev-payment ${placeholderClass}" value="${formatNumberWithCommas(acc.prevPayment)}" placeholder="$" ${acc.isPlaceholder ? 'disabled' : ''}></td>
                 <td><input type="text" class="inline-input account-total-current calculated-field ${totalCurrentClass}" value="${formatNumberWithCommas(acc.totalCurrent)}" readonly></td>
@@ -1495,7 +1509,84 @@
             `;
             fragment.appendChild(row);
 
-            const numericInputs = row.querySelectorAll('.inline-input:not(.account-total-current):not(.calculated-field):not(.account-billno), .phone-rental, .phone-total');
+            // ===== AUTO-SUM LOGIC: Set up event listeners on phone totals =====
+            const phoneTotalInputs = row.querySelectorAll('.phone-total');
+            const totalAccountInput = row.querySelector('.account-total-account');
+            const prevOutstandingInput = row.querySelector('.account-prev-outstanding');
+            const prevPaymentInput = row.querySelector('.account-prev-payment');
+            const totalCurrentInput = row.querySelector('.account-total-current');
+
+            // Function to update Total Account Charges and Total Current
+            function updateTotals() {
+                let sum = 0;
+                phoneTotalInputs.forEach(input => {
+                    sum += parseNumberFromDisplay(input.value);
+                });
+                if (totalAccountInput) {
+                    totalAccountInput.value = formatNumberWithCommas(sum);
+                }
+                // Update Total Current
+                const prevOutstanding = parseNumberFromDisplay(prevOutstandingInput ? prevOutstandingInput.value : 0);
+                const prevPayment = parseNumberFromDisplay(prevPaymentInput ? prevPaymentInput.value : 0);
+                const totalCurrent = sum + prevOutstanding - prevPayment;
+                if (totalCurrentInput) {
+                    totalCurrentInput.value = formatNumberWithCommas(totalCurrent);
+                    totalCurrentInput.style.color = totalCurrent < 0 ? '#dc2626' : '#1b5e20';
+                    totalCurrentInput.style.background = totalCurrent < 0 ? '#fce4ec' : '#f0f7f0';
+                }
+            }
+
+            // Attach event listeners to each phone total input
+            phoneTotalInputs.forEach(input => {
+                input.addEventListener('input', updateTotals);
+                input.addEventListener('blur', function() {
+                    if (this.value && this.value.trim() !== '') {
+                        const raw = parseNumberFromDisplay(this.value);
+                        this.value = formatNumberWithCommas(raw);
+                        updateTotals();
+                    }
+                });
+                input.addEventListener('focus', function() {
+                    const raw = parseNumberFromDisplay(this.value);
+                    this.value = raw.toString();
+                });
+            });
+
+            // Also update when Previous Outstanding or Previous Payment changes
+            if (prevOutstandingInput) {
+                prevOutstandingInput.addEventListener('input', updateTotals);
+                prevOutstandingInput.addEventListener('blur', function() {
+                    if (this.value && this.value.trim() !== '') {
+                        const raw = parseNumberFromDisplay(this.value);
+                        this.value = formatNumberWithCommas(raw);
+                        updateTotals();
+                    }
+                });
+                prevOutstandingInput.addEventListener('focus', function() {
+                    const raw = parseNumberFromDisplay(this.value);
+                    this.value = raw.toString();
+                });
+            }
+            if (prevPaymentInput) {
+                prevPaymentInput.addEventListener('input', updateTotals);
+                prevPaymentInput.addEventListener('blur', function() {
+                    if (this.value && this.value.trim() !== '') {
+                        const raw = parseNumberFromDisplay(this.value);
+                        this.value = formatNumberWithCommas(raw);
+                        updateTotals();
+                    }
+                });
+                prevPaymentInput.addEventListener('focus', function() {
+                    const raw = parseNumberFromDisplay(this.value);
+                    this.value = raw.toString();
+                });
+            }
+
+            // Initial calculation
+            updateTotals();
+
+            // Numeric formatting for other fields (billno is text, not numeric)
+            const numericInputs = row.querySelectorAll('.inline-input:not(.account-total-current):not(.calculated-field):not(.account-billno):not(.auto-sum-field), .phone-rental');
             numericInputs.forEach(inp => {
                 inp.addEventListener('blur', function() {
                     if (this.value && this.value.trim() !== '') {
