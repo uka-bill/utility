@@ -8,7 +8,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== EXISTING STYLES (same as before) ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -335,7 +334,7 @@
     </style>
 </head>
 <body>
-    <!-- ===== NAVBAR AND PAGE CONTENT (same as before) ===== -->
+    <!-- ===== NAVBAR ===== -->
     <nav class="navbar">
         <div class="logo">
             <div class="logo-icon">⚡</div>
@@ -358,7 +357,6 @@
     </nav>
 
     <div class="container">
-        <!-- ===== PAGE HEADER AND PRINT SECTION (unchanged) ===== -->
         <div class="page-header">
             <div>
                 <h1 class="page-title">📊 Reports & Print Center</h1>
@@ -366,21 +364,281 @@
             </div>
         </div>
 
+        <!-- ===== PRINT SECTION ===== -->
         <div class="print-section no-print">
-            <!-- Print section content unchanged -->
             <h3>🖨️ Print Utility Bills</h3>
-            ... (the entire print section remains identical to previous versions)
+            <div class="utility-selector">
+                <div class="checkbox-item" style="background:rgba(8,145,178,0.10); border-radius:20px;">
+                    <input type="checkbox" class="utility-type-checkbox" value="water" checked>
+                    <span class="color-dot water"></span>
+                    <label>💧 Water</label>
+                </div>
+                <div class="checkbox-item" style="background:rgba(217,119,6,0.10); border-radius:20px;">
+                    <input type="checkbox" class="utility-type-checkbox" value="electricity" checked>
+                    <span class="color-dot electricity"></span>
+                    <label>⚡ Electricity</label>
+                </div>
+                <div class="checkbox-item" style="background:rgba(13,148,136,0.10); border-radius:20px;">
+                    <input type="checkbox" class="utility-type-checkbox" value="telephone" checked>
+                    <span class="color-dot telephone"></span>
+                    <label>📞 Telephone</label>
+                </div>
+                <button class="btn btn-sm btn-secondary" onclick="toggleAllUtilities(true)" style="margin-left:auto;">Select All</button>
+                <button class="btn btn-sm btn-secondary" onclick="toggleAllUtilities(false)">Deselect All</button>
+            </div>
+            <div class="print-note">
+                <span>⚠️</span>
+                <div><strong>Note:</strong> Please select only <strong>one</strong> utility type at a time for printing. Selecting multiple utilities will print only the first selected one.</div>
+            </div>
+            <div class="selection-grid">
+                <div>
+                    <label class="form-label">🏫 Schools</label>
+                    <div style="margin-bottom:10px;">
+                        <button type="button" class="select-all-btn" onclick="selectAllSchools()">Select All</button>
+                        <button type="button" class="select-all-btn" style="background:var(--gray);" onclick="deselectAllSchools()">Deselect All</button>
+                    </div>
+                    <div class="checkbox-list" id="schoolsCheckboxList"><div style="padding:12px; color:var(--gray);">Loading schools...</div></div>
+                </div>
+                <div>
+                    <label class="form-label">🏛️ Departments</label>
+                    <div style="margin-bottom:10px;">
+                        <button type="button" class="select-all-btn" onclick="selectAllDepartments()">Select All</button>
+                        <button type="button" class="select-all-btn" style="background:var(--gray);" onclick="deselectAllDepartments()">Deselect All</button>
+                    </div>
+                    <div class="checkbox-list" id="departmentsCheckboxList"><div style="padding:12px; color:var(--gray);">Loading departments...</div></div>
+                </div>
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">📅 Month</label>
+                        <select class="form-control" id="printMonth">
+                            <option value="all">All Months</option>
+                            <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+                            <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+                            <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+                            <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">🗓️ Year</label>
+                        <select class="form-control" id="printYear"></select>
+                    </div>
+                    <div class="pagination-controls">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="enablePagination" checked>
+                            <label for="enablePagination">Enable Pagination</label>
+                        </div>
+                        <div>
+                            <label style="font-size:0.78rem; font-weight:500; margin-right:4px;">Items per page:</label>
+                            <input type="number" id="itemsPerPage" value="10" min="1" max="100">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column-selection-section">
+                <h4>Select Columns to Print:</h4>
+                <div class="column-checkboxes" id="printColumnCheckboxes"></div>
+                <div id="subtotalsContainer">
+                    <div style="margin-top:8px; border-top:1px solid var(--gray-light); padding-top:10px;">
+                        <label style="font-size:0.82rem; font-weight:600; color:var(--dark); display:block; margin-bottom:4px;">📊 Subtotal Columns to Display:</label>
+                        <div id="subtotalOptions">
+                            <div class="column-checkbox-item">
+                                <input type="checkbox" id="subtotalConsumption" checked>
+                                <label for="subtotalConsumption">Total Consumption</label>
+                            </div>
+                            <div class="column-checkbox-item">
+                                <input type="checkbox" id="subtotalBillAmount" checked>
+                                <label for="subtotalBillAmount">Total Bill Amount</label>
+                            </div>
+                            <div class="column-checkbox-item">
+                                <input type="checkbox" id="subtotalOutstanding" checked>
+                                <label for="subtotalOutstanding">Total Outstanding</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="entityDisplayOptions">
+                    <div class="column-checkbox-item">
+                        <input type="checkbox" id="showAllEntities">
+                        <label for="showAllEntities">📋 Show all entities (including zero bills)</label>
+                    </div>
+                    <div class="column-checkbox-item">
+                        <input type="checkbox" id="groupByEntity" checked>
+                        <label for="groupByEntity">👥 Group by Entity (entity name once)</label>
+                    </div>
+                </div>
+                <div class="approval-details-section">
+                    <div class="section-title">📝 Approval Details (appears on last page)</div>
+                    <div class="approval-details-grid">
+                        <div class="approval-role">
+                            <div class="role-label">Disediakan oleh</div>
+                            <div class="field"><label>Nama:</label><input type="text" id="preparedName" value="Md Adilah Hayatulisham Bin Metussin"></div>
+                            <div class="field"><label>I/C:</label><input type="text" id="preparedIC" value="00-311798 (K)"></div>
+                            <div class="field"><label>Jawatan:</label><input type="text" id="preparedPosition" value="Pekerja Tingkat III"></div>
+                        </div>
+                        <div class="approval-role">
+                            <div class="role-label">Disemak oleh</div>
+                            <div class="field"><label>Nama:</label><input type="text" id="checkedName" value="Awang Muhammad Sazali Bin Hj Ali"></div>
+                            <div class="field"><label>I/C:</label><input type="text" id="checkedIC" value="00-292267 (K)"></div>
+                            <div class="field"><label>Jawatan:</label><input type="text" id="checkedPosition" value="Penolong Pegawai Kerja Tingkat I"></div>
+                        </div>
+                        <div class="approval-role">
+                            <div class="role-label">Disahkan oleh</div>
+                            <div class="field"><label>Nama:</label><input type="text" id="verifiedName" value="Norhasinah binti Hj Siadi"></div>
+                            <div class="field"><label>I/C:</label><input type="text" id="verifiedIC" value="00-279128(K)"></div>
+                            <div class="field"><label>Jawatan:</label><input type="text" id="verifiedPosition" value="Pegawai Tugas-Tugas Khas Tingkat I"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="printUtilityBtn">🖨️ Print Selected</button>
+            </div>
         </div>
 
-        <div class="info-note no-print">...</div>
+        <div class="info-note no-print">
+            <span>📄</span>
+            <div><strong>Generate Reports</strong> — Select filters below to generate utility bills reports. You can print, export as PDF, or export as Excel/CSV for further analysis.</div>
+        </div>
 
-        <div class="report-controls no-print">...</div>
-
-        <div class="loading no-print" id="loadingIndicator">...</div>
-        <div class="report-results" id="reportResults">...</div>
+        <!-- ===== REPORT CONTROLS ===== -->
+        <div class="report-controls no-print">
+            <div class="selection-options">
+                <div class="selection-option">
+                    <input type="radio" id="entityTypeSelection" name="selectionType" value="entityType" checked>
+                    <label for="entityTypeSelection">📋 By Entity Type</label>
+                </div>
+                <div class="selection-option">
+                    <input type="radio" id="specificEntitiesSelection" name="selectionType" value="specificEntities">
+                    <label for="specificEntitiesSelection">🎯 By Specific Entities</label>
+                </div>
+            </div>
+            <div class="controls-grid">
+                <div class="form-group">
+                    <label class="form-label">🏷️ Entity Type</label>
+                    <select class="form-control" id="entityType">
+                        <option value="all">All Entities</option>
+                        <option value="school">🏫 Schools Only</option>
+                        <option value="department">🏛️ Departments Only</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">⚡ Utility Type</label>
+                    <select class="form-control" id="utilityType">
+                        <option value="all">All Utilities</option>
+                        <option value="water">💧 Water Only</option>
+                        <option value="electricity">🔌 Electricity Only</option>
+                        <option value="telephone">📞 Telephone Only</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">📅 Month</label>
+                    <select class="form-control" id="month">
+                        <option value="all">All Months</option>
+                        <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+                        <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+                        <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+                        <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🗓️ Year</label>
+                    <input type="number" class="form-control" id="year" min="2020" max="2035" placeholder="Enter year">
+                </div>
+            </div>
+            <div class="generate-extra-options">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="generateShowAllEntities">
+                    <label for="generateShowAllEntities">📋 Show all entities (including zero bills)</label>
+                </div>
+            </div>
+            <div class="entity-selection" id="specificEntitiesSection">
+                <h4 style="margin-bottom:14px; color:var(--dark); font-size:0.9rem; font-weight:600;">🎯 Select Specific Entities</h4>
+                <div class="entity-columns">
+                    <div class="form-group">
+                        <label class="form-label">🏫 Schools (Ctrl+Click for multiple)</label>
+                        <select class="form-control" id="schoolsSelect" multiple size="6">
+                            <option value="">Loading schools...</option>
+                        </select>
+                        <div style="margin-top:5px; font-size:0.7rem; color:var(--gray);">Hold Ctrl/Cmd to select multiple schools</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">🏛️ Departments (Ctrl+Click for multiple)</label>
+                        <select class="form-control" id="departmentsSelect" multiple size="6">
+                            <option value="">Loading departments...</option>
+                        </select>
+                        <div style="margin-top:5px; font-size:0.7rem; color:var(--gray);">Hold Ctrl/Cmd to select multiple departments</div>
+                    </div>
+                </div>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="generateReport">🔍 Generate Report</button>
+                <button class="btn btn-success" id="printReport" style="display:none;">🖨️ Print Report</button>
+                <button class="btn btn-danger" id="exportPDF" style="display:none;">📄 Export as PDF</button>
+                <button class="btn btn-warning" id="exportExcel" style="display:none;">📊 Export as Excel</button>
+            </div>
+        </div>
+        <div class="loading no-print" id="loadingIndicator"><span>⏳ Generating report, please wait...</span></div>
+        <div class="report-results" id="reportResults">
+            <div class="results-header">
+                <h3 class="results-title" id="reportTitle">Report Results</h3>
+                <div class="print-only">
+                    <h3>🏛️ KEMENTERIAN PENDIDIKAN</h3>
+                    <h4 id="reportSubtitle">Utility Bills Report</h4>
+                    <p id="reportDate">Generated on: </p>
+                    <hr>
+                </div>
+            </div>
+            <div class="summary-cards no-print" id="summaryCards"></div>
+            <div class="scroll-hint no-print">
+                <i>↔️</i> Scroll horizontally to see all columns | <i>📌</i> Table headers are frozen while scrolling
+            </div>
+            <div class="data-table-container">
+                <div class="data-table-wrapper" id="dataTableWrapper">
+                    <table class="data-table" id="reportTable">
+                        <thead id="reportTableHead">
+                            <tr id="reportTableHeaderRow">
+                                <th>Entity Name</th><th>Type</th><th>Utility</th>
+                                <th>Account No.</th><th>Meter / Phone No.</th>
+                                <th>Consumption</th><th>Bill Amount</th>
+                                <th>Amount Paid</th>
+                                <th>Outstanding</th>
+                                <th class="period-column">Period</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportData">
+                            <tr><td colspan="10" class="no-results">Click "Generate Report" to view data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="processing-overlay" id="processingOverlay">...</div>
+    <div class="processing-overlay" id="processingOverlay">
+        <div class="processing-box">
+            <div class="processing-spinner"></div>
+            <span class="processing-icon">📄</span>
+            <h3 class="processing-title">Processing Bills</h3>
+            <p class="processing-subtitle">Please wait while we prepare your document</p>
+            <div class="processing-step active" id="stepFetching">
+                <span class="step-icon">📡</span>
+                <span id="stepFetchingText">Fetching bills data...</span>
+            </div>
+            <div class="processing-step" id="stepProcessing">
+                <span class="step-icon">⚙️</span>
+                <span id="stepProcessingText">Processing bills...</span>
+            </div>
+            <div class="processing-step" id="stepGenerating">
+                <span class="step-icon">📄</span>
+                <span id="stepGeneratingText">Generating print preview...</span>
+            </div>
+            <div class="processing-progress-bar">
+                <div class="processing-progress-fill" id="processingProgressFill"></div>
+            </div>
+            <div class="processing-status" id="processingStatus">Initializing...</div>
+            <div class="processing-bills-count" id="processingBillsCount"></div>
+        </div>
+    </div>
 
     <div id="printPreviewContainer" style="display:none;"></div>
 
@@ -396,42 +654,308 @@
         document.getElementById('year').max = 2035;
         document.getElementById('month').value = new Date().getMonth() + 1;
 
-        const COLUMN_DEFINITIONS = { /* unchanged */ };
-        const UTILITY_HEADERS = { /* unchanged */ };
+        const COLUMN_DEFINITIONS = {
+            water: [
+                { key: 'no', label: 'No.', show: true, required: true },
+                { key: 'entityName', label: 'Entity Name', show: true },
+                { key: 'entityType', label: 'Type', show: true },
+                { key: 'accountNumber', label: 'Account No.', show: true },
+                { key: 'meterNumber', label: 'Meter No.', show: true },
+                { key: 'consumption', label: 'Consumption (m³)', show: true },
+                { key: 'billAmount', label: 'Bill Amount ($)', show: true },
+                { key: 'amountPaid', label: 'Amount Paid ($)', show: true },
+                { key: 'outstanding', label: 'Outstanding ($)', show: true },
+                { key: 'period', label: 'Period', show: true }
+            ],
+            electricity: [
+                { key: 'no', label: 'No.', show: true, required: true },
+                { key: 'entityName', label: 'Entity Name', show: true },
+                { key: 'entityType', label: 'Type', show: true },
+                { key: 'accountNumber', label: 'Account No.', show: true },
+                { key: 'meterNumber', label: 'Meter No.', show: true },
+                { key: 'consumption', label: 'Consumption (kWh)', show: true },
+                { key: 'billAmount', label: 'Bill Amount ($)', show: true },
+                { key: 'amountPaid', label: 'Amount Paid ($)', show: true },
+                { key: 'outstanding', label: 'Outstanding ($)', show: true },
+                { key: 'period', label: 'Period', show: true }
+            ],
+            telephone: [
+                { key: 'no', label: 'No.', show: true, required: true },
+                { key: 'entityName', label: 'Entity Name', show: true },
+                { key: 'entityType', label: 'Type', show: true },
+                { key: 'accountNumber', label: 'Account No.', show: true },
+                { key: 'phoneNumber', label: 'Phone No.', show: true },
+                { key: 'billNumber', label: 'Bill No.', show: true },
+                { key: 'rentalAmount', label: 'Rental Amount ($)', show: true },
+                { key: 'totalAmount', label: 'Total Amount ($)', show: true },
+                { key: 'totalAccountCharges', label: 'Total Account Charges ($)', show: true },
+                { key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true },
+                { key: 'previousPayment', label: 'Previous Payment ($)', show: true },
+                { key: 'totalCurrentCharges', label: 'Total Current Charges ($)', show: true },
+                { key: 'amountPaid', label: 'Amount Paid ($)', show: true },
+                { key: 'period', label: 'Period', show: true }
+            ]
+        };
 
-        // ====== HELPERS (unchanged) ======
-        function showProcessingOverlay() { /* ... */ }
-        function updateProcessingStep(step, status, progress) { /* ... */ }
-        function updateProcessingBillsCount(count) { /* ... */ }
-        function hideProcessingOverlay() { /* ... */ }
-        function populateYears() { /* ... */ }
-        function escapeHtml(str) { /* ... */ }
-        function formatNumberWithCommas(num) { /* ... */ }
-        function getMonthName(month) { /* ... */ }
-        function getUtilityHeader(utilityTypes) { /* ... */ }
+        const UTILITY_HEADERS = {
+            water: { title: 'Master Invoice Pembayaran Bil Air', subtitle: 'Water Bill Payment' },
+            electricity: { title: 'Master Invoice Pembayaran Bil Elektrik', subtitle: 'Electricity Bill Payment' },
+            telephone: { title: 'Master Invoice Pembayaran Bil Telefon', subtitle: 'Telephone Bill Payment' }
+        };
 
-        // ====== LOAD CHECKBOX LISTS (unchanged) ======
-        async function loadCheckboxLists() { /* ... */ }
-        function renderSchoolsCheckboxList() { /* ... */ }
-        function renderDepartmentsCheckboxList() { /* ... */ }
-        function selectAllSchools() { /* ... */ }
-        function deselectAllSchools() { /* ... */ }
-        function selectAllDepartments() { /* ... */ }
-        function deselectAllDepartments() { /* ... */ }
-        function toggleAllUtilities(checked) { /* ... */ }
-        function getSelectedSchoolIds() { /* ... */ }
-        function getSelectedDepartmentIds() { /* ... */ }
-        function getSelectedUtilityTypes() { /* ... */ }
-        function getSelectedPrintColumns() { /* ... */ }
-        function populateColumnCheckboxes() { /* ... */ }
-        function updateSubtotalsVisibility() { /* ... */ }
-        document.addEventListener('change', function(e) { /* ... */ });
+        // ====== HELPERS ======
+        function showProcessingOverlay() {
+            document.getElementById('processingOverlay').classList.add('active');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('stepFetching').classList.add('active');
+            document.getElementById('stepProcessing').classList.remove('active');
+            document.getElementById('stepGenerating').classList.remove('active');
+            document.getElementById('processingProgressFill').style.width = '0%';
+            document.getElementById('processingStatus').textContent = 'Initializing...';
+        }
+        function updateProcessingStep(step, status, progress) {
+            const steps = ['stepFetching', 'stepProcessing', 'stepGenerating'];
+            steps.forEach((s, index) => {
+                const el = document.getElementById(s);
+                if (index < step) {
+                    el.classList.remove('active');
+                    const existingCheck = el.querySelector('.step-check');
+                    if (existingCheck) existingCheck.remove();
+                    const check = document.createElement('span');
+                    check.className = 'step-check';
+                    check.textContent = ' ✅';
+                    el.appendChild(check);
+                } else if (index === step) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+            if (status) document.getElementById('processingStatus').textContent = status;
+            if (progress !== undefined) {
+                document.getElementById('processingProgressFill').style.width = Math.min(progress, 100) + '%';
+            }
+        }
+        function updateProcessingBillsCount(count) {
+            const el = document.getElementById('processingBillsCount');
+            el.textContent = count > 0 ? `${count} bill${count > 1 ? 's' : ''} found` : '';
+        }
+        function hideProcessingOverlay() {
+            document.getElementById('processingOverlay').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        function populateYears() {
+            const yearSelect = document.getElementById('printYear');
+            yearSelect.innerHTML = '<option value="all">All Years</option>';
+            for (let y = 2020; y <= 2035; y++) {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                if (y === currentYear) opt.selected = true;
+                yearSelect.appendChild(opt);
+            }
+        }
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+        function formatNumberWithCommas(num) {
+            if (num === undefined || num === null || isNaN(num)) return '0.00';
+            return Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        function getMonthName(month) {
+            const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            return months[month - 1] || 'Unknown';
+        }
+        function getUtilityHeader(utilityTypes) {
+            if (!utilityTypes || utilityTypes.length === 0) {
+                return { title: 'Master Invoice Pembayaran Bil Utiliti', subtitle: 'Utility Bill Payment' };
+            }
+            return UTILITY_HEADERS[utilityTypes[0]] || UTILITY_HEADERS.water;
+        }
 
-        // ====== LOAD ENTITIES FOR SPECIFIC SELECTION (unchanged) ======
-        async function loadEntitiesForSelection() { /* ... */ }
-        document.querySelectorAll('input[name="selectionType"]').forEach(radio => { /* ... */ });
+        // ====== LOAD CHECKBOX LISTS ======
+        async function loadCheckboxLists() {
+            try {
+                const schoolsRes = await fetch('/api/schools');
+                if (schoolsRes.ok) {
+                    allSchoolsData = await schoolsRes.json();
+                    allSchoolsData.sort((a, b) => a.id - b.id);
+                    renderSchoolsCheckboxList();
+                }
+                const deptsRes = await fetch('/api/departments');
+                if (deptsRes.ok) {
+                    allDepartmentsData = await deptsRes.json();
+                    allDepartmentsData.sort((a, b) => a.id - b.id);
+                    renderDepartmentsCheckboxList();
+                }
+            } catch (error) { console.error('Error loading entities:', error); }
+        }
+        function renderSchoolsCheckboxList() {
+            const container = document.getElementById('schoolsCheckboxList');
+            if (!allSchoolsData.length) {
+                container.innerHTML = '<div style="padding:12px; color:var(--gray);">No schools found</div>';
+                return;
+            }
+            container.innerHTML = '';
+            allSchoolsData.forEach(school => {
+                const div = document.createElement('div');
+                div.className = 'checkbox-item';
+                div.innerHTML = `
+                    <input type="checkbox" class="school-checkbox" value="${school.id}" id="school_${school.id}">
+                    <label for="school_${school.id}">${escapeHtml(school.name)} ${school.cluster_number ? `(Cluster ${school.cluster_number})` : ''}</label>
+                `;
+                container.appendChild(div);
+            });
+        }
+        function renderDepartmentsCheckboxList() {
+            const container = document.getElementById('departmentsCheckboxList');
+            if (!allDepartmentsData.length) {
+                container.innerHTML = '<div style="padding:12px; color:var(--gray);">No departments found</div>';
+                return;
+            }
+            container.innerHTML = '';
+            allDepartmentsData.forEach(dept => {
+                const displayName = dept.unit_name || dept.department_name || dept.name || `Dept #${dept.id}`;
+                const div = document.createElement('div');
+                div.className = 'checkbox-item';
+                div.innerHTML = `
+                    <input type="checkbox" class="department-checkbox" value="${dept.id}" id="dept_${dept.id}">
+                    <label for="dept_${dept.id}">${escapeHtml(displayName)} ${dept.department_name ? `(${dept.department_name})` : ''}</label>
+                `;
+                container.appendChild(div);
+            });
+        }
+        function selectAllSchools() { document.querySelectorAll('.school-checkbox').forEach(cb => cb.checked = true); }
+        function deselectAllSchools() { document.querySelectorAll('.school-checkbox').forEach(cb => cb.checked = false); }
+        function selectAllDepartments() { document.querySelectorAll('.department-checkbox').forEach(cb => cb.checked = true); }
+        function deselectAllDepartments() { document.querySelectorAll('.department-checkbox').forEach(cb => cb.checked = false); }
+        function toggleAllUtilities(checked) {
+            document.querySelectorAll('.utility-type-checkbox').forEach(cb => cb.checked = checked);
+            populateColumnCheckboxes();
+            updateSubtotalsVisibility();
+        }
+        function getSelectedSchoolIds() {
+            const ids = [];
+            document.querySelectorAll('.school-checkbox:checked').forEach(cb => {
+                const val = parseInt(cb.value);
+                if (!isNaN(val)) ids.push(val);
+            });
+            return ids;
+        }
+        function getSelectedDepartmentIds() {
+            const ids = [];
+            document.querySelectorAll('.department-checkbox:checked').forEach(cb => {
+                const val = parseInt(cb.value);
+                if (!isNaN(val)) ids.push(val);
+            });
+            return ids;
+        }
+        function getSelectedUtilityTypes() {
+            const types = [];
+            document.querySelectorAll('.utility-type-checkbox:checked').forEach(cb => types.push(cb.value));
+            return types;
+        }
+        function getSelectedPrintColumns() {
+            const selected = {};
+            document.querySelectorAll('.print-col-checkbox').forEach(cb => {
+                selected[cb.dataset.col] = cb.checked;
+            });
+            return selected;
+        }
+        function populateColumnCheckboxes() {
+            const container = document.getElementById('printColumnCheckboxes');
+            const selectedTypes = getSelectedUtilityTypes();
+            if (selectedTypes.length === 0) {
+                container.innerHTML = '<span style="color:var(--gray); font-size:0.85rem;">Please select at least one utility type</span>';
+                return;
+            }
+            const primaryType = selectedTypes[0];
+            const columns = COLUMN_DEFINITIONS[primaryType] || [];
+            container.innerHTML = '';
+            columns.forEach(col => {
+                const div = document.createElement('div');
+                div.className = 'column-checkbox-item';
+                const checkedAttr = col.show !== false ? 'checked' : '';
+                const disabledAttr = col.required ? 'disabled' : '';
+                div.innerHTML = `
+                    <input type="checkbox" class="print-col-checkbox" data-col="${col.key}" ${checkedAttr} ${disabledAttr}>
+                    <label>${col.label}</label>
+                `;
+                container.appendChild(div);
+            });
+            updateSubtotalsVisibility();
+        }
+        function updateSubtotalsVisibility() {
+            const types = getSelectedUtilityTypes();
+            const container = document.getElementById('subtotalsContainer');
+            if (types.length === 1 && types[0] === 'telephone') {
+                container.classList.add('hidden');
+            } else {
+                container.classList.remove('hidden');
+            }
+        }
+        document.addEventListener('change', function(e) {
+            if (e.target.classList && e.target.classList.contains('utility-type-checkbox')) {
+                populateColumnCheckboxes();
+            }
+        });
 
-        // ========== generatePrintPreviewWithEntities (UPDATED balance row spacing) ==========
+        // ====== LOAD ENTITIES FOR SPECIFIC SELECTION ======
+        async function loadEntitiesForSelection() {
+            try {
+                const schoolsRes = await fetch('/api/entities?type=school');
+                if (schoolsRes.ok) {
+                    const schools = await schoolsRes.json();
+                    const schoolsSelect = document.getElementById('schoolsSelect');
+                    schoolsSelect.innerHTML = '';
+                    if (schools.length === 0) {
+                        schoolsSelect.innerHTML = '<option value="">No schools found</option>';
+                    } else {
+                        schools.forEach(school => {
+                            const option = document.createElement('option');
+                            option.value = school.id;
+                            option.textContent = school.name + (school.cluster ? ` (Cluster ${school.cluster})` : '');
+                            schoolsSelect.appendChild(option);
+                        });
+                    }
+                }
+                const deptsRes = await fetch('/api/entities?type=department');
+                if (deptsRes.ok) {
+                    const departments = await deptsRes.json();
+                    const departmentsSelect = document.getElementById('departmentsSelect');
+                    departmentsSelect.innerHTML = '';
+                    if (departments.length === 0) {
+                        departmentsSelect.innerHTML = '<option value="">No departments found</option>';
+                    } else {
+                        departments.forEach(dept => {
+                            const option = document.createElement('option');
+                            option.value = dept.id;
+                            option.textContent = dept.name;
+                            departmentsSelect.appendChild(option);
+                        });
+                    }
+                }
+            } catch (error) { console.error('Error loading entities:', error); }
+        }
+        document.querySelectorAll('input[name="selectionType"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const specificEntitiesSection = document.getElementById('specificEntitiesSection');
+                if (this.value === 'specificEntities') {
+                    specificEntitiesSection.classList.add('active');
+                    if (document.getElementById('schoolsSelect').children.length <= 1) loadEntitiesForSelection();
+                } else {
+                    specificEntitiesSection.classList.remove('active');
+                }
+            });
+        });
+
+        // ========== generatePrintPreviewWithEntities (UPDATED: balance c/f spacing & zero-bill filter) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, includeZeroBills, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -448,13 +972,12 @@
             });
             const currentDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-            // Subtotal column keys
             const subtotalKeys = [];
             if (subtotalOptions.showConsumption) subtotalKeys.push('totalConsumption');
             if (subtotalOptions.showBillAmount) subtotalKeys.push('totalBillAmount');
             if (subtotalOptions.showOutstanding) subtotalKeys.push('totalOutstanding');
 
-            // --- Build column configuration (unchanged) ---
+            // --- Build column configuration ---
             let colConfig = [];
             colConfig.push({ key: 'no', label: 'No.', show: true, required: true });
             if (selectedColumns.entityName !== false) colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
@@ -535,7 +1058,6 @@
             if (hasTelephone) tableClass = 'print-table-telephone';
             else if (hasElectricity) tableClass = 'print-table-electricity';
 
-            // Helper to get bill amount
             function getBillAmount(bill) {
                 if (hasTelephone) {
                     return bill.totalAccountCharges || 0;
@@ -544,7 +1066,7 @@
                 }
             }
 
-            // --- DEDUPLICATE and FILTER zero-amount bills (controlled by includeZeroBills) ---
+            // --- DEDUPLICATE and optionally FILTER zero-amount bills ---
             let entityInfo = [];
             for (const entityGroup of entityData) {
                 const entity = entityGroup.entity;
@@ -552,7 +1074,6 @@
                 const bills = entityGroup.bills;
                 const entityName = entity.name || (entityType === 'school' ? 'School #' + entity.id : 'Dept #' + entity.id);
 
-                // Deduplicate
                 const uniqueBills = [];
                 const seen = new Set();
                 bills.forEach(bill => {
@@ -563,7 +1084,6 @@
                     }
                 });
 
-                // Filter zero bills only if includeZeroBills is false
                 let filteredBills = uniqueBills;
                 if (!includeZeroBills) {
                     filteredBills = uniqueBills.filter(bill => {
@@ -626,7 +1146,7 @@
             let cumulativeTotal = 0;
             let globalSerial = 1;
 
-            // ---- Helper: render a detail row (unchanged) ----
+            // ---- Helper: render a detail row ----
             function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals, subtotalKeys) {
                 const rowspanColumns = ['no', 'entityName', 'entityType', ...subtotalKeys];
                 let html = '';
@@ -1112,7 +1632,7 @@
             }
         }
 
-        // ====== PRINT SELECTED BUTTON (unchanged) ======
+        // ====== PRINT SELECTED BUTTON ======
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
             console.log('🖨️ Print Selected button clicked');
 
@@ -1350,6 +1870,7 @@
                     showOutstanding: showOutstanding
                 };
 
+                // Pass showAllEntities as includeZeroBills
                 generatePrintPreviewWithEntities(
                     entityList, month, year, selectedColumns, itemsPerPage,
                     utilityTypes, shouldPaginate, hasSubtotal, groupByEntity,
