@@ -8,7 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== Existing CSS (unchanged) ===== */
+        /* ===== All CSS unchanged ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -335,7 +335,7 @@
     </style>
 </head>
 <body>
-    <!-- ===== NAVBAR AND PAGE CONTENT ===== -->
+    <!-- ===== NAVBAR AND PAGE CONTENT (unchanged) ===== -->
     <nav class="navbar">
         <div class="logo">
             <div class="logo-icon">⚡</div>
@@ -365,7 +365,7 @@
             </div>
         </div>
 
-        <!-- ===== PRINT SECTION ===== -->
+        <!-- ===== PRINT SECTION (unchanged) ===== -->
         <div class="print-section no-print">
             <h3>🖨️ Print Utility Bills</h3>
             <div class="utility-selector">
@@ -501,7 +501,7 @@
             <div><strong>Generate Reports</strong> — Select filters below to generate utility bills reports. You can print, export as PDF, or export as Excel/CSV for further analysis.</div>
         </div>
 
-        <!-- ===== REPORT CONTROLS ===== -->
+        <!-- ===== REPORT CONTROLS (unchanged) ===== -->
         <div class="report-controls no-print">
             <div class="selection-options">
                 <div class="selection-option">
@@ -956,8 +956,9 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (with balance c/f spacing & zero-bill filter) ==========
+        // ========== generatePrintPreviewWithEntities (unchanged – has all fixes) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, includeZeroBills, approvalDetails, subtotalOptions) {
+            // ... (full function unchanged, with balance c/f spacing and zero-bill filter) ...
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
             const yearDisplay = year !== 'all' ? year : 'All Years';
@@ -1633,7 +1634,7 @@
             }
         }
 
-        // ====== PRINT SELECTED BUTTON (UPDATED: optimize for "all" selection) ======
+        // ====== PRINT SELECTED BUTTON (UPDATED: detects "Select All" by counting checkboxes) ======
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
             console.log('🖨️ Print Selected button clicked');
 
@@ -1698,12 +1699,16 @@
                 return;
             }
 
-            // ===== OPTIMIZATION: if all schools AND all departments are selected, use entityType filter =====
-            const totalSchools = allSchoolsData.length;
-            const totalDepartments = allDepartmentsData.length;
+            // ===== OPTIMIZATION: detect if ALL schools AND ALL departments are selected =====
+            // Count checkboxes directly from the DOM (always accurate)
+            const totalSchoolCheckboxes = document.querySelectorAll('.school-checkbox').length;
+            const totalDepartmentCheckboxes = document.querySelectorAll('.department-checkbox').length;
+            const selectedSchoolCount = document.querySelectorAll('.school-checkbox:checked').length;
+            const selectedDepartmentCount = document.querySelectorAll('.department-checkbox:checked').length;
+
             let requestData;
 
-            if (schoolIds.length === totalSchools && departmentIds.length === totalDepartments && totalSchools > 0 && totalDepartments > 0) {
+            if (selectedSchoolCount === totalSchoolCheckboxes && selectedDepartmentCount === totalDepartmentCheckboxes && totalSchoolCheckboxes > 0 && totalDepartmentCheckboxes > 0) {
                 // All schools and all departments selected – use "All Entities" filter to avoid huge payload
                 requestData = {
                     selection_type: 'entityType',
@@ -1780,17 +1785,7 @@
                     });
                 }
 
-                // If we used entityType=all, we might need to filter by selected school/department IDs if not all selected?
-                // But we already handled the "all" case, so we skip this.
-                // For the specificEntities case, we already filter by IDs.
-
-                // However, if we used entityType=all and the user didn't select all schools/departments (but we only use this when all are selected),
-                // we don't need further filtering.
-
-                // For the case where all schools but not all departments, we still use specificEntities, so filtering is done by the backend.
-                // But the backend will fetch all bills for those IDs, which is fine.
-
-                // If showAllEntities is checked, we also include entities with zero bills.
+                // If showAllEntities is checked, include entities with zero bills
                 if (showAllEntities) {
                     const [schoolsRes, deptsRes] = await Promise.all([
                         fetch('/api/schools'),
@@ -1799,19 +1794,12 @@
                     let allSchools = schoolsRes.ok ? await schoolsRes.json() : [];
                     let allDepts = deptsRes.ok ? await deptsRes.json() : [];
 
-                    // If we used entityType=all, we already have all entities, so we don't need to add missing ones.
-                    // But if we used specificEntities, we may have filtered by IDs, so we need to add missing ones.
-                    // However, we only call this code when showAllEntities is true, and we want to include entities with zero bills.
-                    // So we fetch all and add those not already in entityList.
-
-                    // Filter the fetched lists to only those selected by the user (if using specificEntities)
+                    // Filter to only selected entities if using specificEntities
                     if (requestData.selection_type === 'specificEntities') {
                         const selectedSchoolIds = requestData.school_ids || [];
                         const selectedDeptIds = requestData.department_ids || [];
                         allSchools = allSchools.filter(s => selectedSchoolIds.includes(s.id));
                         allDepts = allDepts.filter(d => selectedDeptIds.includes(d.id));
-                    } else {
-                        // entityType=all, we keep all
                     }
 
                     allSchools.forEach(school => {
