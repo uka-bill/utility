@@ -1,3 +1,6 @@
+the is the updated telephone.html
+
+telephone.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +9,6 @@
     <title>Telephone Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== All CSS unchanged ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -33,6 +35,7 @@
             --transition: all 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--gray-50);
@@ -322,6 +325,8 @@
             cursor: default;
         }
         .inline-input.calculated-field.negative { color: var(--danger); background: #fce4ec; border-color: #ffcdd2; }
+
+        /* NEW: auto-sum field style */
         .inline-input.auto-sum-field {
             background: #e8f4fd;
             font-weight: 700;
@@ -437,24 +442,18 @@
         .entity-header { font-weight: 600; font-size: 0.78rem; text-align: left; }
         .entity-header .entity-name { display: block; font-size: 0.78rem; }
 
-        .cluster-separator, .department-group-separator, .division-group-separator {
+        .cluster-separator, .department-group-separator {
             background-color: var(--gray-50);
             border-top: 2px solid var(--primary);
             border-bottom: 2px solid var(--primary);
         }
-        .cluster-separator td, .department-group-separator td, .division-group-separator td {
+        .cluster-separator td, .department-group-separator td {
             padding: 8px 12px;
             font-weight: 700;
             color: var(--primary-dark);
             font-size: 0.85rem;
             background: var(--primary-glow);
             text-align: left;
-        }
-        .division-group-separator td {
-            background: #eef2ff;
-            border-top: 1px solid var(--primary-light);
-            border-bottom: 1px solid var(--primary-light);
-            padding-left: 30px;
         }
         .cluster-info, .dept-group-info { display: flex; align-items: center; gap: 12px; }
         .cluster-count, .dept-group-count {
@@ -481,7 +480,6 @@
         .total-due { font-size: 0.6rem; color: var(--gray); margin-left: 4px; display: block; font-weight: 400; }
         .placeholder-text { color: var(--gray); font-style: italic; }
         .department-name-badge { background: var(--primary-gradient); color: white; padding: 3px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
-        .division-name-badge { background: #6366f1; color: white; padding: 2px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
         .notes-cell { min-width: 90px; }
         .notes-cell .notes-textarea { width: 100%; min-height: 40px; }
 
@@ -905,7 +903,6 @@
                 typeLabel: '🏫 School',
                 clusterNumber: cluster,
                 departmentName: null,
-                divisionName: null,
                 displayOrder: school.display_order || 999,
                 originalId: school.id,
                 accountGroups: accounts,
@@ -924,7 +921,6 @@
                 typeLabel: '🏛️ Department',
                 clusterNumber: null,
                 departmentName: dept.department_name || 'Other',
-                divisionName: dept.division_name || 'Other',
                 displayOrder: dept.display_order || 999,
                 originalId: dept.id,
                 accountGroups: accounts,
@@ -1288,69 +1284,18 @@
             return (a.displayOrder || 999) - (b.displayOrder || 999) || (a.originalId || a.id) - (b.originalId || b.id);
         });
 
-        // =================================================================
-        // NEW: Nested grouping by department → division → units
-        // =================================================================
-        const deptMap = new Map(); // key: departmentName, value: Map(divisionName -> array of units)
-
-        departmentsList.forEach(dept => {
-            const deptName = dept.departmentName || 'Other';
-            const divName = dept.divisionName || 'Other';
-            if (!deptMap.has(deptName)) {
-                deptMap.set(deptName, new Map());
-            }
-            const divMap = deptMap.get(deptName);
-            if (!divMap.has(divName)) {
-                divMap.set(divName, []);
-            }
-            divMap.get(divName).push(dept);
+        const deptGroups = new Map();
+        departmentsList.forEach(d => {
+            const key = d.departmentName || 'Other';
+            if (!deptGroups.has(key)) deptGroups.set(key, []);
+            deptGroups.get(key).push(d);
+        });
+        const sortedDeptGroups = Array.from(deptGroups.entries()).sort((a,b) => {
+            const minA = Math.min(...a[1].map(d => d.originalId || d.id));
+            const minB = Math.min(...b[1].map(d => d.originalId || d.id));
+            return minA - minB;
         });
 
-        // Sort departments by the minimum display_order in the entire department
-        const sortedDeptNames = Array.from(deptMap.keys()).sort((a, b) => {
-            const deptA = deptMap.get(a);
-            const deptB = deptMap.get(b);
-            const minOrderA = Math.min(...Array.from(deptA.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
-            const minOrderB = Math.min(...Array.from(deptB.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
-            if (minOrderA !== minOrderB) return minOrderA - minOrderB;
-            const minIdA = Math.min(...Array.from(deptA.values()).flat().map(d => d.originalId || d.id));
-            const minIdB = Math.min(...Array.from(deptB.values()).flat().map(d => d.originalId || d.id));
-            return minIdA - minIdB;
-        });
-
-        // For each department, sort divisions by min display_order, then units inside each division by display_order
-        const sortedDeptData = [];
-        sortedDeptNames.forEach(deptName => {
-            const divMap = deptMap.get(deptName);
-            // Sort divisions by min display_order
-            const sortedDivNames = Array.from(divMap.keys()).sort((a, b) => {
-                const unitsA = divMap.get(a);
-                const unitsB = divMap.get(b);
-                const minOrderA = Math.min(...unitsA.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
-                const minOrderB = Math.min(...unitsB.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
-                if (minOrderA !== minOrderB) return minOrderA - minOrderB;
-                const minIdA = Math.min(...unitsA.map(d => d.originalId || d.id));
-                const minIdB = Math.min(...unitsB.map(d => d.originalId || d.id));
-                return minIdA - minIdB;
-            });
-            // Build sorted data
-            const deptDivisions = [];
-            sortedDivNames.forEach(divName => {
-                const units = divMap.get(divName);
-                // Sort units by display_order then id
-                units.sort((a, b) => {
-                    const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
-                    const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
-                    if (orderA !== orderB) return orderA - orderB;
-                    return (a.originalId || a.id) - (b.originalId || b.id);
-                });
-                deptDivisions.push({ divisionName: divName, units: units });
-            });
-            sortedDeptData.push({ departmentName: deptName, divisions: deptDivisions });
-        });
-        // =================================================================
-
-        // Render schools first (unchanged)
         const clusterMap = new Map();
         schoolsList.forEach(s => {
             const cluster = s.clusterNumber || 'Unassigned';
@@ -1374,40 +1319,17 @@
             }
         }
 
-        // Render departments with nested grouping: Department → Division → Units
-        for (const deptData of sortedDeptData) {
-            const deptName = deptData.departmentName;
-            const divisions = deptData.divisions;
-            // Count total accounts in this department
-            let totalAccountsInDept = 0;
-            let totalUnitsInDept = 0;
-            divisions.forEach(div => {
-                totalUnitsInDept += div.units.length;
-                div.units.forEach(unit => {
-                    totalAccountsInDept += unit.accountGroups.length;
-                });
-            });
-            // Department header
-            const deptSep = document.createElement('tr');
-            deptSep.className = 'department-group-separator';
-            deptSep.innerHTML = `<td colspan="14"><div class="dept-group-info"><span class="department-name-badge">📞 ${escapeHtml(deptName)}</span><span class="dept-group-count">${totalUnitsInDept} unit${totalUnitsInDept>1?'s':''}, ${totalAccountsInDept} account${totalAccountsInDept>1?'s':''}</span></div></td>`;
-            fragment.appendChild(deptSep);
-
-            // For each division
-            for (const divData of divisions) {
-                const divName = divData.divisionName;
-                const units = divData.units;
-                // Division sub-header
-                const divSep = document.createElement('tr');
-                divSep.className = 'division-group-separator';
-                let divAccountCount = units.reduce((sum, u) => sum + u.accountGroups.length, 0);
-                divSep.innerHTML = `<td colspan="14"><div style="display:flex; align-items:center; gap:12px; padding-left:20px;"><span class="division-name-badge">🏢 ${escapeHtml(divName)}</span><span class="dept-group-count" style="background:#6366f1;">${units.length} unit${units.length>1?'s':''}, ${divAccountCount} account${divAccountCount>1?'s':''}</span></div></td>`;
-                fragment.appendChild(divSep);
-
-                // Render each unit in this division
-                for (const entity of units) {
-                    globalSerial = renderEntity(fragment, entity, month, year, globalSerial, statusFilter);
-                }
+        for (const [deptName, list] of sortedDeptGroups) {
+            if (list.length === 0) continue;
+            let hasVisible = list.some(e => e.accountGroups && e.accountGroups.length > 0);
+            if (!hasVisible) continue;
+            let totalAccounts = list.reduce((sum, e) => sum + e.accountGroups.length, 0);
+            const sep = document.createElement('tr');
+            sep.className = 'department-group-separator';
+            sep.innerHTML = `<td colspan="14"><div class="dept-group-info"><span class="department-name-badge">📞 ${escapeHtml(deptName)}</span><span class="dept-group-count">${list.length} unit${list.length>1?'s':''}, ${totalAccounts} account${totalAccounts>1?'s':''}</span></div></td>`;
+            fragment.appendChild(sep);
+            for (const entity of list) {
+                globalSerial = renderEntity(fragment, entity, month, year, globalSerial, statusFilter);
             }
         }
 
@@ -1418,7 +1340,7 @@
         console.log('✅ Loaded data for month=' + month + ', year=' + year);
     }
 
-    // ============ RENDER ENTITY (unchanged) ============
+    // ============ RENDER ENTITY (UPDATED: Auto-sum Total Account Charges from Phone Totals) ============
     function renderEntity(fragment, entity, month, year, startSerial, statusFilter) {
         let serial = startSerial;
         let hasVisible = false;
@@ -1493,6 +1415,8 @@
             }
 
             const billNo = accountData.billNumber || '';
+            // Total Account Charges will be auto-summed from phone totals, not from saved data
+            // But we use the saved total as initial value if no phone totals exist
             let totalAccountCharges = accountData.totalAccountCharges || 0;
             const prevOutstanding = accountData.previousOutstanding || 0;
             const prevPayment = accountData.previousPayment || 0;
@@ -1547,7 +1471,7 @@
                 entityName: entity.name,
                 entityType: entity.type,
                 entityId: entity.id,
-                phones: phones
+                phones: phones // store for auto-sum calculation
             });
         }
 
@@ -1567,6 +1491,7 @@
             row.setAttribute('data-entity-name', acc.entityName);
             row.setAttribute('data-account', escapeHtml(acc.accountNumber));
 
+            // UPDATED: Total Account Charges is now a calculated field (auto-sum)
             row.innerHTML = `
                 <td class="seq-number">${serial}</td>
                 <td class="entity-header"><span class="entity-name">${escapeHtml(acc.entityName)}</span></td>
@@ -1587,13 +1512,14 @@
             `;
             fragment.appendChild(row);
 
-            // ===== AUTO-SUM LOGIC =====
+            // ===== AUTO-SUM LOGIC: Set up event listeners on phone totals =====
             const phoneTotalInputs = row.querySelectorAll('.phone-total');
             const totalAccountInput = row.querySelector('.account-total-account');
             const prevOutstandingInput = row.querySelector('.account-prev-outstanding');
             const prevPaymentInput = row.querySelector('.account-prev-payment');
             const totalCurrentInput = row.querySelector('.account-total-current');
 
+            // Function to update Total Account Charges and Total Current
             function updateTotals() {
                 let sum = 0;
                 phoneTotalInputs.forEach(input => {
@@ -1602,6 +1528,7 @@
                 if (totalAccountInput) {
                     totalAccountInput.value = formatNumberWithCommas(sum);
                 }
+                // Update Total Current
                 const prevOutstanding = parseNumberFromDisplay(prevOutstandingInput ? prevOutstandingInput.value : 0);
                 const prevPayment = parseNumberFromDisplay(prevPaymentInput ? prevPaymentInput.value : 0);
                 const totalCurrent = sum + prevOutstanding - prevPayment;
@@ -1612,6 +1539,7 @@
                 }
             }
 
+            // Attach event listeners to each phone total input
             phoneTotalInputs.forEach(input => {
                 input.addEventListener('input', updateTotals);
                 input.addEventListener('blur', function() {
@@ -1627,6 +1555,7 @@
                 });
             });
 
+            // Also update when Previous Outstanding or Previous Payment changes
             if (prevOutstandingInput) {
                 prevOutstandingInput.addEventListener('input', updateTotals);
                 prevOutstandingInput.addEventListener('blur', function() {
@@ -1656,8 +1585,10 @@
                 });
             }
 
+            // Initial calculation
             updateTotals();
 
+            // Numeric formatting for other fields (billno is text, not numeric)
             const numericInputs = row.querySelectorAll('.inline-input:not(.account-total-current):not(.calculated-field):not(.account-billno):not(.auto-sum-field), .phone-rental');
             numericInputs.forEach(inp => {
                 inp.addEventListener('blur', function() {
