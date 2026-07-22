@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response 
 import os
 from supabase import create_client, Client
@@ -2445,7 +2446,7 @@ def delete_school(school_id):
     except Exception as e:
         return jsonify({'success': False, 'error': f'Failed to delete school: {str(e)}'}), 500
 
-# ============ DEPARTMENTS API ============
+# ============ DEPARTMENTS API (UPDATED with sanitisation) ============
 
 @app.route('/api/departments', methods=['GET'])
 def api_departments():
@@ -2462,6 +2463,7 @@ def api_departments():
         print(f"❌ Departments GET error: {e}")
         return jsonify([]), 500
 
+# --- UPDATED: create_department with sanitisation ---
 @app.route('/api/departments', methods=['POST'])
 def create_department():
     try:
@@ -2482,9 +2484,30 @@ def create_department():
         if not department_name:
             return jsonify({'success': False, 'error': 'Department Name is required'}), 400
         
-        water_accounts = data.get('waterAccounts', [])
-        electricity_accounts = data.get('electricityAccounts', [])
-        telephone_accounts = data.get('telephoneAccounts', [])
+        # ---- Sanitisation ----
+        def sanitize_accounts(accounts, has_phones=False):
+            cleaned = []
+            if not isinstance(accounts, list):
+                return cleaned
+            for acc in accounts:
+                if not isinstance(acc, dict):
+                    continue
+                if has_phones:
+                    numbers = acc.get('numbers', [])
+                    numbers = [n for n in numbers if isinstance(n, dict)]
+                    acc['numbers'] = numbers
+                else:
+                    meters = acc.get('meters', [])
+                    meters = [m for m in meters if isinstance(m, dict)]
+                    acc['meters'] = meters
+                if 'accountNumber' not in acc:
+                    acc['accountNumber'] = ''
+                cleaned.append(acc)
+            return cleaned
+        
+        water_accounts = sanitize_accounts(data.get('waterAccounts', []), False)
+        electricity_accounts = sanitize_accounts(data.get('electricityAccounts', []), False)
+        telephone_accounts = sanitize_accounts(data.get('telephoneAccounts', []), True)
         
         department_data = {
             "name": unit_name,
@@ -2494,15 +2517,15 @@ def create_department():
             "hotline_numbers": data.get('hotlineNumbers', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
-            "water_accounts": json.dumps(water_accounts) if water_accounts else '[]',
-            "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else '[]',
-            "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else '[]',
-            "water_account": water_accounts[0].get('accountNumber', '') if water_accounts and len(water_accounts) > 0 else '',
-            "water_meter": water_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if water_accounts and len(water_accounts) > 0 and water_accounts[0].get('meters') and len(water_accounts[0]['meters']) > 0 else '',
-            "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts and len(electricity_accounts) > 0 else '',
-            "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
-            "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
-            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
+            "water_accounts": json.dumps(water_accounts, ensure_ascii=False),
+            "electricity_accounts": json.dumps(electricity_accounts, ensure_ascii=False),
+            "telephone_accounts": json.dumps(telephone_accounts, ensure_ascii=False),
+            "water_account": water_accounts[0].get('accountNumber', '') if water_accounts else '',
+            "water_meter": water_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if water_accounts and water_accounts[0].get('meters') else '',
+            "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts else '',
+            "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and electricity_accounts[0].get('meters') else '',
+            "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts else '',
+            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and telephone_accounts[0].get('numbers') else '',
             "display_order": data.get('displayOrder', 0),
             "created_at": datetime.now().isoformat()
         }
@@ -2520,16 +2543,39 @@ def create_department():
         
     except Exception as e:
         print(f"❌ Create department error: {e}")
+        traceback.print_exc()
         return jsonify({'success': False, 'error': f'Failed to create department: {str(e)}'}), 500
 
+# --- UPDATED: update_department with sanitisation ---
 @app.route('/api/departments/<int:department_id>', methods=['PUT'])
 def update_department(department_id):
     try:
         data = request.get_json()
         
-        water_accounts = data.get('waterAccounts', [])
-        electricity_accounts = data.get('electricityAccounts', [])
-        telephone_accounts = data.get('telephoneAccounts', [])
+        # ---- Sanitisation ----
+        def sanitize_accounts(accounts, has_phones=False):
+            cleaned = []
+            if not isinstance(accounts, list):
+                return cleaned
+            for acc in accounts:
+                if not isinstance(acc, dict):
+                    continue
+                if has_phones:
+                    numbers = acc.get('numbers', [])
+                    numbers = [n for n in numbers if isinstance(n, dict)]
+                    acc['numbers'] = numbers
+                else:
+                    meters = acc.get('meters', [])
+                    meters = [m for m in meters if isinstance(m, dict)]
+                    acc['meters'] = meters
+                if 'accountNumber' not in acc:
+                    acc['accountNumber'] = ''
+                cleaned.append(acc)
+            return cleaned
+        
+        water_accounts = sanitize_accounts(data.get('waterAccounts', []), False)
+        electricity_accounts = sanitize_accounts(data.get('electricityAccounts', []), False)
+        telephone_accounts = sanitize_accounts(data.get('telephoneAccounts', []), True)
         
         department_data = {
             "name": data.get('unitName'),
@@ -2539,15 +2585,15 @@ def update_department(department_id):
             "hotline_numbers": data.get('hotlineNumbers', ''),
             "address": data.get('address', ''),
             "notes": data.get('notes', ''),
-            "water_accounts": json.dumps(water_accounts) if water_accounts else '[]',
-            "electricity_accounts": json.dumps(electricity_accounts) if electricity_accounts else '[]',
-            "telephone_accounts": json.dumps(telephone_accounts) if telephone_accounts else '[]',
-            "water_account": water_accounts[0].get('accountNumber', '') if water_accounts and len(water_accounts) > 0 else '',
-            "water_meter": water_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if water_accounts and len(water_accounts) > 0 and water_accounts[0].get('meters') and len(water_accounts[0]['meters']) > 0 else '',
-            "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts and len(electricity_accounts) > 0 else '',
-            "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
-            "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
-            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
+            "water_accounts": json.dumps(water_accounts, ensure_ascii=False),
+            "electricity_accounts": json.dumps(electricity_accounts, ensure_ascii=False),
+            "telephone_accounts": json.dumps(telephone_accounts, ensure_ascii=False),
+            "water_account": water_accounts[0].get('accountNumber', '') if water_accounts else '',
+            "water_meter": water_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if water_accounts and water_accounts[0].get('meters') else '',
+            "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts else '',
+            "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and electricity_accounts[0].get('meters') else '',
+            "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts else '',
+            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and telephone_accounts[0].get('numbers') else '',
             "display_order": data.get('displayOrder', 0)
         }
         
@@ -2564,6 +2610,7 @@ def update_department(department_id):
         
     except Exception as e:
         print(f"❌ Update department error: {e}")
+        traceback.print_exc()
         return jsonify({'success': False, 'error': f'Failed to update department: {str(e)}'}), 500
 
 @app.route('/api/departments/<int:department_id>', methods=['DELETE'])
