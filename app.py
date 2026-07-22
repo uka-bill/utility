@@ -1,4 +1,3 @@
-app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response 
 import os
 from supabase import create_client, Client
@@ -2446,7 +2445,7 @@ def delete_school(school_id):
     except Exception as e:
         return jsonify({'success': False, 'error': f'Failed to delete school: {str(e)}'}), 500
 
-# ============ DEPARTMENTS API (UPDATED with sanitisation) ============
+# ============ DEPARTMENTS API (UPDATED with sanitisation + display_order) ============
 
 @app.route('/api/departments', methods=['GET'])
 def api_departments():
@@ -2463,7 +2462,7 @@ def api_departments():
         print(f"❌ Departments GET error: {e}")
         return jsonify([]), 500
 
-# --- UPDATED: create_department with sanitisation ---
+# --- UPDATED: create_department with display_order = max+1 per group ---
 @app.route('/api/departments', methods=['POST'])
 def create_department():
     try:
@@ -2509,6 +2508,16 @@ def create_department():
         electricity_accounts = sanitize_accounts(data.get('electricityAccounts', []), False)
         telephone_accounts = sanitize_accounts(data.get('telephoneAccounts', []), True)
         
+        # ---- Determine display_order within the same department group ----
+        existing = supabase.table("departments")\
+            .select("display_order")\
+            .eq("department_name", department_name)\
+            .order("display_order", desc=True)\
+            .limit(1)\
+            .execute()
+        max_order = existing.data[0]['display_order'] if existing.data else 0
+        new_display_order = max_order + 1
+        
         department_data = {
             "name": unit_name,
             "unit_name": unit_name,
@@ -2526,7 +2535,7 @@ def create_department():
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and electricity_accounts[0].get('meters') else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and telephone_accounts[0].get('numbers') else '',
-            "display_order": data.get('displayOrder', 0),
+            "display_order": new_display_order,
             "created_at": datetime.now().isoformat()
         }
         
@@ -2546,7 +2555,7 @@ def create_department():
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'Failed to create department: {str(e)}'}), 500
 
-# --- UPDATED: update_department with sanitisation ---
+# --- UPDATED: update_department (already accepts displayOrder) ---
 @app.route('/api/departments/<int:department_id>', methods=['PUT'])
 def update_department(department_id):
     try:
