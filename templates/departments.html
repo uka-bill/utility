@@ -883,16 +883,16 @@
         </div>
     </div>
     <ul class="nav-tabs">
-    <li><a href="/dashboard" >Dashboard</a></li>
-    <li><a href="/departments"class="active">Departments</a></li>
-    <li><a href="/schools">Schools</a></li>
-    <li><a href="/water">Water</a></li>
-    <li><a href="/electricity">Electricity</a></li>
-    <li><a href="/telephone">Telephone</a></li>
-    <li><a href="/sut-office">SUT Office</a></li>
-    <li><a href="/reports">Reports &amp; Print</a></li>
-    <li><a href="/data-management">Data Management</a></li>
-</ul>
+        <li><a href="/dashboard">Dashboard</a></li>
+        <li><a href="/departments" class="active">Departments</a></li>
+        <li><a href="/schools">Schools</a></li>
+        <li><a href="/water">Water</a></li>
+        <li><a href="/electricity">Electricity</a></li>
+        <li><a href="/telephone">Telephone</a></li>
+        <li><a href="/sut-office">SUT Office</a></li>
+        <li><a href="/reports">Reports &amp; Print</a></li>
+        <li><a href="/data-management">Data Management</a></li>
+    </ul>
 </nav>
 
 <div class="container">
@@ -1045,7 +1045,6 @@
             (d.address || '').toLowerCase().includes(search));
         if(deptFilter !== 'all') filtered = filtered.filter(d => d.department_name === deptFilter);
         if(divFilter !== 'all') filtered = filtered.filter(d => d.division_name === divFilter);
-        filtered.sort((a,b)=> a.id - b.id);
         return filtered;
     }
     
@@ -1079,6 +1078,7 @@
             return; 
         }
         
+        // ===== GROUP BY DEPARTMENT NAME =====
         const groupedMap = new Map();
         const groupOrder = [];
         for(let dept of filtered) { 
@@ -1090,15 +1090,65 @@
             groupedMap.get(deptName).push(dept); 
         }
         
+        // Sort groups by minimum display_order
+        groupOrder.sort((a, b) => {
+            const deptsA = groupedMap.get(a);
+            const deptsB = groupedMap.get(b);
+            const minOrderA = Math.min(...deptsA.map(d => d.display_order !== undefined ? d.display_order : 999));
+            const minOrderB = Math.min(...deptsB.map(d => d.display_order !== undefined ? d.display_order : 999));
+            if (minOrderA !== minOrderB) return minOrderA - minOrderB;
+            const minIdA = Math.min(...deptsA.map(d => d.id));
+            const minIdB = Math.min(...deptsB.map(d => d.id));
+            return minIdA - minIdB;
+        });
+        
         let globalSeq = 1;
+        
         for(let deptName of groupOrder) {
             const departments = groupedMap.get(deptName);
+            
+            // Group departments by division within this department
+            const divMap = new Map();
+            departments.forEach(dept => {
+                const divName = dept.division_name || 'Other';
+                if (!divMap.has(divName)) divMap.set(divName, []);
+                divMap.get(divName).push(dept);
+            });
+            
+            // Sort divisions by minimum display_order within each division
+            const sortedDivisions = Array.from(divMap.keys()).sort((a, b) => {
+                const deptsA = divMap.get(a);
+                const deptsB = divMap.get(b);
+                const minOrderA = Math.min(...deptsA.map(d => d.display_order !== undefined ? d.display_order : 999));
+                const minOrderB = Math.min(...deptsB.map(d => d.display_order !== undefined ? d.display_order : 999));
+                if (minOrderA !== minOrderB) return minOrderA - minOrderB;
+                const minIdA = Math.min(...deptsA.map(d => d.id));
+                const minIdB = Math.min(...deptsB.map(d => d.id));
+                return minIdA - minIdB;
+            });
+            
+            // Build flat list of units in correct division order
+            const orderedUnits = [];
+            sortedDivisions.forEach(divName => {
+                const depts = divMap.get(divName);
+                // Sort units within division by display_order then id
+                depts.sort((a, b) => {
+                    const orderA = a.display_order !== undefined ? a.display_order : 999;
+                    const orderB = b.display_order !== undefined ? b.display_order : 999;
+                    if (orderA !== orderB) return orderA - orderB;
+                    return a.id - b.id;
+                });
+                orderedUnits.push(...depts);
+            });
+            
+            // Render department separator
             const sepRow = document.createElement('tr'); 
             sepRow.className = 'department-separator';
-            sepRow.innerHTML = `<td colspan="11"><div class="dept-info"><span>🏢 ${escapeHtml(deptName)}</span><span class="dept-count">${departments.length} unit${departments.length > 1 ? 's' : ''}</span></div></td>`;
+            sepRow.innerHTML = `<td colspan="11"><div class="dept-info"><span>🏢 ${escapeHtml(deptName)}</span><span class="dept-count">${orderedUnits.length} unit${orderedUnits.length > 1 ? 's' : ''}</span></div></td>`;
             tbody.appendChild(sepRow);
             
-            for(let dept of departments) {
+            // Render each unit (now in correct division order)
+            for(let dept of orderedUnits) {
                 const waterAccounts = dept.water_accounts && typeof dept.water_accounts === 'string' ? JSON.parse(dept.water_accounts) : (dept.water_accounts || []);
                 const electricityAccounts = dept.electricity_accounts && typeof dept.electricity_accounts === 'string' ? JSON.parse(dept.electricity_accounts) : (dept.electricity_accounts || []);
                 const telephoneAccounts = dept.telephone_accounts && typeof dept.telephone_accounts === 'string' ? JSON.parse(dept.telephone_accounts) : (dept.telephone_accounts || []);
