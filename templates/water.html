@@ -381,7 +381,6 @@
             background: var(--gray-50);
         }
 
-        /* Notes input - text-align left, no numeric formatting */
         .notes-input {
             text-align: left !important;
         }
@@ -603,7 +602,6 @@
             color: var(--gray);
         }
 
-        /* Entity Summary Row Styles - CENTERED */
         .entity-summary-row {
             background: #eef2ff !important;
             border-top: 2px solid var(--primary);
@@ -791,7 +789,6 @@
     let isLoading = false;
     let savingEntities = new Set();
     let activeSavingToast = null;
-    
     let savedScrollPosition = 0;
 
     function saveScrollPosition() {
@@ -882,9 +879,6 @@
             if (resp.ok) {
                 existingBills = await resp.json();
                 console.log('📊 Loaded ' + existingBills.length + ' water bills for ' + month + '/' + year);
-                if (existingBills.length > 0) {
-                    console.log('📋 Sample bill:', existingBills[0]);
-                }
             } else {
                 existingBills = [];
                 console.warn('⚠️ Failed to load bills, status:', resp.status);
@@ -947,6 +941,7 @@
                 typeLabel: '🏫 School',
                 clusterNumber: cluster,
                 departmentName: null,
+                divisionName: null,
                 displayOrder: school.display_order || 999,
                 originalId: school.id,
                 accountGroups: accountGroups,
@@ -977,6 +972,7 @@
                 typeLabel: '🏛️ Department',
                 clusterNumber: null,
                 departmentName: dept.department_name || 'Other',
+                divisionName: dept.division_name || 'Other',
                 displayOrder: dept.display_order || 999,
                 originalId: dept.id,
                 accountGroups: accountGroups,
@@ -987,7 +983,6 @@
         return entities;
     }
 
-    // ========== BILL LOOKUP WITH ACCOUNT-ONLY FALLBACK ==========
     function normalizeMeter(m) {
         if (!m || m === '—' || m.trim() === '—') return '';
         return m.trim();
@@ -996,8 +991,6 @@
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
         const cleanAccount = (accountNumber || '').trim();
         const cleanMeter = normalizeMeter(meterNumber);
-        
-        console.log(`🔍 Looking for: entity=${entityId}, account='${cleanAccount}', meter='${cleanMeter}', month=${month}, year=${year}`);
         
         if (cleanMeter === '') {
             for (let i = 0; i < existingBills.length; i++) {
@@ -1008,7 +1001,6 @@
                     billAccount === cleanAccount &&
                     bill.month == month && 
                     bill.year == year) {
-                    console.log(`✅ Found match on account only: bill ID=${bill.id}`);
                     return bill;
                 }
             }
@@ -1020,7 +1012,6 @@
                     billAccount === cleanAccount &&
                     (bill.bill_month || bill.month) == month &&
                     (bill.bill_year || bill.year) == year) {
-                    console.log(`✅ Found match on account only (bill_month): bill ID=${bill.id}`);
                     return bill;
                 }
             }
@@ -1037,7 +1028,6 @@
                     billMeter === cleanMeter &&
                     bill.month == month && 
                     bill.year == year) {
-                    console.log(`✅ Found exact match: bill ID=${bill.id}`);
                     return bill;
                 }
             }
@@ -1051,13 +1041,11 @@
                     billMeter === cleanMeter &&
                     (bill.bill_month || bill.month) == month &&
                     (bill.bill_year || bill.year) == year) {
-                    console.log(`✅ Found bill_month match: bill ID=${bill.id}`);
                     return bill;
                 }
             }
         }
         
-        console.log(`ℹ️ No exact match, trying account-only fallback...`);
         for (let i = 0; i < existingBills.length; i++) {
             const bill = existingBills[i];
             const billAccount = (bill.account_number || '').trim();
@@ -1066,12 +1054,10 @@
                 billAccount === cleanAccount &&
                 bill.month == month && 
                 bill.year == year) {
-                console.log(`✅ Found match on account only (fallback): bill ID=${bill.id}`);
                 return bill;
             }
         }
         
-        console.log(`❌ No bill found for account='${cleanAccount}'`);
         return null;
     }
 
@@ -1092,10 +1078,8 @@
         return false;
     }
 
-    // ============ SAVE FUNCTION ============
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
-        
         if (isLoading) return;
         
         const entityId = parseInt(entityRow.getAttribute('data-entity-id'));
@@ -1258,7 +1242,6 @@
         }
     }
 
-    // ============ RENDER FUNCTION ============
     async function renderWaterTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
@@ -1308,29 +1291,60 @@
             if (orderA !== orderB) return orderA - orderB;
             return (a.originalId || a.id) - (b.originalId || b.id);
         });
-        
-        const deptByDepartmentName = new Map();
-        for (let i = 0; i < departmentsList.length; i++) {
-            const dept = departmentsList[i];
+
+        // ===== DEPARTMENT GROUPING: Department → Division → Units (no division separator) =====
+        const deptMap = new Map();
+        departmentsList.forEach(dept => {
             const deptName = dept.departmentName || 'Other';
-            if (!deptByDepartmentName.has(deptName)) {
-                deptByDepartmentName.set(deptName, []);
+            const divName = dept.divisionName || 'Other';
+            if (!deptMap.has(deptName)) {
+                deptMap.set(deptName, new Map());
             }
-            deptByDepartmentName.get(deptName).push(dept);
-        }
-        
-        const sortedDeptGroups = Array.from(deptByDepartmentName.entries()).sort((a, b) => {
-            const minIdA = Math.min(...a[1].map(d => d.originalId || d.id));
-            const minIdB = Math.min(...b[1].map(d => d.originalId || d.id));
+            const divMap = deptMap.get(deptName);
+            if (!divMap.has(divName)) {
+                divMap.set(divName, []);
+            }
+            divMap.get(divName).push(dept);
+        });
+
+        const sortedDeptNames = Array.from(deptMap.keys()).sort((a, b) => {
+            const deptA = deptMap.get(a);
+            const deptB = deptMap.get(b);
+            const minOrderA = Math.min(...Array.from(deptA.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+            const minOrderB = Math.min(...Array.from(deptB.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+            if (minOrderA !== minOrderB) return minOrderA - minOrderB;
+            const minIdA = Math.min(...Array.from(deptA.values()).flat().map(d => d.originalId || d.id));
+            const minIdB = Math.min(...Array.from(deptB.values()).flat().map(d => d.originalId || d.id));
             return minIdA - minIdB;
         });
-        
-        for (let d = 0; d < sortedDeptGroups.length; d++) {
-            const [deptName, deptsInGroup] = sortedDeptGroups[d];
-            deptsInGroup.sort((a, b) => {
-                return (a.originalId || a.id) - (b.originalId || b.id);
+
+        const sortedDeptData = [];
+        sortedDeptNames.forEach(deptName => {
+            const divMap = deptMap.get(deptName);
+            const sortedDivNames = Array.from(divMap.keys()).sort((a, b) => {
+                const unitsA = divMap.get(a);
+                const unitsB = divMap.get(b);
+                const minOrderA = Math.min(...unitsA.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+                const minOrderB = Math.min(...unitsB.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+                if (minOrderA !== minOrderB) return minOrderA - minOrderB;
+                const minIdA = Math.min(...unitsA.map(d => d.originalId || d.id));
+                const minIdB = Math.min(...unitsB.map(d => d.originalId || d.id));
+                return minIdA - minIdB;
             });
-        }
+            const deptDivisions = [];
+            sortedDivNames.forEach(divName => {
+                const units = divMap.get(divName);
+                units.sort((a, b) => {
+                    const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
+                    const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
+                    if (orderA !== orderB) return orderA - orderB;
+                    return (a.originalId || a.id) - (b.originalId || b.id);
+                });
+                deptDivisions.push({ divisionName: divName, units: units });
+            });
+            sortedDeptData.push({ departmentName: deptName, divisions: deptDivisions });
+        });
+        // ===== END DEPARTMENT GROUPING =====
         
         const schoolsByCluster = new Map();
         for (let i = 0; i < schoolsList.length; i++) {
@@ -1432,82 +1446,30 @@
             }
         }
         
-        for (let d = 0; d < sortedDeptGroups.length; d++) {
-            const [deptName, deptsInGroup] = sortedDeptGroups[d];
+        // Render departments with nested grouping (no division separator)
+        for (const deptData of sortedDeptData) {
+            const deptName = deptData.departmentName;
+            const divisions = deptData.divisions;
+            let totalAccountsInDept = 0;
+            let totalUnitsInDept = 0;
+            divisions.forEach(div => {
+                totalUnitsInDept += div.units.length;
+                div.units.forEach(unit => {
+                    totalAccountsInDept += unit.accountGroups.length;
+                });
+            });
             
-            if (!deptsInGroup || deptsInGroup.length === 0) continue;
+            // Department header
+            const deptSep = document.createElement('tr');
+            deptSep.className = 'department-group-separator';
+            deptSep.innerHTML = `<td colspan="12"><div class="dept-group-info"><span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span><span class="dept-group-count">${totalUnitsInDept} unit${totalUnitsInDept>1?'s':''}, ${totalAccountsInDept} account${totalAccountsInDept>1?'s':''}</span></div></td>`;
+            tbody.appendChild(deptSep);
             
-            const visibleGroupEntities = [];
-            
-            for (let i = 0; i < deptsInGroup.length; i++) {
-                const entity = deptsInGroup[i];
-                const visibleAccounts = [];
-                
-                for (let a = 0; a < entity.accountGroups.length; a++) {
-                    const account = entity.accountGroups[a];
-                    const meters = account.meters || [];
-                    const visibleMeters = [];
-                    
-                    if (meters.length === 0) {
-                        const meterNum = '';
-                        const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
-                        visibleMeters.push({
-                            meterNumber: '',
-                            location: '',
-                            notes: '',
-                            existing: existing,
-                            billId: existing ? existing.id : null,
-                            isPlaceholder: true
-                        });
-                    } else {
-                        for (let m = 0; m < meters.length; m++) {
-                            const meter = meters[m];
-                            const meterNum = meter.meterNumber || '';
-                            const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
-                            
-                            if (statusFilter === 'all' || 
-                                (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
-                                (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                                visibleMeters.push({
-                                    meterNumber: meterNum,
-                                    location: meter.location || '',
-                                    notes: meter.notes || '',
-                                    existing: existing,
-                                    billId: existing ? existing.id : null,
-                                    isPlaceholder: false
-                                });
-                            }
-                        }
-                    }
-                    
-                    visibleAccounts.push({
-                        accountNumber: account.accountNumber,
-                        meters: visibleMeters,
-                        isPlaceholder: account.isPlaceholder || (meters.length === 0 && visibleMeters.length === 0)
-                    });
-                }
-                
-                const entityCopy = JSON.parse(JSON.stringify(entity));
-                entityCopy.accountGroups = visibleAccounts;
-                visibleGroupEntities.push(entityCopy);
-            }
-            
-            if (visibleGroupEntities.length > 0) {
-                let totalMeters = 0;
-                for (let i = 0; i < visibleGroupEntities.length; i++) {
-                    const e = visibleGroupEntities[i];
-                    for (let a = 0; a < e.accountGroups.length; a++) {
-                        totalMeters += e.accountGroups[a].meters.length;
-                    }
-                }
-                
-                const deptSeparator = document.createElement('tr');
-                deptSeparator.className = 'department-group-separator';
-                deptSeparator.innerHTML = '<td colspan="12"><div class="dept-group-info"><span class="department-name-badge">🏢 ' + escapeHtml(deptName) + '</span><span class="dept-group-count">' + visibleGroupEntities.length + ' unit' + (visibleGroupEntities.length > 1 ? 's' : '') + ', ' + totalMeters + ' meter' + (totalMeters > 1 ? 's' : '') + '</span></div></td>';
-                tbody.appendChild(deptSeparator);
-                
-                for (let i = 0; i < visibleGroupEntities.length; i++) {
-                    globalSerial = await renderEntity(tbody, visibleGroupEntities[i], month, year, globalSerial, entityNumber);
+            // For each division, render units directly (no division header)
+            for (const divData of divisions) {
+                const units = divData.units;
+                for (const entity of units) {
+                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, entityNumber);
                     entityNumber++;
                 }
             }
@@ -1518,7 +1480,6 @@
         showLoading(false);
     }
     
-    // ============ RENDER ENTITY WITH SUMMARY ROW ============
     async function renderEntity(tbody, entity, month, year, startSerial, entityNumber) {
         let serial = startSerial;
         let entityTotalPaid = 0;
@@ -1573,7 +1534,6 @@
             }
         }
         
-        // Entity Row
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
         if (entityHasBills) {
@@ -1603,7 +1563,6 @@
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
         
-        // Meter Rows
         let currentAccount = null;
         let meterRowElements = [];
         
@@ -1659,7 +1618,6 @@
                     '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.displayMeter) + '</div>' +
                     meterData.locationDisplay +
                 '</td>' +
-                // UPDATED: Consumption uses formatConsumption (removes .00)
                 '<td style="text-align:right;"><input type="text" class="inline-input consumption-input" value="' + formatConsumption(meterData.consumption) + '" placeholder="m³"></td>' +
                 '<td style="text-align:right;"><input type="text" class="inline-input current-charge-input" value="' + formatNumberWithCommas(meterData.currentCharges) + '" placeholder="$"></td>' +
                 '<td style="text-align:right;"><input type="text" class="inline-input outstanding-input" value="' + formatNumberWithCommas(meterData.outstandingCharges) + '" placeholder="$"></td>' +
@@ -1671,7 +1629,6 @@
             tbody.appendChild(meterRow);
             meterRowElements.push(meterRow);
             
-            // Formatting: separate blur/focus for consumption vs other numeric fields
             const consumptionInput = meterRow.querySelector('.consumption-input');
             if (consumptionInput) {
                 consumptionInput.addEventListener('blur', function() {
@@ -1686,7 +1643,6 @@
                 });
             }
             
-            // Other numeric fields (current charges, outstanding, previous paid, amount paid) use formatNumberWithCommas
             const otherNumericInputs = meterRow.querySelectorAll('.inline-input:not(.notes-input):not(.consumption-input)');
             otherNumericInputs.forEach(inp => {
                 inp.addEventListener('blur', function() {
@@ -1704,7 +1660,6 @@
             currentAccount = accountNum;
         }
         
-        // ========== SUMMARY ROW ==========
         let totalConsumption = 0;
         let totalBillAmount = 0;
         let totalOutstanding = 0;
@@ -1721,7 +1676,6 @@
         summaryRow.innerHTML = `
             <td class="summary-label" style="text-align:center;">Total</td>
             <td colspan="3" style="text-align:center;"></td>
-            <!-- UPDATED: Summary consumption uses formatConsumption -->
             <td class="summary-total" id="summary-consumption-${entity.id}" style="text-align:center;">${formatConsumption(totalConsumption)}</td>
             <td class="summary-total" id="summary-bill-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalBillAmount)}</td>
             <td class="summary-total" id="summary-outstanding-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalOutstanding)}</td>
@@ -1733,7 +1687,6 @@
         `;
         tbody.appendChild(summaryRow);
         
-        // Auto-update totals on input
         meterRowElements.forEach((row) => {
             const consumptionInput = row.querySelector('.consumption-input');
             const billInput = row.querySelector('.current-charge-input');
@@ -1777,7 +1730,6 @@
     }
     
     function attachEventListeners() {
-        // Save button click
         document.getElementById('billsTableBody').addEventListener('click', async function(e) {
             const saveBtn = e.target.closest('.save-entity-btn');
             if (saveBtn && !saveBtn.disabled) {
@@ -1789,7 +1741,6 @@
             }
         });
         
-        // Auto-refresh on month/year change
         const monthSelect = document.getElementById('globalMonth');
         const yearSelect = document.getElementById('globalYear');
         monthSelect.addEventListener('change', function() {
