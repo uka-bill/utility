@@ -893,16 +893,16 @@
         </div>
     </div>
     <ul class="nav-tabs">
-    <li><a href="/dashboard" >Dashboard</a></li>
-    <li><a href="/departments"class="active">Departments</a></li>
-    <li><a href="/schools">Schools</a></li>
-    <li><a href="/water">Water</a></li>
-    <li><a href="/electricity">Electricity</a></li>
-    <li><a href="/telephone">Telephone</a></li>
-    <li><a href="/sut-office">SUT Office</a></li>
-    <li><a href="/reports">Reports &amp; Print</a></li>
-    <li><a href="/data-management">Data Management</a></li>
-</ul>
+        <li><a href="/dashboard">Dashboard</a></li>
+        <li><a href="/departments" class="active">Departments</a></li>
+        <li><a href="/schools">Schools</a></li>
+        <li><a href="/water">Water</a></li>
+        <li><a href="/electricity">Electricity</a></li>
+        <li><a href="/telephone">Telephone</a></li>
+        <li><a href="/sut-office">SUT Office</a></li>
+        <li><a href="/reports">Reports &amp; Print</a></li>
+        <li><a href="/data-management">Data Management</a></li>
+    </ul>
 </nav>
 
 <div class="container">
@@ -1080,6 +1080,10 @@
         return html;
     }
     
+    // ============================================================
+    // UPDATED renderDepartments: groups by division inside each department
+    // No division separator rows – units appear in division order
+    // ============================================================
     function renderDepartments() {
         const filtered = getFilteredDepartments();
         const tbody = document.getElementById('deptsTbody');
@@ -1088,7 +1092,8 @@
             tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:40px; color:var(--gray);">No departments found</td></tr>'; 
             return; 
         }
-        
+
+        // Group by department name
         const groupedMap = new Map();
         const groupOrder = [];
         for(let dept of filtered) { 
@@ -1099,16 +1104,53 @@
             } 
             groupedMap.get(deptName).push(dept); 
         }
-        
+
         let globalSeq = 1;
         for(let deptName of groupOrder) {
             const departments = groupedMap.get(deptName);
+            
+            // Group by division within this department
+            const divMap = new Map();
+            departments.forEach(dept => {
+                const divName = dept.division_name || 'Other';
+                if (!divMap.has(divName)) divMap.set(divName, []);
+                divMap.get(divName).push(dept);
+            });
+
+            // Sort divisions by min display_order (then min id)
+            const sortedDivisions = Array.from(divMap.keys()).sort((a, b) => {
+                const deptsA = divMap.get(a);
+                const deptsB = divMap.get(b);
+                const minOrderA = Math.min(...deptsA.map(d => d.display_order !== undefined ? d.display_order : 999));
+                const minOrderB = Math.min(...deptsB.map(d => d.display_order !== undefined ? d.display_order : 999));
+                if (minOrderA !== minOrderB) return minOrderA - minOrderB;
+                const minIdA = Math.min(...deptsA.map(d => d.id));
+                const minIdB = Math.min(...deptsB.map(d => d.id));
+                return minIdA - minIdB;
+            });
+
+            // Build ordered units: flatten divisions in sorted order, units sorted by display_order inside each division
+            const orderedUnits = [];
+            sortedDivisions.forEach(divName => {
+                const depts = divMap.get(divName);
+                // Sort units within division by display_order then id
+                depts.sort((a, b) => {
+                    const orderA = a.display_order !== undefined ? a.display_order : 999;
+                    const orderB = b.display_order !== undefined ? b.display_order : 999;
+                    if (orderA !== orderB) return orderA - orderB;
+                    return a.id - b.id;
+                });
+                orderedUnits.push(...depts);
+            });
+
+            // Render department separator
             const sepRow = document.createElement('tr'); 
             sepRow.className = 'department-separator';
-            sepRow.innerHTML = `<td colspan="11"><div class="dept-info"><span>🏢 ${escapeHtml(deptName)}</span><span class="dept-count">${departments.length} unit${departments.length > 1 ? 's' : ''}</span></div></td>`;
+            sepRow.innerHTML = `<td colspan="11"><div class="dept-info"><span>🏢 ${escapeHtml(deptName)}</span><span class="dept-count">${orderedUnits.length} unit${orderedUnits.length > 1 ? 's' : ''}</span></div></td>`;
             tbody.appendChild(sepRow);
-            
-            for(let dept of departments) {
+
+            // Render each unit (now in correct division order)
+            for(let dept of orderedUnits) {
                 const waterAccounts = dept.water_accounts && typeof dept.water_accounts === 'string' ? JSON.parse(dept.water_accounts) : (dept.water_accounts || []);
                 const electricityAccounts = dept.electricity_accounts && typeof dept.electricity_accounts === 'string' ? JSON.parse(dept.electricity_accounts) : (dept.electricity_accounts || []);
                 const telephoneAccounts = dept.telephone_accounts && typeof dept.telephone_accounts === 'string' ? JSON.parse(dept.telephone_accounts) : (dept.telephone_accounts || []);
@@ -1134,7 +1176,8 @@
                 globalSeq++;
             }
         }
-        
+
+        // Re-attach event listeners
         document.querySelectorAll('.edit-dept-btn').forEach(btn => {
             btn.addEventListener('click', () => openEditModal(parseInt(btn.getAttribute('data-id'))));
         });
@@ -1147,6 +1190,7 @@
         });
     }
     
+    // ========== REST OF SCRIPT (unchanged) ==========
     function openEditModal(deptId) {
         const dept = allDepartments.find(d => d.id === deptId);
         if (!dept) return;
@@ -1165,11 +1209,9 @@
         document.body.style.overflow = 'hidden';
     }
     
-    // ========== SYNC FORM DATA TO OBJECT (FIX FOR DISAPPEARING VALUES) ==========
     function syncFormDataToObject() {
         if (!currentEditingDept) return;
         
-        // Sync water accounts
         const waterAccounts = currentEditingDept.water_accounts || [];
         for (let i = 0; i < waterAccounts.length; i++) {
             const accountNumberInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="water"]`);
@@ -1188,7 +1230,6 @@
             waterAccounts[i].meters = meters;
         }
         
-        // Sync electricity accounts
         const electricityAccounts = currentEditingDept.electricity_accounts || [];
         for (let i = 0; i < electricityAccounts.length; i++) {
             const accountNumberInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="electricity"]`);
@@ -1207,7 +1248,6 @@
             electricityAccounts[i].meters = meters;
         }
         
-        // Sync telephone accounts
         const telephoneAccounts = currentEditingDept.telephone_accounts || [];
         for (let i = 0; i < telephoneAccounts.length; i++) {
             const accountNumberInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="telephone"]`);
@@ -1227,7 +1267,6 @@
         }
     }
     
-    // ============ UPDATED renderEditForm with data-type on inputs ============
     function renderEditForm() {
         const container = document.getElementById('modalBody');
         
@@ -1316,9 +1355,8 @@
         container.innerHTML = html;
     }
     
-    // ========== UPDATED: Add/Remove functions now sync data first ==========
     window.addAccount = function(type) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         if (type === 'water') {
             currentEditingDept.water_accounts.push({ accountNumber: '', meters: [] });
         } else if (type === 'electricity') {
@@ -1330,7 +1368,7 @@
     };
     
     window.removeAccount = function(accountIndex, type) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         if (type === 'water') {
             currentEditingDept.water_accounts.splice(accountIndex, 1);
         } else if (type === 'electricity') {
@@ -1342,7 +1380,7 @@
     };
     
     window.addMeter = function(accountIndex, type) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         if (type === 'water') {
             if (!currentEditingDept.water_accounts[accountIndex].meters) currentEditingDept.water_accounts[accountIndex].meters = [];
             currentEditingDept.water_accounts[accountIndex].meters.push({ meterNumber: '', location: '' });
@@ -1354,7 +1392,7 @@
     };
     
     window.removeMeter = function(accountIndex, meterIndex, type) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         if (type === 'water') {
             currentEditingDept.water_accounts[accountIndex].meters.splice(meterIndex, 1);
         } else if (type === 'electricity') {
@@ -1364,22 +1402,20 @@
     };
     
     window.addPhoneNumber = function(accountIndex) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         if (!currentEditingDept.telephone_accounts[accountIndex].numbers) currentEditingDept.telephone_accounts[accountIndex].numbers = [];
         currentEditingDept.telephone_accounts[accountIndex].numbers.push({ phoneNumber: '', location: '' });
         renderEditForm();
     };
     
     window.removePhoneNumber = function(accountIndex, numberIndex) {
-        syncFormDataToObject(); // Save current form data before modifying
+        syncFormDataToObject();
         currentEditingDept.telephone_accounts[accountIndex].numbers.splice(numberIndex, 1);
         renderEditForm();
     };
     
     function collectFormData() {
-        // First sync the DOM data to the object to ensure we have the latest values
         syncFormDataToObject();
-        
         const deptData = {
             unitName: document.getElementById('editUnitName')?.value || '',
             divisionName: document.getElementById('editDivisionName')?.value || '',
@@ -1391,20 +1427,16 @@
             electricityAccounts: currentEditingDept.electricity_accounts || [],
             telephoneAccounts: currentEditingDept.telephone_accounts || []
         };
-        
         return deptData;
     }
     
     async function saveDepartment() {
         if (!currentEditingDept) return;
-        
         const deptData = collectFormData();
-        
         if (!deptData.unitName || !deptData.divisionName || !deptData.departmentName) {
             showMessage('Please fill in Unit Name, Division Name, and Department Name', true);
             return;
         }
-        
         showLoading(true);
         try {
             console.log('📤 Saving department data:', deptData);
@@ -1415,7 +1447,6 @@
             });
             const result = await response.json();
             console.log('📥 Server response:', result);
-            
             if (response.ok && result.success) {
                 showMessage('Department updated successfully');
                 closeEditModal();
@@ -1462,7 +1493,6 @@
             electricityAccounts: [],
             telephoneAccounts: []
         };
-        
         showLoading(true);
         try {
             console.log('📤 Sending new department data:', deptData);
@@ -1473,7 +1503,6 @@
             });
             const result = await response.json();
             console.log('📥 Server response:', result);
-            
             if (response.ok && result.success) {
                 const newDeptId = result.department?.id;
                 if (!newDeptId) {
