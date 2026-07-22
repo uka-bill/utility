@@ -526,7 +526,8 @@ def export_schools_csv():
                      'Telephone Account', 'Telephone Number', 'Notes'])
     response = supabase.table("schools").select("*").execute()
     schools = response.data if response.data else []
-    schools.sort(key=lambda x: (int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
+    # Sort by display_order, then cluster, then id
+    schools.sort(key=lambda x: (x.get('display_order', x.get('id', 0)), int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
     for school in schools:
         writer.writerow([
             school.get('id', ''),
@@ -691,7 +692,7 @@ def export_schools_csv_to_string():
                      'Telephone Account', 'Telephone Number', 'Notes'])
     response = supabase.table("schools").select("*").execute()
     schools = response.data if response.data else []
-    schools.sort(key=lambda x: (int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
+    schools.sort(key=lambda x: (x.get('display_order', x.get('id', 0)), int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
     for school in schools:
         writer.writerow([
             school.get('id', ''),
@@ -1368,9 +1369,8 @@ def get_entities():
         if not supabase:
             return jsonify([]), 500
         if entity_type == 'school':
-            response = supabase.table("schools").select("id, name, cluster_number").execute()
+            response = supabase.table("schools").select("id, name, cluster_number").order("display_order").execute()
             schools = response.data if response.data else []
-            schools.sort(key=lambda x: (int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
             entities = []
             for school in schools:
                 entities.append({
@@ -1895,28 +1895,41 @@ def dashboard_data():
         print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
-# ============ SCHOOLS API ============
+# ============ SCHOOLS API (UPDATED) ============
 @app.route('/api/schools', methods=['GET'])
 def api_schools():
     try:
         print("🏫 GET /api/schools called")
         if not supabase:
             return jsonify([]), 500
-        response = supabase.table("schools").select("*").execute()
+        # Order by display_order, then cluster_number, then id
+        response = supabase.table("schools").select("*").order("display_order").order("cluster_number").order("id").execute()
         schools = response.data if response.data else []
-        def get_cluster_order(school):
-            cluster = school.get('cluster_number')
-            if cluster is not None:
-                try:
-                    return int(cluster)
-                except (ValueError, TypeError):
-                    return 999
-            return 999
-        schools.sort(key=lambda x: (get_cluster_order(x), x.get('id', 0)))
         return jsonify(schools)
     except Exception as e:
         print(f"❌ Schools GET error: {e}")
         return jsonify([]), 500
+
+@app.route('/api/schools/ensure-order', methods=['POST'])
+def ensure_school_order():
+    """Set display_order = id for all schools that have null or 0."""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        response = supabase.table("schools").select("id, display_order").execute()
+        schools = response.data if response.data else []
+        updated = 0
+        for school in schools:
+            if school.get('display_order') is None or school.get('display_order') == 0:
+                supabase.table("schools").update({"display_order": school['id']}).eq("id", school['id']).execute()
+                updated += 1
+        return jsonify({
+            'success': True,
+            'message': f'Updated {updated} schools with display_order = id'
+        })
+    except Exception as e:
+        print(f"❌ Error ensuring school order: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/schools', methods=['POST'])
 def create_school():
@@ -1929,9 +1942,22 @@ def create_school():
             return jsonify({'success': False, 'error': 'Cluster number is required'}), 400
         if not data.get('schoolNumber'):
             return jsonify({'success': False, 'error': 'School number is required'}), 400
+
         water_accounts = data.get('waterAccounts', [])
         electricity_accounts = data.get('electricityAccounts', [])
         telephone_accounts = data.get('telephoneAccounts', [])
+
+        # ---- Determine display_order within the same cluster ----
+        cluster_number = data.get('clusterNumber')
+        existing = supabase.table("schools")\
+            .select("display_order")\
+            .eq("cluster_number", cluster_number)\
+            .order("display_order", desc=True)\
+            .limit(1)\
+            .execute()
+        max_order = existing.data[0]['display_order'] if existing.data else 0
+        new_display_order = max_order + 1
+
         school_data = {
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber'),
@@ -1949,6 +1975,7 @@ def create_school():
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
+            "display_order": new_display_order,
             "created_at": datetime.now().isoformat()
         }
         response = supabase.table("schools").insert(school_data).execute()
@@ -1972,6 +1999,7 @@ def update_school(school_id):
         water_accounts = data.get('waterAccounts', [])
         electricity_accounts = data.get('electricityAccounts', [])
         telephone_accounts = data.get('telephoneAccounts', [])
+
         school_data = {
             "name": data.get('name'),
             "cluster_number": data.get('clusterNumber', ''),
@@ -1988,8 +2016,10 @@ def update_school(school_id):
             "electricity_account": electricity_accounts[0].get('accountNumber', '') if electricity_accounts and len(electricity_accounts) > 0 else '',
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
-            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else ''
+            "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
+            "display_order": data.get('displayOrder', 0)
         }
+
         print(f"📦 Prepared school_data: {school_data}")
         response = supabase.table("schools").update(school_data).eq("id", school_id).execute()
         print(f"✅ Supabase response: {response}")
@@ -2058,7 +2088,7 @@ def ensure_department_order():
             'message': f'Updated {updated} departments with display_order = id'
         })
     except Exception as e:
-        print(f"❌ Error ensuring order: {e}")
+        print(f"❌ Error ensuring department order: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/departments', methods=['POST'])
