@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -960,7 +960,7 @@
         });
     }
     
-    // ========== FILTERED & SORTED (group by dept, sort groups by min id, within group by display_order then id) ==========
+    // ========== FILTERED & SORTED ==========
     function getFilteredDepartments() {
         let filtered = [...allDepartments];
         const search = document.getElementById('searchFilter').value.toLowerCase();
@@ -993,7 +993,6 @@
         const result = [];
         sortedGroupKeys.forEach(key => {
             const depts = grouped[key].sort((a, b) => {
-                // primary: display_order (fallback to id if undefined)
                 const orderA = a.display_order !== undefined ? a.display_order : a.id;
                 const orderB = b.display_order !== undefined ? b.display_order : b.id;
                 if (orderA !== orderB) return orderA - orderB;
@@ -1104,7 +1103,7 @@
         });
     }
     
-    // ========== MOVE UP/DOWN FUNCTIONS ==========
+    // ========== MOVE UP/DOWN FUNCTIONS (FIXED: immediate visual swap) ==========
     async function moveDepartmentUp(deptId) {
         await moveDepartment(deptId, -1);
     }
@@ -1113,68 +1112,101 @@
     }
     
     async function moveDepartment(deptId, direction) {
+        // 1. Find the department
         const deptIndex = allDepartments.findIndex(d => d.id === deptId);
-        if (deptIndex === -1) return;
-        
+        if (deptIndex === -1) {
+            showMessage('Department not found', true);
+            return;
+        }
+
         const groupName = allDepartments[deptIndex].department_name || 'Other';
+        // 2. Get all departments in that group, sorted by display_order (fallback to id)
         const group = allDepartments
             .filter(d => (d.department_name || 'Other') === groupName)
-            .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
-        
+            .sort((a, b) => {
+                const orderA = a.display_order !== undefined ? a.display_order : a.id;
+                const orderB = b.display_order !== undefined ? b.display_order : b.id;
+                return orderA - orderB;
+            });
+
         const currentPos = group.findIndex(d => d.id === deptId);
-        if (currentPos === -1) return;
+        if (currentPos === -1) {
+            showMessage('Department not found in group', true);
+            return;
+        }
         const newPos = currentPos + direction;
-        if (newPos < 0 || newPos >= group.length) return;
-        
+        if (newPos < 0 || newPos >= group.length) {
+            showMessage('Cannot move further', true);
+            return;
+        }
+
         const currentDept = group[currentPos];
         const neighborDept = group[newPos];
-        const currentOrder = currentDept.display_order || 0;
-        const neighborOrder = neighborDept.display_order || 0;
-        
+
+        // Ensure both have display_order set (if undefined, use id)
+        if (currentDept.display_order === undefined) currentDept.display_order = currentDept.id;
+        if (neighborDept.display_order === undefined) neighborDept.display_order = neighborDept.id;
+
+        // 3. Swap the display_order values in the objects
+        const tempOrder = currentDept.display_order;
+        currentDept.display_order = neighborDept.display_order;
+        neighborDept.display_order = tempOrder;
+
+        // 4. Re-render immediately (visual update)
+        renderDepartments();
+
+        // 5. Persist to database
         try {
             showLoading(true);
-            
-            // Update current with neighbor's order
+
+            // Update current with its new order
+            const updateCurrent = {
+                unitName: currentDept.unit_name || '',
+                divisionName: currentDept.division_name || '',
+                departmentName: currentDept.department_name || '',
+                hotlineNumbers: currentDept.hotline_numbers || '',
+                address: currentDept.address || '',
+                notes: currentDept.notes || '',
+                waterAccounts: currentDept.water_accounts || [],
+                electricityAccounts: currentDept.electricity_accounts || [],
+                telephoneAccounts: currentDept.telephone_accounts || [],
+                displayOrder: currentDept.display_order
+            };
             await fetch(`/api/departments/${currentDept.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    unitName: currentDept.unit_name || '',
-                    divisionName: currentDept.division_name || '',
-                    departmentName: currentDept.department_name || '',
-                    hotlineNumbers: currentDept.hotline_numbers || '',
-                    address: currentDept.address || '',
-                    notes: currentDept.notes || '',
-                    waterAccounts: currentDept.water_accounts || [],
-                    electricityAccounts: currentDept.electricity_accounts || [],
-                    telephoneAccounts: currentDept.telephone_accounts || [],
-                    displayOrder: neighborOrder
-                })
+                body: JSON.stringify(updateCurrent)
             });
-            
-            // Update neighbor with current's order
+
+            // Update neighbor with its new order
+            const updateNeighbor = {
+                unitName: neighborDept.unit_name || '',
+                divisionName: neighborDept.division_name || '',
+                departmentName: neighborDept.department_name || '',
+                hotlineNumbers: neighborDept.hotline_numbers || '',
+                address: neighborDept.address || '',
+                notes: neighborDept.notes || '',
+                waterAccounts: neighborDept.water_accounts || [],
+                electricityAccounts: neighborDept.electricity_accounts || [],
+                telephoneAccounts: neighborDept.telephone_accounts || [],
+                displayOrder: neighborDept.display_order
+            };
             await fetch(`/api/departments/${neighborDept.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    unitName: neighborDept.unit_name || '',
-                    divisionName: neighborDept.division_name || '',
-                    departmentName: neighborDept.department_name || '',
-                    hotlineNumbers: neighborDept.hotline_numbers || '',
-                    address: neighborDept.address || '',
-                    notes: neighborDept.notes || '',
-                    waterAccounts: neighborDept.water_accounts || [],
-                    electricityAccounts: neighborDept.electricity_accounts || [],
-                    telephoneAccounts: neighborDept.telephone_accounts || [],
-                    displayOrder: currentOrder
-                })
+                body: JSON.stringify(updateNeighbor)
             });
-            
-            await loadDepartments();
+
             showMessage('Order updated successfully');
+            // Optionally re-fetch from server to confirm (but we already updated locally)
+            // Uncomment the next line if you want to sync with server (will cause a brief flicker)
+            // await loadDepartments();
+
         } catch (error) {
             console.error(error);
             showMessage('Error updating order', true);
+            // Revert local changes by reloading from server
+            await loadDepartments();
         } finally {
             showLoading(false);
         }
