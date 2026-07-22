@@ -437,18 +437,24 @@
         .entity-header { font-weight: 600; font-size: 0.78rem; text-align: left; }
         .entity-header .entity-name { display: block; font-size: 0.78rem; }
 
-        .cluster-separator, .department-group-separator {
+        .cluster-separator, .department-group-separator, .division-group-separator {
             background-color: var(--gray-50);
             border-top: 2px solid var(--primary);
             border-bottom: 2px solid var(--primary);
         }
-        .cluster-separator td, .department-group-separator td {
+        .cluster-separator td, .department-group-separator td, .division-group-separator td {
             padding: 8px 12px;
             font-weight: 700;
             color: var(--primary-dark);
             font-size: 0.85rem;
             background: var(--primary-glow);
             text-align: left;
+        }
+        .division-group-separator td {
+            background: #eef2ff;
+            border-top: 1px solid var(--primary-light);
+            border-bottom: 1px solid var(--primary-light);
+            padding-left: 30px;
         }
         .cluster-info, .dept-group-info { display: flex; align-items: center; gap: 12px; }
         .cluster-count, .dept-group-count {
@@ -475,6 +481,7 @@
         .total-due { font-size: 0.6rem; color: var(--gray); margin-left: 4px; display: block; font-weight: 400; }
         .placeholder-text { color: var(--gray); font-style: italic; }
         .department-name-badge { background: var(--primary-gradient); color: white; padding: 3px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .division-name-badge { background: #6366f1; color: white; padding: 2px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
         .notes-cell { min-width: 90px; }
         .notes-cell .notes-textarea { width: 100%; min-height: 40px; }
 
@@ -1282,7 +1289,7 @@
         });
 
         // =================================================================
-        // Nested grouping by department → division → units (without division separator)
+        // NEW: Nested grouping by department → division → units
         // =================================================================
         const deptMap = new Map(); // key: departmentName, value: Map(divisionName -> array of units)
 
@@ -1326,7 +1333,7 @@
                 const minIdB = Math.min(...unitsB.map(d => d.originalId || d.id));
                 return minIdA - minIdB;
             });
-            // Build sorted data (without division separator)
+            // Build sorted data
             const deptDivisions = [];
             sortedDivNames.forEach(divName => {
                 const units = divMap.get(divName);
@@ -1367,7 +1374,7 @@
             }
         }
 
-        // Render departments with nested grouping: Department → Division → Units (NO DIVISION SEPARATOR)
+        // Render departments with nested grouping: Department → Division → Units
         for (const deptData of sortedDeptData) {
             const deptName = deptData.departmentName;
             const divisions = deptData.divisions;
@@ -1386,9 +1393,17 @@
             deptSep.innerHTML = `<td colspan="14"><div class="dept-group-info"><span class="department-name-badge">📞 ${escapeHtml(deptName)}</span><span class="dept-group-count">${totalUnitsInDept} unit${totalUnitsInDept>1?'s':''}, ${totalAccountsInDept} account${totalAccountsInDept>1?'s':''}</span></div></td>`;
             fragment.appendChild(deptSep);
 
-            // For each division, render units directly (no division header row)
+            // For each division
             for (const divData of divisions) {
+                const divName = divData.divisionName;
                 const units = divData.units;
+                // Division sub-header
+                const divSep = document.createElement('tr');
+                divSep.className = 'division-group-separator';
+                let divAccountCount = units.reduce((sum, u) => sum + u.accountGroups.length, 0);
+                divSep.innerHTML = `<td colspan="14"><div style="display:flex; align-items:center; gap:12px; padding-left:20px;"><span class="division-name-badge">🏢 ${escapeHtml(divName)}</span><span class="dept-group-count" style="background:#6366f1;">${units.length} unit${units.length>1?'s':''}, ${divAccountCount} account${divAccountCount>1?'s':''}</span></div></td>`;
+                fragment.appendChild(divSep);
+
                 // Render each unit in this division
                 for (const entity of units) {
                     globalSerial = renderEntity(fragment, entity, month, year, globalSerial, statusFilter);
