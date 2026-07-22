@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* ===== Existing CSS (unchanged) ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -241,7 +242,7 @@
 
         /* ===== SPACING FOR BALANCE C/F ===== */
         .balance-row td:first-child {
-            padding-right: 20px !important;
+            padding-right: 30px !important;
         }
 
         .approval-footer { margin-top:30px; padding-top:20px; border-top:2px solid #1a56db; width:100%; font-size:9pt; }
@@ -334,7 +335,7 @@
     </style>
 </head>
 <body>
-    <!-- ===== NAVBAR ===== -->
+    <!-- ===== NAVBAR AND PAGE CONTENT ===== -->
     <nav class="navbar">
         <div class="logo">
             <div class="logo-icon">⚡</div>
@@ -955,7 +956,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (UPDATED: balance c/f spacing & zero-bill filter) ==========
+        // ========== generatePrintPreviewWithEntities (with balance c/f spacing & zero-bill filter) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, includeZeroBills, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1632,7 +1633,7 @@
             }
         }
 
-        // ====== PRINT SELECTED BUTTON ======
+        // ====== PRINT SELECTED BUTTON (UPDATED: optimize for "all" selection) ======
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
             console.log('🖨️ Print Selected button clicked');
 
@@ -1697,11 +1698,23 @@
                 return;
             }
 
-            showProcessingOverlay();
-            updateProcessingStep(0, 'Fetching bills and entities...', 10);
+            // ===== OPTIMIZATION: if all schools AND all departments are selected, use entityType filter =====
+            const totalSchools = allSchoolsData.length;
+            const totalDepartments = allDepartmentsData.length;
+            let requestData;
 
-            try {
-                const requestData = {
+            if (schoolIds.length === totalSchools && departmentIds.length === totalDepartments && totalSchools > 0 && totalDepartments > 0) {
+                // All schools and all departments selected – use "All Entities" filter to avoid huge payload
+                requestData = {
+                    selection_type: 'entityType',
+                    entity_type: 'all',
+                    utility_type: utilityTypes[0],
+                    month: month,
+                    year: year ? parseInt(year) : null
+                };
+                console.log('📡 Optimized: All schools and departments selected, using entityType=all');
+            } else {
+                requestData = {
                     selection_type: 'specificEntities',
                     utility_type: utilityTypes[0],
                     month: month,
@@ -1709,7 +1722,13 @@
                     school_ids: schoolIds,
                     department_ids: departmentIds
                 };
+                console.log('📡 Using specificEntities with IDs');
+            }
 
+            showProcessingOverlay();
+            updateProcessingStep(0, 'Fetching bills and entities...', 10);
+
+            try {
                 console.log('📡 API Request:', requestData);
 
                 updateProcessingStep(0, 'Fetching bills from server...', 20);
@@ -1761,17 +1780,17 @@
                     });
                 }
 
-                if (schoolIds.length > 0 || departmentIds.length > 0) {
-                    entityList = entityList.filter(e => {
-                        if (e.type === 'school') {
-                            return schoolIds.length > 0 && schoolIds.includes(e.entity.id);
-                        } else if (e.type === 'department') {
-                            return departmentIds.length > 0 && departmentIds.includes(e.entity.id);
-                        }
-                        return false;
-                    });
-                }
+                // If we used entityType=all, we might need to filter by selected school/department IDs if not all selected?
+                // But we already handled the "all" case, so we skip this.
+                // For the specificEntities case, we already filter by IDs.
 
+                // However, if we used entityType=all and the user didn't select all schools/departments (but we only use this when all are selected),
+                // we don't need further filtering.
+
+                // For the case where all schools but not all departments, we still use specificEntities, so filtering is done by the backend.
+                // But the backend will fetch all bills for those IDs, which is fine.
+
+                // If showAllEntities is checked, we also include entities with zero bills.
                 if (showAllEntities) {
                     const [schoolsRes, deptsRes] = await Promise.all([
                         fetch('/api/schools'),
@@ -1780,15 +1799,19 @@
                     let allSchools = schoolsRes.ok ? await schoolsRes.json() : [];
                     let allDepts = deptsRes.ok ? await deptsRes.json() : [];
 
-                    if (schoolIds.length > 0) {
-                        allSchools = allSchools.filter(s => schoolIds.includes(s.id));
+                    // If we used entityType=all, we already have all entities, so we don't need to add missing ones.
+                    // But if we used specificEntities, we may have filtered by IDs, so we need to add missing ones.
+                    // However, we only call this code when showAllEntities is true, and we want to include entities with zero bills.
+                    // So we fetch all and add those not already in entityList.
+
+                    // Filter the fetched lists to only those selected by the user (if using specificEntities)
+                    if (requestData.selection_type === 'specificEntities') {
+                        const selectedSchoolIds = requestData.school_ids || [];
+                        const selectedDeptIds = requestData.department_ids || [];
+                        allSchools = allSchools.filter(s => selectedSchoolIds.includes(s.id));
+                        allDepts = allDepts.filter(d => selectedDeptIds.includes(d.id));
                     } else {
-                        allSchools = [];
-                    }
-                    if (departmentIds.length > 0) {
-                        allDepts = allDepts.filter(d => departmentIds.includes(d.id));
-                    } else {
-                        allDepts = [];
+                        // entityType=all, we keep all
                     }
 
                     allSchools.forEach(school => {
@@ -1870,7 +1893,6 @@
                     showOutstanding: showOutstanding
                 };
 
-                // Pass showAllEntities as includeZeroBills
                 generatePrintPreviewWithEntities(
                     entityList, month, year, selectedColumns, itemsPerPage,
                     utilityTypes, shouldPaginate, hasSubtotal, groupByEntity,
