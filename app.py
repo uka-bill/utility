@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response 
 import os
 from supabase import create_client, Client
@@ -1682,7 +1683,7 @@ def get_entities():
         print(f"❌ Entities GET error: {e}")
         return jsonify([]), 500
 
-# ============ GENERATE REPORT API (UPDATED with fallback) ============
+# ============ GENERATE REPORT API (UPDATED: pre-fetch entity names) ============
 
 @app.route('/api/generate-report', methods=['POST'])
 def generate_report():
@@ -1756,23 +1757,35 @@ def generate_report():
             bills = filtered_bills
             print(f"📊 After specific entity filter: {len(bills)} bills")
         
-        # Enrich bills with entity names (same as before)
+        # ========== OPTIMIZATION: Pre-fetch all schools and departments once ==========
+        school_dict = {}
+        dept_dict = {}
+        
+        try:
+            schools_resp = supabase.table("schools").select("id, name").execute()
+            if schools_resp.data:
+                for school in schools_resp.data:
+                    school_dict[school['id']] = school['name']
+        except Exception as e:
+            print(f"⚠️ Error fetching schools: {e}")
+        
+        try:
+            depts_resp = supabase.table("departments").select("id, name, unit_name").execute()
+            if depts_resp.data:
+                for dept in depts_resp.data:
+                    dept_dict[dept['id']] = dept.get('unit_name') or dept.get('name') or 'Unknown Department'
+        except Exception as e:
+            print(f"⚠️ Error fetching departments: {e}")
+        
+        # Enrich bills with entity names using the dictionaries
         enriched_bills = []
         for bill in bills:
             bill_data = dict(bill)
             
             if bill_data['entity_type'] == 'school':
-                school_response = supabase.table("schools").select("name").eq("id", bill_data['entity_id']).execute()
-                if school_response.data and len(school_response.data) > 0:
-                    bill_data['entity_name'] = school_response.data[0]['name']
-                else:
-                    bill_data['entity_name'] = 'Unknown School'
+                bill_data['entity_name'] = school_dict.get(bill_data['entity_id'], 'Unknown School')
             elif bill_data['entity_type'] == 'department':
-                dept_response = supabase.table("departments").select("name", "unit_name").eq("id", bill_data['entity_id']).execute()
-                if dept_response.data and len(dept_response.data) > 0:
-                    bill_data['entity_name'] = dept_response.data[0].get('unit_name') or dept_response.data[0]['name'] or 'Unknown Department'
-                else:
-                    bill_data['entity_name'] = 'Unknown Department'
+                bill_data['entity_name'] = dept_dict.get(bill_data['entity_id'], 'Unknown Department')
             else:
                 bill_data['entity_name'] = 'Unknown'
             
