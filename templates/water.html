@@ -365,13 +365,6 @@
             if (resp.ok) {
                 existingBills = await resp.json();
                 console.log('📊 Loaded ' + existingBills.length + ' water bills for ' + month + '/' + year);
-                // DEBUG: Log the first bill
-                if (existingBills.length > 0) {
-                    console.log('🔍 First bill in existingBills:', existingBills[0]);
-                    console.log('🔍 Looking for entity_id=1, month=' + month + ', year=' + year);
-                    const found = existingBills.find(b => b.entity_id == 1 && b.month == month && b.year == year);
-                    console.log('🔍 Found bill for entity_id=1:', found);
-                }
             } else {
                 existingBills = [];
                 console.warn('⚠️ Failed to load bills, status:', resp.status);
@@ -471,27 +464,69 @@
         return m.trim();
     }
 
-    // ========== DEBUG findBillForMeter ==========
+    // ========== FIXED findBillForMeter ==========
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
-        console.log('🔎 findBillForMeter called with:', { entityType, entityId, accountNumber, meterNumber, month, year, existingBillsLength: existingBills.length });
+        const cleanAccount = (accountNumber || '').trim();
+        const normalizeAccount = (acc) => {
+            if (!acc) return '';
+            return String(acc).replace(/[()\s\-]/g, '').trim();
+        };
+        const normAccount = normalizeAccount(cleanAccount);
         
-        // Just take the first bill for this entity and month/year
+        // 1. Try match by account_number (normalized) + month + year
+        for (let bill of existingBills) {
+            const billAccount = normalizeAccount(bill.account_number);
+            if (bill.entity_type === entityType &&
+                billAccount === normAccount &&
+                bill.month == month && bill.year == year) {
+                console.log('✅ MATCHED BY ACCOUNT:', bill);
+                return bill;
+            }
+        }
+        // fallback bill_month/bill_year
+        for (let bill of existingBills) {
+            const billAccount = normalizeAccount(bill.account_number);
+            if (bill.entity_type === entityType &&
+                billAccount === normAccount &&
+                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
+                console.log('✅ MATCHED BY ACCOUNT (bill_month):', bill);
+                return bill;
+            }
+        }
+        
+        // 2. Try match by entity_id + month + year
         for (let bill of existingBills) {
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
                 bill.month == month && bill.year == year) {
-                console.log('✅ MATCH FOUND! Bill:', bill);
+                console.log('✅ MATCHED BY ENTITY ID:', bill);
                 return bill;
             }
         }
-        // Fallback to bill_month/bill_year
         for (let bill of existingBills) {
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
                 (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                console.log('✅ MATCH FOUND (bill_month)! Bill:', bill);
+                console.log('✅ MATCHED BY ENTITY ID (bill_month):', bill);
                 return bill;
             }
         }
-        console.log('❌ No match found for:', { entityType, entityId, month, year });
+        
+        // 3. Fallback: first bill for this entity_type + month + year
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.month == month && bill.year == year) {
+                console.log('✅ FALLBACK MATCH (first bill):', bill);
+                return bill;
+            }
+        }
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
+                console.log('✅ FALLBACK MATCH (bill_month):', bill);
+                return bill;
+            }
+        }
+        
+        console.log('❌ No match found for:', { entityType, entityId, accountNumber, month, year });
         return null;
     }
 
@@ -683,8 +718,8 @@
         // Department grouping
         const deptMap = new Map();
         departmentsList.forEach(dept => {
-            const deptName = dept.departmentName || 'Other';
-            const divName = dept.divisionName || 'Other';
+            const deptName = dept.department_name || 'Other';
+            const divName = dept.division_name || 'Other';
             if (!deptMap.has(deptName)) {
                 deptMap.set(deptName, new Map());
             }
@@ -698,8 +733,8 @@
         const sortedDeptNames = Array.from(deptMap.keys()).sort((a, b) => {
             const deptA = deptMap.get(a);
             const deptB = deptMap.get(b);
-            const minOrderA = Math.min(...Array.from(deptA.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
-            const minOrderB = Math.min(...Array.from(deptB.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+            const minOrderA = Math.min(...Array.from(deptA.values()).flat().map(d => d.display_order !== undefined ? d.display_order : 999));
+            const minOrderB = Math.min(...Array.from(deptB.values()).flat().map(d => d.display_order !== undefined ? d.display_order : 999));
             if (minOrderA !== minOrderB) return minOrderA - minOrderB;
             const minIdA = Math.min(...Array.from(deptA.values()).flat().map(d => d.originalId || d.id));
             const minIdB = Math.min(...Array.from(deptB.values()).flat().map(d => d.originalId || d.id));
@@ -712,8 +747,8 @@
             const sortedDivNames = Array.from(divMap.keys()).sort((a, b) => {
                 const unitsA = divMap.get(a);
                 const unitsB = divMap.get(b);
-                const minOrderA = Math.min(...unitsA.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
-                const minOrderB = Math.min(...unitsB.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+                const minOrderA = Math.min(...unitsA.map(d => d.display_order !== undefined ? d.display_order : 999));
+                const minOrderB = Math.min(...unitsB.map(d => d.display_order !== undefined ? d.display_order : 999));
                 if (minOrderA !== minOrderB) return minOrderA - minOrderB;
                 const minIdA = Math.min(...unitsA.map(d => d.originalId || d.id));
                 const minIdB = Math.min(...unitsB.map(d => d.originalId || d.id));
@@ -723,8 +758,8 @@
             sortedDivNames.forEach(divName => {
                 const units = divMap.get(divName);
                 units.sort((a, b) => {
-                    const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
-                    const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
+                    const orderA = a.display_order !== undefined ? a.display_order : 999;
+                    const orderB = b.display_order !== undefined ? b.display_order : 999;
                     if (orderA !== orderB) return orderA - orderB;
                     return (a.originalId || a.id) - (b.originalId || b.id);
                 });
@@ -759,7 +794,7 @@
                     const meters = account.meters || [];
                     const visibleMeters = [];
                     if (meters.length === 0) {
-                        const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, '', month, year);
+                        const existing = findBillForMeter(entity.type, entity.id, account.account_number, '', month, year);
                         visibleMeters.push({
                             meterNumber: '',
                             location: '',
@@ -772,7 +807,7 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
+                            const existing = findBillForMeter(entity.type, entity.id, account.account_number, meterNum, month, year);
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
@@ -790,7 +825,7 @@
                     if (visibleMeters.length > 0) {
                         hasAnyVisible = true;
                         visibleAccounts.push({
-                            accountNumber: account.accountNumber,
+                            accountNumber: account.account_number,
                             meters: visibleMeters,
                             isPlaceholder: account.isPlaceholder
                         });
@@ -860,17 +895,12 @@
         let isFirstMeter = true;
         let meterRowsData = [];
 
-        console.log('📋 Rendering entity:', entity.name, 'ID:', entity.id);
-
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             let isFirstMeterForAccount = true;
             for (let m = 0; m < account.meters.length; m++) {
                 const meter = account.meters[m];
                 const existing = meter.existing;
-                
-                console.log('🔍 Meter:', meter.meterNumber, 'existing:', existing);
-
                 let parsedNotes = {};
                 if (existing && existing.notes && existing.notes.startsWith('{')) {
                     try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
@@ -886,7 +916,6 @@
                     currentCharges = existing.current_charges || 0;
                     outstandingCharges = existing.unsettled_charges || 0;
                     amountPaid = existing.amount_paid || 0;
-                    console.log('✅ Found existing bill with current_charges:', currentCharges);
                 }
 
                 let previousPayment = parsedNotes.previousPayment || 0;
@@ -899,7 +928,7 @@
 
                 meterRowsData.push({
                     serial: serial,
-                    accountNumber: account.accountNumber,
+                    accountNumber: account.account_number,
                     meterNumber: meter.meterNumber,
                     displayMeter: displayMeter,
                     locationDisplay: locationDisplay,
