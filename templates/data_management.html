@@ -6,7 +6,7 @@
     <title>Data Management - Utility Bills Management</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* All CSS remains exactly as before – unchanged */
+        /* (all CSS unchanged – same as before) */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -1063,7 +1063,7 @@
             }
         }
 
-        // ---------- RESTORE (with robust response handling) ----------
+        // ---------- RESTORE (with robust response handling and logging) ----------
         async function performRestore() {
             if (!selectedBackupFile) {
                 showToast('Please select a backup file first.', 'error');
@@ -1105,10 +1105,12 @@
                     body: formData
                 });
 
-                // Always read the response as text first
+                // Read response as text first
                 const responseText = await response.text();
 
-                // Try to parse JSON; if it fails, use the raw text as error message
+                // Log a preview of the response for debugging (first 200 chars)
+                console.log('🔍 Response preview (first 200 chars):', responseText.substring(0, 200));
+
                 let result;
                 let isJson = false;
                 try {
@@ -1116,7 +1118,13 @@
                     isJson = true;
                 } catch (parseError) {
                     // Not JSON – we'll treat the raw text as the error
-                    result = { error: responseText || 'Server returned an empty or invalid response.' };
+                    console.error('❌ Response is not valid JSON. Raw response length:', responseText.length);
+                    // If the response is large, truncate the error message
+                    let errorMsg = responseText;
+                    if (errorMsg.length > 500) {
+                        errorMsg = errorMsg.substring(0, 500) + '... (truncated)';
+                    }
+                    result = { error: errorMsg || 'Server returned an empty or invalid response.' };
                 }
 
                 // If the HTTP status is not OK, throw with the error message
