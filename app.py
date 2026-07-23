@@ -2072,17 +2072,18 @@ def ensure_department_order():
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
-        
+
         # Get all department IDs
         response = supabase.table("departments").select("id").execute()
         depts = response.data if response.data else []
+        if not depts:
+            return jsonify({'success': True, 'message': 'No departments to update'})
+
         updated = 0
-        
-        # Set display_order = id for every department
         for dept in depts:
             supabase.table("departments").update({"display_order": dept['id']}).eq("id", dept['id']).execute()
             updated += 1
-        
+
         return jsonify({
             'success': True,
             'message': f'Reset {updated} departments to creation order (display_order = id)'
