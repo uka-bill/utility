@@ -447,11 +447,9 @@ def restore_backup():
         except UnicodeDecodeError:
             return jsonify({'error': 'File is not valid UTF-8. Please ensure it is a JSON file.'}), 400
 
-        # Log file size (for debugging)
         file_size = len(backup_content)
         print(f"📄 File size: {file_size} bytes")
 
-        # Check for empty content
         if file_size == 0 or backup_content.strip() == '':
             return jsonify({'error': 'Backup file is empty. Please check the file.'}), 400
 
@@ -464,15 +462,22 @@ def restore_backup():
         try:
             backup_data = json.loads(backup_content)
         except json.JSONDecodeError as e:
-            # Return a clear error with position
             return jsonify({
                 'error': f'Invalid JSON format: {str(e)}',
-                'details': 'Make sure the file is a valid JSON backup. The error occurred at line {e.lineno}, column {e.colno}.'
+                'details': f'Error at line {e.lineno}, column {e.colno}'
             }), 400
 
-        # Proceed with restore
-        data_to_restore = backup_data.get('data', backup_data)
-        result = restore_all_data(data_to_restore)
+        # Proceed with restore – wrap the whole restore in a try/except to catch any database errors
+        try:
+            data_to_restore = backup_data.get('data', backup_data)
+            result = restore_all_data(data_to_restore)
+        except Exception as restore_error:
+            print(f"❌ Restore execution error: {restore_error}")
+            print(traceback.format_exc())
+            return jsonify({
+                'error': f'Restore execution failed: {str(restore_error)}',
+                'details': 'Check server logs for more information.'
+            }), 500
 
         if result['success']:
             return jsonify({
@@ -490,6 +495,7 @@ def restore_backup():
     except Exception as e:
         print(f"❌ Restore backup error: {e}")
         print(traceback.format_exc())
+        # Always return a JSON error, never HTML
         return jsonify({'error': f'Restore failed: {str(e)}'}), 500
 
 # ============ EXPORT FUNCTIONS ============
