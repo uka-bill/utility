@@ -193,7 +193,6 @@ def restore_all_data(backup_data):
     errors = []
     try:
         print("🗑️ Clearing existing data...")
-        # Clear tables with detailed logging
         try:
             supabase.table("utility_bills").delete().neq("id", 0).execute()
             print("✅ Cleared utility_bills")
@@ -239,7 +238,6 @@ def restore_all_data(backup_data):
                     print(f"   ✅ Chunk inserted successfully")
                 except Exception as e:
                     print(f"❌ Chunk insert failed: {e}")
-                    # Try inserting one by one to find the problematic row
                     for idx, record in enumerate(chunk):
                         try:
                             supabase.table(table_name).insert(record).execute()
@@ -258,7 +256,6 @@ def restore_all_data(backup_data):
 
         print(f"📊 Data counts: FY={len(financial_years)}, Schools={len(schools)}, Depts={len(departments)}, Bills={len(bills)}, SUT={len(sut_expenses)}")
 
-        # Remove 'id' field
         def remove_id(records):
             return [{k: v for k, v in r.items() if k != 'id'} for r in records]
 
@@ -279,11 +276,60 @@ def restore_all_data(backup_data):
 
         def prepare_bill(bill):
             bill_copy = {k: v for k, v in bill.items() if k != 'id'}
-            if 'bill_image' in bill_copy and isinstance(bill_copy['bill_image'], (list, dict)):
-                bill_copy['bill_image'] = json.dumps(bill_copy['bill_image'])
+            
+            # Ensure numeric fields are floats
+            numeric_fields = ['current_charges', 'late_charges', 'unsettled_charges', 
+                              'amount_paid', 'consumption_m3', 'consumption_kwh']
+            for field in numeric_fields:
+                if field in bill_copy and bill_copy[field] is not None:
+                    try:
+                        bill_copy[field] = float(bill_copy[field])
+                    except (ValueError, TypeError):
+                        bill_copy[field] = 0.0
+
+            # Special handling for telephone bills
+            if bill.get('utility_type') == 'telephone':
+                account_number = bill_copy.get('account_number', '')
+                current_charges = bill_copy.get('current_charges', 0.0)
+                unsettled_charges = bill_copy.get('unsettled_charges', 0.0)
+                amount_paid = bill_copy.get('amount_paid', 0.0)
+                bill_number = bill_copy.get('bill_number', '')
+
+                # Build or update the notes structure
+                notes_obj = {}
+                try:
+                    if bill_copy.get('notes'):
+                        notes_obj = json.loads(bill_copy['notes'])
+                    if not isinstance(notes_obj, dict):
+                        notes_obj = {}
+                except:
+                    notes_obj = {}
+
+                if 'accounts' not in notes_obj:
+                    notes_obj['accounts'] = {}
+
+                if account_number not in notes_obj['accounts']:
+                    notes_obj['accounts'][account_number] = {
+                        'accountNumber': account_number,
+                        'billNumber': bill_number,
+                        'totalAccountCharges': current_charges,
+                        'previousOutstanding': unsettled_charges,
+                        'previousPayment': 0.0,
+                        'totalCurrentCharges': current_charges + unsettled_charges,
+                        'amountPaid': amount_paid,
+                        'phones': [],
+                        'notes': ''
+                    }
+                # Update the notes field
+                bill_copy['notes'] = json.dumps(notes_obj)
+            else:
+                # For water/electricity, keep notes as is, but ensure it's a string
+                if 'bill_image' in bill_copy and isinstance(bill_copy['bill_image'], (list, dict)):
+                    bill_copy['bill_image'] = json.dumps(bill_copy['bill_image'])
+            
             return bill_copy
 
-        # Insert in order (financial years first, then schools, depts, bills, sut)
+        # Insert in order
         if financial_years:
             batch_insert('financial_years', remove_id(financial_years), chunk_size=5)
         if schools:
@@ -470,7 +516,6 @@ def restore_backup():
         if not file.filename.endswith('.json'):
             return jsonify({'error': 'Only JSON backup files are supported'}), 400
 
-        # Read and decode the file content
         try:
             backup_content = file.read().decode('utf-8')
         except UnicodeDecodeError:
@@ -482,12 +527,10 @@ def restore_backup():
         if file_size == 0 or backup_content.strip() == '':
             return jsonify({'error': 'Backup file is empty. Please check the file.'}), 400
 
-        # Remove UTF-8 BOM if present
         if backup_content.startswith('\ufeff'):
             backup_content = backup_content[1:]
             print("🔍 Removed UTF-8 BOM")
 
-        # Parse JSON
         try:
             backup_data = json.loads(backup_content)
         except json.JSONDecodeError as e:
@@ -496,7 +539,6 @@ def restore_backup():
                 'details': f'Error at line {e.lineno}, column {e.colno}'
             }), 400
 
-        # Proceed with restore
         try:
             data_to_restore = backup_data.get('data', backup_data)
             result = restore_all_data(data_to_restore)
@@ -525,6 +567,82 @@ def restore_backup():
         print(f"❌ Restore backup error: {e}")
         print(traceback.format_exc())
         return jsonify({'error': f'Restore failed: {str(e)}'}), 500
+
+# ============ MIGRATION ENDPOINT ============
+@app.route('/api/migrate-all-bills', methods=['POST'])
+def migrate_all_bills():
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+
+        # Fetch all bills
+        response = supabase.table("utility_bills").select("*").execute()
+        bills = response.data if response.data else []
+        print(f"📊 Found {len(bills)} bills to migrate")
+
+        updated = 0
+        for bill in bills:
+            bill_id = bill['id']
+            utility_type = bill.get('utility_type')
+            update_data = {}
+
+            # Ensure numeric fields are floats
+            numeric_fields = ['current_charges', 'late_charges', 'unsettled_charges', 
+                              'amount_paid', 'consumption_m3', 'consumption_kwh']
+            for field in numeric_fields:
+                if field in bill:
+                    try:
+                        val = float(bill[field]) if bill[field] is not None else 0.0
+                        update_data[field] = val
+                    except (ValueError, TypeError):
+                        update_data[field] = 0.0
+
+            # Special handling for telephone
+            if utility_type == 'telephone':
+                account_number = bill.get('account_number', '')
+                current_charges = update_data.get('current_charges', 0.0)
+                unsettled_charges = update_data.get('unsettled_charges', 0.0)
+                amount_paid = update_data.get('amount_paid', 0.0)
+                bill_number = bill.get('bill_number', '')
+
+                notes_obj = {}
+                try:
+                    if bill.get('notes'):
+                        notes_obj = json.loads(bill['notes'])
+                    if not isinstance(notes_obj, dict):
+                        notes_obj = {}
+                except:
+                    notes_obj = {}
+
+                if 'accounts' not in notes_obj:
+                    notes_obj['accounts'] = {}
+
+                if account_number not in notes_obj['accounts']:
+                    notes_obj['accounts'][account_number] = {
+                        'accountNumber': account_number,
+                        'billNumber': bill_number,
+                        'totalAccountCharges': current_charges,
+                        'previousOutstanding': unsettled_charges,
+                        'previousPayment': 0.0,
+                        'totalCurrentCharges': current_charges + unsettled_charges,
+                        'amountPaid': amount_paid,
+                        'phones': [],
+                        'notes': ''
+                    }
+                update_data['notes'] = json.dumps(notes_obj)
+
+            if update_data:
+                supabase.table("utility_bills").update(update_data).eq("id", bill_id).execute()
+                updated += 1
+
+        return jsonify({
+            'success': True,
+            'message': f'Migrated {updated} bills'
+        })
+
+    except Exception as e:
+        print(f"❌ Migration error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ============ EXPORT FUNCTIONS ============
 @app.route('/api/export-data', methods=['GET'])
