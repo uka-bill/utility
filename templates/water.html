@@ -1500,11 +1500,21 @@
                     try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
                 }
                 
-                let consumption = existing ? (existing.consumption_m3 || 0) : 0;
-                let currentCharges = existing ? (existing.current_charges || 0) : 0;
-                let outstandingCharges = existing ? (existing.unsettled_charges || 0) : 0;
+                // ----- FIX: Explicitly get values from existing bill -----
+                let consumption = 0;
+                let currentCharges = 0;
+                let outstandingCharges = 0;
+                let amountPaid = 0;
+                
+                if (existing) {
+                    consumption = existing.consumption_m3 || 0;
+                    currentCharges = existing.current_charges || 0;
+                    outstandingCharges = existing.unsettled_charges || 0;
+                    amountPaid = existing.amount_paid || 0;
+                }
+                // ----- END FIX -----
+                
                 let previousPayment = parsedNotes.previousPayment || 0;
-                let amountPaid = existing ? (existing.amount_paid || 0) : 0;
                 let notes = parsedNotes.originalNotes || meter.notes || '';
                 
                 entityTotalPaid += amountPaid;
@@ -1527,6 +1537,7 @@
                     notes: notes,
                     billId: meter.billId,
                     isFirstMeterForAccount: isFirstMeterForAccount,
+                    existingBill: existing // store the full bill for debugging
                 });
                 
                 isFirstMeterForAccount = false;
@@ -1610,6 +1621,11 @@
                 }
             }
             
+            // ----- FIX: Use the explicit currentCharges from meterData -----
+            const currentChargesDisplay = meterData.currentCharges || 0;
+            const outstandingDisplay = meterData.outstandingCharges || 0;
+            const consumptionDisplay = meterData.consumption || 0;
+            
             meterRow.innerHTML = 
                 '<td class="seq-number">—</td>' +
                 '<td></td>' +
@@ -1618,9 +1634,9 @@
                     '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.displayMeter) + '</div>' +
                     meterData.locationDisplay +
                 '</td>' +
-                '<td style="text-align:right;"><input type="text" class="inline-input consumption-input" value="' + formatConsumption(meterData.consumption) + '" placeholder="m³"></td>' +
-                '<td style="text-align:right;"><input type="text" class="inline-input current-charge-input" value="' + formatNumberWithCommas(meterData.currentCharges) + '" placeholder="$"></td>' +
-                '<td style="text-align:right;"><input type="text" class="inline-input outstanding-input" value="' + formatNumberWithCommas(meterData.outstandingCharges) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;"><input type="text" class="inline-input consumption-input" value="' + formatConsumption(consumptionDisplay) + '" placeholder="m³"></td>' +
+                '<td style="text-align:right;"><input type="text" class="inline-input current-charge-input" value="' + formatNumberWithCommas(currentChargesDisplay) + '" placeholder="$"></td>' +
+                '<td style="text-align:right;"><input type="text" class="inline-input outstanding-input" value="' + formatNumberWithCommas(outstandingDisplay) + '" placeholder="$"></td>' +
                 '<td style="text-align:right;"><input type="text" class="inline-input previous-paid-input" value="' + formatNumberWithCommas(meterData.previousPayment) + '" placeholder="$"></td>' +
                 '<td style="text-align:right;" class="amount-paid-cell">' + amountPaidHtml + '</td>' +
                 '<td class="notes-cell"><input type="text" class="inline-input notes-input" value="' + escapeHtml(meterData.notes) + '" placeholder="Notes..."></td>' +
