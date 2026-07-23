@@ -839,6 +839,7 @@
             if (!res.ok) throw new Error('Fetch failed');
             allDepartments = await res.json();
             console.log(`✅ Loaded ${allDepartments.length} departments`);
+            // Ensure every department has display_order (fallback to id)
             allDepartments.forEach(d => {
                 if (d.display_order === undefined || d.display_order === null) {
                     d.display_order = d.id;
@@ -877,7 +878,7 @@
         });
     }
 
-    // ===== FILTERED & SORTED (groups by display_order) =====
+    // ===== FILTERED & SORTED (exactly like water.html) =====
     function getFilteredDepartments() {
         let filtered = [...allDepartments];
         const search = document.getElementById('searchFilter').value.toLowerCase();
@@ -894,6 +895,7 @@
         if (deptFilter !== 'all') filtered = filtered.filter(d => d.department_name === deptFilter);
         if (divFilter !== 'all') filtered = filtered.filter(d => d.division_name === divFilter);
 
+        // Group by department_name
         const grouped = {};
         filtered.forEach(d => {
             const key = d.department_name || 'Other';
@@ -901,7 +903,7 @@
             grouped[key].push(d);
         });
 
-        // Sort groups by min display_order (fallback id)
+        // Sort groups by min display_order (fallback to id) – same as water tabs
         const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
             const minOrderA = Math.min(...grouped[a].map(d => d.display_order !== undefined ? d.display_order : d.id));
             const minOrderB = Math.min(...grouped[b].map(d => d.display_order !== undefined ? d.display_order : d.id));
@@ -911,6 +913,7 @@
             return minIdA - minIdB;
         });
 
+        // Flatten: within each group sort by display_order (fallback id)
         const result = [];
         sortedGroupKeys.forEach(key => {
             const depts = grouped[key].sort((a, b) => {
