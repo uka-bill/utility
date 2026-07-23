@@ -6,6 +6,7 @@
     <title>Data Management - Utility Bills Management</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* All CSS remains exactly as before – unchanged */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -1015,7 +1016,6 @@
             statusEl.style.color = 'var(--warning)';
 
             try {
-                // Use the direct-download endpoint – it returns the JSON file directly
                 const response = await fetch('/api/backup/download-direct');
                 
                 if (!response.ok) {
@@ -1023,7 +1023,6 @@
                     throw new Error(errorText || 'Backup creation failed');
                 }
 
-                // Get filename from Content-Disposition header or generate one
                 const contentDisposition = response.headers.get('Content-Disposition');
                 let filename = 'uka_bill_backup.json';
                 if (contentDisposition) {
@@ -1045,7 +1044,6 @@
                 statusEl.style.color = 'var(--success)';
                 showToast('Backup downloaded successfully!', 'success');
                 
-                // Refresh the backup list (new file may have been saved on server)
                 setTimeout(loadBackupHistory, 1000);
 
             } catch (error) {
@@ -1065,14 +1063,13 @@
             }
         }
 
-        // ---------- RESTORE (uses /api/backup/restore with FormData) ----------
+        // ---------- RESTORE (with robust response handling) ----------
         async function performRestore() {
             if (!selectedBackupFile) {
                 showToast('Please select a backup file first.', 'error');
                 return;
             }
 
-            // Client-side file size check
             if (selectedBackupFile.size === 0) {
                 showToast('The selected file is empty. Please choose a valid backup.', 'error');
                 return;
@@ -1097,7 +1094,6 @@
             percentEl.textContent = '0%';
 
             try {
-                // Upload the file via FormData to /api/backup/restore
                 const formData = new FormData();
                 formData.append('backup_file', selectedBackupFile);
 
@@ -1109,10 +1105,29 @@
                     body: formData
                 });
 
+                // Always read the response as text first
+                const responseText = await response.text();
+
+                // Try to parse JSON; if it fails, use the raw text as error message
+                let result;
+                let isJson = false;
+                try {
+                    result = JSON.parse(responseText);
+                    isJson = true;
+                } catch (parseError) {
+                    // Not JSON – we'll treat the raw text as the error
+                    result = { error: responseText || 'Server returned an empty or invalid response.' };
+                }
+
+                // If the HTTP status is not OK, throw with the error message
+                if (!response.ok) {
+                    const errorMsg = isJson ? (result.error || result.message || `Server error (${response.status})`) : result.error;
+                    throw new Error(errorMsg);
+                }
+
+                // Now we have a successful JSON response
                 progressFill.style.width = '90%';
                 percentEl.textContent = '90%';
-
-                const result = await response.json();
 
                 if (result.success) {
                     progressFill.style.width = '100%';
@@ -1205,13 +1220,9 @@
 
         // ---------- EVENT LISTENERS ----------
         function setupEventListeners() {
-            // Create Backup
             document.getElementById('createBackupBtn').addEventListener('click', createBackup);
-
-            // Refresh Backup List
             document.getElementById('refreshBackupListBtn').addEventListener('click', loadBackupHistory);
 
-            // Restore - File input
             const fileInput = document.getElementById('restoreFileInput');
             const dropZone = document.getElementById('restoreDropZone');
 
@@ -1240,10 +1251,7 @@
                 }
             });
 
-            // Restore button
             document.getElementById('restoreBtn').addEventListener('click', performRestore);
-
-            // Clear file button
             document.getElementById('clearFileBtn').addEventListener('click', clearFileSelection);
         }
     </script>
