@@ -6,6 +6,8 @@
     <title>Departments Management - Utility Bills Management</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* ===== All CSS from previous version – same as above ===== */
+        /* (I'll include it once again to be complete) */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -32,14 +34,7 @@
             --transition: all 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
         }
         * { margin:0; padding:0; box-sizing:border-box; }
-        body {
-            font-family:'Inter', sans-serif;
-            background:var(--gray-50);
-            color:var(--dark);
-            font-size:15px;
-            line-height:1.6;
-            -webkit-font-smoothing:antialiased;
-        }
+        body { font-family:'Inter', sans-serif; background:var(--gray-50); color:var(--dark); font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased; }
         ::-webkit-scrollbar { width:6px; height:6px; }
         ::-webkit-scrollbar-track { background:var(--gray-50); }
         ::-webkit-scrollbar-thumb { background:var(--gray-light); border-radius:10px; }
@@ -839,7 +834,6 @@
             if (!res.ok) throw new Error('Fetch failed');
             allDepartments = await res.json();
             console.log(`✅ Loaded ${allDepartments.length} departments`);
-            // Ensure every department has display_order (fallback to id)
             allDepartments.forEach(d => {
                 if (d.display_order === undefined || d.display_order === null) {
                     d.display_order = d.id;
@@ -903,7 +897,7 @@
             grouped[key].push(d);
         });
 
-        // Sort groups by min display_order (fallback to id) – same as water tabs
+        // Sort groups by min display_order (fallback to id)
         const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
             const minOrderA = Math.min(...grouped[a].map(d => d.display_order !== undefined ? d.display_order : d.id));
             const minOrderB = Math.min(...grouped[b].map(d => d.display_order !== undefined ? d.display_order : d.id));
@@ -1032,6 +1026,7 @@
             showMessage('Department not found', true);
             return;
         }
+
         const groupName = allDepartments[deptIndex].department_name || 'Other';
         const group = allDepartments
             .filter(d => (d.department_name || 'Other') === groupName)
@@ -1040,6 +1035,7 @@
                 const orderB = b.display_order !== undefined ? b.display_order : b.id;
                 return orderA - orderB;
             });
+
         const currentPos = group.findIndex(d => d.id === deptId);
         if (currentPos === -1) {
             showMessage('Department not found in group', true);
@@ -1050,8 +1046,10 @@
             showMessage('Cannot move further', true);
             return;
         }
+
         const currentDept = group[currentPos];
         const neighborDept = group[newPos];
+
         if (currentDept.display_order === undefined) currentDept.display_order = currentDept.id;
         if (neighborDept.display_order === undefined) neighborDept.display_order = neighborDept.id;
 
@@ -1063,6 +1061,7 @@
 
         try {
             showLoading(true);
+
             const updateCurrent = {
                 unitName: currentDept.unit_name || '',
                 divisionName: currentDept.division_name || '',
@@ -1081,8 +1080,8 @@
                 body: JSON.stringify(updateCurrent)
             });
             if (!resp1.ok) {
-                const err = await resp1.json();
-                throw new Error(err.error || 'Failed to update order');
+                const errText = await resp1.text();
+                throw new Error(`Server returned ${resp1.status}: ${errText}`);
             }
 
             const updateNeighbor = {
@@ -1103,13 +1102,15 @@
                 body: JSON.stringify(updateNeighbor)
             });
             if (!resp2.ok) {
-                const err = await resp2.json();
-                throw new Error(err.error || 'Failed to update order');
+                const errText = await resp2.text();
+                throw new Error(`Server returned ${resp2.status}: ${errText}`);
             }
+
             showMessage('Order updated successfully');
         } catch (error) {
-            console.error(error);
+            console.error('Move error:', error);
             showMessage('Error updating order: ' + error.message, true);
+            // Revert local changes by reloading from server
             await loadDepartments();
         } finally {
             showLoading(false);
@@ -1124,16 +1125,20 @@
         showLoading(true);
         try {
             const resp = await fetch('/api/departments/ensure-order', { method: 'POST' });
+            if (!resp.ok) {
+                const errText = await resp.text();
+                throw new Error(`Server returned ${resp.status}: ${errText}`);
+            }
             const result = await resp.json();
-            if (resp.ok && result.success) {
+            if (result.success) {
                 showMessage(result.message, false);
                 await loadDepartments();
             } else {
                 showMessage(result.error || 'Failed to fix order', true);
             }
         } catch (err) {
-            showMessage('Network error', true);
-            console.error(err);
+            console.error('Fix order error:', err);
+            showMessage('Network error: ' + err.message, true);
         } finally {
             showLoading(false);
         }
