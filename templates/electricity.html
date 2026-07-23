@@ -814,17 +814,13 @@
 
     function saveScrollPosition() {
         const wrapper = document.querySelector('.table-wrapper');
-        if (wrapper) {
-            savedScrollPosition = wrapper.scrollTop;
-        }
+        if (wrapper) savedScrollPosition = wrapper.scrollTop;
     }
 
     function restoreScrollPosition() {
         const wrapper = document.querySelector('.table-wrapper');
         if (wrapper && savedScrollPosition > 0) {
-            setTimeout(() => {
-                wrapper.scrollTop = savedScrollPosition;
-            }, 50);
+            setTimeout(() => wrapper.scrollTop = savedScrollPosition, 50);
         }
     }
 
@@ -833,9 +829,7 @@
     }
 
     function showSavingToast(entityName) {
-        if (activeSavingToast) {
-            activeSavingToast.remove();
-        }
+        if (activeSavingToast) activeSavingToast.remove();
         const toast = document.createElement('div');
         toast.className = 'saving-toast';
         toast.innerHTML = '<span class="saving-spinner"></span> Saving ' + entityName + '... Please wait';
@@ -845,10 +839,7 @@
     }
 
     function hideSavingToast() {
-        if (activeSavingToast) {
-            activeSavingToast.remove();
-            activeSavingToast = null;
-        }
+        if (activeSavingToast) { activeSavingToast.remove(); activeSavingToast = null; }
     }
 
     function showToast(message, isError) {
@@ -863,8 +854,7 @@
     function populateYears() {
         const yearSelect = document.getElementById('globalYear');
         yearSelect.innerHTML = '';
-        const start = 2020;
-        const end = 2035;
+        const start = 2020, end = 2035;
         for (let y = start; y <= end; y++) {
             const opt = document.createElement('option');
             opt.value = y;
@@ -880,14 +870,8 @@
                 fetch('/api/schools'),
                 fetch('/api/departments')
             ]);
-            if (schoolsRes.ok) {
-                allSchools = await schoolsRes.json();
-                console.log('🏫 Loaded ' + allSchools.length + ' schools');
-            }
-            if (deptsRes.ok) {
-                allDepartments = await deptsRes.json();
-                console.log('🏢 Loaded ' + allDepartments.length + ' departments');
-            }
+            if (schoolsRes.ok) allSchools = await schoolsRes.json();
+            if (deptsRes.ok) allDepartments = await deptsRes.json();
         } catch(e) {
             console.error('Error loading entities:', e);
         }
@@ -915,9 +899,7 @@
         try {
             if (entity.electricity_accounts && typeof entity.electricity_accounts === 'string') {
                 const parsed = JSON.parse(entity.electricity_accounts);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    accounts = parsed;
-                }
+                if (Array.isArray(parsed) && parsed.length > 0) accounts = parsed;
             } else if (entity.electricity_accounts && Array.isArray(entity.electricity_accounts)) {
                 accounts = entity.electricity_accounts;
             } else if (entity.electricity_account && entity.electricity_account !== '—') {
@@ -999,57 +981,69 @@
         return m.trim();
     }
 
+    // ========== FIXED findBillForMeter ==========
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
         const cleanAccount = (accountNumber || '').trim();
-        const cleanMeter = normalizeMeter(meterNumber);
-        if (cleanMeter === '') {
-            for (let i = 0; i < existingBills.length; i++) {
-                const bill = existingBills[i];
-                const billAccount = (bill.account_number || '').trim();
-                if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                    billAccount === cleanAccount && bill.month == month && bill.year == year) {
-                    return bill;
-                }
-            }
-            for (let i = 0; i < existingBills.length; i++) {
-                const bill = existingBills[i];
-                const billAccount = (bill.account_number || '').trim();
-                if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                    billAccount === cleanAccount && (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                    return bill;
-                }
-            }
-        }
-        if (cleanMeter !== '') {
-            for (let i = 0; i < existingBills.length; i++) {
-                const bill = existingBills[i];
-                const billAccount = (bill.account_number || '').trim();
-                const billMeter = normalizeMeter(bill.meter_number);
-                if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                    billAccount === cleanAccount && billMeter === cleanMeter &&
-                    bill.month == month && bill.year == year) {
-                    return bill;
-                }
-            }
-            for (let i = 0; i < existingBills.length; i++) {
-                const bill = existingBills[i];
-                const billAccount = (bill.account_number || '').trim();
-                const billMeter = normalizeMeter(bill.meter_number);
-                if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                    billAccount === cleanAccount && billMeter === cleanMeter &&
-                    (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                    return bill;
-                }
-            }
-        }
-        for (let i = 0; i < existingBills.length; i++) {
-            const bill = existingBills[i];
-            const billAccount = (bill.account_number || '').trim();
-            if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                billAccount === cleanAccount && bill.month == month && bill.year == year) {
+        const normalizeAccount = (acc) => {
+            if (!acc) return '';
+            return String(acc).replace(/[()\s\-]/g, '').trim();
+        };
+        const normAccount = normalizeAccount(cleanAccount);
+        
+        // 1. Try match by account_number (normalized) + month + year
+        for (let bill of existingBills) {
+            const billAccount = normalizeAccount(bill.account_number);
+            if (bill.entity_type === entityType &&
+                billAccount === normAccount &&
+                bill.month == month && bill.year == year) {
+                console.log('✅ MATCHED BY ACCOUNT:', bill);
                 return bill;
             }
         }
+        // fallback bill_month/bill_year
+        for (let bill of existingBills) {
+            const billAccount = normalizeAccount(bill.account_number);
+            if (bill.entity_type === entityType &&
+                billAccount === normAccount &&
+                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
+                console.log('✅ MATCHED BY ACCOUNT (bill_month):', bill);
+                return bill;
+            }
+        }
+        
+        // 2. Try match by entity_id + month + year
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType && bill.entity_id == entityId &&
+                bill.month == month && bill.year == year) {
+                console.log('✅ MATCHED BY ENTITY ID:', bill);
+                return bill;
+            }
+        }
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType && bill.entity_id == entityId &&
+                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
+                console.log('✅ MATCHED BY ENTITY ID (bill_month):', bill);
+                return bill;
+            }
+        }
+        
+        // 3. Fallback: first bill for this entity_type + month + year
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.month == month && bill.year == year) {
+                console.log('✅ FALLBACK MATCH (first bill):', bill);
+                return bill;
+            }
+        }
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
+                console.log('✅ FALLBACK MATCH (bill_month):', bill);
+                return bill;
+            }
+        }
+        
+        console.log('❌ No match found for:', { entityType, entityId, accountNumber, month, year });
         return null;
     }
 
@@ -1070,6 +1064,7 @@
         return false;
     }
 
+    // ========== Save functions ==========
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
         if (isLoading) return;
@@ -1091,7 +1086,9 @@
         const saveBtn = entityRow.querySelector('.save-entity-btn');
         const originalBtnText = saveBtn ? saveBtn.innerHTML : 'Save All';
         if (saveBtn) { saveBtn.innerHTML = '<span class="saving-indicator"></span> Saving...'; saveBtn.disabled = true; }
-        meterRows.forEach(row => { row.querySelectorAll('.inline-input').forEach(input => input.classList.add('saving')); });
+        meterRows.forEach(row => {
+            row.querySelectorAll('.inline-input').forEach(input => input.classList.add('saving'));
+        });
 
         const batchBills = [];
         for (let i = 0; i < meterRows.length; i++) {
@@ -1168,13 +1165,9 @@
 
     function updateEntityTotalDisplay(entityId, batchBills) {
         let totalPaid = 0;
-        for (let i = 0; i < batchBills.length; i++) {
-            totalPaid += batchBills[i].amount_paid || 0;
-        }
+        for (let i = 0; i < batchBills.length; i++) totalPaid += batchBills[i].amount_paid || 0;
         const entityTotalSpan = document.getElementById('entity-total-' + entityId);
-        if (entityTotalSpan) {
-            entityTotalSpan.innerHTML = '(Total Paid: $' + formatNumberWithCommas(totalPaid) + ')';
-        }
+        if (entityTotalSpan) entityTotalSpan.innerHTML = '(Total Paid: $' + formatNumberWithCommas(totalPaid) + ')';
         const entityStatusSpan = document.getElementById('entity-status-' + entityId);
         if (entityStatusSpan) {
             if (totalPaid > 0) {
@@ -1187,10 +1180,12 @@
         }
     }
 
+    // ========== Render Table ==========
     async function renderElectricityTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
         const year = parseInt(document.getElementById('globalYear').value);
-        currentMonth = month; currentYear = year;
+        currentMonth = month;
+        currentYear = year;
         const tbody = document.getElementById('billsTableBody');
         tbody.innerHTML = '<tr><td colspan="12" class="no-data">Loading data...</td></tr>';
 
@@ -1217,7 +1212,8 @@
         }
 
         tbody.innerHTML = '';
-        let globalSerial = 1, entityNumber = 1;
+        let globalSerial = 1;
+        let entityNumber = 1;
 
         let schoolsList = filteredEntities.filter(e => e.type === 'school');
         let departmentsList = filteredEntities.filter(e => e.type === 'department');
@@ -1226,10 +1222,13 @@
             const clusterA = a.clusterNumber ? parseInt(a.clusterNumber.replace('CLUSTER ', '')) : 999;
             const clusterB = b.clusterNumber ? parseInt(b.clusterNumber.replace('CLUSTER ', '')) : 999;
             if (clusterA !== clusterB) return clusterA - clusterB;
-            return (a.displayOrder || 999) - (b.displayOrder || 999) || (a.originalId || a.id) - (b.originalId || b.id);
+            const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
+            const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
+            if (orderA !== orderB) return orderA - orderB;
+            return (a.originalId || a.id) - (b.originalId || b.id);
         });
 
-        // Department grouping using display_order
+        // Department grouping
         const deptMap = new Map();
         departmentsList.forEach(dept => {
             const deptName = dept.departmentName || 'Other';
@@ -1241,8 +1240,7 @@
         });
 
         const sortedDeptNames = Array.from(deptMap.keys()).sort((a, b) => {
-            const deptA = deptMap.get(a);
-            const deptB = deptMap.get(b);
+            const deptA = deptMap.get(a), deptB = deptMap.get(b);
             const minOrderA = Math.min(...Array.from(deptA.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
             const minOrderB = Math.min(...Array.from(deptB.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
             if (minOrderA !== minOrderB) return minOrderA - minOrderB;
@@ -1255,8 +1253,7 @@
         sortedDeptNames.forEach(deptName => {
             const divMap = deptMap.get(deptName);
             const sortedDivNames = Array.from(divMap.keys()).sort((a, b) => {
-                const unitsA = divMap.get(a);
-                const unitsB = divMap.get(b);
+                const unitsA = divMap.get(a), unitsB = divMap.get(b);
                 const minOrderA = Math.min(...unitsA.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
                 const minOrderB = Math.min(...unitsB.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
                 if (minOrderA !== minOrderB) return minOrderA - minOrderB;
@@ -1270,7 +1267,8 @@
                 units.sort((a, b) => {
                     const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
                     const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
-                    return orderA - orderB || (a.originalId || a.id) - (b.originalId || b.id);
+                    if (orderA !== orderB) return orderA - orderB;
+                    return (a.originalId || a.id) - (b.originalId || b.id);
                 });
                 deptDivisions.push({ divisionName: divName, units: units });
             });
@@ -1302,7 +1300,14 @@
                     const visibleMeters = [];
                     if (meters.length === 0) {
                         const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, '', month, year);
-                        visibleMeters.push({ meterNumber: '', location: '', notes: '', existing, billId: existing ? existing.id : null, isPlaceholder: true });
+                        visibleMeters.push({
+                            meterNumber: '',
+                            location: '',
+                            notes: '',
+                            existing: existing,
+                            billId: existing ? existing.id : null,
+                            isPlaceholder: true
+                        });
                     } else {
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
@@ -1311,13 +1316,24 @@
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
-                                visibleMeters.push({ meterNumber: meterNum, location: meter.location || '', notes: meter.notes || '', existing, billId: existing ? existing.id : null, isPlaceholder: false });
+                                visibleMeters.push({
+                                    meterNumber: meterNum,
+                                    location: meter.location || '',
+                                    notes: meter.notes || '',
+                                    existing: existing,
+                                    billId: existing ? existing.id : null,
+                                    isPlaceholder: false
+                                });
                             }
                         }
                     }
                     if (visibleMeters.length > 0) {
                         hasAnyVisible = true;
-                        visibleAccounts.push({ accountNumber: account.accountNumber, meters: visibleMeters, isPlaceholder: account.isPlaceholder });
+                        visibleAccounts.push({
+                            accountNumber: account.accountNumber,
+                            meters: visibleMeters,
+                            isPlaceholder: account.isPlaceholder
+                        });
                     }
                 }
                 if (hasAnyVisible) {
@@ -1345,7 +1361,8 @@
             }
         }
 
-        for (let deptData of sortedDeptData) {
+        // Render departments
+        for (const deptData of sortedDeptData) {
             const deptName = deptData.departmentName;
             const divisions = deptData.divisions;
             let totalAccountsInDept = 0, totalUnitsInDept = 0;
@@ -1357,8 +1374,9 @@
             deptSep.className = 'department-group-separator';
             deptSep.innerHTML = `<td colspan="12"><div class="dept-group-info"><span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span><span class="dept-group-count">${totalUnitsInDept} unit${totalUnitsInDept>1?'s':''}, ${totalAccountsInDept} account${totalAccountsInDept>1?'s':''}</span></div></td>`;
             tbody.appendChild(deptSep);
-            for (let divData of divisions) {
-                for (let entity of divData.units) {
+            for (const divData of divisions) {
+                const units = divData.units;
+                for (const entity of units) {
                     globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, entityNumber);
                     entityNumber++;
                 }
@@ -1388,7 +1406,6 @@
                     try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
                 }
 
-                // ----- FIX: Explicitly get values from existing bill -----
                 let consumption = 0;
                 let currentCharges = 0;
                 let outstandingCharges = 0;
@@ -1400,17 +1417,22 @@
                     outstandingCharges = existing.unsettled_charges || 0;
                     amountPaid = existing.amount_paid || 0;
                 }
-                // ----- END FIX -----
 
                 let previousPayment = parsedNotes.previousPayment || 0;
                 let notes = parsedNotes.originalNotes || meter.notes || '';
                 entityTotalPaid += amountPaid;
                 if (existing && amountPaid > 0) entityHasBills = true;
+
                 const locationDisplay = meter.location ? '<div style="font-size:0.7rem; color:var(--gray);">📍 ' + escapeHtml(meter.location) + '</div>' : '';
                 const displayMeter = meter.meterNumber || '—';
+
+                // ----- FIX: Use account.accountNumber (capital N) -----
+                const accountNumber = account.accountNumber || account.account_number || '';
+                // ----- END FIX -----
+
                 meterRowsData.push({
                     serial: serial,
-                    accountNumber: account.accountNumber,
+                    accountNumber: accountNumber,
                     meterNumber: meter.meterNumber,
                     displayMeter: displayMeter,
                     locationDisplay: locationDisplay,
@@ -1424,6 +1446,7 @@
                     isFirstMeterForAccount: isFirstMeterForAccount,
                     existingBill: existing
                 });
+
                 isFirstMeterForAccount = false;
                 serial++;
             }
@@ -1440,11 +1463,14 @@
         entityRow.setAttribute('data-entity-type', entity.type);
         entityRow.setAttribute('data-entity-id', entity.id);
         entityRow.setAttribute('data-entity-name', entity.name);
+
         entityRow.innerHTML = '<td class="seq-number">' + entityNumber + '</td>' +
             '<td class="entity-header"><span class="entity-name">' + escapeHtml(entity.name) + '</span>' +
             '<span class="total-due" id="entity-total-' + entity.id + '">(Total Paid: $' + formatNumberWithCommas(entityTotalPaid) + ')</span>' +
-            '</td><td><span class="badge ' + (entity.type === 'school' ? 'badge-school' : 'badge-department') + '">' + entity.typeLabel + '</span></td>' +
-            '<td colspan="6"></td><td></td>' +
+            '</td>' +
+            '<td><span class="badge ' + (entity.type === 'school' ? 'badge-school' : 'badge-department') + '">' + entity.typeLabel + '</span></td>' +
+            '<td colspan="6"></td>' +
+            '<td></td>' +
             '<td><span class="status-badge ' + entityStatusClass + '" id="entity-status-' + entity.id + '">' + entityStatusText + '</span></td>' +
             '<td class="entity-actions"><button class="btn btn-success btn-sm save-entity-btn">Save All</button></td>';
         tbody.appendChild(entityRow);
@@ -1455,6 +1481,7 @@
         for (let i = 0; i < meterRowsData.length; i++) {
             const meterData = meterRowsData[i];
             const accountNum = meterData.accountNumber;
+
             if (currentAccount !== null && currentAccount !== accountNum) {
                 const accountDisplay = accountNum && accountNum !== '—' ? accountNum : 'No Account';
                 const separatorRow = document.createElement('tr');
@@ -1462,6 +1489,7 @@
                 separatorRow.innerHTML = '<td colspan="12"><div class="account-label">▸ Account: <span class="acct-num">' + escapeHtml(accountDisplay) + '</span></div></td>';
                 tbody.appendChild(separatorRow);
             }
+
             if (currentAccount === null) {
                 currentAccount = accountNum;
                 const accountDisplay = accountNum && accountNum !== '—' ? accountNum : 'No Account';
@@ -1494,21 +1522,26 @@
                 }
             }
 
-            // ----- FIX: Use the explicit currentCharges from meterData -----
             const currentChargesDisplay = meterData.currentCharges || 0;
             const outstandingDisplay = meterData.outstandingCharges || 0;
             const consumptionDisplay = meterData.consumption || 0;
 
             meterRow.innerHTML = 
-                '<td class="seq-number">—</td><td></td><td></td><td>' + accountDisplayHtml +
-                '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.displayMeter) + '</div>' + meterData.locationDisplay +
-                '</td><td style="text-align:right;"><input type="text" class="inline-input consumption-input" value="' + formatConsumption(consumptionDisplay) + '" placeholder="kWh"></td>' +
+                '<td class="seq-number">—</td>' +
+                '<td></td>' +
+                '<td></td>' +
+                '<td>' + accountDisplayHtml +
+                    '<div class="meter-number">🔢 Meter: ' + escapeHtml(meterData.displayMeter) + '</div>' +
+                    meterData.locationDisplay +
+                '</td>' +
+                '<td style="text-align:right;"><input type="text" class="inline-input consumption-input" value="' + formatConsumption(consumptionDisplay) + '" placeholder="kWh"></td>' +
                 '<td style="text-align:right;"><input type="text" class="inline-input current-charge-input" value="' + formatNumberWithCommas(currentChargesDisplay) + '" placeholder="$"></td>' +
                 '<td style="text-align:right;"><input type="text" class="inline-input outstanding-input" value="' + formatNumberWithCommas(outstandingDisplay) + '" placeholder="$"></td>' +
                 '<td style="text-align:right;"><input type="text" class="inline-input previous-paid-input" value="' + formatNumberWithCommas(meterData.previousPayment) + '" placeholder="$"></td>' +
                 '<td style="text-align:right;" class="amount-paid-cell">' + amountPaidHtml + '</td>' +
                 '<td class="notes-cell"><input type="text" class="inline-input notes-input" value="' + escapeHtml(meterData.notes) + '" placeholder="Notes..."></td>' +
-                '<td style="text-align:center;"></td><td style="text-align:center;"></td>';
+                '<td style="text-align:center;"></td>' +
+                '<td style="text-align:center;"></td>';
             tbody.appendChild(meterRow);
             meterRowElements.push(meterRow);
 
@@ -1525,6 +1558,7 @@
                     this.value = raw.toString();
                 });
             }
+
             const otherNumericInputs = meterRow.querySelectorAll('.inline-input:not(.notes-input):not(.consumption-input)');
             otherNumericInputs.forEach(inp => {
                 inp.addEventListener('blur', function() {
@@ -1538,6 +1572,7 @@
                     this.value = raw.toString();
                 });
             });
+
             currentAccount = accountNum;
         }
 
@@ -1559,7 +1594,9 @@
             <td class="summary-total" id="summary-outstanding-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalOutstanding)}</td>
             <td class="summary-dash" style="text-align:center;">—</td>
             <td class="summary-dash" style="text-align:center;">—</td>
-            <td style="text-align:center;"></td><td style="text-align:center;"></td><td style="text-align:center;"></td>
+            <td style="text-align:center;"></td>
+            <td style="text-align:center;"></td>
+            <td style="text-align:center;"></td>
         `;
         tbody.appendChild(summaryRow);
 
@@ -1613,29 +1650,42 @@
                 return;
             }
         });
+
         const monthSelect = document.getElementById('globalMonth');
         const yearSelect = document.getElementById('globalYear');
         monthSelect.addEventListener('change', function() {
-            renderElectricityTable(parseInt(this.value), parseInt(document.getElementById('globalYear').value));
+            const month = parseInt(this.value);
+            const year = parseInt(document.getElementById('globalYear').value);
+            renderElectricityTable(month, year);
         });
         yearSelect.addEventListener('change', function() {
-            renderElectricityTable(parseInt(document.getElementById('globalMonth').value), parseInt(this.value));
+            const month = parseInt(document.getElementById('globalMonth').value);
+            const year = parseInt(this.value);
+            renderElectricityTable(month, year);
         });
     }
 
     document.addEventListener('DOMContentLoaded', async function() {
         populateYears();
         const now = new Date();
-        document.getElementById('globalMonth').value = now.getMonth() + 1;
-        document.getElementById('globalYear').value = now.getFullYear();
+        const monthSelect = document.getElementById('globalMonth');
+        const yearSelect = document.getElementById('globalYear');
+        if (monthSelect) monthSelect.value = now.getMonth() + 1;
+        if (yearSelect) yearSelect.value = now.getFullYear();
         attachEventListeners();
         await renderElectricityTable();
-        document.getElementById('refreshTableBtn').addEventListener('click', async function() {
-            await renderElectricityTable();
-        });
-        document.getElementById('applyFiltersBtn').addEventListener('click', async function() {
-            await renderElectricityTable();
-        });
+        const refreshBtn = document.getElementById('refreshTableBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', async function() {
+                await renderElectricityTable();
+            });
+        }
+        const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+        if (applyFiltersBtn) {
+            applyFiltersBtn.addEventListener('click', async function() {
+                await renderElectricityTable();
+            });
+        }
     });
 </script>
 </body>
