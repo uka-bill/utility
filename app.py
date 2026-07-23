@@ -277,15 +277,18 @@ def restore_all_data(backup_data):
         def prepare_bill(bill):
             bill_copy = {k: v for k, v in bill.items() if k != 'id'}
             
-            # Ensure numeric fields are floats
+            # -------- FIX: Ensure numeric fields are floats, default to 0.0 --------
             numeric_fields = ['current_charges', 'late_charges', 'unsettled_charges', 
                               'amount_paid', 'consumption_m3', 'consumption_kwh']
             for field in numeric_fields:
-                if field in bill_copy and bill_copy[field] is not None:
+                val = bill_copy.get(field)
+                if val is not None:
                     try:
-                        bill_copy[field] = float(bill_copy[field])
+                        bill_copy[field] = float(val)
                     except (ValueError, TypeError):
                         bill_copy[field] = 0.0
+                else:
+                    bill_copy[field] = 0.0  # explicit default
 
             # Special handling for telephone bills
             if bill.get('utility_type') == 'telephone':
@@ -339,7 +342,14 @@ def restore_all_data(backup_data):
             prepared_depts = [prepare_department(d) for d in departments]
             batch_insert('departments', prepared_depts, chunk_size=5)
         if bills:
+            # Log sample before prepare
+            print("📋 Sample bills before prepare (first 3):")
+            for b in bills[:3]:
+                print(f"  id={b.get('id')}: current_charges={b.get('current_charges')}, unsettled={b.get('unsettled_charges')}, amount_paid={b.get('amount_paid')}")
             prepared_bills = [prepare_bill(b) for b in bills]
+            print("📋 Sample bills after prepare (first 3):")
+            for pb in prepared_bills[:3]:
+                print(f"  current_charges={pb.get('current_charges')}, unsettled={pb.get('unsettled_charges')}, amount_paid={pb.get('amount_paid')}")
             batch_insert('utility_bills', prepared_bills, chunk_size=5)
         if sut_expenses:
             batch_insert('sut_office_expenses', remove_id(sut_expenses), chunk_size=5)
@@ -593,9 +603,12 @@ def migrate_all_bills():
                 if field in bill:
                     try:
                         val = float(bill[field]) if bill[field] is not None else 0.0
+                        # Only set if the value is not already a valid number? We'll just ensure it's float.
                         update_data[field] = val
                     except (ValueError, TypeError):
                         update_data[field] = 0.0
+                else:
+                    update_data[field] = 0.0
 
             # Special handling for telephone
             if utility_type == 'telephone':
