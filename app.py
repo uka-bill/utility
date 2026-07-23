@@ -2514,4 +2514,4 @@ if __name__ == '__main__':
     initialize_database_tables()
     port = int(os.environ.get('PORT', 5000))
     print(f"🌐 Server will run on port: {port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
