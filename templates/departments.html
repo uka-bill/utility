@@ -6,8 +6,6 @@
     <title>Departments Management - Utility Bills Management</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== All CSS from previous version – same as above ===== */
-        /* (I'll include it once again to be complete) */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -34,7 +32,14 @@
             --transition: all 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
         }
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Inter', sans-serif; background:var(--gray-50); color:var(--dark); font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+        body {
+            font-family:'Inter', sans-serif;
+            background:var(--gray-50);
+            color:var(--dark);
+            font-size:15px;
+            line-height:1.6;
+            -webkit-font-smoothing:antialiased;
+        }
         ::-webkit-scrollbar { width:6px; height:6px; }
         ::-webkit-scrollbar-track { background:var(--gray-50); }
         ::-webkit-scrollbar-thumb { background:var(--gray-light); border-radius:10px; }
@@ -1016,7 +1021,7 @@
         });
     }
 
-    // ===== MOVE UP/DOWN =====
+    // ===== MOVE UP/DOWN (UPDATED: reload after success) =====
     async function moveDepartmentUp(deptId) { await moveDepartment(deptId, -1); }
     async function moveDepartmentDown(deptId) { await moveDepartment(deptId, 1); }
 
@@ -1057,6 +1062,7 @@
         currentDept.display_order = neighborDept.display_order;
         neighborDept.display_order = tempOrder;
 
+        // Re-render immediately for visual feedback
         renderDepartments();
 
         try {
@@ -1107,10 +1113,14 @@
             }
 
             showMessage('Order updated successfully');
+
+            // --- FIX: Reload from server to ensure consistent state ---
+            await loadDepartments();
+
         } catch (error) {
             console.error('Move error:', error);
             showMessage('Error updating order: ' + error.message, true);
-            // Revert local changes by reloading from server
+            // Revert by reloading from server
             await loadDepartments();
         } finally {
             showLoading(false);
