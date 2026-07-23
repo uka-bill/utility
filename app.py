@@ -193,66 +193,76 @@ def restore_all_data(backup_data):
     errors = []
     try:
         print("🗑️ Clearing existing data...")
-        # Clear tables
+        # Clear tables with detailed logging
         try:
             supabase.table("utility_bills").delete().neq("id", 0).execute()
             print("✅ Cleared utility_bills")
         except Exception as e:
             errors.append(f"Failed to clear utility_bills: {str(e)}")
+            print(f"⚠️ Error clearing utility_bills: {e}")
         try:
             supabase.table("sut_office_expenses").delete().neq("id", 0).execute()
             print("✅ Cleared sut_office_expenses")
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ Error clearing sut_office_expenses: {e}")
         try:
             supabase.table("departments").delete().neq("id", 0).execute()
             print("✅ Cleared departments")
         except Exception as e:
             errors.append(f"Failed to clear departments: {str(e)}")
+            print(f"⚠️ Error clearing departments: {e}")
         try:
             supabase.table("schools").delete().neq("id", 0).execute()
             print("✅ Cleared schools")
         except Exception as e:
             errors.append(f"Failed to clear schools: {str(e)}")
+            print(f"⚠️ Error clearing schools: {e}")
         try:
             supabase.table("financial_years").delete().neq("id", 0).execute()
             print("✅ Cleared financial_years")
         except Exception as e:
             errors.append(f"Failed to clear financial_years: {str(e)}")
+            print(f"⚠️ Error clearing financial_years: {e}")
 
-        # Batch insert function
-        def batch_insert(table_name, records, chunk_size=100):
+        # ---- Batch insert with detailed logging ----
+        def batch_insert(table_name, records, chunk_size=10):
             if not records:
+                print(f"⏭️ No records to insert into {table_name}")
                 return
             total = len(records)
             print(f"📥 Inserting {total} records into {table_name}...")
             for i in range(0, total, chunk_size):
                 chunk = records[i:i+chunk_size]
                 try:
+                    print(f"   🔄 Inserting chunk {i//chunk_size + 1} (rows {i+1}-{min(i+chunk_size, total)}) into {table_name}")
                     supabase.table(table_name).insert(chunk).execute()
-                    print(f"   Inserted {i+len(chunk)}/{total}")
+                    print(f"   ✅ Chunk inserted successfully")
                 except Exception as e:
-                    # If chunk fails, try one by one to isolate errors
-                    print(f"⚠️ Batch insert failed for chunk, trying individual inserts: {e}")
-                    for record in chunk:
+                    print(f"❌ Chunk insert failed: {e}")
+                    # Try inserting one by one to find the problematic row
+                    for idx, record in enumerate(chunk):
                         try:
                             supabase.table(table_name).insert(record).execute()
+                            print(f"   ✅ Inserted row {i+idx+1} individually")
                         except Exception as ind_e:
-                            errors.append(f"Failed to insert record in {table_name}: {ind_e}")
+                            errors.append(f"Failed to insert row {i+idx+1} in {table_name}: {ind_e}")
+                            print(f"   ❌ Row {i+idx+1} failed: {ind_e}")
             print(f"✅ Finished inserting {table_name}")
 
-        # Prepare data for each table
+        # Prepare data
         financial_years = backup_data.get('financial_years', [])
         schools = backup_data.get('schools', [])
         departments = backup_data.get('departments', [])
         bills = backup_data.get('utility_bills', [])
         sut_expenses = backup_data.get('sut_office_expenses', [])
 
-        # Remove 'id' field from each record (let Supabase auto-generate)
+        print(f"📊 Data counts: FY={len(financial_years)}, Schools={len(schools)}, Depts={len(departments)}, Bills={len(bills)}, SUT={len(sut_expenses)}")
+
+        # Remove 'id' field
         def remove_id(records):
             return [{k: v for k, v in r.items() if k != 'id'} for r in records]
 
-        # Clean up nested JSON fields for schools/departments (they might be strings already, but if they are lists/dicts we need to json.dumps)
+        # Clean nested JSON fields for schools/departments
         def prepare_school(school):
             school_copy = {k: v for k, v in school.items() if k != 'id'}
             for field in ['water_accounts', 'electricity_accounts', 'telephone_accounts']:
@@ -273,31 +283,26 @@ def restore_all_data(backup_data):
                 bill_copy['bill_image'] = json.dumps(bill_copy['bill_image'])
             return bill_copy
 
-        # Insert financial years
+        # Insert in order (financial years first, then schools, depts, bills, sut)
         if financial_years:
-            batch_insert('financial_years', remove_id(financial_years))
-
-        # Insert schools
+            batch_insert('financial_years', remove_id(financial_years), chunk_size=5)
         if schools:
             prepared_schools = [prepare_school(s) for s in schools]
-            batch_insert('schools', prepared_schools)
-
-        # Insert departments
+            batch_insert('schools', prepared_schools, chunk_size=5)
         if departments:
             prepared_depts = [prepare_department(d) for d in departments]
-            batch_insert('departments', prepared_depts)
-
-        # Insert utility bills
+            batch_insert('departments', prepared_depts, chunk_size=5)
         if bills:
             prepared_bills = [prepare_bill(b) for b in bills]
-            batch_insert('utility_bills', prepared_bills)
-
-        # Insert SUT expenses
+            batch_insert('utility_bills', prepared_bills, chunk_size=5)
         if sut_expenses:
-            batch_insert('sut_office_expenses', remove_id(sut_expenses))
+            batch_insert('sut_office_expenses', remove_id(sut_expenses), chunk_size=5)
 
         return {'success': len(errors) == 0, 'errors': errors}
     except Exception as e:
+        print(f"❌ Fatal error in restore_all_data: {e}")
+        import traceback
+        traceback.print_exc()
         return {'success': False, 'errors': [str(e)]}
 
 # ============ BACKUP API ROUTES ============
@@ -491,7 +496,7 @@ def restore_backup():
                 'details': f'Error at line {e.lineno}, column {e.colno}'
             }), 400
 
-        # Proceed with restore – wrap the whole restore in a try/except to catch any database errors
+        # Proceed with restore
         try:
             data_to_restore = backup_data.get('data', backup_data)
             result = restore_all_data(data_to_restore)
@@ -519,7 +524,6 @@ def restore_backup():
     except Exception as e:
         print(f"❌ Restore backup error: {e}")
         print(traceback.format_exc())
-        # Always return a JSON error, never HTML
         return jsonify({'error': f'Restore failed: {str(e)}'}), 500
 
 # ============ EXPORT FUNCTIONS ============
