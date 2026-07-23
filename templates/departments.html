@@ -743,10 +743,7 @@
             <h1 class="page-title">🏢 Departments Management</h1>
             <span class="page-subtitle">Manage all departments, units, and their utility accounts</span>
         </div>
-        <div style="display:flex; gap:10px;">
-            <button class="btn btn-info btn-sm" id="fixOrderBtn">🔧 Fix Order</button>
-            <button class="btn btn-primary" id="addNewDeptBtn">➕ Add New Department</button>
-        </div>
+        <button class="btn btn-primary" id="addNewDeptBtn">➕ Add New Department</button>
     </div>
 
     <div class="filters-bar">
@@ -877,7 +874,7 @@
         });
     }
 
-    // ===== FILTERED & SORTED (exactly like water.html) =====
+    // ===== FILTERED & SORTED (matches water.html) =====
     function getFilteredDepartments() {
         let filtered = [...allDepartments];
         const search = document.getElementById('searchFilter').value.toLowerCase();
@@ -894,7 +891,6 @@
         if (deptFilter !== 'all') filtered = filtered.filter(d => d.department_name === deptFilter);
         if (divFilter !== 'all') filtered = filtered.filter(d => d.division_name === divFilter);
 
-        // Group by department_name
         const grouped = {};
         filtered.forEach(d => {
             const key = d.department_name || 'Other';
@@ -902,7 +898,6 @@
             grouped[key].push(d);
         });
 
-        // Sort groups by min display_order (fallback to id)
         const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
             const minOrderA = Math.min(...grouped[a].map(d => d.display_order !== undefined ? d.display_order : d.id));
             const minOrderB = Math.min(...grouped[b].map(d => d.display_order !== undefined ? d.display_order : d.id));
@@ -912,7 +907,6 @@
             return minIdA - minIdB;
         });
 
-        // Flatten: within each group sort by display_order (fallback id)
         const result = [];
         sortedGroupKeys.forEach(key => {
             const depts = grouped[key].sort((a, b) => {
@@ -1021,7 +1015,7 @@
         });
     }
 
-    // ===== MOVE UP/DOWN (UPDATED: reload after success) =====
+    // ===== MOVE UP/DOWN (optimised – no reload on success) =====
     async function moveDepartmentUp(deptId) { await moveDepartment(deptId, -1); }
     async function moveDepartmentDown(deptId) { await moveDepartment(deptId, 1); }
 
@@ -1062,7 +1056,6 @@
         currentDept.display_order = neighborDept.display_order;
         neighborDept.display_order = tempOrder;
 
-        // Re-render immediately for visual feedback
         renderDepartments();
 
         try {
@@ -1114,41 +1107,13 @@
 
             showMessage('Order updated successfully');
 
-            // --- FIX: Reload from server to ensure consistent state ---
-            await loadDepartments();
+            // No reload – the local state is already updated and correct.
 
         } catch (error) {
             console.error('Move error:', error);
             showMessage('Error updating order: ' + error.message, true);
-            // Revert by reloading from server
+            // Revert by reloading from server to get the correct state back
             await loadDepartments();
-        } finally {
-            showLoading(false);
-        }
-    }
-
-    // ===== FIX ORDER =====
-    async function fixOrder() {
-        if (!confirm('⚠️ This will reset ALL departments to their original creation order.\nAny custom ordering will be lost.\n\nAre you sure you want to continue?')) {
-            return;
-        }
-        showLoading(true);
-        try {
-            const resp = await fetch('/api/departments/ensure-order', { method: 'POST' });
-            if (!resp.ok) {
-                const errText = await resp.text();
-                throw new Error(`Server returned ${resp.status}: ${errText}`);
-            }
-            const result = await resp.json();
-            if (result.success) {
-                showMessage(result.message, false);
-                await loadDepartments();
-            } else {
-                showMessage(result.error || 'Failed to fix order', true);
-            }
-        } catch (err) {
-            console.error('Fix order error:', err);
-            showMessage('Network error: ' + err.message, true);
         } finally {
             showLoading(false);
         }
@@ -1375,7 +1340,6 @@
         container.innerHTML = html;
     }
 
-    // ===== COLLECT FORM DATA (NO CLEANING) =====
     function collectFormData() {
         syncFormDataToObject();
         console.log('📤 Sending department data:', {
@@ -1523,7 +1487,6 @@
     document.getElementById('saveDeptBtn').addEventListener('click', saveDepartment);
     document.getElementById('addNewDeptBtn').addEventListener('click', addNewDepartment);
     document.getElementById('refreshBtn').addEventListener('click', loadDepartments);
-    document.getElementById('fixOrderBtn').addEventListener('click', fixOrder);
     document.getElementById('searchFilter').addEventListener('input', () => renderDepartments());
     document.getElementById('departmentFilter').addEventListener('change', () => renderDepartments());
     document.getElementById('divisionFilter').addEventListener('change', () => renderDepartments());
