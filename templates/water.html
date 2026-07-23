@@ -47,7 +47,6 @@
         ::-webkit-scrollbar-track { background: var(--gray-50); }
         ::-webkit-scrollbar-thumb { background: var(--gray-light); border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--gray); }
-
         .navbar {
             background: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(20px) saturate(180%);
@@ -951,73 +950,22 @@
         return m.trim();
     }
 
-    // ========== FIXED findBillForMeter ==========
+    // ========== SIMPLIFIED findBillForMeter ==========
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
-        const cleanAccount = (accountNumber || '').trim();
-        const cleanMeter = normalizeMeter(meterNumber);
-        
-        // Helper to clean account numbers for comparison (remove spaces, parentheses)
-        const normalizeAccount = (acc) => {
-            if (!acc) return '';
-            return String(acc).replace(/[()\s\-]/g, '').trim();
-        };
-        const normAccount = normalizeAccount(cleanAccount);
-        
-        // 1. Try exact match (account + meter)
-        if (cleanMeter !== '') {
-            for (let bill of existingBills) {
-                const billAccount = normalizeAccount(bill.account_number);
-                const billMeter = normalizeMeter(bill.meter_number);
-                if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                    billAccount === normAccount && billMeter === cleanMeter &&
-                    bill.month == month && bill.year == year) {
-                    return bill;
-                }
-            }
-            // Also check bill_month/bill_year fallback
-            for (let bill of existingBills) {
-                const billAccount = normalizeAccount(bill.account_number);
-                const billMeter = normalizeMeter(bill.meter_number);
-                if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                    billAccount === normAccount && billMeter === cleanMeter &&
-                    (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                    return bill;
-                }
-            }
-        }
-        
-        // 2. Try account only (ignore meter)
-        for (let bill of existingBills) {
-            const billAccount = normalizeAccount(bill.account_number);
-            if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                billAccount === normAccount &&
-                bill.month == month && bill.year == year) {
-                return bill;
-            }
-        }
-        for (let bill of existingBills) {
-            const billAccount = normalizeAccount(bill.account_number);
-            if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                billAccount === normAccount &&
-                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                return bill;
-            }
-        }
-        
-        // 3. Fallback: first bill for this entity and month/year (ignore account/meter)
+        // Just take the first bill for this entity and month/year
         for (let bill of existingBills) {
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
                 bill.month == month && bill.year == year) {
                 return bill;
             }
         }
+        // Fallback to bill_month/bill_year
         for (let bill of existingBills) {
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
                 (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
                 return bill;
             }
         }
-        
         return null;
     }
 
@@ -1392,7 +1340,6 @@
             for (let m = 0; m < account.meters.length; m++) {
                 const meter = account.meters[m];
                 const existing = meter.existing;
-                console.log('🔍 findBillForMeter for meter:', meter.meterNumber, 'existing:', existing);
                 let parsedNotes = {};
                 if (existing && existing.notes && existing.notes.startsWith('{')) {
                     try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
