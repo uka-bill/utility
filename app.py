@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response 
 import os
-from supabase import create_client, Client 
+from supabase import create_client, Client
 import uuid
 from werkzeug.utils import secure_filename
 import csv
@@ -193,6 +193,7 @@ def restore_all_data(backup_data):
     errors = []
     try:
         print("🗑️ Clearing existing data...")
+        # Clear tables
         try:
             supabase.table("utility_bills").delete().neq("id", 0).execute()
             print("✅ Cleared utility_bills")
@@ -218,60 +219,83 @@ def restore_all_data(backup_data):
             print("✅ Cleared financial_years")
         except Exception as e:
             errors.append(f"Failed to clear financial_years: {str(e)}")
-        
+
+        # Batch insert function
+        def batch_insert(table_name, records, chunk_size=100):
+            if not records:
+                return
+            total = len(records)
+            print(f"📥 Inserting {total} records into {table_name}...")
+            for i in range(0, total, chunk_size):
+                chunk = records[i:i+chunk_size]
+                try:
+                    supabase.table(table_name).insert(chunk).execute()
+                    print(f"   Inserted {i+len(chunk)}/{total}")
+                except Exception as e:
+                    # If chunk fails, try one by one to isolate errors
+                    print(f"⚠️ Batch insert failed for chunk, trying individual inserts: {e}")
+                    for record in chunk:
+                        try:
+                            supabase.table(table_name).insert(record).execute()
+                        except Exception as ind_e:
+                            errors.append(f"Failed to insert record in {table_name}: {ind_e}")
+            print(f"✅ Finished inserting {table_name}")
+
+        # Prepare data for each table
         financial_years = backup_data.get('financial_years', [])
-        for fy in financial_years:
-            fy_copy = {k: v for k, v in fy.items() if k != 'id'}
-            try:
-                supabase.table("financial_years").insert(fy_copy).execute()
-            except Exception as e:
-                errors.append(f"Failed to restore financial year: {str(e)}")
-        
         schools = backup_data.get('schools', [])
-        for school in schools:
-            school_copy = {k: v for k, v in school.items() if k != 'id'}
-            if school_copy.get('water_accounts') and isinstance(school_copy['water_accounts'], (list, dict)):
-                school_copy['water_accounts'] = json.dumps(school_copy['water_accounts'])
-            if school_copy.get('electricity_accounts') and isinstance(school_copy['electricity_accounts'], (list, dict)):
-                school_copy['electricity_accounts'] = json.dumps(school_copy['electricity_accounts'])
-            if school_copy.get('telephone_accounts') and isinstance(school_copy['telephone_accounts'], (list, dict)):
-                school_copy['telephone_accounts'] = json.dumps(school_copy['telephone_accounts'])
-            try:
-                supabase.table("schools").insert(school_copy).execute()
-            except Exception as e:
-                errors.append(f"Failed to restore school {school.get('name')}: {str(e)}")
-        
         departments = backup_data.get('departments', [])
-        for dept in departments:
-            dept_copy = {k: v for k, v in dept.items() if k != 'id'}
-            if dept_copy.get('water_accounts') and isinstance(dept_copy['water_accounts'], (list, dict)):
-                dept_copy['water_accounts'] = json.dumps(dept_copy['water_accounts'])
-            if dept_copy.get('electricity_accounts') and isinstance(dept_copy['electricity_accounts'], (list, dict)):
-                dept_copy['electricity_accounts'] = json.dumps(dept_copy['electricity_accounts'])
-            if dept_copy.get('telephone_accounts') and isinstance(dept_copy['telephone_accounts'], (list, dict)):
-                dept_copy['telephone_accounts'] = json.dumps(dept_copy['telephone_accounts'])
-            try:
-                supabase.table("departments").insert(dept_copy).execute()
-            except Exception as e:
-                errors.append(f"Failed to restore department {dept.get('name')}: {str(e)}")
-        
         bills = backup_data.get('utility_bills', [])
-        for bill in bills:
-            bill_copy = {k: v for k, v in bill.items() if k != 'id'}
-            if bill_copy.get('bill_image') and isinstance(bill_copy['bill_image'], (list, dict)):
-                bill_copy['bill_image'] = json.dumps(bill_copy['bill_image'])
-            try:
-                supabase.table("utility_bills").insert(bill_copy).execute()
-            except Exception as e:
-                errors.append(f"Failed to restore bill for {bill.get('entity_name')}: {str(e)}")
-        
         sut_expenses = backup_data.get('sut_office_expenses', [])
-        for expense in sut_expenses:
-            expense_copy = {k: v for k, v in expense.items() if k != 'id'}
-            try:
-                supabase.table("sut_office_expenses").insert(expense_copy).execute()
-            except Exception as e:
-                errors.append(f"Failed to restore SUT expense: {str(e)}")
+
+        # Remove 'id' field from each record (let Supabase auto-generate)
+        def remove_id(records):
+            return [{k: v for k, v in r.items() if k != 'id'} for r in records]
+
+        # Clean up nested JSON fields for schools/departments (they might be strings already, but if they are lists/dicts we need to json.dumps)
+        def prepare_school(school):
+            school_copy = {k: v for k, v in school.items() if k != 'id'}
+            for field in ['water_accounts', 'electricity_accounts', 'telephone_accounts']:
+                if field in school_copy and isinstance(school_copy[field], (list, dict)):
+                    school_copy[field] = json.dumps(school_copy[field])
+            return school_copy
+
+        def prepare_department(dept):
+            dept_copy = {k: v for k, v in dept.items() if k != 'id'}
+            for field in ['water_accounts', 'electricity_accounts', 'telephone_accounts']:
+                if field in dept_copy and isinstance(dept_copy[field], (list, dict)):
+                    dept_copy[field] = json.dumps(dept_copy[field])
+            return dept_copy
+
+        def prepare_bill(bill):
+            bill_copy = {k: v for k, v in bill.items() if k != 'id'}
+            if 'bill_image' in bill_copy and isinstance(bill_copy['bill_image'], (list, dict)):
+                bill_copy['bill_image'] = json.dumps(bill_copy['bill_image'])
+            return bill_copy
+
+        # Insert financial years
+        if financial_years:
+            batch_insert('financial_years', remove_id(financial_years))
+
+        # Insert schools
+        if schools:
+            prepared_schools = [prepare_school(s) for s in schools]
+            batch_insert('schools', prepared_schools)
+
+        # Insert departments
+        if departments:
+            prepared_depts = [prepare_department(d) for d in departments]
+            batch_insert('departments', prepared_depts)
+
+        # Insert utility bills
+        if bills:
+            prepared_bills = [prepare_bill(b) for b in bills]
+            batch_insert('utility_bills', prepared_bills)
+
+        # Insert SUT expenses
+        if sut_expenses:
+            batch_insert('sut_office_expenses', remove_id(sut_expenses))
+
         return {'success': len(errors) == 0, 'errors': errors}
     except Exception as e:
         return {'success': False, 'errors': [str(e)]}
