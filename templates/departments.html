@@ -6,6 +6,7 @@
     <title>Departments Management - Utility Bills Management</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* ===== All CSS (unchanged – same as before) ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -1015,18 +1016,24 @@
         });
     }
 
-    // ===== MOVE UP/DOWN (optimised – no reload on success) =====
+    // ===== MOVE UP/DOWN (with debug logs) =====
     async function moveDepartmentUp(deptId) { await moveDepartment(deptId, -1); }
     async function moveDepartmentDown(deptId) { await moveDepartment(deptId, 1); }
 
     async function moveDepartment(deptId, direction) {
+        console.log(`🔄 moveDepartment called: deptId=${deptId}, direction=${direction}`);
+
         const deptIndex = allDepartments.findIndex(d => d.id === deptId);
         if (deptIndex === -1) {
+            console.error('❌ Department not found in allDepartments');
             showMessage('Department not found', true);
             return;
         }
 
         const groupName = allDepartments[deptIndex].department_name || 'Other';
+        console.log(`📂 Group name: "${groupName}"`);
+
+        // Get all departments in the same group, sorted by display_order
         const group = allDepartments
             .filter(d => (d.department_name || 'Other') === groupName)
             .sort((a, b) => {
@@ -1035,13 +1042,20 @@
                 return orderA - orderB;
             });
 
+        console.log('📋 Group order before move:');
+        group.forEach((d, idx) => {
+            console.log(`  ${idx}: ID=${d.id}, name="${d.unit_name}", display_order=${d.display_order}`);
+        });
+
         const currentPos = group.findIndex(d => d.id === deptId);
         if (currentPos === -1) {
+            console.error('❌ Department not found in group');
             showMessage('Department not found in group', true);
             return;
         }
         const newPos = currentPos + direction;
         if (newPos < 0 || newPos >= group.length) {
+            console.log('⛔ Cannot move further (already at edge)');
             showMessage('Cannot move further', true);
             return;
         }
@@ -1049,18 +1063,27 @@
         const currentDept = group[currentPos];
         const neighborDept = group[newPos];
 
+        console.log(`🔄 Swapping ${currentDept.id} (${currentDept.unit_name}) with ${neighborDept.id} (${neighborDept.unit_name})`);
+
         if (currentDept.display_order === undefined) currentDept.display_order = currentDept.id;
         if (neighborDept.display_order === undefined) neighborDept.display_order = neighborDept.id;
 
+        console.log(`  Before swap: current.display_order=${currentDept.display_order}, neighbor.display_order=${neighborDept.display_order}`);
+
+        // Swap display_order
         const tempOrder = currentDept.display_order;
         currentDept.display_order = neighborDept.display_order;
         neighborDept.display_order = tempOrder;
 
+        console.log(`  After swap: current.display_order=${currentDept.display_order}, neighbor.display_order=${neighborDept.display_order}`);
+
+        // Update the view immediately
         renderDepartments();
 
         try {
             showLoading(true);
 
+            // Save to server
             const updateCurrent = {
                 unitName: currentDept.unit_name || '',
                 divisionName: currentDept.division_name || '',
@@ -1105,12 +1128,11 @@
                 throw new Error(`Server returned ${resp2.status}: ${errText}`);
             }
 
+            console.log('✅ Move successful');
             showMessage('Order updated successfully');
 
-            // No reload – the local state is already updated and correct.
-
         } catch (error) {
-            console.error('Move error:', error);
+            console.error('❌ Move error:', error);
             showMessage('Error updating order: ' + error.message, true);
             // Revert by reloading from server to get the correct state back
             await loadDepartments();
