@@ -52,7 +52,6 @@
         .logo span { background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 700; }
         .logo-sub { font-weight: 400; color: var(--gray); font-size: 0.7rem; letter-spacing: 0.5px; text-transform: uppercase; -webkit-text-fill-color: var(--gray); display: block; margin-top: -2px; }
         .nav-tabs { display: flex; list-style: none; gap: 4px; align-items: center; }
-        .nav-tabs li { margin: 0; }
         .nav-tabs a { text-decoration: none; color: var(--gray); padding: 8px 18px; border-radius: var(--radius-xs); transition: var(--transition); font-weight: 500; font-size: 0.82rem; letter-spacing: 0.15px; }
         .nav-tabs a:hover { color: var(--primary); background: rgba(26,86,219,0.06); }
         .nav-tabs a.active { background: var(--primary-gradient); color: white; box-shadow: 0 4px 16px rgba(26,86,219,0.30); }
@@ -279,17 +278,13 @@
 
     function saveScrollPosition() {
         const wrapper = document.querySelector('.table-wrapper');
-        if (wrapper) {
-            savedScrollPosition = wrapper.scrollTop;
-        }
+        if (wrapper) savedScrollPosition = wrapper.scrollTop;
     }
 
     function restoreScrollPosition() {
         const wrapper = document.querySelector('.table-wrapper');
         if (wrapper && savedScrollPosition > 0) {
-            setTimeout(() => {
-                wrapper.scrollTop = savedScrollPosition;
-            }, 50);
+            setTimeout(() => wrapper.scrollTop = savedScrollPosition, 50);
         }
     }
 
@@ -298,9 +293,7 @@
     }
 
     function showSavingToast(entityName) {
-        if (activeSavingToast) {
-            activeSavingToast.remove();
-        }
+        if (activeSavingToast) activeSavingToast.remove();
         const toast = document.createElement('div');
         toast.className = 'saving-toast';
         toast.innerHTML = '<span class="saving-spinner"></span> Saving ' + entityName + '... Please wait';
@@ -310,10 +303,7 @@
     }
 
     function hideSavingToast() {
-        if (activeSavingToast) {
-            activeSavingToast.remove();
-            activeSavingToast = null;
-        }
+        if (activeSavingToast) { activeSavingToast.remove(); activeSavingToast = null; }
     }
 
     function showToast(message, isError) {
@@ -328,8 +318,7 @@
     function populateYears() {
         const yearSelect = document.getElementById('globalYear');
         yearSelect.innerHTML = '';
-        const start = 2020;
-        const end = 2035;
+        const start = 2020, end = 2035;
         for (let y = start; y <= end; y++) {
             const opt = document.createElement('option');
             opt.value = y;
@@ -345,14 +334,8 @@
                 fetch('/api/schools'),
                 fetch('/api/departments')
             ]);
-            if (schoolsRes.ok) {
-                allSchools = await schoolsRes.json();
-                console.log('🏫 Loaded ' + allSchools.length + ' schools');
-            }
-            if (deptsRes.ok) {
-                allDepartments = await deptsRes.json();
-                console.log('🏢 Loaded ' + allDepartments.length + ' departments');
-            }
+            if (schoolsRes.ok) allSchools = await schoolsRes.json();
+            if (deptsRes.ok) allDepartments = await deptsRes.json();
         } catch(e) {
             console.error('Error loading entities:', e);
         }
@@ -380,9 +363,7 @@
         try {
             if (entity.water_accounts && typeof entity.water_accounts === 'string') {
                 const parsed = JSON.parse(entity.water_accounts);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    accounts = parsed;
-                }
+                if (Array.isArray(parsed) && parsed.length > 0) accounts = parsed;
             } else if (entity.water_accounts && Array.isArray(entity.water_accounts)) {
                 accounts = entity.water_accounts;
             } else if (entity.water_account && entity.water_account !== '—') {
@@ -648,13 +629,9 @@
 
     function updateEntityTotalDisplay(entityId, batchBills) {
         let totalPaid = 0;
-        for (let i = 0; i < batchBills.length; i++) {
-            totalPaid += batchBills[i].amount_paid || 0;
-        }
+        for (let i = 0; i < batchBills.length; i++) totalPaid += batchBills[i].amount_paid || 0;
         const entityTotalSpan = document.getElementById('entity-total-' + entityId);
-        if (entityTotalSpan) {
-            entityTotalSpan.innerHTML = '(Total Paid: $' + formatNumberWithCommas(totalPaid) + ')';
-        }
+        if (entityTotalSpan) entityTotalSpan.innerHTML = '(Total Paid: $' + formatNumberWithCommas(totalPaid) + ')';
         const entityStatusSpan = document.getElementById('entity-status-' + entityId);
         if (entityStatusSpan) {
             if (totalPaid > 0) {
@@ -702,8 +679,8 @@
         let globalSerial = 1;
         let entityNumber = 1;
 
-        let schoolsList = filteredEntities.filter(function(e) { return e.type === 'school'; });
-        let departmentsList = filteredEntities.filter(function(e) { return e.type === 'department'; });
+        let schoolsList = filteredEntities.filter(e => e.type === 'school');
+        let departmentsList = filteredEntities.filter(e => e.type === 'department');
 
         schoolsList.sort((a, b) => {
             const clusterA = a.clusterNumber ? parseInt(a.clusterNumber.replace('CLUSTER ', '')) : 999;
@@ -718,23 +695,18 @@
         // Department grouping
         const deptMap = new Map();
         departmentsList.forEach(dept => {
-            const deptName = dept.department_name || 'Other';
-            const divName = dept.division_name || 'Other';
-            if (!deptMap.has(deptName)) {
-                deptMap.set(deptName, new Map());
-            }
+            const deptName = dept.departmentName || 'Other';
+            const divName = dept.divisionName || 'Other';
+            if (!deptMap.has(deptName)) deptMap.set(deptName, new Map());
             const divMap = deptMap.get(deptName);
-            if (!divMap.has(divName)) {
-                divMap.set(divName, []);
-            }
+            if (!divMap.has(divName)) divMap.set(divName, []);
             divMap.get(divName).push(dept);
         });
 
         const sortedDeptNames = Array.from(deptMap.keys()).sort((a, b) => {
-            const deptA = deptMap.get(a);
-            const deptB = deptMap.get(b);
-            const minOrderA = Math.min(...Array.from(deptA.values()).flat().map(d => d.display_order !== undefined ? d.display_order : 999));
-            const minOrderB = Math.min(...Array.from(deptB.values()).flat().map(d => d.display_order !== undefined ? d.display_order : 999));
+            const deptA = deptMap.get(a), deptB = deptMap.get(b);
+            const minOrderA = Math.min(...Array.from(deptA.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+            const minOrderB = Math.min(...Array.from(deptB.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
             if (minOrderA !== minOrderB) return minOrderA - minOrderB;
             const minIdA = Math.min(...Array.from(deptA.values()).flat().map(d => d.originalId || d.id));
             const minIdB = Math.min(...Array.from(deptB.values()).flat().map(d => d.originalId || d.id));
@@ -745,10 +717,9 @@
         sortedDeptNames.forEach(deptName => {
             const divMap = deptMap.get(deptName);
             const sortedDivNames = Array.from(divMap.keys()).sort((a, b) => {
-                const unitsA = divMap.get(a);
-                const unitsB = divMap.get(b);
-                const minOrderA = Math.min(...unitsA.map(d => d.display_order !== undefined ? d.display_order : 999));
-                const minOrderB = Math.min(...unitsB.map(d => d.display_order !== undefined ? d.display_order : 999));
+                const unitsA = divMap.get(a), unitsB = divMap.get(b);
+                const minOrderA = Math.min(...unitsA.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+                const minOrderB = Math.min(...unitsB.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
                 if (minOrderA !== minOrderB) return minOrderA - minOrderB;
                 const minIdA = Math.min(...unitsA.map(d => d.originalId || d.id));
                 const minIdB = Math.min(...unitsB.map(d => d.originalId || d.id));
@@ -758,8 +729,8 @@
             sortedDivNames.forEach(divName => {
                 const units = divMap.get(divName);
                 units.sort((a, b) => {
-                    const orderA = a.display_order !== undefined ? a.display_order : 999;
-                    const orderB = b.display_order !== undefined ? b.display_order : 999;
+                    const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
+                    const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
                     if (orderA !== orderB) return orderA - orderB;
                     return (a.originalId || a.id) - (b.originalId || b.id);
                 });
@@ -772,9 +743,7 @@
         for (let i = 0; i < schoolsList.length; i++) {
             const school = schoolsList[i];
             const cluster = school.clusterNumber || 'Unassigned';
-            if (!schoolsByCluster.has(cluster)) {
-                schoolsByCluster.set(cluster, []);
-            }
+            if (!schoolsByCluster.has(cluster)) schoolsByCluster.set(cluster, []);
             schoolsByCluster.get(cluster).push(school);
         }
         const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
@@ -794,7 +763,7 @@
                     const meters = account.meters || [];
                     const visibleMeters = [];
                     if (meters.length === 0) {
-                        const existing = findBillForMeter(entity.type, entity.id, account.account_number, '', month, year);
+                        const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, '', month, year);
                         visibleMeters.push({
                             meterNumber: '',
                             location: '',
@@ -807,7 +776,7 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            const existing = findBillForMeter(entity.type, entity.id, account.account_number, meterNum, month, year);
+                            const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
@@ -825,7 +794,7 @@
                     if (visibleMeters.length > 0) {
                         hasAnyVisible = true;
                         visibleAccounts.push({
-                            accountNumber: account.account_number,
+                            accountNumber: account.accountNumber,
                             meters: visibleMeters,
                             isPlaceholder: account.isPlaceholder
                         });
@@ -843,9 +812,7 @@
                 let totalMeters = 0;
                 for (let i = 0; i < visibleClusterEntities.length; i++) {
                     const e = visibleClusterEntities[i];
-                    for (let a = 0; a < e.accountGroups.length; a++) {
-                        totalMeters += e.accountGroups[a].meters.length;
-                    }
+                    for (let a = 0; a < e.accountGroups.length; a++) totalMeters += e.accountGroups[a].meters.length;
                 }
                 const separatorRow = document.createElement('tr');
                 separatorRow.className = 'cluster-separator';
@@ -862,13 +829,10 @@
         for (const deptData of sortedDeptData) {
             const deptName = deptData.departmentName;
             const divisions = deptData.divisions;
-            let totalAccountsInDept = 0;
-            let totalUnitsInDept = 0;
+            let totalAccountsInDept = 0, totalUnitsInDept = 0;
             divisions.forEach(div => {
                 totalUnitsInDept += div.units.length;
-                div.units.forEach(unit => {
-                    totalAccountsInDept += unit.accountGroups.length;
-                });
+                div.units.forEach(unit => totalAccountsInDept += unit.accountGroups.length);
             });
             const deptSep = document.createElement('tr');
             deptSep.className = 'department-group-separator';
@@ -926,9 +890,13 @@
                 const locationDisplay = meter.location ? '<div style="font-size:0.7rem; color:var(--gray);">📍 ' + escapeHtml(meter.location) + '</div>' : '';
                 const displayMeter = meter.meterNumber || '—';
 
+                // ----- FIX: Use account.accountNumber (capital N) -----
+                const accountNumber = account.accountNumber || account.account_number || '';
+                // ----- END FIX -----
+
                 meterRowsData.push({
                     serial: serial,
-                    accountNumber: account.account_number,
+                    accountNumber: accountNumber,
                     meterNumber: meter.meterNumber,
                     displayMeter: displayMeter,
                     locationDisplay: locationDisplay,
@@ -950,15 +918,9 @@
 
         let entityStatusClass = 'status-pending';
         let entityStatusText = 'Pending';
-        if (entityHasBills) {
-            entityStatusText = 'Paid';
-            entityStatusClass = 'status-paid';
-        } else if (entityTotalPaid === 0) {
-            entityStatusText = 'Not entered';
-        } else {
-            entityStatusText = 'Partially Paid';
-            entityStatusClass = 'status-partial';
-        }
+        if (entityHasBills) { entityStatusText = 'Paid'; entityStatusClass = 'status-paid'; }
+        else if (entityTotalPaid === 0) { entityStatusText = 'Not entered'; }
+        else { entityStatusText = 'Partially Paid'; entityStatusClass = 'status-partial'; }
 
         const entityRow = document.createElement('tr');
         entityRow.className = 'entity-row';
@@ -1078,10 +1040,7 @@
             currentAccount = accountNum;
         }
 
-        let totalConsumption = 0;
-        let totalBillAmount = 0;
-        let totalOutstanding = 0;
-
+        let totalConsumption = 0, totalBillAmount = 0, totalOutstanding = 0;
         meterRowsData.forEach(m => {
             totalConsumption += m.consumption;
             totalBillAmount += m.currentCharges;
@@ -1105,11 +1064,10 @@
         `;
         tbody.appendChild(summaryRow);
 
-        meterRowElements.forEach((row) => {
+        meterRowElements.forEach(row => {
             const consumptionInput = row.querySelector('.consumption-input');
             const billInput = row.querySelector('.current-charge-input');
             const outstandingInput = row.querySelector('.outstanding-input');
-
             const updateFunction = function() {
                 let totalCons = 0, totalBill = 0, totalOut = 0;
                 meterRowElements.forEach(mRow => {
@@ -1120,7 +1078,6 @@
                     totalBill += parseNumberFromDisplay(bInput ? bInput.value : 0);
                     totalOut += parseNumberFromDisplay(oInput ? oInput.value : 0);
                 });
-
                 const summaryCons = document.getElementById(`summary-consumption-${entity.id}`);
                 const summaryBill = document.getElementById(`summary-bill-${entity.id}`);
                 const summaryOut = document.getElementById(`summary-outstanding-${entity.id}`);
@@ -1128,7 +1085,6 @@
                 if (summaryBill) summaryBill.textContent = formatNumberWithCommas(totalBill);
                 if (summaryOut) summaryOut.textContent = formatNumberWithCommas(totalOut);
             };
-
             if (consumptionInput) consumptionInput.addEventListener('input', updateFunction);
             if (billInput) billInput.addEventListener('input', updateFunction);
             if (outstandingInput) outstandingInput.addEventListener('input', updateFunction);
