@@ -6,7 +6,6 @@
     <title>Departments Management - Utility Bills Management</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== All CSS (unchanged – same as before) ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -875,7 +874,7 @@
         });
     }
 
-    // ===== FILTERED & SORTED (matches water.html) =====
+    // ===== FILTERED & SORTED (with tie‑breaker) =====
     function getFilteredDepartments() {
         let filtered = [...allDepartments];
         const search = document.getElementById('searchFilter').value.toLowerCase();
@@ -913,7 +912,8 @@
             const depts = grouped[key].sort((a, b) => {
                 const orderA = a.display_order !== undefined ? a.display_order : a.id;
                 const orderB = b.display_order !== undefined ? b.display_order : b.id;
-                return orderA - orderB;
+                if (orderA !== orderB) return orderA - orderB;
+                return a.id - b.id; // tie-breaker
             });
             result.push(...depts);
         });
@@ -1016,7 +1016,7 @@
         });
     }
 
-    // ===== MOVE UP/DOWN (with debug logs) =====
+    // ===== MOVE UP/DOWN (with duplicate handling) =====
     async function moveDepartmentUp(deptId) { await moveDepartment(deptId, -1); }
     async function moveDepartmentDown(deptId) { await moveDepartment(deptId, 1); }
 
@@ -1033,13 +1033,14 @@
         const groupName = allDepartments[deptIndex].department_name || 'Other';
         console.log(`📂 Group name: "${groupName}"`);
 
-        // Get all departments in the same group, sorted by display_order
+        // Get group sorted by display_order (with tie-breaker)
         const group = allDepartments
             .filter(d => (d.department_name || 'Other') === groupName)
             .sort((a, b) => {
                 const orderA = a.display_order !== undefined ? a.display_order : a.id;
                 const orderB = b.display_order !== undefined ? b.display_order : b.id;
-                return orderA - orderB;
+                if (orderA !== orderB) return orderA - orderB;
+                return a.id - b.id;
             });
 
         console.log('📋 Group order before move:');
@@ -1065,12 +1066,61 @@
 
         console.log(`🔄 Swapping ${currentDept.id} (${currentDept.unit_name}) with ${neighborDept.id} (${neighborDept.unit_name})`);
 
+        // Ensure display_order values exist
         if (currentDept.display_order === undefined) currentDept.display_order = currentDept.id;
         if (neighborDept.display_order === undefined) neighborDept.display_order = neighborDept.id;
 
         console.log(`  Before swap: current.display_order=${currentDept.display_order}, neighbor.display_order=${neighborDept.display_order}`);
 
-        // Swap display_order
+        // ----- DUPLICATE DETECTION -----
+        if (currentDept.display_order === neighborDept.display_order) {
+            console.warn('⚠️ Duplicate display_order values – renumbering the whole group.');
+            // Renumber all departments in the group sequentially
+            const sortedGroup = group.slice().sort((a, b) => {
+                const orderA = a.display_order !== undefined ? a.display_order : a.id;
+                const orderB = b.display_order !== undefined ? b.display_order : b.id;
+                if (orderA !== orderB) return orderA - orderB;
+                return a.id - b.id;
+            });
+            sortedGroup.forEach((d, idx) => {
+                d.display_order = idx + 1; // 1-based
+            });
+            // Update allDepartments with new values (the objects are the same references)
+            try {
+                showLoading(true);
+                for (let d of sortedGroup) {
+                    await fetch(`/api/departments/${d.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            unitName: d.unit_name || '',
+                            divisionName: d.division_name || '',
+                            departmentName: d.department_name || '',
+                            hotlineNumbers: d.hotline_numbers || '',
+                            address: d.address || '',
+                            notes: d.notes || '',
+                            waterAccounts: d.water_accounts || [],
+                            electricityAccounts: d.electricity_accounts || [],
+                            telephoneAccounts: d.telephone_accounts || [],
+                            displayOrder: d.display_order
+                        })
+                    });
+                }
+                // Re-render to reflect new order
+                renderDepartments();
+                showMessage('Group reordered automatically');
+                console.log('✅ Group renumbered successfully');
+            } catch (err) {
+                console.error('❌ Error renumbering group:', err);
+                showMessage('Error fixing duplicate order', true);
+                await loadDepartments(); // revert
+            } finally {
+                showLoading(false);
+            }
+            return; // exit after renumbering
+        }
+
+        // ----- Normal swap -----
         const tempOrder = currentDept.display_order;
         currentDept.display_order = neighborDept.display_order;
         neighborDept.display_order = tempOrder;
