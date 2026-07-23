@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response 
 import os
 from supabase import create_client, Client
@@ -430,17 +431,41 @@ def restore_backup():
         print("💾 POST /api/backup/restore called")
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
+
         if 'backup_file' not in request.files:
             return jsonify({'error': 'No backup file provided'}), 400
+
         file = request.files['backup_file']
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
+
         if not file.filename.endswith('.json'):
             return jsonify({'error': 'Only JSON backup files are supported'}), 400
+
+        # Read and decode the file content
         backup_content = file.read().decode('utf-8')
-        backup_data = json.loads(backup_content)
+
+        # Check for empty content
+        if not backup_content or backup_content.strip() == '':
+            return jsonify({'error': 'Backup file is empty'}), 400
+
+        # Remove UTF-8 BOM if present (optional)
+        if backup_content.startswith('\ufeff'):
+            backup_content = backup_content[1:]
+
+        # Parse JSON
+        try:
+            backup_data = json.loads(backup_content)
+        except json.JSONDecodeError as e:
+            return jsonify({
+                'error': f'Invalid JSON format: {str(e)}',
+                'details': 'Make sure the file is a valid JSON backup.'
+            }), 400
+
+        # Proceed with restore
         data_to_restore = backup_data.get('data', backup_data)
         result = restore_all_data(data_to_restore)
+
         if result['success']:
             return jsonify({
                 'success': True,
@@ -453,9 +478,7 @@ def restore_backup():
                 'error': 'Restore completed with errors',
                 'errors': result['errors']
             }), 500
-    except json.JSONDecodeError as e:
-        print(f"❌ Restore JSON decode error: {e}")
-        return jsonify({'error': 'Invalid backup file format'}), 400
+
     except Exception as e:
         print(f"❌ Restore backup error: {e}")
         print(traceback.format_exc())
@@ -2514,4 +2537,4 @@ if __name__ == '__main__':
     initialize_database_tables()
     port = int(os.environ.get('PORT', 5000))
     print(f"🌐 Server will run on port: {port}")
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=port, debug=False)
