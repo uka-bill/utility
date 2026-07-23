@@ -2089,6 +2089,7 @@ def ensure_department_order():
         })
     except Exception as e:
         print(f"❌ Error resetting order: {e}")
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/departments', methods=['POST'])
