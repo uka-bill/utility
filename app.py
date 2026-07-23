@@ -569,7 +569,7 @@ def restore_backup():
         return jsonify({'error': f'Restore failed: {str(e)}'}), 500
 
 # ============ MIGRATION ENDPOINT ============
-@app.route('/api/migrate-all-bills', methods=['POST'])
+@app.route('/api/migrate-all-bills', methods=['GET', 'POST'])
 def migrate_all_bills():
     try:
         if not supabase:
