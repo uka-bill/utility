@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response 
 import os
 from supabase import create_client, Client
@@ -442,23 +443,32 @@ def restore_backup():
             return jsonify({'error': 'Only JSON backup files are supported'}), 400
 
         # Read and decode the file content
-        backup_content = file.read().decode('utf-8')
+        try:
+            backup_content = file.read().decode('utf-8')
+        except UnicodeDecodeError:
+            return jsonify({'error': 'File is not valid UTF-8. Please ensure it is a JSON file.'}), 400
+
+        # Log file size (for debugging)
+        file_size = len(backup_content)
+        print(f"📄 File size: {file_size} bytes")
 
         # Check for empty content
-        if not backup_content or backup_content.strip() == '':
-            return jsonify({'error': 'Backup file is empty'}), 400
+        if file_size == 0 or backup_content.strip() == '':
+            return jsonify({'error': 'Backup file is empty. Please check the file.'}), 400
 
-        # Remove UTF-8 BOM if present (optional)
+        # Remove UTF-8 BOM if present
         if backup_content.startswith('\ufeff'):
             backup_content = backup_content[1:]
+            print("🔍 Removed UTF-8 BOM")
 
         # Parse JSON
         try:
             backup_data = json.loads(backup_content)
         except json.JSONDecodeError as e:
+            # Return a clear error with position
             return jsonify({
                 'error': f'Invalid JSON format: {str(e)}',
-                'details': 'Make sure the file is a valid JSON backup.'
+                'details': 'Make sure the file is a valid JSON backup. The error occurred at line {e.lineno}, column {e.colno}.'
             }), 400
 
         # Proceed with restore
