@@ -981,7 +981,7 @@
         return m.trim();
     }
 
-    // ========== FIXED findBillForMeter ==========
+    // ========== FIXED findBillForMeter (NO FALLBACK) ==========
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
         const cleanAccount = (accountNumber || '').trim();
         const normalizeAccount = (acc) => {
@@ -996,17 +996,15 @@
             if (bill.entity_type === entityType &&
                 billAccount === normAccount &&
                 bill.month == month && bill.year == year) {
-                console.log('✅ MATCHED BY ACCOUNT:', bill);
                 return bill;
             }
         }
-        // fallback bill_month/bill_year
+        // fallback to bill_month/bill_year
         for (let bill of existingBills) {
             const billAccount = normalizeAccount(bill.account_number);
             if (bill.entity_type === entityType &&
                 billAccount === normAccount &&
                 (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                console.log('✅ MATCHED BY ACCOUNT (bill_month):', bill);
                 return bill;
             }
         }
@@ -1015,35 +1013,17 @@
         for (let bill of existingBills) {
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
                 bill.month == month && bill.year == year) {
-                console.log('✅ MATCHED BY ENTITY ID:', bill);
                 return bill;
             }
         }
         for (let bill of existingBills) {
             if (bill.entity_type === entityType && bill.entity_id == entityId &&
                 (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                console.log('✅ MATCHED BY ENTITY ID (bill_month):', bill);
                 return bill;
             }
         }
         
-        // 3. Fallback: first bill for this entity_type + month + year
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType &&
-                bill.month == month && bill.year == year) {
-                console.log('✅ FALLBACK MATCH (first bill):', bill);
-                return bill;
-            }
-        }
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType &&
-                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                console.log('✅ FALLBACK MATCH (bill_month):', bill);
-                return bill;
-            }
-        }
-        
-        console.log('❌ No match found for:', { entityType, entityId, accountNumber, month, year });
+        // No more fallback – return null if nothing matches
         return null;
     }
 
@@ -1426,9 +1406,7 @@
                 const locationDisplay = meter.location ? '<div style="font-size:0.7rem; color:var(--gray);">📍 ' + escapeHtml(meter.location) + '</div>' : '';
                 const displayMeter = meter.meterNumber || '—';
 
-                // ----- FIX: Use account.accountNumber (capital N) -----
                 const accountNumber = account.accountNumber || account.account_number || '';
-                // ----- END FIX -----
 
                 meterRowsData.push({
                     serial: serial,
