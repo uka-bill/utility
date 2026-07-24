@@ -1125,6 +1125,7 @@
         return entities;
     }
 
+    // ========== FIXED findBillByAccount (NO FALLBACK) ==========
     function findBillByAccount(entityType, entityId, accountNumber, month, year) {
         const normalizeAccount = (acc) => {
             if (!acc) return '';
@@ -1165,21 +1166,7 @@
             }
         }
         
-        // 3. Fallback: first bill for this entity_type + month + year
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType &&
-                bill.month == month && bill.year == year) {
-                return bill;
-            }
-        }
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType &&
-                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                return bill;
-            }
-        }
-        
-        console.log('❌ No match found for:', { entityType, entityId, accountNumber, month, year });
+        // No more fallback – return null if nothing matches
         return null;
     }
 
@@ -1535,9 +1522,7 @@
 
         for (let account of entity.accountGroups) {
             const accountNumber = account.accountNumber || '—';
-            // ----- FIX: Use findBillByAccount instead of findBillByEntity -----
             const existingBill = findBillByAccount(entity.type, entity.id, accountNumber, month, year);
-            // ----- END FIX -----
             let parsedNotes = {};
             if (existingBill && existingBill.notes) {
                 try { parsedNotes = JSON.parse(existingBill.notes); } catch(e) {}
