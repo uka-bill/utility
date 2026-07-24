@@ -6,7 +6,6 @@
     <title>Data Management - Utility Bills Management</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* (all CSS unchanged – same as before) */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -628,7 +627,7 @@
         }
 
         .restore-progress .progress-bar {
-            height: 6px;
+            height: 8px;
             background: var(--gray-light);
             border-radius: 10px;
             overflow: hidden;
@@ -648,6 +647,13 @@
             justify-content: space-between;
             font-size: 0.8rem;
             color: var(--gray);
+        }
+
+        .restore-progress .progress-message {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--dark);
+            margin-top: 4px;
         }
 
         .empty-state {
@@ -754,7 +760,7 @@
         <div class="page-header">
             <div>
                 <h1 class="page-title">📊 Data Management</h1>
-                <span class="page-subtitle">Export, backup, and manage your data securely</span>
+                <span class="page-subtitle">Export, backup, and restore your data securely</span>
             </div>
         </div>
 
@@ -852,13 +858,14 @@
             </div>
         </div>
 
-        <!-- Restore Section -->
+        <!-- Restore Section (with Streaming) -->
         <div class="section-card">
             <h2><span class="badge-icon">📥</span> Restore from Backup</h2>
             
             <div class="info-box warning" style="margin-bottom: 20px;">
                 <h3>⚠️ Important Notice</h3>
                 <p><strong>Restoring a backup will overwrite all current data.</strong> Please ensure you have a current backup before proceeding. This action cannot be undone.</p>
+                <p style="margin-top: 8px; font-size: 0.85rem;">The restore process is streamed in batches to avoid timeouts – you will see a live progress bar.</p>
             </div>
             
             <div class="restore-upload-area" id="restoreDropZone">
@@ -887,6 +894,7 @@
                 <div class="progress-bar">
                     <div class="progress-fill" id="restoreProgressFill"></div>
                 </div>
+                <div class="progress-message" id="restoreMessage">Initializing...</div>
             </div>
         </div>
     </div>
@@ -930,7 +938,7 @@
             }
         }
 
-        // ---------- BACKUP HISTORY (uses /api/backup/list) ----------
+        // ---------- BACKUP HISTORY ----------
         async function loadBackupHistory() {
             const listContainer = document.getElementById('backupHistoryList');
             listContainer.innerHTML = '<div class="empty-state">Loading backups...</div>';
@@ -987,7 +995,6 @@
             }
         }
 
-        // ---------- DELETE BACKUP ----------
         async function deleteBackupFile(filename) {
             try {
                 const response = await fetch(`/api/backup/delete/${encodeURIComponent(filename)}`, {
@@ -1005,7 +1012,7 @@
             }
         }
 
-        // ---------- CREATE & DOWNLOAD BACKUP (uses /api/backup/download-direct) ----------
+        // ---------- CREATE BACKUP ----------
         async function createBackup() {
             const btn = document.getElementById('createBackupBtn');
             const statusEl = document.getElementById('backupStatus');
@@ -1063,8 +1070,8 @@
             }
         }
 
-        // ---------- RESTORE (with robust response handling and logging) ----------
-        async function performRestore() {
+        // ---------- STREAMING RESTORE ----------
+        async function performStreamingRestore() {
             if (!selectedBackupFile) {
                 showToast('Please select a backup file first.', 'error');
                 return;
@@ -1086,78 +1093,87 @@
             const progressContainer = document.getElementById('restoreProgress');
             const progressFill = document.getElementById('restoreProgressFill');
             const percentEl = document.getElementById('restorePercent');
+            const messageEl = document.getElementById('restoreMessage');
 
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span> Restoring...';
             progressContainer.style.display = 'block';
             progressFill.style.width = '0%';
             percentEl.textContent = '0%';
+            messageEl.textContent = 'Starting restore...';
+
+            const formData = new FormData();
+            formData.append('backup_file', selectedBackupFile);
 
             try {
-                const formData = new FormData();
-                formData.append('backup_file', selectedBackupFile);
-
-                progressFill.style.width = '30%';
-                percentEl.textContent = '30%';
-
-                const response = await fetch('/api/backup/restore', {
+                const response = await fetch('/api/restore/stream', {
                     method: 'POST',
                     body: formData
                 });
 
-                // Read response as text first
-                const responseText = await response.text();
-
-                // Log a preview of the response for debugging (first 200 chars)
-                console.log('🔍 Response preview (first 200 chars):', responseText.substring(0, 200));
-
-                let result;
-                let isJson = false;
-                try {
-                    result = JSON.parse(responseText);
-                    isJson = true;
-                } catch (parseError) {
-                    // Not JSON – we'll treat the raw text as the error
-                    console.error('❌ Response is not valid JSON. Raw response length:', responseText.length);
-                    // If the response is large, truncate the error message
-                    let errorMsg = responseText;
-                    if (errorMsg.length > 500) {
-                        errorMsg = errorMsg.substring(0, 500) + '... (truncated)';
-                    }
-                    result = { error: errorMsg || 'Server returned an empty or invalid response.' };
-                }
-
-                // If the HTTP status is not OK, throw with the error message
                 if (!response.ok) {
-                    const errorMsg = isJson ? (result.error || result.message || `Server error (${response.status})`) : result.error;
-                    throw new Error(errorMsg);
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Restore request failed');
                 }
 
-                // Now we have a successful JSON response
-                progressFill.style.width = '90%';
-                percentEl.textContent = '90%';
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
 
-                if (result.success) {
-                    progressFill.style.width = '100%';
-                    percentEl.textContent = '100%';
-                    showToast('✅ Data restored successfully!', 'success');
-                    
-                    setTimeout(() => {
-                        progressContainer.style.display = 'none';
-                        progressFill.style.width = '0%';
-                        percentEl.textContent = '0%';
-                        clearFileSelection();
-                        loadDataStats();
-                        loadBackupHistory();
-                    }, 1500);
-                } else {
-                    throw new Error(result.error || result.errors ? result.errors.join(', ') : 'Restore failed');
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // Split by newline
+                    let lines = buffer.split('\n');
+                    buffer = lines.pop(); // keep incomplete line
+
+                    for (let line of lines) {
+                        if (line.trim() === '') continue;
+                        try {
+                            const msg = JSON.parse(line);
+                            if (msg.progress !== undefined) {
+                                const progress = Math.min(msg.progress, 100);
+                                progressFill.style.width = progress + '%';
+                                percentEl.textContent = progress + '%';
+                            }
+                            if (msg.message) {
+                                messageEl.textContent = msg.message;
+                            }
+                            if (msg.errors && msg.errors.length > 0) {
+                                // Show errors but continue
+                                console.warn('Restore errors:', msg.errors);
+                                showToast('Restore completed with errors: ' + msg.errors.join('; '), 'warning');
+                            }
+                            if (msg.progress === 100) {
+                                // Done
+                                if (msg.errors && msg.errors.length > 0) {
+                                    showToast('Restore completed with errors. Check the console.', 'warning');
+                                } else {
+                                    showToast('✅ Restore completed successfully!', 'success');
+                                }
+                                setTimeout(() => {
+                                    progressContainer.style.display = 'none';
+                                    progressFill.style.width = '0%';
+                                    percentEl.textContent = '0%';
+                                    messageEl.textContent = '';
+                                }, 2000);
+                                clearFileSelection();
+                                loadDataStats();
+                                loadBackupHistory();
+                            }
+                        } catch (parseError) {
+                            console.warn('Failed to parse progress line:', line);
+                        }
+                    }
                 }
             } catch (error) {
                 console.error('Restore error:', error);
                 progressFill.style.width = '100%';
                 percentEl.textContent = '100%';
                 progressFill.style.background = 'var(--danger)';
+                messageEl.textContent = '❌ Error: ' + error.message;
                 showToast('❌ Error restoring data: ' + error.message, 'error');
                 
                 setTimeout(() => {
@@ -1165,6 +1181,7 @@
                     progressFill.style.width = '0%';
                     progressFill.style.background = '';
                     percentEl.textContent = '0%';
+                    messageEl.textContent = '';
                 }, 3000);
             } finally {
                 btn.disabled = false;
@@ -1201,6 +1218,7 @@
             document.getElementById('restoreProgress').style.display = 'none';
             document.getElementById('restoreProgressFill').style.width = '0%';
             document.getElementById('restorePercent').textContent = '0%';
+            document.getElementById('restoreMessage').textContent = '';
         }
 
         // ---------- TOAST ----------
@@ -1259,7 +1277,7 @@
                 }
             });
 
-            document.getElementById('restoreBtn').addEventListener('click', performRestore);
+            document.getElementById('restoreBtn').addEventListener('click', performStreamingRestore);
             document.getElementById('clearFileBtn').addEventListener('click', clearFileSelection);
         }
     </script>
