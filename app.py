@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response 
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response, Response, stream_with_context
 import os
 from supabase import create_client, Client
 import uuid
@@ -189,63 +189,49 @@ def get_all_data_with_order():
         print(f"❌ Error fetching data for backup: {e}")
         raise
 
-def restore_all_data(backup_data):
+# ============ STREAMING RESTORE GENERATOR ============
+def restore_all_data_stream(backup_data):
+    """
+    Generator that yields progress messages as it restores data.
+    Each yield is a JSON string like {"progress": 10, "message": "Clearing tables..."}
+    """
     errors = []
     try:
         print("🗑️ Clearing existing data...")
+        # Clear in reverse dependency order
+        yield {"progress": 5, "message": "Clearing utility bills..."}
         try:
             supabase.table("utility_bills").delete().neq("id", 0).execute()
-            print("✅ Cleared utility_bills")
         except Exception as e:
             errors.append(f"Failed to clear utility_bills: {str(e)}")
             print(f"⚠️ Error clearing utility_bills: {e}")
+        
+        yield {"progress": 10, "message": "Clearing SUT expenses..."}
         try:
             supabase.table("sut_office_expenses").delete().neq("id", 0).execute()
-            print("✅ Cleared sut_office_expenses")
         except Exception as e:
             print(f"⚠️ Error clearing sut_office_expenses: {e}")
+        
+        yield {"progress": 15, "message": "Clearing departments..."}
         try:
             supabase.table("departments").delete().neq("id", 0).execute()
-            print("✅ Cleared departments")
         except Exception as e:
             errors.append(f"Failed to clear departments: {str(e)}")
             print(f"⚠️ Error clearing departments: {e}")
+        
+        yield {"progress": 20, "message": "Clearing schools..."}
         try:
             supabase.table("schools").delete().neq("id", 0).execute()
-            print("✅ Cleared schools")
         except Exception as e:
             errors.append(f"Failed to clear schools: {str(e)}")
             print(f"⚠️ Error clearing schools: {e}")
+        
+        yield {"progress": 25, "message": "Clearing financial years..."}
         try:
             supabase.table("financial_years").delete().neq("id", 0).execute()
-            print("✅ Cleared financial_years")
         except Exception as e:
             errors.append(f"Failed to clear financial_years: {str(e)}")
             print(f"⚠️ Error clearing financial_years: {e}")
-
-        # ---- Batch insert with detailed logging ----
-        def batch_insert(table_name, records, chunk_size=10):
-            if not records:
-                print(f"⏭️ No records to insert into {table_name}")
-                return
-            total = len(records)
-            print(f"📥 Inserting {total} records into {table_name}...")
-            for i in range(0, total, chunk_size):
-                chunk = records[i:i+chunk_size]
-                try:
-                    print(f"   🔄 Inserting chunk {i//chunk_size + 1} (rows {i+1}-{min(i+chunk_size, total)}) into {table_name}")
-                    supabase.table(table_name).insert(chunk).execute()
-                    print(f"   ✅ Chunk inserted successfully")
-                except Exception as e:
-                    print(f"❌ Chunk insert failed: {e}")
-                    for idx, record in enumerate(chunk):
-                        try:
-                            supabase.table(table_name).insert(record).execute()
-                            print(f"   ✅ Inserted row {i+idx+1} individually")
-                        except Exception as ind_e:
-                            errors.append(f"Failed to insert row {i+idx+1} in {table_name}: {ind_e}")
-                            print(f"   ❌ Row {i+idx+1} failed: {ind_e}")
-            print(f"✅ Finished inserting {table_name}")
 
         # Prepare data
         financial_years = backup_data.get('financial_years', [])
@@ -259,7 +245,7 @@ def restore_all_data(backup_data):
         def remove_id(records):
             return [{k: v for k, v in r.items() if k != 'id'} for r in records]
 
-        # Clean nested JSON fields for schools/departments
+        # Prepare functions for nested JSON
         def prepare_school(school):
             school_copy = {k: v for k, v in school.items() if k != 'id'}
             for field in ['water_accounts', 'electricity_accounts', 'telephone_accounts']:
@@ -276,8 +262,7 @@ def restore_all_data(backup_data):
 
         def prepare_bill(bill):
             bill_copy = {k: v for k, v in bill.items() if k != 'id'}
-            
-            # -------- FIX: Ensure numeric fields are floats, default to 0.0 --------
+            # Ensure numeric fields are floats
             numeric_fields = ['current_charges', 'late_charges', 'unsettled_charges', 
                               'amount_paid', 'consumption_m3', 'consumption_kwh']
             for field in numeric_fields:
@@ -288,17 +273,14 @@ def restore_all_data(backup_data):
                     except (ValueError, TypeError):
                         bill_copy[field] = 0.0
                 else:
-                    bill_copy[field] = 0.0  # explicit default
-
-            # Special handling for telephone bills
+                    bill_copy[field] = 0.0
+            # Handle telephone notes
             if bill.get('utility_type') == 'telephone':
                 account_number = bill_copy.get('account_number', '')
                 current_charges = bill_copy.get('current_charges', 0.0)
                 unsettled_charges = bill_copy.get('unsettled_charges', 0.0)
                 amount_paid = bill_copy.get('amount_paid', 0.0)
                 bill_number = bill_copy.get('bill_number', '')
-
-                # Build or update the notes structure
                 notes_obj = {}
                 try:
                     if bill_copy.get('notes'):
@@ -307,10 +289,8 @@ def restore_all_data(backup_data):
                         notes_obj = {}
                 except:
                     notes_obj = {}
-
                 if 'accounts' not in notes_obj:
                     notes_obj['accounts'] = {}
-
                 if account_number not in notes_obj['accounts']:
                     notes_obj['accounts'][account_number] = {
                         'accountNumber': account_number,
@@ -323,43 +303,92 @@ def restore_all_data(backup_data):
                         'phones': [],
                         'notes': ''
                     }
-                # Update the notes field
                 bill_copy['notes'] = json.dumps(notes_obj)
             else:
-                # For water/electricity, keep notes as is, but ensure it's a string
                 if 'bill_image' in bill_copy and isinstance(bill_copy['bill_image'], (list, dict)):
                     bill_copy['bill_image'] = json.dumps(bill_copy['bill_image'])
-            
             return bill_copy
 
-        # Insert in order
+        # Helper to batch insert with progress
+        def batch_insert(table_name, records, chunk_size=20, progress_start=0, progress_step=0):
+            if not records:
+                return
+            total = len(records)
+            for i in range(0, total, chunk_size):
+                chunk = records[i:i+chunk_size]
+                try:
+                    supabase.table(table_name).insert(chunk).execute()
+                    current_progress = progress_start + (i / total) * progress_step
+                    yield {"progress": int(current_progress), "message": f"Inserting {table_name} ({i+len(chunk)}/{total})"}
+                except Exception as e:
+                    # If chunk fails, try individual inserts
+                    for idx, record in enumerate(chunk):
+                        try:
+                            supabase.table(table_name).insert(record).execute()
+                            current_progress = progress_start + ((i+idx+1) / total) * progress_step
+                            yield {"progress": int(current_progress), "message": f"Inserting {table_name} ({i+idx+1}/{total}) - individual"}
+                        except Exception as ind_e:
+                            errors.append(f"Failed to insert row {i+idx+1} in {table_name}: {ind_e}")
+                            print(f"   ❌ Row {i+idx+1} failed: {ind_e}")
+            yield {"progress": int(progress_start + progress_step), "message": f"Finished {table_name}"}
+
+        # Insert in order with progress tracking
+        total_steps = 100
+        current_progress = 30
+
         if financial_years:
-            batch_insert('financial_years', remove_id(financial_years), chunk_size=5)
+            # 20% of progress allocated to financial_years
+            yield from batch_insert('financial_years', remove_id(financial_years), chunk_size=10,
+                                    progress_start=current_progress, progress_step=10)
+            current_progress += 10
+        else:
+            current_progress += 10
+            yield {"progress": current_progress, "message": "No financial years to insert"}
+
         if schools:
             prepared_schools = [prepare_school(s) for s in schools]
-            batch_insert('schools', prepared_schools, chunk_size=5)
+            yield from batch_insert('schools', prepared_schools, chunk_size=10,
+                                    progress_start=current_progress, progress_step=15)
+            current_progress += 15
+        else:
+            current_progress += 15
+            yield {"progress": current_progress, "message": "No schools to insert"}
+
         if departments:
             prepared_depts = [prepare_department(d) for d in departments]
-            batch_insert('departments', prepared_depts, chunk_size=5)
-        if bills:
-            # Log sample before prepare
-            print("📋 Sample bills before prepare (first 3):")
-            for b in bills[:3]:
-                print(f"  id={b.get('id')}: current_charges={b.get('current_charges')}, unsettled={b.get('unsettled_charges')}, amount_paid={b.get('amount_paid')}")
-            prepared_bills = [prepare_bill(b) for b in bills]
-            print("📋 Sample bills after prepare (first 3):")
-            for pb in prepared_bills[:3]:
-                print(f"  current_charges={pb.get('current_charges')}, unsettled={pb.get('unsettled_charges')}, amount_paid={pb.get('amount_paid')}")
-            batch_insert('utility_bills', prepared_bills, chunk_size=5)
-        if sut_expenses:
-            batch_insert('sut_office_expenses', remove_id(sut_expenses), chunk_size=5)
+            yield from batch_insert('departments', prepared_depts, chunk_size=10,
+                                    progress_start=current_progress, progress_step=15)
+            current_progress += 15
+        else:
+            current_progress += 15
+            yield {"progress": current_progress, "message": "No departments to insert"}
 
-        return {'success': len(errors) == 0, 'errors': errors}
+        if bills:
+            prepared_bills = [prepare_bill(b) for b in bills]
+            yield from batch_insert('utility_bills', prepared_bills, chunk_size=10,
+                                    progress_start=current_progress, progress_step=20)
+            current_progress += 20
+        else:
+            current_progress += 20
+            yield {"progress": current_progress, "message": "No bills to insert"}
+
+        if sut_expenses:
+            yield from batch_insert('sut_office_expenses', remove_id(sut_expenses), chunk_size=10,
+                                    progress_start=current_progress, progress_step=10)
+            current_progress += 10
+        else:
+            current_progress += 10
+            yield {"progress": current_progress, "message": "No SUT expenses to insert"}
+
+        if errors:
+            yield {"progress": 100, "message": "Restore completed with errors", "errors": errors}
+        else:
+            yield {"progress": 100, "message": "Restore completed successfully!"}
+
     except Exception as e:
-        print(f"❌ Fatal error in restore_all_data: {e}")
-        import traceback
+        print(f"❌ Fatal error in restore_all_data_stream: {e}")
         traceback.print_exc()
-        return {'success': False, 'errors': [str(e)]}
+        yield {"progress": 100, "message": f"Fatal error: {str(e)}", "errors": [str(e)]}
 
 # ============ BACKUP API ROUTES ============
 @app.route('/api/backup/all', methods=['GET'])
@@ -509,6 +538,61 @@ def delete_backup(filename):
         print(f"❌ Delete backup error: {e}")
         return jsonify({'error': f'Delete failed: {str(e)}'}), 500
 
+# ============ STREAMING RESTORE ENDPOINT ============
+@app.route('/api/restore/stream', methods=['POST'])
+def restore_backup_stream():
+    try:
+        print("💾 POST /api/restore/stream called")
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+
+        if 'backup_file' not in request.files:
+            return jsonify({'error': 'No backup file provided'}), 400
+
+        file = request.files['backup_file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        if not file.filename.endswith('.json'):
+            return jsonify({'error': 'Only JSON backup files are supported'}), 400
+
+        try:
+            backup_content = file.read().decode('utf-8')
+        except UnicodeDecodeError:
+            return jsonify({'error': 'File is not valid UTF-8'}), 400
+
+        file_size = len(backup_content)
+        print(f"📄 File size: {file_size} bytes")
+
+        if file_size == 0 or backup_content.strip() == '':
+            return jsonify({'error': 'Backup file is empty'}), 400
+
+        if backup_content.startswith('\ufeff'):
+            backup_content = backup_content[1:]
+            print("🔍 Removed UTF-8 BOM")
+
+        try:
+            backup_data = json.loads(backup_content)
+        except json.JSONDecodeError as e:
+            return jsonify({'error': f'Invalid JSON: {str(e)}'}), 400
+
+        # Extract the actual data
+        data_to_restore = backup_data.get('data', backup_data)
+
+        # Define generator that yields progress messages
+        def generate():
+            for progress_msg in restore_all_data_stream(data_to_restore):
+                yield json.dumps(progress_msg) + '\n'
+                time.sleep(0.1)  # small delay to allow client to read
+
+        return Response(stream_with_context(generate()), mimetype='application/json')
+
+    except Exception as e:
+        print(f"❌ Restore stream error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Restore failed: {str(e)}'}), 500
+
+# Keep old restore endpoint for backward compatibility (non-streaming)
 @app.route('/api/backup/restore', methods=['POST'])
 def restore_backup():
     try:
@@ -529,54 +613,43 @@ def restore_backup():
         try:
             backup_content = file.read().decode('utf-8')
         except UnicodeDecodeError:
-            return jsonify({'error': 'File is not valid UTF-8. Please ensure it is a JSON file.'}), 400
-
-        file_size = len(backup_content)
-        print(f"📄 File size: {file_size} bytes")
-
-        if file_size == 0 or backup_content.strip() == '':
-            return jsonify({'error': 'Backup file is empty. Please check the file.'}), 400
+            return jsonify({'error': 'File is not valid UTF-8'}), 400
 
         if backup_content.startswith('\ufeff'):
             backup_content = backup_content[1:]
-            print("🔍 Removed UTF-8 BOM")
 
         try:
             backup_data = json.loads(backup_content)
         except json.JSONDecodeError as e:
-            return jsonify({
-                'error': f'Invalid JSON format: {str(e)}',
-                'details': f'Error at line {e.lineno}, column {e.colno}'
-            }), 400
+            return jsonify({'error': f'Invalid JSON: {str(e)}'}), 400
 
-        try:
-            data_to_restore = backup_data.get('data', backup_data)
-            result = restore_all_data(data_to_restore)
-        except Exception as restore_error:
-            print(f"❌ Restore execution error: {restore_error}")
-            print(traceback.format_exc())
-            return jsonify({
-                'error': f'Restore execution failed: {str(restore_error)}',
-                'details': 'Check server logs for more information.'
-            }), 500
+        data_to_restore = backup_data.get('data', backup_data)
+        # Use the same restore function but without streaming (we'll just collect all messages and ignore)
+        # We'll just call the restore_all_data function (non-streaming) which we already have
+        # But we need to define that function separately. Let's just use the original restore_all_data.
+        result = restore_all_data(data_to_restore)  # We need to keep this function
 
         if result['success']:
-            return jsonify({
-                'success': True,
-                'message': 'Data restored successfully! Order preserved.',
-                'order_preserved': True
-            })
+            return jsonify({'success': True, 'message': 'Data restored successfully!'})
         else:
-            return jsonify({
-                'success': False,
-                'error': 'Restore completed with errors',
-                'errors': result['errors']
-            }), 500
+            return jsonify({'success': False, 'error': 'Restore completed with errors', 'errors': result['errors']}), 500
 
     except Exception as e:
         print(f"❌ Restore backup error: {e}")
-        print(traceback.format_exc())
         return jsonify({'error': f'Restore failed: {str(e)}'}), 500
+
+# We need to keep the original restore_all_data for backward compatibility.
+# But we can reuse the same logic as the generator but without yields.
+def restore_all_data(backup_data):
+    errors = []
+    try:
+        # Call the generator but collect all messages
+        for msg in restore_all_data_stream(backup_data):
+            if msg.get('errors'):
+                errors.extend(msg['errors'])
+        return {'success': len(errors) == 0, 'errors': errors}
+    except Exception as e:
+        return {'success': False, 'errors': [str(e)]}
 
 # ============ MIGRATION ENDPOINT ============
 @app.route('/api/migrate-all-bills', methods=['POST'])
@@ -596,28 +669,24 @@ def migrate_all_bills():
             utility_type = bill.get('utility_type')
             update_data = {}
 
-            # Ensure numeric fields are floats
             numeric_fields = ['current_charges', 'late_charges', 'unsettled_charges', 
                               'amount_paid', 'consumption_m3', 'consumption_kwh']
             for field in numeric_fields:
                 if field in bill:
                     try:
                         val = float(bill[field]) if bill[field] is not None else 0.0
-                        # Only set if the value is not already a valid number? We'll just ensure it's float.
                         update_data[field] = val
                     except (ValueError, TypeError):
                         update_data[field] = 0.0
                 else:
                     update_data[field] = 0.0
 
-            # Special handling for telephone
             if utility_type == 'telephone':
                 account_number = bill.get('account_number', '')
                 current_charges = update_data.get('current_charges', 0.0)
                 unsettled_charges = update_data.get('unsettled_charges', 0.0)
                 amount_paid = update_data.get('amount_paid', 0.0)
                 bill_number = bill.get('bill_number', '')
-
                 notes_obj = {}
                 try:
                     if bill.get('notes'):
@@ -626,10 +695,8 @@ def migrate_all_bills():
                         notes_obj = {}
                 except:
                     notes_obj = {}
-
                 if 'accounts' not in notes_obj:
                     notes_obj['accounts'] = {}
-
                 if account_number not in notes_obj['accounts']:
                     notes_obj['accounts'][account_number] = {
                         'accountNumber': account_number,
