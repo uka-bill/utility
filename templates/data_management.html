@@ -598,6 +598,13 @@
         .toast.info {
             background: var(--primary);
         }
+        
+        /* Reminder toast special styling */
+        .toast.reminder {
+            background: #8b5cf6; /* purple */
+            border-left: 6px solid #fcd34d;
+            font-weight: 600;
+        }
 
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
@@ -661,6 +668,18 @@
             font-size: 0.85rem;
             padding: 12px;
             text-align: center;
+        }
+
+        .reminder-badge {
+            background: #8b5cf6;
+            color: white;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-left: 12px;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
         }
 
         @media (max-width: 1024px) {
@@ -829,7 +848,7 @@
 
         <!-- Backup & Restore Section -->
         <div class="section-card">
-            <h2><span class="badge-icon">💾</span> Backup &amp; Restore</h2>
+            <h2><span class="badge-icon">💾</span> Backup &amp; Restore <span class="reminder-badge" id="reminderBadge" style="display:none;">🔔 Backup reminder</span></h2>
             <p>Create a complete JSON backup of all your data or restore from an existing backup file.</p>
             
             <div class="grid-options" style="margin-bottom: 24px;">
@@ -865,7 +884,10 @@
             <div class="info-box warning" style="margin-bottom: 20px;">
                 <h3>⚠️ Important Notice</h3>
                 <p><strong>Restoring a backup will overwrite all current data.</strong> Please ensure you have a current backup before proceeding. This action cannot be undone.</p>
-                <p style="margin-top: 8px; font-size: 0.85rem;">The restore process is streamed in batches to avoid timeouts – you will see a live progress bar.</p>
+                <p style="margin-top: 8px; font-size: 0.85rem;">
+                    <strong>✨ New streaming restore:</strong> The process is streamed in batches – you will see a live progress bar. 
+                    This prevents timeouts even for large backups.
+                </p>
             </div>
             
             <div class="restore-upload-area" id="restoreDropZone">
@@ -908,6 +930,7 @@
             loadDataStats();
             loadBackupHistory();
             setupEventListeners();
+            checkBackupReminder(); // NEW: monthly reminder
         });
 
         // ---------- DATA STATS ----------
@@ -1142,12 +1165,10 @@
                                 messageEl.textContent = msg.message;
                             }
                             if (msg.errors && msg.errors.length > 0) {
-                                // Show errors but continue
                                 console.warn('Restore errors:', msg.errors);
                                 showToast('Restore completed with errors: ' + msg.errors.join('; '), 'warning');
                             }
                             if (msg.progress === 100) {
-                                // Done
                                 if (msg.errors && msg.errors.length > 0) {
                                     showToast('Restore completed with errors. Check the console.', 'warning');
                                 } else {
@@ -1242,6 +1263,51 @@
                 if (m === '>') return '&gt;';
                 return m;
             });
+        }
+
+        // ---------- MONTHLY BACKUP REMINDER ----------
+        function checkBackupReminder() {
+            const today = new Date();
+            const day = today.getDate();
+            const month = today.getMonth();
+            const year = today.getFullYear();
+            
+            // Check if we already showed the reminder this month
+            const lastReminderMonth = localStorage.getItem('backupReminderMonth');
+            const lastReminderYear = localStorage.getItem('backupReminderYear');
+            
+            // If we haven't shown it this month, or it's a different month/year
+            if (lastReminderMonth != month || lastReminderYear != year) {
+                // If today is on or after the 27th
+                if (day >= 27) {
+                    // Show reminder
+                    const toast = document.getElementById('toast');
+                    toast.textContent = '🔔 Reminder: Please backup your data today (27th or later).';
+                    toast.className = 'toast reminder';
+                    toast.style.display = 'block';
+                    // Auto close after 8 seconds
+                    setTimeout(() => {
+                        toast.style.display = 'none';
+                    }, 8000);
+                    
+                    // Store that we've shown it this month
+                    localStorage.setItem('backupReminderMonth', month);
+                    localStorage.setItem('backupReminderYear', year);
+                    
+                    // Also show the badge
+                    document.getElementById('reminderBadge').style.display = 'inline-block';
+                } else {
+                    // If before the 27th, don't show but clear any previous badge
+                    document.getElementById('reminderBadge').style.display = 'none';
+                }
+            } else {
+                // Already shown this month – just show the badge if it's still after 27th
+                if (day >= 27) {
+                    document.getElementById('reminderBadge').style.display = 'inline-block';
+                } else {
+                    document.getElementById('reminderBadge').style.display = 'none';
+                }
+            }
         }
 
         // ---------- EVENT LISTENERS ----------
