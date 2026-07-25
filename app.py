@@ -1712,9 +1712,12 @@ def generate_report():
             bills = response.data if response.data else []
 
         # ====== Parse telephone notes to populate missing fields ======
-        for bill in bills:
+        # We'll add detailed debug prints here.
+        print(f"📞 Processing {len(bills)} bills for telephone parsing...")
+        for idx, bill in enumerate(bills):
             if bill.get('utility_type') == 'telephone':
-                # Initialize default values (fallback to top-level columns)
+                print(f"📞 Bill #{idx+1} (ID: {bill.get('id')}) - account: {bill.get('account_number')}")
+                # Initialize defaults from top-level fields
                 bill['billNumber'] = bill.get('bill_number', '')
                 bill['totalAccountCharges'] = float(bill.get('current_charges', 0))
                 bill['previousOutstanding'] = float(bill.get('unsettled_charges', 0))
@@ -1727,28 +1730,34 @@ def generate_report():
 
                 notes = bill.get('notes')
                 if notes and isinstance(notes, str):
+                    print(f"   📝 Notes found (length {len(notes)}): {notes[:200]}...")  # show first 200 chars
                     try:
                         notes_data = json.loads(notes)
                         accounts = notes_data.get('accounts', {})
+                        print(f"   📂 Accounts found: {list(accounts.keys())}")
                         if not accounts:
-                            print(f"⚠️ No accounts found in notes for bill ID {bill.get('id')}")
+                            print("   ⚠️ No accounts found in notes, using top-level defaults.")
                             continue
 
-                        # Try to find account data using account_number, or use the first account
                         account_number = bill.get('account_number')
                         acc_data = None
+                        # Try to find by account_number
                         if account_number and account_number in accounts:
                             acc_data = accounts[account_number]
+                            print(f"   ✅ Found account for '{account_number}'")
                         else:
                             # Use the first account that has a billNumber, or just the first
                             for acc_key, acc_val in accounts.items():
                                 if acc_val.get('billNumber'):
                                     acc_data = acc_val
+                                    print(f"   ✅ Using first account with billNumber: '{acc_key}'")
                                     break
                             if not acc_data:
                                 acc_data = next(iter(accounts.values()))
+                                print(f"   ⚠️ No account with billNumber, using first account: '{list(accounts.keys())[0]}'")
 
                         if acc_data:
+                            # Override with parsed data
                             bill['billNumber'] = acc_data.get('billNumber', bill['billNumber'])
                             bill['totalAccountCharges'] = float(acc_data.get('totalAccountCharges', bill['totalAccountCharges']))
                             bill['previousOutstanding'] = float(acc_data.get('previousOutstanding', bill['previousOutstanding']))
@@ -1761,13 +1770,14 @@ def generate_report():
                                 bill['phoneNumber'] = phones[0].get('phoneNumber', bill['phoneNumber'])
                                 bill['rentalAmount'] = sum(float(p.get('rentalAmount', 0)) for p in phones)
                                 bill['totalAmount'] = sum(float(p.get('totalAmount', 0)) for p in phones)
-                            print(f"✅ Parsed telephone bill ID {bill.get('id')}: billNumber={bill['billNumber']}, totalAccountCharges={bill['totalAccountCharges']}")
+                            print(f"   ✅ Parsed: billNumber={bill['billNumber']}, totalAccountCharges={bill['totalAccountCharges']}")
                         else:
-                            print(f"⚠️ No account data found in notes for bill ID {bill.get('id')}")
+                            print("   ⚠️ No account data found in notes, using top-level defaults.")
                     except json.JSONDecodeError as e:
-                        print(f"⚠️ JSON decode error for bill ID {bill.get('id')}: {e}")
+                        print(f"   ❌ JSON decode error: {e}")
                 else:
-                    print(f"⚠️ No notes field for bill ID {bill.get('id')}, using top-level defaults")
+                    print(f"   ⚠️ No notes field or notes is not a string, using top-level defaults.")
+
         # ====== End of telephone parsing ======
 
         if selection_type == 'entityType':
@@ -1791,14 +1801,13 @@ def generate_report():
             bills = filtered_bills
             print(f"📊 After specific entity filter: {len(bills)} bills")
 
-        # Build dictionaries for entity name lookup
+        # Build dictionaries for entity name lookup (both int and str keys)
         school_dict = {}
         dept_dict = {}
         try:
             schools_resp = supabase.table("schools").select("id, name").execute()
             if schools_resp.data:
                 for school in schools_resp.data:
-                    # Use both int and str keys to be safe
                     school_dict[int(school['id'])] = school['name']
                     school_dict[str(school['id'])] = school['name']
         except Exception as e:
