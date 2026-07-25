@@ -1712,7 +1712,7 @@ def generate_report():
             bills = response.data if response.data else []
 
         # ====== Parse telephone notes to populate missing fields ======
-        debug_notes = []  # For debugging (first 5 bills)
+        # This block now prints debug info to the console (visible in server logs)
         for idx, bill in enumerate(bills):
             if bill.get('utility_type') == 'telephone':
                 # Initialize defaults from top-level fields
@@ -1760,20 +1760,21 @@ def generate_report():
                                     bill['rentalAmount'] = sum(float(p.get('rentalAmount', 0)) for p in phones)
                                     bill['totalAmount'] = sum(float(p.get('totalAmount', 0)) for p in phones)
 
-                                # Store debug info for first 5 bills
+                                # Debug: print first few bills to server console
                                 if idx < 5:
-                                    debug_notes.append({
-                                        'id': bill.get('id'),
-                                        'account_number': account_number,
-                                        'notes_keys': list(accounts.keys()),
-                                        'extracted': {
-                                            'billNumber': bill['billNumber'],
-                                            'totalAccountCharges': bill['totalAccountCharges']
-                                        }
-                                    })
+                                    print(f"📞 Debug bill {idx+1}: ID={bill.get('id')}, account={account_number}, keys={list(accounts.keys())}, billNumber={bill['billNumber']}, totalAccountCharges={bill['totalAccountCharges']}")
+                            else:
+                                if idx < 5:
+                                    print(f"⚠️ Debug bill {idx+1}: No account data found, using defaults")
+                        else:
+                            if idx < 5:
+                                print(f"⚠️ Debug bill {idx+1}: No accounts in notes")
                     except Exception as e:
-                        # If anything fails, keep defaults
-                        pass
+                        if idx < 5:
+                            print(f"❌ Debug bill {idx+1}: Error parsing notes: {e}")
+                else:
+                    if idx < 5:
+                        print(f"ℹ️ Debug bill {idx+1}: No notes field, using top-level defaults")
 
         # ====== End of telephone parsing ======
 
@@ -1859,16 +1860,8 @@ def generate_report():
 
         enriched_bills.sort(key=lambda x: x.get('entity_name', ''))
         print(f"📊 Report generated with {len(enriched_bills)} bills")
-        
-        # Add debug info to response (only if there are telephone bills)
-        response_data = enriched_bills
-        if debug_notes:
-            # Add a _debug field so you can see it in the Network tab
-            response_data = {
-                'bills': enriched_bills,
-                '_debug_telephone_parsing': debug_notes
-            }
-        return jsonify(response_data)
+        # Return the bills array directly (no debug wrapper)
+        return jsonify(enriched_bills)
     except Exception as e:
         print(f"❌ Generate report error: {e}")
         print(traceback.format_exc())
