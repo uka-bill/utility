@@ -623,10 +623,7 @@ def restore_backup():
             return jsonify({'error': f'Invalid JSON: {str(e)}'}), 400
 
         data_to_restore = backup_data.get('data', backup_data)
-        # Use the same restore function but without streaming (we'll just collect all messages and ignore)
-        # We'll just call the restore_all_data function (non-streaming) which we already have
-        # But we need to define that function separately. Let's just use the original restore_all_data.
-        result = restore_all_data(data_to_restore)  # We need to keep this function
+        result = restore_all_data(data_to_restore)
 
         if result['success']:
             return jsonify({'success': True, 'message': 'Data restored successfully!'})
@@ -637,12 +634,9 @@ def restore_backup():
         print(f"❌ Restore backup error: {e}")
         return jsonify({'error': f'Restore failed: {str(e)}'}), 500
 
-# We need to keep the original restore_all_data for backward compatibility.
-# But we can reuse the same logic as the generator but without yields.
 def restore_all_data(backup_data):
     errors = []
     try:
-        # Call the generator but collect all messages
         for msg in restore_all_data_stream(backup_data):
             if msg.get('errors'):
                 errors.extend(msg['errors'])
@@ -676,7 +670,6 @@ def restore_department_order_from_csv():
         if csv_content.startswith('\ufeff'):
             csv_content = csv_content[1:]
 
-        # Parse CSV
         csv_reader = csv.DictReader(io.StringIO(csv_content))
         
         updates = {}
@@ -697,7 +690,6 @@ def restore_department_order_from_csv():
 
         print(f"📊 Found {len(updates)} departments to update")
 
-        # Update each department
         updated_count = 0
         error_count = 0
         errors = []
@@ -706,6 +698,7 @@ def restore_department_order_from_csv():
             try:
                 supabase.table("departments").update({"display_order": order}).eq("id", dept_id).execute()
                 updated_count += 1
+                print(f"  ✅ Updated ID {dept_id} -> {order}")
             except Exception as e:
                 error_count += 1
                 errors.append(f"Failed to update department {dept_id}: {str(e)}")
