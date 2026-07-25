@@ -1731,16 +1731,16 @@ def generate_report():
                         notes_data = json.loads(notes)
                         accounts = notes_data.get('accounts', {})
                         if not accounts:
+                            print(f"⚠️ No accounts found in notes for bill ID {bill.get('id')}")
                             continue
 
+                        # Try to find account data using account_number, or use the first account
                         account_number = bill.get('account_number')
                         acc_data = None
-
-                        # Try to find by account_number
                         if account_number and account_number in accounts:
                             acc_data = accounts[account_number]
                         else:
-                            # Fallback: use the first account that has a billNumber, or just the first
+                            # Use the first account that has a billNumber, or just the first
                             for acc_key, acc_val in accounts.items():
                                 if acc_val.get('billNumber'):
                                     acc_data = acc_val
@@ -1761,11 +1761,13 @@ def generate_report():
                                 bill['phoneNumber'] = phones[0].get('phoneNumber', bill['phoneNumber'])
                                 bill['rentalAmount'] = sum(float(p.get('rentalAmount', 0)) for p in phones)
                                 bill['totalAmount'] = sum(float(p.get('totalAmount', 0)) for p in phones)
-
-                    except json.JSONDecodeError:
-                        # If JSON is malformed, keep the defaults
-                        pass
-
+                            print(f"✅ Parsed telephone bill ID {bill.get('id')}: billNumber={bill['billNumber']}, totalAccountCharges={bill['totalAccountCharges']}")
+                        else:
+                            print(f"⚠️ No account data found in notes for bill ID {bill.get('id')}")
+                    except json.JSONDecodeError as e:
+                        print(f"⚠️ JSON decode error for bill ID {bill.get('id')}: {e}")
+                else:
+                    print(f"⚠️ No notes field for bill ID {bill.get('id')}, using top-level defaults")
         # ====== End of telephone parsing ======
 
         if selection_type == 'entityType':
@@ -1788,32 +1790,49 @@ def generate_report():
                 filtered_bills = bills
             bills = filtered_bills
             print(f"📊 After specific entity filter: {len(bills)} bills")
+
+        # Build dictionaries for entity name lookup
         school_dict = {}
         dept_dict = {}
         try:
             schools_resp = supabase.table("schools").select("id, name").execute()
             if schools_resp.data:
                 for school in schools_resp.data:
-                    school_dict[school['id']] = school['name']
+                    # Use both int and str keys to be safe
+                    school_dict[int(school['id'])] = school['name']
+                    school_dict[str(school['id'])] = school['name']
         except Exception as e:
             print(f"⚠️ Error fetching schools: {e}")
         try:
             depts_resp = supabase.table("departments").select("id, name, unit_name").execute()
             if depts_resp.data:
                 for dept in depts_resp.data:
-                    dept_dict[dept['id']] = dept.get('unit_name') or dept.get('name') or 'Unknown Department'
+                    name = dept.get('unit_name') or dept.get('name') or 'Unknown Department'
+                    dept_dict[int(dept['id'])] = name
+                    dept_dict[str(dept['id'])] = name
         except Exception as e:
             print(f"⚠️ Error fetching departments: {e}")
 
         enriched_bills = []
         for bill in bills:
             bill_data = dict(bill)
-            # Convert entity_id to int for dictionary lookup
-            entity_id = int(bill_data.get('entity_id', 0))
+            entity_id = bill_data.get('entity_id')
+            # Convert to int and str for lookup
+            if entity_id is not None:
+                try:
+                    entity_id_int = int(entity_id)
+                    entity_id_str = str(entity_id)
+                except:
+                    entity_id_int = None
+                    entity_id_str = str(entity_id)
+            else:
+                entity_id_int = None
+                entity_id_str = None
+
             if bill_data['entity_type'] == 'school':
-                bill_data['entity_name'] = school_dict.get(entity_id, 'Unknown School')
+                bill_data['entity_name'] = school_dict.get(entity_id_int) or school_dict.get(entity_id_str) or 'Unknown School'
             elif bill_data['entity_type'] == 'department':
-                bill_data['entity_name'] = dept_dict.get(entity_id, 'Unknown Department')
+                bill_data['entity_name'] = dept_dict.get(entity_id_int) or dept_dict.get(entity_id_str) or 'Unknown Department'
             else:
                 bill_data['entity_name'] = 'Unknown'
 
