@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response, Response, stream_with_context
 import os
 from supabase import create_client, Client
@@ -1710,6 +1711,53 @@ def generate_report():
         else:
             response = query.execute()
             bills = response.data if response.data else []
+
+        # ====== NEW BLOCK: parse telephone notes to populate missing fields ======
+        # This block does NOT change any database data – it only enriches the bill objects
+        # for the report response.
+        for bill in bills:
+            if bill.get('utility_type') == 'telephone':
+                notes = bill.get('notes')
+                if notes and isinstance(notes, str):
+                    try:
+                        notes_data = json.loads(notes)
+                        accounts = notes_data.get('accounts', {})
+                        account_number = bill.get('account_number')
+                        
+                        # Try to find the account details using the bill's account_number
+                        acc_data = None
+                        if account_number and account_number in accounts:
+                            acc_data = accounts[account_number]
+                        elif accounts:
+                            # Fallback: use the first account in the dictionary
+                            acc_data = next(iter(accounts.values()))
+                        
+                        if acc_data:
+                            # Extract basic fields
+                            bill['billNumber'] = acc_data.get('billNumber', '')
+                            bill['totalAccountCharges'] = acc_data.get('totalAccountCharges', 0)
+                            bill['previousOutstanding'] = acc_data.get('previousOutstanding', 0)
+                            bill['previousPayment'] = acc_data.get('previousPayment', 0)
+                            bill['totalCurrentCharges'] = acc_data.get('totalCurrentCharges', 0)
+                            bill['amountPaid'] = acc_data.get('amountPaid', 0)
+                            
+                            # Process phones to get first phone number and totals
+                            phones = acc_data.get('phones', [])
+                            if phones:
+                                bill['phoneNumber'] = phones[0].get('phoneNumber', '')
+                                # Sum rental and total amounts across all phones in this account
+                                bill['rentalAmount'] = sum(p.get('rentalAmount', 0) for p in phones)
+                                bill['totalAmount'] = sum(p.get('totalAmount', 0) for p in phones)
+                            else:
+                                bill['phoneNumber'] = ''
+                                bill['rentalAmount'] = 0
+                                bill['totalAmount'] = 0
+                    except json.JSONDecodeError:
+                        # If JSON is malformed, leave fields as defaults
+                        pass
+
+        # ====== End of new block ======
+
         if selection_type == 'entityType':
             entity_type_filter = data.get('entity_type', 'all')
             if entity_type_filter != 'all':
@@ -2293,7 +2341,7 @@ def update_school(school_id):
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
-            "display_order": data.get('displayOrder')  # <--- FIXED: only include if provided
+            "display_order": data.get('displayOrder')
         }
         
         # Remove None values so they don't overwrite existing data
@@ -2505,7 +2553,7 @@ def update_department(department_id):
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and electricity_accounts[0].get('meters') else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and telephone_accounts[0].get('numbers') else '',
-            "display_order": data.get('displayOrder')  # <--- FIXED: only include if provided
+            "display_order": data.get('displayOrder')
         }
         
         # Remove None values so they don't overwrite existing data
