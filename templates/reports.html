@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* ===== All styles unchanged (same as previous) ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -333,6 +334,7 @@
     </style>
 </head>
 <body>
+    <!-- ===== NAVBAR ===== -->
     <nav class="navbar">
         <div class="logo">
             <div class="logo-icon">⚡</div>
@@ -355,6 +357,7 @@
     </nav>
 
     <div class="container">
+        <!-- ===== PAGE HEADER ===== -->
         <div class="page-header">
             <div>
                 <h1 class="page-title">📊 Reports & Print Center</h1>
@@ -362,6 +365,7 @@
             </div>
         </div>
 
+        <!-- ===== PRINT SECTION ===== -->
         <div class="print-section no-print">
             <h3>🖨️ Print Utility Bills</h3>
             <div class="utility-selector">
@@ -492,11 +496,13 @@
             </div>
         </div>
 
+        <!-- ===== INFO NOTE ===== -->
         <div class="info-note no-print">
             <span>📄</span>
             <div><strong>Generate Reports</strong> — Select filters below to generate utility bills reports. You can print, export as PDF, or export as Excel/CSV for further analysis.</div>
         </div>
 
+        <!-- ===== REPORT CONTROLS ===== -->
         <div class="report-controls no-print">
             <div class="selection-options">
                 <div class="selection-option">
@@ -574,6 +580,8 @@
             </div>
         </div>
         <div class="loading no-print" id="loadingIndicator"><span>⏳ Generating report, please wait...</span></div>
+
+        <!-- ===== REPORT RESULTS ===== -->
         <div class="report-results" id="reportResults">
             <div class="results-header">
                 <h3 class="results-title" id="reportTitle">Report Results</h3>
@@ -610,6 +618,7 @@
         </div>
     </div>
 
+    <!-- ===== PROCESSING OVERLAY ===== -->
     <div class="processing-overlay" id="processingOverlay">
         <div class="processing-box">
             <div class="processing-spinner"></div>
@@ -639,7 +648,7 @@
     <div id="printPreviewContainer" style="display:none;"></div>
 
     <script>
-        // ====== GLOBALS ======
+        // ====== GLOBALS & HELPERS (same as previous) ======
         let allSchoolsData = [];
         let allDepartmentsData = [];
         let allSchools = [];
@@ -699,7 +708,6 @@
             telephone: { title: 'Master Invoice Pembayaran Bil Telefon', subtitle: 'Telephone Bill Payment' }
         };
 
-        // ====== HELPERS ======
         function showProcessingOverlay() {
             document.getElementById('processingOverlay').classList.add('active');
             document.body.style.overflow = 'hidden';
@@ -951,7 +959,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (FIXED) ==========
+        // ========== GENERATE PRINT PREVIEW (with grand total fix) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, includeZeroBills, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1054,7 +1062,15 @@
 
             function getBillAmount(bill) {
                 if (hasTelephone) {
-                    return bill.totalAccountCharges || 0;
+                    // Determine which column to use based on what's visible
+                    if (visibleCols.some(c => c.key === 'totalAccountCharges')) {
+                        return bill.totalAccountCharges || 0;
+                    } else if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
+                        return bill.totalCurrentCharges || 0;
+                    } else {
+                        // Fallback to totalAccountCharges
+                        return bill.totalAccountCharges || 0;
+                    }
                 } else {
                     return bill.current_charges || bill.bill_amount || 0;
                 }
@@ -1106,8 +1122,11 @@
             }
 
             // ===== BUILD ENTITY INFO WITH EXPANDED BILLS =====
-            let entityInfo = [];
+            let entities = [];
             let grandTotalAccountCharges = 0;
+            let grandTotalCurrentCharges = 0;
+            let grandTotalBillAmount = 0;
+            let grandTotalConsumption = 0;
 
             for (const entityGroup of entityData) {
                 const entity = entityGroup.entity;
@@ -1145,11 +1164,15 @@
                     return Math.abs(amt) > 0.005;
                 });
 
+                // Update grand totals
                 filteredBills.forEach(b => {
-                    grandTotalAccountCharges += getBillAmount(b);
+                    grandTotalAccountCharges += b.totalAccountCharges || 0;
+                    grandTotalCurrentCharges += b.totalCurrentCharges || 0;
+                    grandTotalBillAmount += b.current_charges || b.bill_amount || 0;
+                    grandTotalConsumption += b.consumption || 0;
                 });
 
-                entityInfo.push({
+                entities.push({
                     entityId: entity.id,
                     entityName: entityName,
                     entityType: entityType,
@@ -1160,65 +1183,25 @@
                 });
             }
 
-            // ===== PAGINATION BY ROWS =====
-            let allRows = [];
-            for (const info of entityInfo) {
-                const entityName = info.entityName;
-                const entityType = info.entityType;
-                const entity = info.entity;
-                const entityTotals = info.totals;
-                const bills = info.bills;
-                for (let b = 0; b < bills.length; b++) {
-                    const bill = bills[b];
-                    const isFirst = (b === 0);
-                    const rowspan = bills.length;
-                    const rowData = {
-                        entityName: entityName,
-                        entityType: entityType,
-                        entity: entity,
-                        entityTotals: entityTotals,
-                        isFirstInGroup: isFirst,
-                        rowspan: rowspan,
-                        bill: bill,
-                        period: bill.period || '—',
-                        accountNumber: bill.account_number || '—',
-                        meterTelNo: (hasTelephone ? (bill.phoneNumber || bill.phone_number || '—') : (bill.meter_number || '—')),
-                        consumption: bill.consumption_kwh || bill.consumption || 0,
-                        billAmount: bill.current_charges || bill.bill_amount || 0,
-                        amountPaid: bill.amountPaid || bill.amount_paid || 0,
-                        outstanding: bill.unsettled_charges || bill.outstanding || 0,
-                        billNumber: bill.billNumber || bill.bill_number || '—',
-                        rentalAmount: bill.rentalAmount || 0,
-                        totalAmount: bill.totalAmount || 0,
-                        totalAccountCharges: bill.totalAccountCharges || 0,
-                        previousOutstanding: bill.previousOutstanding || 0,
-                        previousPayment: bill.previousPayment || 0,
-                        totalCurrentCharges: bill.totalCurrentCharges || 0,
-                        isZeroBill: (Math.abs(getBillAmount(bill)) <= 0.005)
-                    };
-                    allRows.push(rowData);
-                }
-            }
-
-            // ===== PAGINATE =====
+            // ===== PAGINATE BY ENTITY =====
             let pages = [];
             if (shouldPaginate) {
-                const rowsPerPage = Math.max(1, itemsPerPage);
-                for (let i = 0; i < allRows.length; i += rowsPerPage) {
-                    pages.push(allRows.slice(i, i + rowsPerPage));
+                const entitiesPerPage = Math.max(1, itemsPerPage);
+                for (let i = 0; i < entities.length; i += entitiesPerPage) {
+                    pages.push(entities.slice(i, i + entitiesPerPage));
                 }
             } else {
-                pages = [allRows];
+                pages = [entities];
             }
 
             let totalPages = pages.length;
             let pageIndex = 0;
-            let globalSerial = 1;
+            let globalEntityNumber = 1;
             let cumulativeTotal = 0; // For water/electricity balance
 
-            // ===== RENDER DETAIL ROW (FIXED: No rowspan on "No." column) =====
-            function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals, subtotalKeys) {
-                const rowspanColumns = ['entityName', 'entityType', ...subtotalKeys]; // 'no' is removed
+            // ===== RENDER DETAIL ROW =====
+            function renderDetailRow(row, entityNumber, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals, subtotalKeys) {
+                const rowspanColumns = ['no', 'entityName', 'entityType', ...subtotalKeys];
                 let html = '';
                 const detailClass = isFirst ? 'entity-group-header' : 'entity-group-detail';
                 const isZeroRow = row.isZeroBill || false;
@@ -1228,34 +1211,30 @@
                 for (let i = 0; i < visibleCols.length; i++) {
                     const col = visibleCols[i];
                     const colKey = col.key;
+                    const isRowspanCol = rowspanColumns.includes(colKey);
 
-                    // --- "No." column: ALWAYS show, NO rowspan ---
-                    if (colKey === 'no') {
-                        html += '<td style="text-align:center; vertical-align:middle;">' + serial + '</td>';
-                        continue;
-                    }
-
-                    // --- Columns that may have rowspan (entity name, type, totals) ---
-                    if (rowspanColumns.includes(colKey)) {
-                        if (isFirst) {
-                            const rowspanAttr = (rowspan > 1) ? ' rowspan="' + rowspan + '"' : '';
-                            if (colKey === 'entityName') {
-                                html += '<td class="entity-name-cell" style="vertical-align:middle; max-width:120px; word-break:break-word; font-size:8.5pt; text-align:left;"' + rowspanAttr + '>' + escapeHtml(entityName) + '</td>';
-                            } else if (colKey === 'entityType') {
-                                html += '<td style="text-align:center;"' + rowspanAttr + '>' + (entityType === 'school' ? '🏫 School' : '🏛️ Department') + '</td>';
-                            } else if (colKey === 'totalConsumption') {
-                                const unit = hasWater ? 'm³' : 'kWh';
-                                html += '<td style="text-align:center; font-size:8pt;"' + rowspanAttr + '>' + formatNumberWithCommas(entityTotals.consumption) + ' ' + unit + '</td>';
-                            } else if (colKey === 'totalBillAmount') {
-                                html += '<td class="currency-cell" style="font-size:8pt; text-align:center;"' + rowspanAttr + '>' + formatNumberWithCommas(entityTotals.billAmount) + '</td>';
-                            } else if (colKey === 'totalOutstanding') {
-                                html += '<td class="currency-cell" style="font-size:8pt; text-align:center;"' + rowspanAttr + '>' + formatNumberWithCommas(entityTotals.outstanding) + '</td>';
-                            }
+                    if (isRowspanCol && isFirst) {
+                        const rowspanAttr = (rowspan > 1) ? ' rowspan="' + rowspan + '"' : '';
+                        if (colKey === 'no') {
+                            html += '<td style="text-align:center; vertical-align:middle;"' + rowspanAttr + '>' + entityNumber + '</td>';
+                        } else if (colKey === 'entityName') {
+                            html += '<td class="entity-name-cell" style="vertical-align:middle; max-width:120px; word-break:break-word; font-size:8.5pt; text-align:left;"' + rowspanAttr + '>' + escapeHtml(entityName) + '</td>';
+                        } else if (colKey === 'entityType') {
+                            html += '<td style="text-align:center;"' + rowspanAttr + '>' + (entityType === 'school' ? '🏫 School' : '🏛️ Department') + '</td>';
+                        } else if (colKey === 'totalConsumption') {
+                            const unit = hasWater ? 'm³' : 'kWh';
+                            html += '<td style="text-align:center; font-size:8pt;"' + rowspanAttr + '>' + formatNumberWithCommas(entityTotals.consumption) + ' ' + unit + '</td>';
+                        } else if (colKey === 'totalBillAmount') {
+                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;"' + rowspanAttr + '>' + formatNumberWithCommas(entityTotals.billAmount) + '</td>';
+                        } else if (colKey === 'totalOutstanding') {
+                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;"' + rowspanAttr + '>' + formatNumberWithCommas(entityTotals.outstanding) + '</td>';
                         }
                         continue;
+                    } else if (isRowspanCol) {
+                        continue;
                     }
 
-                    // --- Regular detail columns (no rowspan) ---
+                    // --- Regular detail columns ---
                     if (colKey === 'accountNumber') {
                         let acc = row.accountNumber || row.account_number;
                         if (!acc || acc === '—' || acc === '') {
@@ -1300,7 +1279,7 @@
                 return html;
             }
 
-            // ===== BUILD FINAL HTML =====
+            // ===== BUILD HTML =====
             let printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>&nbsp;</title><style>' +
                 'body { font-family: "Inter", sans-serif; font-size: 9pt; margin: 0; }' +
                 '.print-page { page-break-after: always; }' +
@@ -1354,8 +1333,7 @@
                 '@media print { body { margin: 0; } .print-page { page-break-after: always; } .render-url { display: none !important; } }' +
                 '</style></head><body>';
 
-            // ===== RENDER PAGES =====
-            pages.forEach((pageRows, idx) => {
+            pages.forEach((pageEntities, idx) => {
                 pageIndex++;
                 const isLastPage = (pageIndex === totalPages);
 
@@ -1363,13 +1341,16 @@
                 let pageTotalBillAmount = 0, pageTotalAmountPaid = 0, pageTotalOutstanding = 0;
                 let pageTotalCurrent = 0, pageTotalAccount = 0, pageTotalConsumption = 0;
 
-                for (const row of pageRows) {
-                    pageTotalConsumption += row.consumption || 0;
-                    pageTotalBillAmount += row.billAmount || 0;
-                    pageTotalOutstanding += row.outstanding || 0;
-                    pageTotalAmountPaid += row.amountPaid || 0;
-                    pageTotalCurrent += row.totalCurrentCharges || 0;
-                    pageTotalAccount += row.totalAccountCharges || 0;
+                for (const entity of pageEntities) {
+                    const bills = entity.bills;
+                    for (const row of bills) {
+                        pageTotalConsumption += row.consumption || 0;
+                        pageTotalBillAmount += row.current_charges || row.bill_amount || 0;
+                        pageTotalOutstanding += row.unsettled_charges || row.outstanding || 0;
+                        pageTotalAmountPaid += row.amountPaid || row.amount_paid || 0;
+                        pageTotalCurrent += row.totalCurrentCharges || 0;
+                        pageTotalAccount += row.totalAccountCharges || 0;
+                    }
                 }
 
                 const pageBillAmountTotal = pageTotalBillAmount;
@@ -1393,34 +1374,63 @@
                     visibleCols.map(c => '<th style="font-size:8pt; white-space:nowrap; text-align:center;">' + c.label + '</th>').join('') +
                     '</tr></thead><tbody>';
 
-                // ===== RENDER ROWS FOR THIS PAGE =====
-                for (let r = 0; r < pageRows.length; r++) {
-                    const row = pageRows[r];
-                    const entityName = row.entityName;
-                    const entityType = row.entityType;
-                    const entity = row.entity;
-                    const entityTotals = row.entityTotals;
-                    const isFirst = row.isFirstInGroup;
-                    const rowspan = row.rowspan;
+                // ===== RENDER ENTITIES ON THIS PAGE =====
+                for (let e = 0; e < pageEntities.length; e++) {
+                    const entity = pageEntities[e];
+                    const entityName = entity.entityName;
+                    const entityType = entity.entityType;
+                    const entityObj = entity.entity;
+                    const entityTotals = entity.totals;
+                    const bills = entity.bills;
+                    const rowspan = bills.length;
 
-                    let showGroup = groupByEntity && isFirst;
-                    let actualRowspan = groupByEntity ? rowspan : 1;
+                    for (let b = 0; b < bills.length; b++) {
+                        const bill = bills[b];
+                        const isFirst = (b === 0);
+                        const rowData = {
+                            entityName: entityName,
+                            entityType: entityType,
+                            entity: entityObj,
+                            entityTotals: entityTotals,
+                            isFirstInGroup: isFirst,
+                            rowspan: rowspan,
+                            bill: bill,
+                            period: bill.period || '—',
+                            accountNumber: bill.account_number || '—',
+                            meterTelNo: (hasTelephone ? (bill.phoneNumber || bill.phone_number || '—') : (bill.meter_number || '—')),
+                            consumption: bill.consumption_kwh || bill.consumption || 0,
+                            billAmount: bill.current_charges || bill.bill_amount || 0,
+                            amountPaid: bill.amountPaid || bill.amount_paid || 0,
+                            outstanding: bill.unsettled_charges || bill.outstanding || 0,
+                            billNumber: bill.billNumber || bill.bill_number || '—',
+                            rentalAmount: bill.rentalAmount || 0,
+                            totalAmount: bill.totalAmount || 0,
+                            totalAccountCharges: bill.totalAccountCharges || 0,
+                            previousOutstanding: bill.previousOutstanding || 0,
+                            previousPayment: bill.previousPayment || 0,
+                            totalCurrentCharges: bill.totalCurrentCharges || 0,
+                            isZeroBill: (Math.abs(getBillAmount(bill)) <= 0.005)
+                        };
 
-                    printHtml += renderDetailRow(
-                        row,
-                        globalSerial,
-                        showGroup,
-                        actualRowspan,
-                        visibleCols,
-                        hasWaterElectricity,
-                        hasTelephone,
-                        entityName,
-                        entityType,
-                        entity,
-                        entityTotals,
-                        subtotalKeys
-                    );
-                    globalSerial++;
+                        let showGroup = groupByEntity && isFirst;
+                        let actualRowspan = groupByEntity ? rowspan : 1;
+
+                        printHtml += renderDetailRow(
+                            rowData,
+                            globalEntityNumber,
+                            showGroup,
+                            actualRowspan,
+                            visibleCols,
+                            hasWaterElectricity,
+                            hasTelephone,
+                            entityName,
+                            entityType,
+                            entityObj,
+                            entityTotals,
+                            subtotalKeys
+                        );
+                    }
+                    globalEntityNumber++;
                 }
 
                 // ===== PAGE TOTAL =====
@@ -1436,7 +1446,7 @@
                     else pageTotalValue = pageTotalBillAmount;
                 }
 
-                if (pageRows.length > 0) {
+                if (pageEntities.length > 0) {
                     printHtml += '<tr class="summary-row">';
                     visibleCols.forEach((col, idx) => {
                         if (idx === summaryColIndex) {
@@ -1454,7 +1464,7 @@
                     printHtml += '</tr>';
                 }
 
-                // ===== BALANCE C/F (for water/electricity) =====
+                // ===== BALANCE C/F =====
                 if (hasWaterElectricity && pageIndex < totalPages) {
                     const cfAmount = cumulativeTotal;
                     let balanceHtml = '<tr class="balance-row">';
@@ -1471,10 +1481,20 @@
                     printHtml += balanceHtml;
                 }
 
-                // ===== GRAND TOTAL (last page only) =====
+                // ===== GRAND TOTAL (last page) =====
                 if (isLastPage) {
+                    // Choose the correct grand total based on visible columns
                     let totalValueForSummary = grandTotalAccountCharges;
-                    if (!hasTelephone && hasWaterElectricity) {
+                    if (hasTelephone) {
+                        if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
+                            totalValueForSummary = grandTotalCurrentCharges;
+                        } else if (visibleCols.some(c => c.key === 'totalAccountCharges')) {
+                            totalValueForSummary = grandTotalAccountCharges;
+                        } else {
+                            // Fallback: use totalAccountCharges
+                            totalValueForSummary = grandTotalAccountCharges;
+                        }
+                    } else if (hasWaterElectricity) {
                         if (visibleCols.some(c => c.key === 'totalBillAmount')) totalValueForSummary = grandTotalBillAmount;
                         else if (visibleCols.some(c => c.key === 'billAmount')) totalValueForSummary = grandTotalBillAmount;
                         else if (visibleCols.some(c => c.key === 'totalConsumption')) totalValueForSummary = grandTotalConsumption;
@@ -1523,12 +1543,12 @@
                         '<div class="date-line">Tarikh: ' + currentDate + '</div></div>' +
                         '</div></div><div class="footer-note">' +
                         (totalPages > 1 ? 'Page ' + pageIndex + ' of ' + totalPages + ' | ' : '') +
-                        'Total Bills: ' + allRows.length + ' | This is a computer-generated document.' +
+                        'Total Entities: ' + entities.length + ' | Total Bills: ' + entities.reduce((sum, e) => sum + e.bills.length, 0) + ' | This is a computer-generated document.' +
                         '</div></div>';
                 } else {
                     printHtml += '<div class="footer-note">' +
                         'Page ' + pageIndex + ' of ' + totalPages + ' | ' +
-                        'Total Bills: ' + allRows.length + ' | This is a computer-generated document.' +
+                        'Total Entities: ' + entities.length + ' | Total Bills: ' + entities.reduce((sum, e) => sum + e.bills.length, 0) + ' | This is a computer-generated document.' +
                         '</div>';
                 }
 
@@ -1773,11 +1793,7 @@
 
                 let shouldPaginate = false;
                 if (enablePagination) {
-                    let totalRows = 0;
-                    for (const e of entityList) {
-                        totalRows += e.bills.length;
-                    }
-                    shouldPaginate = totalRows > itemsPerPage;
+                    shouldPaginate = entityList.length > itemsPerPage;
                 }
 
                 const subtotalOptions = {
