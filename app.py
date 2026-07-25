@@ -1712,10 +1712,10 @@ def generate_report():
             bills = response.data if response.data else []
 
         # ====== Parse telephone notes to populate missing fields ======
-        # This block now prints debug info to the console (visible in server logs)
+        # This version includes a _debug_notes field for the first 5 bills
         for idx, bill in enumerate(bills):
             if bill.get('utility_type') == 'telephone':
-                # Initialize defaults from top-level fields
+                # Initialize defaults
                 bill['billNumber'] = bill.get('bill_number', '')
                 bill['totalAccountCharges'] = float(bill.get('current_charges', 0))
                 bill['previousOutstanding'] = float(bill.get('unsettled_charges', 0))
@@ -1730,51 +1730,47 @@ def generate_report():
                 if notes and isinstance(notes, str):
                     try:
                         notes_data = json.loads(notes)
+                        # Try to get accounts
                         accounts = notes_data.get('accounts', {})
                         if accounts:
-                            # Try to find account data
+                            # Try to use the account that matches the bill's account_number
                             account_number = bill.get('account_number')
                             acc_data = None
                             if account_number and account_number in accounts:
                                 acc_data = accounts[account_number]
                             else:
-                                # Use first account with billNumber, or just first
+                                # Otherwise, use the first account with a billNumber or just the first
                                 for acc_key, acc_val in accounts.items():
-                                    if acc_val.get('billNumber'):
+                                    if acc_val.get('billNumber') or acc_val.get('totalAccountCharges'):
                                         acc_data = acc_val
                                         break
                                 if not acc_data:
                                     acc_data = next(iter(accounts.values()))
-
                             if acc_data:
+                                # Override with parsed data
                                 bill['billNumber'] = acc_data.get('billNumber', bill['billNumber'])
                                 bill['totalAccountCharges'] = float(acc_data.get('totalAccountCharges', bill['totalAccountCharges']))
                                 bill['previousOutstanding'] = float(acc_data.get('previousOutstanding', bill['previousOutstanding']))
                                 bill['previousPayment'] = float(acc_data.get('previousPayment', bill['previousPayment']))
                                 bill['totalCurrentCharges'] = float(acc_data.get('totalCurrentCharges', bill['totalCurrentCharges']))
                                 bill['amountPaid'] = float(acc_data.get('amountPaid', bill['amountPaid']))
-
                                 phones = acc_data.get('phones', [])
                                 if phones:
                                     bill['phoneNumber'] = phones[0].get('phoneNumber', bill['phoneNumber'])
                                     bill['rentalAmount'] = sum(float(p.get('rentalAmount', 0)) for p in phones)
                                     bill['totalAmount'] = sum(float(p.get('totalAmount', 0)) for p in phones)
-
-                                # Debug: print first few bills to server console
-                                if idx < 5:
-                                    print(f"📞 Debug bill {idx+1}: ID={bill.get('id')}, account={account_number}, keys={list(accounts.keys())}, billNumber={bill['billNumber']}, totalAccountCharges={bill['totalAccountCharges']}")
-                            else:
-                                if idx < 5:
-                                    print(f"⚠️ Debug bill {idx+1}: No account data found, using defaults")
                         else:
-                            if idx < 5:
-                                print(f"⚠️ Debug bill {idx+1}: No accounts in notes")
-                    except Exception as e:
-                        if idx < 5:
-                            print(f"❌ Debug bill {idx+1}: Error parsing notes: {e}")
-                else:
-                    if idx < 5:
-                        print(f"ℹ️ Debug bill {idx+1}: No notes field, using top-level defaults")
+                            # No accounts object; try to parse notes as direct fields (legacy)
+                            if 'billNumber' in notes_data:
+                                bill['billNumber'] = notes_data.get('billNumber', bill['billNumber'])
+                            if 'totalAccountCharges' in notes_data:
+                                bill['totalAccountCharges'] = float(notes_data.get('totalAccountCharges', bill['totalAccountCharges']))
+                    except json.JSONDecodeError:
+                        pass
+
+                # Add debug notes for the first 5 bills (will appear in the response)
+                if idx < 5:
+                    bill['_debug_notes'] = notes  # Include the raw notes for inspection
 
         # ====== End of telephone parsing ======
 
