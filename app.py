@@ -1712,11 +1712,9 @@ def generate_report():
             bills = response.data if response.data else []
 
         # ====== Parse telephone notes to populate missing fields ======
-        # We'll add detailed debug prints here.
-        print(f"📞 Processing {len(bills)} bills for telephone parsing...")
+        debug_notes = []  # For debugging (first 5 bills)
         for idx, bill in enumerate(bills):
             if bill.get('utility_type') == 'telephone':
-                print(f"📞 Bill #{idx+1} (ID: {bill.get('id')}) - account: {bill.get('account_number')}")
                 # Initialize defaults from top-level fields
                 bill['billNumber'] = bill.get('bill_number', '')
                 bill['totalAccountCharges'] = float(bill.get('current_charges', 0))
@@ -1730,53 +1728,52 @@ def generate_report():
 
                 notes = bill.get('notes')
                 if notes and isinstance(notes, str):
-                    print(f"   📝 Notes found (length {len(notes)}): {notes[:200]}...")  # show first 200 chars
                     try:
                         notes_data = json.loads(notes)
                         accounts = notes_data.get('accounts', {})
-                        print(f"   📂 Accounts found: {list(accounts.keys())}")
-                        if not accounts:
-                            print("   ⚠️ No accounts found in notes, using top-level defaults.")
-                            continue
+                        if accounts:
+                            # Try to find account data
+                            account_number = bill.get('account_number')
+                            acc_data = None
+                            if account_number and account_number in accounts:
+                                acc_data = accounts[account_number]
+                            else:
+                                # Use first account with billNumber, or just first
+                                for acc_key, acc_val in accounts.items():
+                                    if acc_val.get('billNumber'):
+                                        acc_data = acc_val
+                                        break
+                                if not acc_data:
+                                    acc_data = next(iter(accounts.values()))
 
-                        account_number = bill.get('account_number')
-                        acc_data = None
-                        # Try to find by account_number
-                        if account_number and account_number in accounts:
-                            acc_data = accounts[account_number]
-                            print(f"   ✅ Found account for '{account_number}'")
-                        else:
-                            # Use the first account that has a billNumber, or just the first
-                            for acc_key, acc_val in accounts.items():
-                                if acc_val.get('billNumber'):
-                                    acc_data = acc_val
-                                    print(f"   ✅ Using first account with billNumber: '{acc_key}'")
-                                    break
-                            if not acc_data:
-                                acc_data = next(iter(accounts.values()))
-                                print(f"   ⚠️ No account with billNumber, using first account: '{list(accounts.keys())[0]}'")
+                            if acc_data:
+                                bill['billNumber'] = acc_data.get('billNumber', bill['billNumber'])
+                                bill['totalAccountCharges'] = float(acc_data.get('totalAccountCharges', bill['totalAccountCharges']))
+                                bill['previousOutstanding'] = float(acc_data.get('previousOutstanding', bill['previousOutstanding']))
+                                bill['previousPayment'] = float(acc_data.get('previousPayment', bill['previousPayment']))
+                                bill['totalCurrentCharges'] = float(acc_data.get('totalCurrentCharges', bill['totalCurrentCharges']))
+                                bill['amountPaid'] = float(acc_data.get('amountPaid', bill['amountPaid']))
 
-                        if acc_data:
-                            # Override with parsed data
-                            bill['billNumber'] = acc_data.get('billNumber', bill['billNumber'])
-                            bill['totalAccountCharges'] = float(acc_data.get('totalAccountCharges', bill['totalAccountCharges']))
-                            bill['previousOutstanding'] = float(acc_data.get('previousOutstanding', bill['previousOutstanding']))
-                            bill['previousPayment'] = float(acc_data.get('previousPayment', bill['previousPayment']))
-                            bill['totalCurrentCharges'] = float(acc_data.get('totalCurrentCharges', bill['totalCurrentCharges']))
-                            bill['amountPaid'] = float(acc_data.get('amountPaid', bill['amountPaid']))
+                                phones = acc_data.get('phones', [])
+                                if phones:
+                                    bill['phoneNumber'] = phones[0].get('phoneNumber', bill['phoneNumber'])
+                                    bill['rentalAmount'] = sum(float(p.get('rentalAmount', 0)) for p in phones)
+                                    bill['totalAmount'] = sum(float(p.get('totalAmount', 0)) for p in phones)
 
-                            phones = acc_data.get('phones', [])
-                            if phones:
-                                bill['phoneNumber'] = phones[0].get('phoneNumber', bill['phoneNumber'])
-                                bill['rentalAmount'] = sum(float(p.get('rentalAmount', 0)) for p in phones)
-                                bill['totalAmount'] = sum(float(p.get('totalAmount', 0)) for p in phones)
-                            print(f"   ✅ Parsed: billNumber={bill['billNumber']}, totalAccountCharges={bill['totalAccountCharges']}")
-                        else:
-                            print("   ⚠️ No account data found in notes, using top-level defaults.")
-                    except json.JSONDecodeError as e:
-                        print(f"   ❌ JSON decode error: {e}")
-                else:
-                    print(f"   ⚠️ No notes field or notes is not a string, using top-level defaults.")
+                                # Store debug info for first 5 bills
+                                if idx < 5:
+                                    debug_notes.append({
+                                        'id': bill.get('id'),
+                                        'account_number': account_number,
+                                        'notes_keys': list(accounts.keys()),
+                                        'extracted': {
+                                            'billNumber': bill['billNumber'],
+                                            'totalAccountCharges': bill['totalAccountCharges']
+                                        }
+                                    })
+                    except Exception as e:
+                        # If anything fails, keep defaults
+                        pass
 
         # ====== End of telephone parsing ======
 
@@ -1838,14 +1835,15 @@ def generate_report():
                 entity_id_int = None
                 entity_id_str = None
 
+            # Try to get entity name from dictionaries, fallback to the bill's own entity_name
             if bill_data['entity_type'] == 'school':
-                bill_data['entity_name'] = school_dict.get(entity_id_int) or school_dict.get(entity_id_str) or 'Unknown School'
+                bill_data['entity_name'] = school_dict.get(entity_id_int) or school_dict.get(entity_id_str) or bill_data.get('entity_name', 'Unknown School')
             elif bill_data['entity_type'] == 'department':
-                bill_data['entity_name'] = dept_dict.get(entity_id_int) or dept_dict.get(entity_id_str) or 'Unknown Department'
+                bill_data['entity_name'] = dept_dict.get(entity_id_int) or dept_dict.get(entity_id_str) or bill_data.get('entity_name', 'Unknown Department')
             else:
-                bill_data['entity_name'] = 'Unknown'
+                bill_data['entity_name'] = bill_data.get('entity_name', 'Unknown')
 
-            # Ensure telephone fields are present (they may have been added above)
+            # Ensure telephone fields are present
             if bill_data['utility_type'] == 'telephone':
                 bill_data['billNumber'] = bill_data.get('billNumber', '')
                 bill_data['totalAccountCharges'] = bill_data.get('totalAccountCharges', 0)
@@ -1861,7 +1859,16 @@ def generate_report():
 
         enriched_bills.sort(key=lambda x: x.get('entity_name', ''))
         print(f"📊 Report generated with {len(enriched_bills)} bills")
-        return jsonify(enriched_bills)
+        
+        # Add debug info to response (only if there are telephone bills)
+        response_data = enriched_bills
+        if debug_notes:
+            # Add a _debug field so you can see it in the Network tab
+            response_data = {
+                'bills': enriched_bills,
+                '_debug_telephone_parsing': debug_notes
+            }
+        return jsonify(response_data)
     except Exception as e:
         print(f"❌ Generate report error: {e}")
         print(traceback.format_exc())
