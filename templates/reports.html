@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+        /* ===== All styles unchanged ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -947,7 +948,7 @@
             });
         });
 
-        // ========== FIXED: generatePrintPreviewWithEntities ==========
+        // ========== generatePrintPreviewWithEntities (with telephone account expansion) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, includeZeroBills, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1050,20 +1051,79 @@
 
             function getBillAmount(bill) {
                 if (hasTelephone) {
-                    // Use totalAccountCharges from the bill (parsed from notes)
                     return bill.totalAccountCharges || 0;
                 } else {
                     return bill.current_charges || bill.bill_amount || 0;
                 }
             }
 
+            // ===== NEW: Expand telephone bills =====
+            function expandTelephoneBills(bills) {
+                const expanded = [];
+                for (const bill of bills) {
+                    // If not telephone, keep as is
+                    if (bill.utility_type !== 'telephone') {
+                        expanded.push(bill);
+                        continue;
+                    }
+                    // Try to parse notes
+                    const notes = bill.notes;
+                    if (notes && typeof notes === 'string') {
+                        try {
+                            const parsed = JSON.parse(notes);
+                            const accounts = parsed.accounts;
+                            if (accounts && typeof accounts === 'object') {
+                                let accountCount = 0;
+                                for (const accKey in accounts) {
+                                    const accData = accounts[accKey];
+                                    // Create a new bill object for this account
+                                    const newBill = { ...bill }; // copy original
+                                    // Override with account data
+                                    newBill.account_number = accData.accountNumber || accKey;
+                                    newBill.billNumber = accData.billNumber || bill.billNumber || '';
+                                    newBill.totalAccountCharges = accData.totalAccountCharges || 0;
+                                    newBill.previousOutstanding = accData.previousOutstanding || 0;
+                                    newBill.previousPayment = accData.previousPayment || 0;
+                                    newBill.totalCurrentCharges = accData.totalCurrentCharges || 0;
+                                    newBill.amountPaid = accData.amountPaid || 0;
+                                    newBill.phoneNumber = (accData.phones && accData.phones.length > 0) ? accData.phones[0].phoneNumber : '';
+                                    newBill.rentalAmount = 0;
+                                    newBill.totalAmount = 0;
+                                    if (accData.phones) {
+                                        newBill.rentalAmount = accData.phones.reduce((sum, p) => sum + (p.rentalAmount || 0), 0);
+                                        newBill.totalAmount = accData.phones.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+                                    }
+                                    // Also set the meter_number for fallback
+                                    newBill.meter_number = newBill.billNumber;
+                                    expanded.push(newBill);
+                                    accountCount++;
+                                }
+                                if (accountCount > 0) {
+                                    // Skip the original bill because we expanded it
+                                    continue;
+                                }
+                            }
+                        } catch (e) {
+                            // If parsing fails, keep the original bill
+                        }
+                    }
+                    // If no expansion happened, keep the original
+                    expanded.push(bill);
+                }
+                return expanded;
+            }
+
+            // ===== Process entities with expanded bills =====
             let entityInfo = [];
             for (const entityGroup of entityData) {
                 const entity = entityGroup.entity;
                 const entityType = entityGroup.type;
-                const bills = entityGroup.bills || [];
+                let bills = entityGroup.bills || [];
+                // Expand telephone bills
+                bills = expandTelephoneBills(bills);
                 const entityName = entity.name || (entityType === 'school' ? 'School #' + entity.id : 'Dept #' + entity.id);
 
+                // Deduplicate by account_number + meter_number (optional)
                 const uniqueBills = [];
                 const seen = new Set();
                 bills.forEach(bill => {
@@ -1103,6 +1163,17 @@
                 });
             }
 
+            // The rest of the function (pagination, rendering) remains unchanged.
+            // For brevity, the rendering code is included but not modified.
+            // It will use the expanded bills array.
+
+            // ... (pagination and rendering code from previous version)
+            // The rendering loop already iterates over info.bills and uses rowData with billNumber, totalAccountCharges, etc.
+            // So it will automatically show all expanded accounts.
+
+            // Since the full rendering code is long, I'll include it in the complete file provided.
+
+            // ===== Continue with pagination and rendering =====
             let grandTotalBillAmount = 0, grandTotalAmountPaid = 0, grandTotalOutstanding = 0;
             let grandTotalRentalAmount = 0, grandTotalTotalAmount = 0, grandTotalAccountCharges = 0;
             let grandTotalPrevOutstanding = 0, grandTotalPrevPayment = 0, grandTotalCurrentCharges = 0;
@@ -1215,6 +1286,7 @@
                 return html;
             }
 
+            // ===== Build HTML (full rendering) =====
             let printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>&nbsp;</title><style>' +
                 'body { font-family: "Inter", sans-serif; font-size: 9pt; margin: 0; }' +
                 '.print-page { page-break-after: always; }' +
@@ -1343,7 +1415,6 @@
                             const bill = bills[b];
                             const isFirst = (b === 0);
                             const isZeroBill = (Math.abs(getBillAmount(bill)) <= 0.005);
-                            // Ensure we read the parsed fields from the bill
                             const rowData = {
                                 entityName: entityName, entityType: entityType,
                                 isZeroBill: isZeroBill,
