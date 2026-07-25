@@ -956,7 +956,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (unchanged – has all fixes) ==========
+        // ========== generatePrintPreviewWithEntities (unchanged) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, includeZeroBills, approvalDetails, subtotalOptions) {
             // ... (full function unchanged, with balance c/f spacing and zero-bill filter) ...
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -1464,13 +1464,13 @@
                                 amountPaid: bill.amount_paid || 0,
                                 outstanding: bill.unsettled_charges || bill.outstanding || 0,
                                 period: bill.period || '—',
-                                billNumber: bill.bill_number || '—',
-                                rentalAmount: bill.rental_amount || 0,
-                                totalAmount: bill.total_amount || 0,
+                                billNumber: bill.billNumber || bill.bill_number || '—',
+                                rentalAmount: bill.rentalAmount || 0,
+                                totalAmount: bill.totalAmount || 0,
                                 totalAccountCharges: bill.totalAccountCharges || 0,
-                                previousOutstanding: bill.previous_outstanding || 0,
-                                previousPayment: bill.previous_payment || 0,
-                                totalCurrentCharges: bill.total_current_charges || 0,
+                                previousOutstanding: bill.previousOutstanding || 0,
+                                previousPayment: bill.previousPayment || 0,
+                                totalCurrentCharges: bill.totalCurrentCharges || 0,
                                 utilityType: bill.utilityType || utilityTypes[0]
                             };
                             printHtml += renderDetailRow(rowData, globalSerial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals, subtotalKeys);
@@ -1700,7 +1700,6 @@
             }
 
             // ===== OPTIMIZATION: detect if ALL schools AND ALL departments are selected =====
-            // Count checkboxes directly from the DOM (always accurate)
             const totalSchoolCheckboxes = document.querySelectorAll('.school-checkbox').length;
             const totalDepartmentCheckboxes = document.querySelectorAll('.department-checkbox').length;
             const selectedSchoolCount = document.querySelectorAll('.school-checkbox:checked').length;
@@ -1745,8 +1744,11 @@
 
                 if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
-                let billsData = await response.json();
+                const billsData = await response.json();
                 console.log('📊 API returned', billsData.length, 'bills');
+                // ====== ADD DEBUG LOG HERE ======
+                console.log('📊 First 3 bills (raw):', billsData.slice(0, 3));
+                // ================================
                 updateProcessingBillsCount(billsData.length);
                 updateProcessingStep(0, `Fetched ${billsData.length} bills`, 30);
 
