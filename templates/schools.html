@@ -762,7 +762,7 @@
     <div class="filters-bar">
         <div class="filter-group">
             <label>🔍 Search</label>
-            <input type="text" id="searchFilter" class="filter-input" placeholder="Name, cluster...">
+            <input type="text" id="searchFilter" class="filter-input" placeholder="Search by name, cluster, account, meter, phone...">
         </div>
         <div class="filter-group">
             <label>📌 Cluster</label>
@@ -855,6 +855,16 @@
                 if (s.display_order === undefined || s.display_order === null) {
                     s.display_order = s.id;
                 }
+                // Ensure account arrays are parsed
+                if (s.water_accounts && typeof s.water_accounts === 'string') {
+                    try { s.water_accounts = JSON.parse(s.water_accounts); } catch(e){ s.water_accounts = []; }
+                }
+                if (s.electricity_accounts && typeof s.electricity_accounts === 'string') {
+                    try { s.electricity_accounts = JSON.parse(s.electricity_accounts); } catch(e){ s.electricity_accounts = []; }
+                }
+                if (s.telephone_accounts && typeof s.telephone_accounts === 'string') {
+                    try { s.telephone_accounts = JSON.parse(s.telephone_accounts); } catch(e){ s.telephone_accounts = []; }
+                }
             });
 
             updateClusterFilter();
@@ -878,22 +888,74 @@
         });
     }
 
+    // ===== ENHANCED SEARCH: checks account numbers, meter numbers, phone numbers =====
+    function schoolMatchesSearch(school, searchTerm) {
+        if (!searchTerm) return true;
+        const term = searchTerm.toLowerCase();
+
+        // Basic fields
+        if ((school.name || '').toLowerCase().includes(term)) return true;
+        if ((school.cluster_number || '').toLowerCase().includes(term)) return true;
+        if ((school.school_number || '').toLowerCase().includes(term)) return true;
+        if ((school.bmo_name || '').toLowerCase().includes(term)) return true;
+        if ((school.bmo_phone || '').toLowerCase().includes(term)) return true;
+        if ((school.address || '').toLowerCase().includes(term)) return true;
+        if ((school.notes || '').toLowerCase().includes(term)) return true;
+
+        // Water accounts
+        if (school.water_accounts && Array.isArray(school.water_accounts)) {
+            for (let acc of school.water_accounts) {
+                if ((acc.accountNumber || '').toLowerCase().includes(term)) return true;
+                if (acc.meters && Array.isArray(acc.meters)) {
+                    for (let m of acc.meters) {
+                        if ((m.meterNumber || '').toLowerCase().includes(term)) return true;
+                        if ((m.location || '').toLowerCase().includes(term)) return true;
+                    }
+                }
+            }
+        }
+
+        // Electricity accounts
+        if (school.electricity_accounts && Array.isArray(school.electricity_accounts)) {
+            for (let acc of school.electricity_accounts) {
+                if ((acc.accountNumber || '').toLowerCase().includes(term)) return true;
+                if (acc.meters && Array.isArray(acc.meters)) {
+                    for (let m of acc.meters) {
+                        if ((m.meterNumber || '').toLowerCase().includes(term)) return true;
+                        if ((m.location || '').toLowerCase().includes(term)) return true;
+                    }
+                }
+            }
+        }
+
+        // Telephone accounts
+        if (school.telephone_accounts && Array.isArray(school.telephone_accounts)) {
+            for (let acc of school.telephone_accounts) {
+                if ((acc.accountNumber || '').toLowerCase().includes(term)) return true;
+                if (acc.numbers && Array.isArray(acc.numbers)) {
+                    for (let n of acc.numbers) {
+                        if ((n.phoneNumber || '').toLowerCase().includes(term)) return true;
+                        if ((n.location || '').toLowerCase().includes(term)) return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     // ===== FILTERED & SORTED =====
     function getFilteredSchools() {
         let filtered = [...allSchools];
         const search = document.getElementById('searchFilter').value.toLowerCase();
         const cluster = document.getElementById('clusterFilter').value;
 
-        if (search) filtered = filtered.filter(s =>
-            s.name?.toLowerCase().includes(search) ||
-            s.cluster_number?.toLowerCase().includes(search) ||
-            s.school_number?.toLowerCase().includes(search) ||
-            s.bmo_name?.toLowerCase().includes(search) ||
-            s.bmo_phone?.toLowerCase().includes(search) ||
-            s.address?.toLowerCase().includes(search) ||
-            s.notes?.toLowerCase().includes(search)
-        );
-        if (cluster !== 'all') filtered = filtered.filter(s => s.cluster_number === cluster);
+        if (search) {
+            filtered = filtered.filter(s => schoolMatchesSearch(s, search));
+        }
+        if (cluster !== 'all') {
+            filtered = filtered.filter(s => s.cluster_number === cluster);
+        }
 
         // Group by cluster, sort groups by cluster number, within group by display_order
         const grouped = {};
@@ -950,9 +1012,9 @@
             tbody.appendChild(sepRow);
 
             schools.forEach(school => {
-                const waterAccounts = school.water_accounts && typeof school.water_accounts === 'string' ? JSON.parse(school.water_accounts) : (school.water_accounts || []);
-                const electricityAccounts = school.electricity_accounts && typeof school.electricity_accounts === 'string' ? JSON.parse(school.electricity_accounts) : (school.electricity_accounts || []);
-                const telephoneAccounts = school.telephone_accounts && typeof school.telephone_accounts === 'string' ? JSON.parse(school.telephone_accounts) : (school.telephone_accounts || []);
+                const waterAccounts = school.water_accounts || [];
+                const electricityAccounts = school.electricity_accounts || [];
+                const telephoneAccounts = school.telephone_accounts || [];
 
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -1155,7 +1217,7 @@
         }
     }
 
-    // ===== EDIT MODAL (unchanged) =====
+    // ===== EDIT MODAL =====
     function openEditModal(schoolId) {
         const school = allSchools.find(s => s.id === schoolId);
         if (!school) return;
@@ -1418,6 +1480,7 @@
             waterAccounts: cleanAccounts(currentEditingSchool.water_accounts || []),
             electricityAccounts: cleanAccounts(currentEditingSchool.electricity_accounts || []),
             telephoneAccounts: cleanAccounts(currentEditingSchool.telephone_accounts || [])
+            // displayOrder is NOT sent here – this preserves the current order
         };
 
         return schoolData;
