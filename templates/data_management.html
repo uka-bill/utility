@@ -501,7 +501,7 @@
             opacity: 0.7;
         }
 
-        #restoreFileInput, #csvFileInput {
+        #restoreFileInput {
             display: none;
         }
 
@@ -918,50 +918,12 @@
                 <div class="progress-message" id="restoreMessage">Initializing...</div>
             </div>
         </div>
-
-        <!-- NEW: Restore Department Order from CSV -->
-        <div class="section-card">
-            <h2><span class="badge-icon">📋</span> Restore Department Order from CSV</h2>
-            <p>Upload a CSV file containing department <strong>ID</strong> and <strong>display_order</strong> to restore the custom sorting order of departments. This will update the <code>display_order</code> for all departments in the CSV.</p>
-            
-            <div class="info-box" style="margin-bottom: 16px;">
-                <h3>📄 CSV Format</h3>
-                <p>Your CSV must contain at least these two columns: <strong>id</strong> and <strong>display_order</strong>. 
-                The <code>display_order</code> should be a number (1, 2, 3, ...) representing the desired order.</p>
-                <p style="margin-top: 8px; font-size: 0.85rem; color: var(--gray);">
-                    Example: <code>id,display_order<br>887,1<br>888,2<br>889,3</code>
-                </p>
-            </div>
-            
-            <div class="restore-upload-area" id="csvDropZone">
-                <span class="upload-icon">📄</span>
-                <h4>Drop your CSV file here</h4>
-                <p>or click to browse for a CSV file</p>
-                <div class="file-types">Supported: .csv</div>
-                <input type="file" id="csvFileInput" accept=".csv">
-            </div>
-            
-            <div id="csvFileInfo" style="display: none; margin-top: 16px; padding: 12px 16px; background: var(--gray-50); border-radius: var(--radius-xs);">
-                <strong>Selected file:</strong> <span id="selectedCsvFileName"></span>
-                <span style="color: var(--gray); margin-left: 12px;" id="selectedCsvFileSize"></span>
-            </div>
-            
-            <div class="restore-actions">
-                <button class="btn btn-warning" id="restoreCsvBtn" disabled>📤 Restore Department Order</button>
-                <button class="btn btn-secondary" id="clearCsvBtn" style="display: none;">Clear File</button>
-            </div>
-            
-            <div id="csvRestoreResult" style="display: none; margin-top: 16px; padding: 16px; border-radius: var(--radius-xs);">
-                <!-- Result will be inserted here -->
-            </div>
-        </div>
     </div>
 
     <div class="toast" id="toast"></div>
 
     <script>
         let selectedBackupFile = null;
-        let selectedCsvFile = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             loadDataStats();
@@ -1245,81 +1207,6 @@
             }
         }
 
-        // ---------- CSV DEPARTMENT ORDER RESTORE ----------
-        async function performCsvRestore() {
-            if (!selectedCsvFile) {
-                showToast('Please select a CSV file first.', 'error');
-                return;
-            }
-
-            if (selectedCsvFile.size === 0) {
-                showToast('The selected file is empty. Please choose a valid CSV.', 'error');
-                return;
-            }
-
-            const confirmed = confirm(
-                '⚠️ This will update the display_order of ALL departments listed in the CSV.\n\n' +
-                'Department order will be changed to match the CSV. Continue?'
-            );
-
-            if (!confirmed) return;
-
-            const btn = document.getElementById('restoreCsvBtn');
-            const resultContainer = document.getElementById('csvRestoreResult');
-
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Processing...';
-            resultContainer.style.display = 'block';
-            resultContainer.innerHTML = '<div style="text-align:center; color:var(--gray);">Updating department order...</div>';
-            resultContainer.style.background = 'var(--gray-50)';
-
-            const formData = new FormData();
-            formData.append('csv_file', selectedCsvFile);
-
-            try {
-                const response = await fetch('/api/departments/restore-order-from-csv', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    resultContainer.style.background = 'var(--success-light)';
-                    resultContainer.innerHTML = `
-                        <div style="color: var(--success); font-weight: 600; font-size: 1rem;">✅ ${result.message}</div>
-                        <div style="margin-top: 8px; color: var(--gray);">
-                            Updated: <strong>${result.updated_count}</strong> departments
-                            ${result.error_count > 0 ? `<span style="color: var(--danger);"> | Errors: ${result.error_count}</span>` : ''}
-                        </div>
-                        ${result.errors ? `<div style="margin-top: 8px; color: var(--danger); font-size: 0.85rem;">${result.errors.join('<br>')}</div>` : ''}
-                        <div style="margin-top: 12px;">
-                            <a href="/departments" class="btn btn-primary btn-sm" target="_blank">📋 View Departments</a>
-                        </div>
-                    `;
-                    showToast('Department order restored successfully!', 'success');
-                    clearCsvSelection();
-                } else {
-                    resultContainer.style.background = '#fef3c7';
-                    resultContainer.innerHTML = `
-                        <div style="color: var(--danger); font-weight: 600;">❌ Error: ${result.error || 'Failed to restore order'}</div>
-                        ${result.errors ? `<div style="margin-top: 8px; color: var(--danger); font-size: 0.85rem;">${result.errors.join('<br>')}</div>` : ''}
-                    `;
-                    showToast('Error restoring department order', 'error');
-                }
-            } catch (error) {
-                console.error('CSV restore error:', error);
-                resultContainer.style.background = '#fef3c7';
-                resultContainer.innerHTML = `
-                    <div style="color: var(--danger); font-weight: 600;">❌ Network error: ${error.message}</div>
-                `;
-                showToast('Network error: ' + error.message, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '📤 Restore Department Order';
-            }
-        }
-
         // ---------- FILE HANDLING ----------
         function handleFileSelect() {
             const file = this.files[0];
@@ -1350,36 +1237,6 @@
             document.getElementById('restoreProgressFill').style.width = '0%';
             document.getElementById('restorePercent').textContent = '0%';
             document.getElementById('restoreMessage').textContent = '';
-        }
-
-        // ---------- CSV FILE HANDLING ----------
-        function handleCsvFileSelect() {
-            const file = this.files[0];
-            if (!file) return;
-
-            if (!file.name.endsWith('.csv')) {
-                showToast('Please select a valid CSV file.', 'error');
-                this.value = '';
-                return;
-            }
-
-            selectedCsvFile = file;
-            document.getElementById('selectedCsvFileName').textContent = file.name;
-            document.getElementById('selectedCsvFileSize').textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
-            document.getElementById('csvFileInfo').style.display = 'block';
-            document.getElementById('restoreCsvBtn').disabled = false;
-            document.getElementById('clearCsvBtn').style.display = 'inline-flex';
-            document.getElementById('csvRestoreResult').style.display = 'none';
-            showToast('CSV file selected: ' + file.name, 'info');
-        }
-
-        function clearCsvSelection() {
-            selectedCsvFile = null;
-            document.getElementById('csvFileInput').value = '';
-            document.getElementById('csvFileInfo').style.display = 'none';
-            document.getElementById('restoreCsvBtn').disabled = true;
-            document.getElementById('clearCsvBtn').style.display = 'none';
-            document.getElementById('csvRestoreResult').style.display = 'none';
         }
 
         // ---------- TOAST ----------
@@ -1477,38 +1334,6 @@
 
             document.getElementById('restoreBtn').addEventListener('click', performStreamingRestore);
             document.getElementById('clearFileBtn').addEventListener('click', clearFileSelection);
-
-            // CSV restore
-            const csvFileInput = document.getElementById('csvFileInput');
-            const csvDropZone = document.getElementById('csvDropZone');
-
-            csvFileInput.addEventListener('change', handleCsvFileSelect);
-
-            csvDropZone.addEventListener('click', function() {
-                csvFileInput.click();
-            });
-
-            csvDropZone.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                this.classList.add('dragover');
-            });
-
-            csvDropZone.addEventListener('dragleave', function(e) {
-                e.preventDefault();
-                this.classList.remove('dragover');
-            });
-
-            csvDropZone.addEventListener('drop', function(e) {
-                e.preventDefault();
-                this.classList.remove('dragover');
-                if (e.dataTransfer.files.length > 0) {
-                    csvFileInput.files = e.dataTransfer.files;
-                    handleCsvFileSelect.call(csvFileInput);
-                }
-            });
-
-            document.getElementById('restoreCsvBtn').addEventListener('click', performCsvRestore);
-            document.getElementById('clearCsvBtn').addEventListener('click', clearCsvSelection);
         }
     </script>
 </body>
