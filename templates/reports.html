@@ -8,7 +8,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== All styles unchanged ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -640,6 +639,7 @@
     <div id="printPreviewContainer" style="display:none;"></div>
 
     <script>
+        // ====== GLOBALS ======
         let allSchoolsData = [];
         let allDepartmentsData = [];
         let allSchools = [];
@@ -699,6 +699,7 @@
             telephone: { title: 'Master Invoice Pembayaran Bil Telefon', subtitle: 'Telephone Bill Payment' }
         };
 
+        // ====== HELPERS ======
         function showProcessingOverlay() {
             document.getElementById('processingOverlay').classList.add('active');
             document.body.style.overflow = 'hidden';
@@ -774,6 +775,7 @@
             return UTILITY_HEADERS[utilityTypes[0]] || UTILITY_HEADERS.water;
         }
 
+        // ====== LOAD CHECKBOX LISTS ======
         async function loadCheckboxLists() {
             try {
                 const schoolsRes = await fetch('/api/schools');
@@ -900,6 +902,7 @@
             }
         });
 
+        // ====== LOAD ENTITIES FOR SPECIFIC SELECTION ======
         async function loadEntitiesForSelection() {
             try {
                 const schoolsRes = await fetch('/api/entities?type=school');
@@ -948,7 +951,7 @@
             });
         });
 
-        // ========== generatePrintPreviewWithEntities (with corrected pagination and grand total) ==========
+        // ========== generatePrintPreviewWithEntities (FIXED) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, includeZeroBills, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1104,7 +1107,7 @@
 
             // ===== BUILD ENTITY INFO WITH EXPANDED BILLS =====
             let entityInfo = [];
-            let grandTotalAccountCharges = 0; // Correctly track global total
+            let grandTotalAccountCharges = 0;
 
             for (const entityGroup of entityData) {
                 const entity = entityGroup.entity;
@@ -1142,7 +1145,6 @@
                     return Math.abs(amt) > 0.005;
                 });
 
-                // Track total account charges for each bill (for grand total)
                 filteredBills.forEach(b => {
                     grandTotalAccountCharges += getBillAmount(b);
                 });
@@ -1159,7 +1161,6 @@
             }
 
             // ===== PAGINATION BY ROWS =====
-            // Flatten all bill rows into a single array
             let allRows = [];
             for (const info of entityInfo) {
                 const entityName = info.entityName;
@@ -1199,7 +1200,7 @@
                 }
             }
 
-            // Paginate rows
+            // ===== PAGINATE =====
             let pages = [];
             if (shouldPaginate) {
                 const rowsPerPage = Math.max(1, itemsPerPage);
@@ -1215,9 +1216,9 @@
             let globalSerial = 1;
             let cumulativeTotal = 0; // For water/electricity balance
 
-            // ===== RENDER DETAIL ROW =====
+            // ===== RENDER DETAIL ROW (FIXED: No rowspan on "No." column) =====
             function renderDetailRow(row, serial, isFirst, rowspan, visibleCols, hasWaterElectricity, hasTelephone, entityName, entityType, entity, entityTotals, subtotalKeys) {
-                const rowspanColumns = ['no', 'entityName', 'entityType', ...subtotalKeys];
+                const rowspanColumns = ['entityName', 'entityType', ...subtotalKeys]; // 'no' is removed
                 let html = '';
                 const detailClass = isFirst ? 'entity-group-header' : 'entity-group-detail';
                 const isZeroRow = row.isZeroBill || false;
@@ -1227,14 +1228,18 @@
                 for (let i = 0; i < visibleCols.length; i++) {
                     const col = visibleCols[i];
                     const colKey = col.key;
-                    const isRowspanCol = rowspanColumns.includes(colKey);
 
-                    if (isRowspanCol) {
+                    // --- "No." column: ALWAYS show, NO rowspan ---
+                    if (colKey === 'no') {
+                        html += '<td style="text-align:center; vertical-align:middle;">' + serial + '</td>';
+                        continue;
+                    }
+
+                    // --- Columns that may have rowspan (entity name, type, totals) ---
+                    if (rowspanColumns.includes(colKey)) {
                         if (isFirst) {
                             const rowspanAttr = (rowspan > 1) ? ' rowspan="' + rowspan + '"' : '';
-                            if (colKey === 'no') {
-                                html += '<td style="text-align:center; vertical-align:middle;"' + rowspanAttr + '>' + serial + '</td>';
-                            } else if (colKey === 'entityName') {
+                            if (colKey === 'entityName') {
                                 html += '<td class="entity-name-cell" style="vertical-align:middle; max-width:120px; word-break:break-word; font-size:8.5pt; text-align:left;"' + rowspanAttr + '>' + escapeHtml(entityName) + '</td>';
                             } else if (colKey === 'entityType') {
                                 html += '<td style="text-align:center;"' + rowspanAttr + '>' + (entityType === 'school' ? '🏫 School' : '🏛️ Department') + '</td>';
@@ -1247,46 +1252,48 @@
                                 html += '<td class="currency-cell" style="font-size:8pt; text-align:center;"' + rowspanAttr + '>' + formatNumberWithCommas(entityTotals.outstanding) + '</td>';
                             }
                         }
-                    } else {
-                        if (colKey === 'accountNumber') {
-                            let acc = row.accountNumber || row.account_number;
-                            if (!acc || acc === '—' || acc === '') {
-                                if (hasWater) acc = entity.water_account || '—';
-                                else if (hasElectricity) acc = entity.electricity_account || '—';
-                                else if (hasTelephone) acc = entity.telephone_account || '—';
-                            }
-                            html += '<td class="mono-cell" style="font-size:8pt; word-break:break-word; text-align:center;">' + escapeHtml(acc) + '</td>';
-                        } else if (colKey === 'meterTelNo') {
-                            let meter = row.meterTelNo || '—';
-                            html += '<td class="mono-cell" style="font-size:8pt; text-align:center;">' + escapeHtml(meter) + '</td>';
-                        } else if (colKey === 'consumption') {
-                            const unit = hasWater ? 'm³' : 'kWh';
-                            html += '<td style="text-align:center; font-size:8pt;">' + formatNumberWithCommas(row.consumption) + ' ' + unit + '</td>';
-                        } else if (colKey === 'billAmount') {
-                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.billAmount) + '</td>';
-                        } else if (colKey === 'amountPaid') {
-                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.amountPaid) + '</td>';
-                        } else if (colKey === 'outstanding') {
-                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.outstanding) + '</td>';
-                        } else if (colKey === 'period') {
-                            html += '<td class="period-column" style="font-size:8pt; text-align:center;">' + (row.period || '—') + '</td>';
-                        } else if (colKey === 'billNumber') {
-                            html += '<td class="mono-cell" style="font-size:8pt; text-align:center;">' + escapeHtml(row.billNumber || '—') + '</td>';
-                        } else if (colKey === 'rentalAmount') {
-                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.rentalAmount || 0) + '</td>';
-                        } else if (colKey === 'totalAmount') {
-                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.totalAmount || 0) + '</td>';
-                        } else if (colKey === 'totalAccountCharges') {
-                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.totalAccountCharges || 0) + '</td>';
-                        } else if (colKey === 'previousOutstanding') {
-                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.previousOutstanding || 0) + '</td>';
-                        } else if (colKey === 'previousPayment') {
-                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.previousPayment || 0) + '</td>';
-                        } else if (colKey === 'totalCurrentCharges') {
-                            html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.totalCurrentCharges || 0) + '</td>';
-                        } else {
-                            html += '<td>&nbsp;</td>';
+                        continue;
+                    }
+
+                    // --- Regular detail columns (no rowspan) ---
+                    if (colKey === 'accountNumber') {
+                        let acc = row.accountNumber || row.account_number;
+                        if (!acc || acc === '—' || acc === '') {
+                            if (hasWater) acc = entity.water_account || '—';
+                            else if (hasElectricity) acc = entity.electricity_account || '—';
+                            else if (hasTelephone) acc = entity.telephone_account || '—';
                         }
+                        html += '<td class="mono-cell" style="font-size:8pt; word-break:break-word; text-align:center;">' + escapeHtml(acc) + '</td>';
+                    } else if (colKey === 'meterTelNo') {
+                        let meter = row.meterTelNo || '—';
+                        html += '<td class="mono-cell" style="font-size:8pt; text-align:center;">' + escapeHtml(meter) + '</td>';
+                    } else if (colKey === 'consumption') {
+                        const unit = hasWater ? 'm³' : 'kWh';
+                        html += '<td style="text-align:center; font-size:8pt;">' + formatNumberWithCommas(row.consumption) + ' ' + unit + '</td>';
+                    } else if (colKey === 'billAmount') {
+                        html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.billAmount) + '</td>';
+                    } else if (colKey === 'amountPaid') {
+                        html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.amountPaid) + '</td>';
+                    } else if (colKey === 'outstanding') {
+                        html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.outstanding) + '</td>';
+                    } else if (colKey === 'period') {
+                        html += '<td class="period-column" style="font-size:8pt; text-align:center;">' + (row.period || '—') + '</td>';
+                    } else if (colKey === 'billNumber') {
+                        html += '<td class="mono-cell" style="font-size:8pt; text-align:center;">' + escapeHtml(row.billNumber || '—') + '</td>';
+                    } else if (colKey === 'rentalAmount') {
+                        html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.rentalAmount || 0) + '</td>';
+                    } else if (colKey === 'totalAmount') {
+                        html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.totalAmount || 0) + '</td>';
+                    } else if (colKey === 'totalAccountCharges') {
+                        html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.totalAccountCharges || 0) + '</td>';
+                    } else if (colKey === 'previousOutstanding') {
+                        html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.previousOutstanding || 0) + '</td>';
+                    } else if (colKey === 'previousPayment') {
+                        html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.previousPayment || 0) + '</td>';
+                    } else if (colKey === 'totalCurrentCharges') {
+                        html += '<td class="currency-cell" style="font-size:8pt; text-align:center;">' + formatNumberWithCommas(row.totalCurrentCharges || 0) + '</td>';
+                    } else {
+                        html += '<td>&nbsp;</td>';
                     }
                 }
                 html += '</tr>';
@@ -1396,9 +1403,6 @@
                     const isFirst = row.isFirstInGroup;
                     const rowspan = row.rowspan;
 
-                    // Determine if we should show this row's entity name/type
-                    // For grouping: only the first row of a group shows the rowspan.
-                    // If groupByEntity is false, we show entity name and type for every row (no rowspan)
                     let showGroup = groupByEntity && isFirst;
                     let actualRowspan = groupByEntity ? rowspan : 1;
 
@@ -1469,11 +1473,8 @@
 
                 // ===== GRAND TOTAL (last page only) =====
                 if (isLastPage) {
-                    let totalValueForSummary = grandTotalAccountCharges; // Use the correct grand total
-                    if (hasTelephone) {
-                        // Use grandTotalAccountCharges we tracked earlier
-                        totalValueForSummary = grandTotalAccountCharges;
-                    } else if (hasWaterElectricity) {
+                    let totalValueForSummary = grandTotalAccountCharges;
+                    if (!hasTelephone && hasWaterElectricity) {
                         if (visibleCols.some(c => c.key === 'totalBillAmount')) totalValueForSummary = grandTotalBillAmount;
                         else if (visibleCols.some(c => c.key === 'billAmount')) totalValueForSummary = grandTotalBillAmount;
                         else if (visibleCols.some(c => c.key === 'totalConsumption')) totalValueForSummary = grandTotalConsumption;
@@ -1772,7 +1773,6 @@
 
                 let shouldPaginate = false;
                 if (enablePagination) {
-                    // Calculate total rows across all entities (bills)
                     let totalRows = 0;
                     for (const e of entityList) {
                         totalRows += e.bills.length;
