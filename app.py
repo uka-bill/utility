@@ -337,7 +337,6 @@ def restore_all_data_stream(backup_data):
         current_progress = 30
 
         if financial_years:
-            # 20% of progress allocated to financial_years
             yield from batch_insert('financial_years', remove_id(financial_years), chunk_size=10,
                                     progress_start=current_progress, progress_step=10)
             current_progress += 10
@@ -651,6 +650,80 @@ def restore_all_data(backup_data):
     except Exception as e:
         return {'success': False, 'errors': [str(e)]}
 
+# ============ RESTORE DEPARTMENT ORDER FROM CSV ============
+@app.route('/api/departments/restore-order-from-csv', methods=['POST'])
+def restore_department_order_from_csv():
+    try:
+        print("📂 POST /api/departments/restore-order-from-csv called")
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+
+        if 'csv_file' not in request.files:
+            return jsonify({'error': 'No CSV file provided'}), 400
+
+        file = request.files['csv_file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        if not file.filename.endswith('.csv'):
+            return jsonify({'error': 'Only CSV files are supported'}), 400
+
+        try:
+            csv_content = file.read().decode('utf-8')
+        except UnicodeDecodeError:
+            return jsonify({'error': 'File is not valid UTF-8'}), 400
+
+        if csv_content.startswith('\ufeff'):
+            csv_content = csv_content[1:]
+
+        # Parse CSV
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+        
+        updates = {}
+        for row in csv_reader:
+            dept_id = row.get('id')
+            if dept_id:
+                try:
+                    dept_id = int(dept_id)
+                    display_order = row.get('display_order', '').strip()
+                    if display_order:
+                        display_order = int(float(display_order))
+                        updates[dept_id] = display_order
+                except (ValueError, TypeError):
+                    print(f"⚠️ Skipping invalid row: {row.get('id')}")
+
+        if not updates:
+            return jsonify({'error': 'No valid department IDs found in CSV'}), 400
+
+        print(f"📊 Found {len(updates)} departments to update")
+
+        # Update each department
+        updated_count = 0
+        error_count = 0
+        errors = []
+
+        for dept_id, order in updates.items():
+            try:
+                supabase.table("departments").update({"display_order": order}).eq("id", dept_id).execute()
+                updated_count += 1
+            except Exception as e:
+                error_count += 1
+                errors.append(f"Failed to update department {dept_id}: {str(e)}")
+                print(f"❌ Error updating {dept_id}: {e}")
+
+        return jsonify({
+            'success': error_count == 0,
+            'message': f'Updated {updated_count} departments, {error_count} errors',
+            'updated_count': updated_count,
+            'error_count': error_count,
+            'errors': errors if errors else None
+        })
+
+    except Exception as e:
+        print(f"❌ Restore order from CSV error: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to restore order: {str(e)}'}), 500
+
 # ============ MIGRATION ENDPOINT ============
 @app.route('/api/migrate-all-bills', methods=['POST'])
 def migrate_all_bills():
@@ -818,9 +891,11 @@ def export_schools_csv():
 def export_departments_csv():
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address', 
-                     'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
-                     'Telephone Account', 'Telephone Number', 'Notes'])
+    writer.writerow(['ID', 'Name', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address', 
+                     'Notes', 'Created At', 'Updated At', 'Water Account', 'Water Meter', 
+                     'Electricity Account', 'Electricity Meter', 'Telephone Account', 'Telephone Number',
+                     'Water Accounts', 'Water Meters', 'Electricity Accounts', 'Electricity Meters',
+                     'Telephone Accounts', 'Telephone Numbers', 'Display Order'])
     response = supabase.table("departments").select("*").execute()
     departments = response.data if response.data else []
     grouped = {}
@@ -838,18 +913,28 @@ def export_departments_csv():
     for dept in sorted_departments:
         writer.writerow([
             dept.get('id', ''),
+            dept.get('name', ''),
             dept.get('unit_name', ''),
             dept.get('division_name', ''),
             dept.get('department_name', ''),
             dept.get('hotline_numbers', ''),
             dept.get('address', ''),
+            dept.get('notes', ''),
+            dept.get('created_at', ''),
+            dept.get('updated_at', ''),
             dept.get('water_account', ''),
             dept.get('water_meter', ''),
             dept.get('electricity_account', ''),
             dept.get('electricity_meter', ''),
             dept.get('telephone_account', ''),
             dept.get('telephone_number', ''),
-            dept.get('notes', '')
+            dept.get('water_accounts', ''),
+            dept.get('water_meters', ''),
+            dept.get('electricity_accounts', ''),
+            dept.get('electricity_meters', ''),
+            dept.get('telephone_accounts', ''),
+            dept.get('telephone_numbers', ''),
+            dept.get('display_order', '')
         ])
     output.seek(0)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -977,9 +1062,11 @@ def export_schools_csv_to_string():
 def export_departments_csv_to_string():
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address', 
-                     'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
-                     'Telephone Account', 'Telephone Number', 'Notes'])
+    writer.writerow(['ID', 'Name', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address', 
+                     'Notes', 'Created At', 'Updated At', 'Water Account', 'Water Meter', 
+                     'Electricity Account', 'Electricity Meter', 'Telephone Account', 'Telephone Number',
+                     'Water Accounts', 'Water Meters', 'Electricity Accounts', 'Electricity Meters',
+                     'Telephone Accounts', 'Telephone Numbers', 'Display Order'])
     response = supabase.table("departments").select("*").execute()
     departments = response.data if response.data else []
     grouped = {}
@@ -997,18 +1084,28 @@ def export_departments_csv_to_string():
     for dept in sorted_departments:
         writer.writerow([
             dept.get('id', ''),
+            dept.get('name', ''),
             dept.get('unit_name', ''),
             dept.get('division_name', ''),
             dept.get('department_name', ''),
             dept.get('hotline_numbers', ''),
             dept.get('address', ''),
+            dept.get('notes', ''),
+            dept.get('created_at', ''),
+            dept.get('updated_at', ''),
             dept.get('water_account', ''),
             dept.get('water_meter', ''),
             dept.get('electricity_account', ''),
             dept.get('electricity_meter', ''),
             dept.get('telephone_account', ''),
             dept.get('telephone_number', ''),
-            dept.get('notes', '')
+            dept.get('water_accounts', ''),
+            dept.get('water_meters', ''),
+            dept.get('electricity_accounts', ''),
+            dept.get('electricity_meters', ''),
+            dept.get('telephone_accounts', ''),
+            dept.get('telephone_numbers', ''),
+            dept.get('display_order', '')
         ])
     return output.getvalue()
 
