@@ -2293,8 +2293,11 @@ def update_school(school_id):
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and len(electricity_accounts) > 0 and electricity_accounts[0].get('meters') and len(electricity_accounts[0]['meters']) > 0 else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts and len(telephone_accounts) > 0 else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
-            "display_order": data.get('displayOrder', 0)
+            "display_order": data.get('displayOrder')  # <--- FIXED: only include if provided
         }
+        
+        # Remove None values so they don't overwrite existing data
+        school_data = {k: v for k, v in school_data.items() if v is not None}
 
         print(f"📦 Prepared school_data: {school_data}")
         response = supabase.table("schools").update(school_data).eq("id", school_id).execute()
@@ -2502,8 +2505,12 @@ def update_department(department_id):
             "electricity_meter": electricity_accounts[0].get('meters', [{}])[0].get('meterNumber', '') if electricity_accounts and electricity_accounts[0].get('meters') else '',
             "telephone_account": telephone_accounts[0].get('accountNumber', '') if telephone_accounts else '',
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and telephone_accounts[0].get('numbers') else '',
-            "display_order": data.get('displayOrder', 0)
+            "display_order": data.get('displayOrder')  # <--- FIXED: only include if provided
         }
+        
+        # Remove None values so they don't overwrite existing data
+        department_data = {k: v for k, v in department_data.items() if v is not None}
+        
         response = supabase.table("departments").update(department_data).eq("id", department_id).execute()
         if hasattr(response, 'data') and response.data:
             return jsonify({
