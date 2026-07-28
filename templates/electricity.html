@@ -981,43 +981,8 @@
         return m.trim();
     }
 
-    // ========== FIXED findBillForMeter (matches account + meter) ==========
-    function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
-        const normalizeAccount = (acc) => {
-            if (!acc) return '';
-            return String(acc).replace(/[()\s\-]/g, '').trim();
-        };
-        const normalizeMeter = (m) => {
-            if (!m) return '';
-            return String(m).replace(/[()\s\-]/g, '').trim();
-        };
-        const normAccount = normalizeAccount(accountNumber);
-        const normMeter = normalizeMeter(meterNumber);
-        
-        // 1. Try match by account_number + meter_number + month + year
-        for (let bill of existingBills) {
-            const billAccount = normalizeAccount(bill.account_number);
-            const billMeter = normalizeMeter(bill.meter_number);
-            if (bill.entity_type === entityType &&
-                billAccount === normAccount &&
-                billMeter === normMeter &&
-                bill.month == month && bill.year == year) {
-                return bill;
-            }
-        }
-        // fallback to bill_month/bill_year
-        for (let bill of existingBills) {
-            const billAccount = normalizeAccount(bill.account_number);
-            const billMeter = normalizeMeter(bill.meter_number);
-            if (bill.entity_type === entityType &&
-                billAccount === normAccount &&
-                billMeter === normMeter &&
-                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                return bill;
-            }
-        }
-        return null;
-    }
+    // ========== FIXED: No frontend bill lookup – always send id:null ==========
+    // The backend will upsert based on the composite key (entity_id, account_number, meter_number, month, year)
 
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
@@ -1067,8 +1032,8 @@
             const row = meterRows[i];
             const accountNumber = row.getAttribute('data-account') || '';
             const meterNumber = row.getAttribute('data-meter') || '';
-            const existingBill = findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year);
-            const existingBillId = existingBill ? existingBill.id : null;
+            // Always set id: null – let backend find or insert
+            const existingBillId = null;
             const consumptionInput = row.querySelector('.consumption-input');
             const currentInput = row.querySelector('.current-charge-input');
             const outstandingInput = row.querySelector('.outstanding-input');
@@ -1117,6 +1082,12 @@
             hideSavingToast();
             if (result.success) {
                 showToast(entityName + ': Saved ' + result.success_count + ' record(s) successfully (' + totalTime + 'ms)', false);
+                // We don't have the batch bills with IDs returned, but we can update totals
+                // Re-fetch bills to update display (optional)
+                await loadExistingBills(month, year);
+                // Re-render the current view? This would require rebuilding the entire table, which is heavy.
+                // Instead, just update the total display with the new data.
+                // We'll update the total display using the batchBills array (which contains the amounts we just saved).
                 updateEntityTotalDisplay(entityId, batchBills);
             } else {
                 showToast(entityName + ': Saved ' + result.success_count + ' records, ' + result.error_count + ' failed', true);
@@ -1271,20 +1242,29 @@
                     const meters = account.meters || [];
                     const visibleMeters = [];
                     if (meters.length === 0) {
-                        const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, '', month, year);
+                        // For placeholder, we still show a row
                         visibleMeters.push({
                             meterNumber: '',
                             location: '',
                             notes: '',
-                            existing: existing,
-                            billId: existing ? existing.id : null,
+                            existing: null,
+                            billId: null,
                             isPlaceholder: true
                         });
                     } else {
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
+                            // Find existing bill for this meter (used to prefill values)
+                            const existing = existingBills.find(bill => {
+                                const accNorm = (bill.account_number || '').replace(/[()\s\-]/g, '').trim();
+                                const meterNorm = (bill.meter_number || '').replace(/[()\s\-]/g, '').trim();
+                                return bill.entity_type === entity.type &&
+                                    bill.entity_id === entity.id &&
+                                    accNorm === (account.accountNumber || '').replace(/[()\s\-]/g, '').trim() &&
+                                    meterNorm === meterNum.replace(/[()\s\-]/g, '').trim() &&
+                                    bill.month == month && bill.year == year;
+                            });
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
