@@ -774,16 +774,24 @@ def export_multiple():
         print(f"❌ Multiple export error: {e}")
         return jsonify({'error': str(e)}), 500
 
+# ============ EXPORT SCHOOLS CSV ============
 def export_schools_csv():
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Name', 'Cluster Number', 'School Number', 'BMO Name', 'BMO Phone', 'Address', 
-                     'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
-                     'Telephone Account', 'Telephone Number', 'Notes'])
+    writer.writerow([
+        'ID', 'Name', 'Cluster Number', 'School Number', 'BMO Name', 'BMO Phone', 'Address',
+        'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter',
+        'Telephone Account', 'Telephone Number', 'Notes',
+        'Water Accounts (JSON)', 'Electricity Accounts (JSON)', 'Telephone Accounts (JSON)',
+        'Display Order', 'Created At', 'Updated At'
+    ])
     response = supabase.table("schools").select("*").execute()
     schools = response.data if response.data else []
     schools.sort(key=lambda x: (x.get('display_order', x.get('id', 0)), int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
     for school in schools:
+        water_accounts_str = json.dumps(school.get('water_accounts', []), ensure_ascii=False) if school.get('water_accounts') else '[]'
+        electricity_accounts_str = json.dumps(school.get('electricity_accounts', []), ensure_ascii=False) if school.get('electricity_accounts') else '[]'
+        telephone_accounts_str = json.dumps(school.get('telephone_accounts', []), ensure_ascii=False) if school.get('telephone_accounts') else '[]'
         writer.writerow([
             school.get('id', ''),
             school.get('name', ''),
@@ -798,7 +806,13 @@ def export_schools_csv():
             school.get('electricity_meter', ''),
             school.get('telephone_account', ''),
             school.get('telephone_number', ''),
-            school.get('notes', '')
+            school.get('notes', ''),
+            water_accounts_str,
+            electricity_accounts_str,
+            telephone_accounts_str,
+            school.get('display_order', ''),
+            school.get('created_at', ''),
+            school.get('updated_at', '')
         ])
     output.seek(0)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -808,14 +822,60 @@ def export_schools_csv():
     response.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return response
 
+def export_schools_csv_to_string():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'ID', 'Name', 'Cluster Number', 'School Number', 'BMO Name', 'BMO Phone', 'Address',
+        'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter',
+        'Telephone Account', 'Telephone Number', 'Notes',
+        'Water Accounts (JSON)', 'Electricity Accounts (JSON)', 'Telephone Accounts (JSON)',
+        'Display Order', 'Created At', 'Updated At'
+    ])
+    response = supabase.table("schools").select("*").execute()
+    schools = response.data if response.data else []
+    schools.sort(key=lambda x: (x.get('display_order', x.get('id', 0)), int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
+    for school in schools:
+        water_accounts_str = json.dumps(school.get('water_accounts', []), ensure_ascii=False) if school.get('water_accounts') else '[]'
+        electricity_accounts_str = json.dumps(school.get('electricity_accounts', []), ensure_ascii=False) if school.get('electricity_accounts') else '[]'
+        telephone_accounts_str = json.dumps(school.get('telephone_accounts', []), ensure_ascii=False) if school.get('telephone_accounts') else '[]'
+        writer.writerow([
+            school.get('id', ''),
+            school.get('name', ''),
+            school.get('cluster_number', ''),
+            school.get('school_number', ''),
+            school.get('bmo_name', ''),
+            school.get('bmo_phone', ''),
+            school.get('address', ''),
+            school.get('water_account', ''),
+            school.get('water_meter', ''),
+            school.get('electricity_account', ''),
+            school.get('electricity_meter', ''),
+            school.get('telephone_account', ''),
+            school.get('telephone_number', ''),
+            school.get('notes', ''),
+            water_accounts_str,
+            electricity_accounts_str,
+            telephone_accounts_str,
+            school.get('display_order', ''),
+            school.get('created_at', ''),
+            school.get('updated_at', '')
+        ])
+    return output.getvalue()
+
+# ============ EXPORT DEPARTMENTS CSV ============
 def export_departments_csv():
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Name', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address', 
-                     'Notes', 'Created At', 'Updated At', 'Water Account', 'Water Meter', 
-                     'Electricity Account', 'Electricity Meter', 'Telephone Account', 'Telephone Number',
-                     'Water Accounts', 'Water Meters', 'Electricity Accounts', 'Electricity Meters',
-                     'Telephone Accounts', 'Telephone Numbers', 'Display Order'])
+    writer.writerow([
+        'ID', 'Name', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address',
+        'Notes', 'Created At', 'Updated At',
+        'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter',
+        'Telephone Account', 'Telephone Number',
+        'Water Accounts (JSON)', 'Water Meters (JSON)', 'Electricity Accounts (JSON)',
+        'Electricity Meters (JSON)', 'Telephone Accounts (JSON)', 'Telephone Numbers (JSON)',
+        'Display Order'
+    ])
     response = supabase.table("departments").select("*").execute()
     departments = response.data if response.data else []
     grouped = {}
@@ -848,12 +908,12 @@ def export_departments_csv():
             dept.get('electricity_meter', ''),
             dept.get('telephone_account', ''),
             dept.get('telephone_number', ''),
-            dept.get('water_accounts', ''),
-            dept.get('water_meters', ''),
-            dept.get('electricity_accounts', ''),
-            dept.get('electricity_meters', ''),
-            dept.get('telephone_accounts', ''),
-            dept.get('telephone_numbers', ''),
+            json.dumps(dept.get('water_accounts', []), ensure_ascii=False) if dept.get('water_accounts') else '[]',
+            json.dumps(dept.get('water_meters', []), ensure_ascii=False) if dept.get('water_meters') else '[]',
+            json.dumps(dept.get('electricity_accounts', []), ensure_ascii=False) if dept.get('electricity_accounts') else '[]',
+            json.dumps(dept.get('electricity_meters', []), ensure_ascii=False) if dept.get('electricity_meters') else '[]',
+            json.dumps(dept.get('telephone_accounts', []), ensure_ascii=False) if dept.get('telephone_accounts') else '[]',
+            json.dumps(dept.get('telephone_numbers', []), ensure_ascii=False) if dept.get('telephone_numbers') else '[]',
             dept.get('display_order', '')
         ])
     output.seek(0)
@@ -864,129 +924,18 @@ def export_departments_csv():
     response.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return response
 
-def export_water_bills_csv():
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['ID', 'Entity Type', 'Entity Name', 'Account Number', 'Meter Number', 
-                     'Consumption (m³)', 'Current Charges', 'Amount Paid', 'Month', 'Year', 'Notes'])
-    response = supabase.table("utility_bills").select("*").eq("utility_type", "water").order("year", desc=True).order("month", desc=True).execute()
-    bills = response.data if response.data else []
-    for bill in bills:
-        writer.writerow([
-            bill.get('id', ''),
-            bill.get('entity_type', ''),
-            bill.get('entity_name', ''),
-            bill.get('account_number', ''),
-            bill.get('meter_number', ''),
-            bill.get('consumption_m3', ''),
-            bill.get('current_charges', 0),
-            bill.get('amount_paid', 0),
-            bill.get('month', ''),
-            bill.get('year', ''),
-            bill.get('notes', '')
-        ])
-    output.seek(0)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"water_bills_export_{timestamp}.csv"
-    response = make_response(output.getvalue())
-    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
-    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-    return response
-
-def export_electricity_bills_csv():
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['ID', 'Entity Type', 'Entity Name', 'Account Number', 'Meter Number', 
-                     'Consumption (kWh)', 'Current Charges', 'Amount Paid', 'Month', 'Year', 'Notes'])
-    response = supabase.table("utility_bills").select("*").eq("utility_type", "electricity").order("year", desc=True).order("month", desc=True).execute()
-    bills = response.data if response.data else []
-    for bill in bills:
-        writer.writerow([
-            bill.get('id', ''),
-            bill.get('entity_type', ''),
-            bill.get('entity_name', ''),
-            bill.get('account_number', ''),
-            bill.get('meter_number', ''),
-            bill.get('consumption_kwh', ''),
-            bill.get('current_charges', 0),
-            bill.get('amount_paid', 0),
-            bill.get('month', ''),
-            bill.get('year', ''),
-            bill.get('notes', '')
-        ])
-    output.seek(0)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"electricity_bills_export_{timestamp}.csv"
-    response = make_response(output.getvalue())
-    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
-    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-    return response
-
-def export_telephone_bills_csv():
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['ID', 'Entity Type', 'Entity Name', 'Account Number', 'Phone Number', 
-                     'Bill Number', 'Current Charges', 'Amount Paid', 'Month', 'Year', 'Notes'])
-    response = supabase.table("utility_bills").select("*").eq("utility_type", "telephone").order("year", desc=True).order("month", desc=True).execute()
-    bills = response.data if response.data else []
-    for bill in bills:
-        writer.writerow([
-            bill.get('id', ''),
-            bill.get('entity_type', ''),
-            bill.get('entity_name', ''),
-            bill.get('account_number', ''),
-            bill.get('phone_number', ''),
-            bill.get('meter_number', ''),
-            bill.get('current_charges', 0),
-            bill.get('amount_paid', 0),
-            bill.get('month', ''),
-            bill.get('year', ''),
-            bill.get('notes', '')
-        ])
-    output.seek(0)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"telephone_bills_export_{timestamp}.csv"
-    response = make_response(output.getvalue())
-    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
-    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-    return response
-
-def export_schools_csv_to_string():
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['ID', 'Name', 'Cluster Number', 'School Number', 'BMO Name', 'BMO Phone', 'Address', 
-                     'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter', 
-                     'Telephone Account', 'Telephone Number', 'Notes'])
-    response = supabase.table("schools").select("*").execute()
-    schools = response.data if response.data else []
-    schools.sort(key=lambda x: (x.get('display_order', x.get('id', 0)), int(x.get('cluster_number', 999)) if x.get('cluster_number') else 999, x.get('id', 0)))
-    for school in schools:
-        writer.writerow([
-            school.get('id', ''),
-            school.get('name', ''),
-            school.get('cluster_number', ''),
-            school.get('school_number', ''),
-            school.get('bmo_name', ''),
-            school.get('bmo_phone', ''),
-            school.get('address', ''),
-            school.get('water_account', ''),
-            school.get('water_meter', ''),
-            school.get('electricity_account', ''),
-            school.get('electricity_meter', ''),
-            school.get('telephone_account', ''),
-            school.get('telephone_number', ''),
-            school.get('notes', '')
-        ])
-    return output.getvalue()
-
 def export_departments_csv_to_string():
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Name', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address', 
-                     'Notes', 'Created At', 'Updated At', 'Water Account', 'Water Meter', 
-                     'Electricity Account', 'Electricity Meter', 'Telephone Account', 'Telephone Number',
-                     'Water Accounts', 'Water Meters', 'Electricity Accounts', 'Electricity Meters',
-                     'Telephone Accounts', 'Telephone Numbers', 'Display Order'])
+    writer.writerow([
+        'ID', 'Name', 'Unit Name', 'Division Name', 'Department Name', 'Hotline Numbers', 'Address',
+        'Notes', 'Created At', 'Updated At',
+        'Water Account', 'Water Meter', 'Electricity Account', 'Electricity Meter',
+        'Telephone Account', 'Telephone Number',
+        'Water Accounts (JSON)', 'Water Meters (JSON)', 'Electricity Accounts (JSON)',
+        'Electricity Meters (JSON)', 'Telephone Accounts (JSON)', 'Telephone Numbers (JSON)',
+        'Display Order'
+    ])
     response = supabase.table("departments").select("*").execute()
     departments = response.data if response.data else []
     grouped = {}
@@ -1019,21 +968,25 @@ def export_departments_csv_to_string():
             dept.get('electricity_meter', ''),
             dept.get('telephone_account', ''),
             dept.get('telephone_number', ''),
-            dept.get('water_accounts', ''),
-            dept.get('water_meters', ''),
-            dept.get('electricity_accounts', ''),
-            dept.get('electricity_meters', ''),
-            dept.get('telephone_accounts', ''),
-            dept.get('telephone_numbers', ''),
+            json.dumps(dept.get('water_accounts', []), ensure_ascii=False) if dept.get('water_accounts') else '[]',
+            json.dumps(dept.get('water_meters', []), ensure_ascii=False) if dept.get('water_meters') else '[]',
+            json.dumps(dept.get('electricity_accounts', []), ensure_ascii=False) if dept.get('electricity_accounts') else '[]',
+            json.dumps(dept.get('electricity_meters', []), ensure_ascii=False) if dept.get('electricity_meters') else '[]',
+            json.dumps(dept.get('telephone_accounts', []), ensure_ascii=False) if dept.get('telephone_accounts') else '[]',
+            json.dumps(dept.get('telephone_numbers', []), ensure_ascii=False) if dept.get('telephone_numbers') else '[]',
             dept.get('display_order', '')
         ])
     return output.getvalue()
 
-def export_water_bills_csv_to_string():
+# ============ EXPORT WATER BILLS CSV ============
+def export_water_bills_csv():
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Entity Type', 'Entity Name', 'Account Number', 'Meter Number', 
-                     'Consumption (m³)', 'Current Charges', 'Amount Paid', 'Month', 'Year', 'Notes'])
+    writer.writerow([
+        'ID', 'Entity Type', 'Entity Name', 'Account Number', 'Meter Number',
+        'Consumption (m³)', 'Current Charges', 'Unsettled Charges', 'Late Charges',
+        'Amount Paid', 'Month', 'Year', 'Bill Month', 'Bill Year', 'Notes'
+    ])
     response = supabase.table("utility_bills").select("*").eq("utility_type", "water").order("year", desc=True).order("month", desc=True).execute()
     bills = response.data if response.data else []
     for bill in bills:
@@ -1043,20 +996,64 @@ def export_water_bills_csv_to_string():
             bill.get('entity_name', ''),
             bill.get('account_number', ''),
             bill.get('meter_number', ''),
-            bill.get('consumption_m3', ''),
+            bill.get('consumption_m3', 0),
             bill.get('current_charges', 0),
+            bill.get('unsettled_charges', 0),
+            bill.get('late_charges', 0),
             bill.get('amount_paid', 0),
             bill.get('month', ''),
             bill.get('year', ''),
+            bill.get('bill_month', bill.get('month', '')),
+            bill.get('bill_year', bill.get('year', '')),
+            bill.get('notes', '')
+        ])
+    output.seek(0)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"water_bills_export_{timestamp}.csv"
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+    return response
+
+def export_water_bills_csv_to_string():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'ID', 'Entity Type', 'Entity Name', 'Account Number', 'Meter Number',
+        'Consumption (m³)', 'Current Charges', 'Unsettled Charges', 'Late Charges',
+        'Amount Paid', 'Month', 'Year', 'Bill Month', 'Bill Year', 'Notes'
+    ])
+    response = supabase.table("utility_bills").select("*").eq("utility_type", "water").order("year", desc=True).order("month", desc=True).execute()
+    bills = response.data if response.data else []
+    for bill in bills:
+        writer.writerow([
+            bill.get('id', ''),
+            bill.get('entity_type', ''),
+            bill.get('entity_name', ''),
+            bill.get('account_number', ''),
+            bill.get('meter_number', ''),
+            bill.get('consumption_m3', 0),
+            bill.get('current_charges', 0),
+            bill.get('unsettled_charges', 0),
+            bill.get('late_charges', 0),
+            bill.get('amount_paid', 0),
+            bill.get('month', ''),
+            bill.get('year', ''),
+            bill.get('bill_month', bill.get('month', '')),
+            bill.get('bill_year', bill.get('year', '')),
             bill.get('notes', '')
         ])
     return output.getvalue()
 
-def export_electricity_bills_csv_to_string():
+# ============ EXPORT ELECTRICITY BILLS CSV ============
+def export_electricity_bills_csv():
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Entity Type', 'Entity Name', 'Account Number', 'Meter Number', 
-                     'Consumption (kWh)', 'Current Charges', 'Amount Paid', 'Month', 'Year', 'Notes'])
+    writer.writerow([
+        'ID', 'Entity Type', 'Entity Name', 'Account Number', 'Meter Number',
+        'Consumption (kWh)', 'Current Charges', 'Unsettled Charges', 'Late Charges',
+        'Amount Paid', 'Month', 'Year', 'Bill Month', 'Bill Year', 'Notes'
+    ])
     response = supabase.table("utility_bills").select("*").eq("utility_type", "electricity").order("year", desc=True).order("month", desc=True).execute()
     bills = response.data if response.data else []
     for bill in bills:
@@ -1066,21 +1063,34 @@ def export_electricity_bills_csv_to_string():
             bill.get('entity_name', ''),
             bill.get('account_number', ''),
             bill.get('meter_number', ''),
-            bill.get('consumption_kwh', ''),
+            bill.get('consumption_kwh', 0),
             bill.get('current_charges', 0),
+            bill.get('unsettled_charges', 0),
+            bill.get('late_charges', 0),
             bill.get('amount_paid', 0),
             bill.get('month', ''),
             bill.get('year', ''),
+            bill.get('bill_month', bill.get('month', '')),
+            bill.get('bill_year', bill.get('year', '')),
             bill.get('notes', '')
         ])
-    return output.getvalue()
+    output.seek(0)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"electricity_bills_export_{timestamp}.csv"
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+    return response
 
-def export_telephone_bills_csv_to_string():
+def export_electricity_bills_csv_to_string():
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Entity Type', 'Entity Name', 'Account Number', 'Phone Number', 
-                     'Bill Number', 'Current Charges', 'Amount Paid', 'Month', 'Year', 'Notes'])
-    response = supabase.table("utility_bills").select("*").eq("utility_type", "telephone").order("year", desc=True).order("month", desc=True).execute()
+    writer.writerow([
+        'ID', 'Entity Type', 'Entity Name', 'Account Number', 'Meter Number',
+        'Consumption (kWh)', 'Current Charges', 'Unsettled Charges', 'Late Charges',
+        'Amount Paid', 'Month', 'Year', 'Bill Month', 'Bill Year', 'Notes'
+    ])
+    response = supabase.table("utility_bills").select("*").eq("utility_type", "electricity").order("year", desc=True).order("month", desc=True).execute()
     bills = response.data if response.data else []
     for bill in bills:
         writer.writerow([
@@ -1088,14 +1098,211 @@ def export_telephone_bills_csv_to_string():
             bill.get('entity_type', ''),
             bill.get('entity_name', ''),
             bill.get('account_number', ''),
-            bill.get('phone_number', ''),
             bill.get('meter_number', ''),
+            bill.get('consumption_kwh', 0),
             bill.get('current_charges', 0),
+            bill.get('unsettled_charges', 0),
+            bill.get('late_charges', 0),
             bill.get('amount_paid', 0),
             bill.get('month', ''),
             bill.get('year', ''),
+            bill.get('bill_month', bill.get('month', '')),
+            bill.get('bill_year', bill.get('year', '')),
             bill.get('notes', '')
         ])
+    return output.getvalue()
+
+# ============ EXPORT TELEPHONE BILLS CSV (flattened by phone) ============
+def export_telephone_bills_csv():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'ID', 'Entity Type', 'Entity Name', 'Account Number', 'Bill Number',
+        'Phone Number', 'Rental Amount', 'Total Amount',
+        'Total Account Charges', 'Previous Outstanding', 'Previous Payment',
+        'Total Current Charges', 'Amount Paid',
+        'Month', 'Year', 'Bill Month', 'Bill Year', 'Notes (JSON)'
+    ])
+    response = supabase.table("utility_bills").select("*").eq("utility_type", "telephone").order("year", desc=True).order("month", desc=True).execute()
+    bills = response.data if response.data else []
+
+    for bill in bills:
+        notes = bill.get('notes')
+        phone_rows = []
+
+        # Parse notes to extract phones
+        if notes and isinstance(notes, str):
+            try:
+                parsed = json.loads(notes)
+                accounts = parsed.get('accounts', {})
+                if accounts:
+                    # Flatten all phones from all accounts
+                    for acc_key, acc_data in accounts.items():
+                        phones = acc_data.get('phones', [])
+                        if phones:
+                            for phone in phones:
+                                phone_rows.append({
+                                    'number': phone.get('phoneNumber', ''),
+                                    'rental': phone.get('rentalAmount', 0),
+                                    'total': phone.get('totalAmount', 0)
+                                })
+                        else:
+                            # If no phones, still create a row with account data
+                            phone_rows.append({
+                                'number': '',
+                                'rental': 0,
+                                'total': 0
+                            })
+                else:
+                    # No accounts; use legacy fields
+                    phone_rows.append({
+                        'number': bill.get('phone_number', ''),
+                        'rental': 0,
+                        'total': 0
+                    })
+            except:
+                # If parsing fails, use top-level phone number
+                phone_rows.append({
+                    'number': bill.get('phone_number', ''),
+                    'rental': 0,
+                    'total': 0
+                })
+        else:
+            # No notes, use top-level phone number
+            phone_rows.append({
+                'number': bill.get('phone_number', ''),
+                'rental': 0,
+                'total': 0
+            })
+
+        # If still no phones, add a placeholder row
+        if not phone_rows:
+            phone_rows.append({'number': '', 'rental': 0, 'total': 0})
+
+        # Write one row per phone
+        for phone in phone_rows:
+            total_account_charges = bill.get('current_charges', 0)
+            previous_outstanding = bill.get('unsettled_charges', 0)
+            previous_payment = 0  # not stored at top level
+            total_current_charges = total_account_charges + previous_outstanding
+            amount_paid = bill.get('amount_paid', 0)
+
+            writer.writerow([
+                bill.get('id', ''),
+                bill.get('entity_type', ''),
+                bill.get('entity_name', ''),
+                bill.get('account_number', ''),
+                bill.get('bill_number', ''),
+                phone.get('number', ''),
+                phone.get('rental', 0),
+                phone.get('total', 0),
+                total_account_charges,
+                previous_outstanding,
+                previous_payment,
+                total_current_charges,
+                amount_paid,
+                bill.get('month', ''),
+                bill.get('year', ''),
+                bill.get('bill_month', bill.get('month', '')),
+                bill.get('bill_year', bill.get('year', '')),
+                notes if notes else ''
+            ])
+
+    output.seek(0)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"telephone_bills_export_{timestamp}.csv"
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+    return response
+
+def export_telephone_bills_csv_to_string():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'ID', 'Entity Type', 'Entity Name', 'Account Number', 'Bill Number',
+        'Phone Number', 'Rental Amount', 'Total Amount',
+        'Total Account Charges', 'Previous Outstanding', 'Previous Payment',
+        'Total Current Charges', 'Amount Paid',
+        'Month', 'Year', 'Bill Month', 'Bill Year', 'Notes (JSON)'
+    ])
+    response = supabase.table("utility_bills").select("*").eq("utility_type", "telephone").order("year", desc=True).order("month", desc=True).execute()
+    bills = response.data if response.data else []
+
+    for bill in bills:
+        notes = bill.get('notes')
+        phone_rows = []
+
+        if notes and isinstance(notes, str):
+            try:
+                parsed = json.loads(notes)
+                accounts = parsed.get('accounts', {})
+                if accounts:
+                    for acc_key, acc_data in accounts.items():
+                        phones = acc_data.get('phones', [])
+                        if phones:
+                            for phone in phones:
+                                phone_rows.append({
+                                    'number': phone.get('phoneNumber', ''),
+                                    'rental': phone.get('rentalAmount', 0),
+                                    'total': phone.get('totalAmount', 0)
+                                })
+                        else:
+                            phone_rows.append({
+                                'number': '',
+                                'rental': 0,
+                                'total': 0
+                            })
+                else:
+                    phone_rows.append({
+                        'number': bill.get('phone_number', ''),
+                        'rental': 0,
+                        'total': 0
+                    })
+            except:
+                phone_rows.append({
+                    'number': bill.get('phone_number', ''),
+                    'rental': 0,
+                    'total': 0
+                })
+        else:
+            phone_rows.append({
+                'number': bill.get('phone_number', ''),
+                'rental': 0,
+                'total': 0
+            })
+
+        if not phone_rows:
+            phone_rows.append({'number': '', 'rental': 0, 'total': 0})
+
+        for phone in phone_rows:
+            total_account_charges = bill.get('current_charges', 0)
+            previous_outstanding = bill.get('unsettled_charges', 0)
+            previous_payment = 0
+            total_current_charges = total_account_charges + previous_outstanding
+            amount_paid = bill.get('amount_paid', 0)
+
+            writer.writerow([
+                bill.get('id', ''),
+                bill.get('entity_type', ''),
+                bill.get('entity_name', ''),
+                bill.get('account_number', ''),
+                bill.get('bill_number', ''),
+                phone.get('number', ''),
+                phone.get('rental', 0),
+                phone.get('total', 0),
+                total_account_charges,
+                previous_outstanding,
+                previous_payment,
+                total_current_charges,
+                amount_paid,
+                bill.get('month', ''),
+                bill.get('year', ''),
+                bill.get('bill_month', bill.get('month', '')),
+                bill.get('bill_year', bill.get('year', '')),
+                notes if notes else ''
+            ])
+
     return output.getvalue()
 
 def format_file_size(size):
@@ -1712,7 +1919,6 @@ def generate_report():
             bills = response.data if response.data else []
 
         # ====== Parse telephone notes to populate missing fields ======
-        # This improved version handles multiple accounts and extracts all fields correctly
         for idx, bill in enumerate(bills):
             if bill.get('utility_type') == 'telephone':
                 # Initialize defaults from top-level fields
@@ -1731,43 +1937,50 @@ def generate_report():
                     try:
                         notes_data = json.loads(notes)
                         accounts = notes_data.get('accounts', {})
-                        if accounts:
-                            account_number = bill.get('account_number')
-                            acc_data = None
-                            # Try to find the exact account by account_number
-                            if account_number and account_number in accounts:
-                                acc_data = accounts[account_number]
-                            else:
-                                # If not found, use the first account that has a billNumber or totalAccountCharges
-                                for acc_key, acc_val in accounts.items():
-                                    if acc_val.get('billNumber') or acc_val.get('totalAccountCharges'):
-                                        acc_data = acc_val
-                                        break
-                                # If still none, use the first account
-                                if not acc_data and accounts:
-                                    acc_data = next(iter(accounts.values()))
+                        if not accounts:
+                            continue
 
-                            if acc_data:
-                                # Extract all fields from the account data
-                                bill['billNumber'] = acc_data.get('billNumber', bill['billNumber'])
-                                bill['totalAccountCharges'] = float(acc_data.get('totalAccountCharges', bill['totalAccountCharges']))
-                                bill['previousOutstanding'] = float(acc_data.get('previousOutstanding', bill['previousOutstanding']))
-                                bill['previousPayment'] = float(acc_data.get('previousPayment', bill['previousPayment']))
-                                bill['totalCurrentCharges'] = float(acc_data.get('totalCurrentCharges', bill['totalCurrentCharges']))
-                                bill['amountPaid'] = float(acc_data.get('amountPaid', bill['amountPaid']))
+                        account_number = bill.get('account_number')
+                        acc_data = None
 
-                                phones = acc_data.get('phones', [])
-                                if phones:
-                                    bill['phoneNumber'] = phones[0].get('phoneNumber', bill['phoneNumber'])
-                                    bill['rentalAmount'] = sum(float(p.get('rentalAmount', 0)) for p in phones)
-                                    bill['totalAmount'] = sum(float(p.get('totalAmount', 0)) for p in phones)
+                        # Try to find by account_number
+                        if account_number and account_number in accounts:
+                            acc_data = accounts[account_number]
+                        else:
+                            # Fallback: use the first account that has a billNumber, or just the first
+                            for acc_key, acc_val in accounts.items():
+                                if acc_val.get('billNumber'):
+                                    acc_data = acc_val
+                                    break
+                            if not acc_data:
+                                acc_data = next(iter(accounts.values()))
 
-                                # Debug: log first 5 bills to console (visible in server logs)
-                                if idx < 5:
-                                    print(f"📞 Bill {idx+1} (ID:{bill.get('id')}) extracted: billNumber={bill['billNumber']}, totalAccountCharges={bill['totalAccountCharges']}")
-                    except json.JSONDecodeError as e:
+                        if acc_data:
+                            bill['billNumber'] = acc_data.get('billNumber', bill['billNumber'])
+                            bill['totalAccountCharges'] = float(acc_data.get('totalAccountCharges', bill['totalAccountCharges']))
+                            bill['previousOutstanding'] = float(acc_data.get('previousOutstanding', bill['previousOutstanding']))
+                            bill['previousPayment'] = float(acc_data.get('previousPayment', bill['previousPayment']))
+                            bill['totalCurrentCharges'] = float(acc_data.get('totalCurrentCharges', bill['totalCurrentCharges']))
+                            bill['amountPaid'] = float(acc_data.get('amountPaid', bill['amountPaid']))
+
+                            phones = acc_data.get('phones', [])
+                            if phones:
+                                bill['phoneNumber'] = phones[0].get('phoneNumber', bill['phoneNumber'])
+                                bill['rentalAmount'] = sum(float(p.get('rentalAmount', 0)) for p in phones)
+                                bill['totalAmount'] = sum(float(p.get('totalAmount', 0)) for p in phones)
+
+                            # Debug: print first few bills to server console
+                            if idx < 5:
+                                print(f"📞 Debug bill {idx+1}: ID={bill.get('id')}, account={account_number}, keys={list(accounts.keys())}, billNumber={bill['billNumber']}, totalAccountCharges={bill['totalAccountCharges']}")
+                        else:
+                            if idx < 5:
+                                print(f"⚠️ Debug bill {idx+1}: No account data found, using defaults")
+                    except Exception as e:
                         if idx < 5:
-                            print(f"⚠️ JSON decode error for bill {idx+1}: {e}")
+                            print(f"❌ Debug bill {idx+1}: Error parsing notes: {e}")
+                else:
+                    if idx < 5:
+                        print(f"ℹ️ Debug bill {idx+1}: No notes field, using top-level defaults")
 
         # ====== End of telephone parsing ======
 
@@ -1853,6 +2066,7 @@ def generate_report():
 
         enriched_bills.sort(key=lambda x: x.get('entity_name', ''))
         print(f"📊 Report generated with {len(enriched_bills)} bills")
+        # Return the bills array directly (no debug wrapper)
         return jsonify(enriched_bills)
     except Exception as e:
         print(f"❌ Generate report error: {e}")
