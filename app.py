@@ -1130,13 +1130,11 @@ def export_telephone_bills_csv():
         notes = bill.get('notes')
         phone_rows = []
 
-        # Parse notes to extract phones
         if notes and isinstance(notes, str):
             try:
                 parsed = json.loads(notes)
                 accounts = parsed.get('accounts', {})
                 if accounts:
-                    # Flatten all phones from all accounts
                     for acc_key, acc_data in accounts.items():
                         phones = acc_data.get('phones', [])
                         if phones:
@@ -1147,43 +1145,37 @@ def export_telephone_bills_csv():
                                     'total': phone.get('totalAmount', 0)
                                 })
                         else:
-                            # If no phones, still create a row with account data
                             phone_rows.append({
                                 'number': '',
                                 'rental': 0,
                                 'total': 0
                             })
                 else:
-                    # No accounts; use legacy fields
                     phone_rows.append({
                         'number': bill.get('phone_number', ''),
                         'rental': 0,
                         'total': 0
                     })
             except:
-                # If parsing fails, use top-level phone number
                 phone_rows.append({
                     'number': bill.get('phone_number', ''),
                     'rental': 0,
                     'total': 0
                 })
         else:
-            # No notes, use top-level phone number
             phone_rows.append({
                 'number': bill.get('phone_number', ''),
                 'rental': 0,
                 'total': 0
             })
 
-        # If still no phones, add a placeholder row
         if not phone_rows:
             phone_rows.append({'number': '', 'rental': 0, 'total': 0})
 
-        # Write one row per phone
         for phone in phone_rows:
             total_account_charges = bill.get('current_charges', 0)
             previous_outstanding = bill.get('unsettled_charges', 0)
-            previous_payment = 0  # not stored at top level
+            previous_payment = 0
             total_current_charges = total_account_charges + previous_outstanding
             amount_paid = bill.get('amount_paid', 0)
 
@@ -1451,23 +1443,40 @@ def batch_update_utility_bills():
                     success_count += 1
                 
                 elif utility_type == 'water':
+                    # Normalize account and meter numbers
+                    account_number = (bill_data.get('account_number', '') or '').strip()
+                    meter_number = (bill_data.get('meter_number', '') or '').strip()
+                    meter_lookup = meter_number if meter_number else None
+
                     existing = supabase.table("utility_bills").select("id")\
                         .eq("utility_type", "water")\
                         .eq("entity_type", entity_type)\
                         .eq("entity_id", entity_id)\
                         .eq("month", month_val)\
                         .eq("year", year_val)\
-                        .eq("account_number", bill_data.get('account_number', ''))\
-                        .eq("meter_number", bill_data.get('meter_number', ''))\
+                        .eq("account_number", account_number)\
+                        .eq("meter_number", meter_lookup)\
                         .execute()
-                    
+
+                    # If not found and meter_lookup is None, try without meter filter (fallback)
+                    if (not existing.data or len(existing.data) == 0) and meter_lookup is None:
+                        existing = supabase.table("utility_bills").select("id")\
+                            .eq("utility_type", "water")\
+                            .eq("entity_type", entity_type)\
+                            .eq("entity_id", entity_id)\
+                            .eq("month", month_val)\
+                            .eq("year", year_val)\
+                            .eq("account_number", account_number)\
+                            .is_("meter_number", None)\
+                            .execute()
+
                     record = {
                         "utility_type": "water",
                         "entity_type": entity_type,
                         "entity_id": entity_id,
                         "entity_name": entity_name,
-                        "account_number": bill_data.get('account_number', ''),
-                        "meter_number": bill_data.get('meter_number', ''),
+                        "account_number": account_number,
+                        "meter_number": meter_number if meter_number else None,
                         "current_charges": float(bill_data.get('current_charges', 0)),
                         "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
                         "amount_paid": float(bill_data.get('amount_paid', 0)),
@@ -1479,7 +1488,7 @@ def batch_update_utility_bills():
                         "notes": bill_data.get('notes', ''),
                         "updated_at": datetime.now().isoformat()
                     }
-                    
+
                     if existing.data and len(existing.data) > 0:
                         supabase.table("utility_bills").update(record).eq("id", existing.data[0]['id']).execute()
                     else:
@@ -1488,23 +1497,39 @@ def batch_update_utility_bills():
                     success_count += 1
                 
                 elif utility_type == 'electricity':
+                    # Normalize account and meter numbers
+                    account_number = (bill_data.get('account_number', '') or '').strip()
+                    meter_number = (bill_data.get('meter_number', '') or '').strip()
+                    meter_lookup = meter_number if meter_number else None
+
                     existing = supabase.table("utility_bills").select("id")\
                         .eq("utility_type", "electricity")\
                         .eq("entity_type", entity_type)\
                         .eq("entity_id", entity_id)\
                         .eq("month", month_val)\
                         .eq("year", year_val)\
-                        .eq("account_number", bill_data.get('account_number', ''))\
-                        .eq("meter_number", bill_data.get('meter_number', ''))\
+                        .eq("account_number", account_number)\
+                        .eq("meter_number", meter_lookup)\
                         .execute()
-                    
+
+                    if (not existing.data or len(existing.data) == 0) and meter_lookup is None:
+                        existing = supabase.table("utility_bills").select("id")\
+                            .eq("utility_type", "electricity")\
+                            .eq("entity_type", entity_type)\
+                            .eq("entity_id", entity_id)\
+                            .eq("month", month_val)\
+                            .eq("year", year_val)\
+                            .eq("account_number", account_number)\
+                            .is_("meter_number", None)\
+                            .execute()
+
                     record = {
                         "utility_type": "electricity",
                         "entity_type": entity_type,
                         "entity_id": entity_id,
                         "entity_name": entity_name,
-                        "account_number": bill_data.get('account_number', ''),
-                        "meter_number": bill_data.get('meter_number', ''),
+                        "account_number": account_number,
+                        "meter_number": meter_number if meter_number else None,
                         "current_charges": float(bill_data.get('current_charges', 0)),
                         "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
                         "amount_paid": float(bill_data.get('amount_paid', 0)),
@@ -1516,7 +1541,7 @@ def batch_update_utility_bills():
                         "notes": bill_data.get('notes', ''),
                         "updated_at": datetime.now().isoformat()
                     }
-                    
+
                     if existing.data and len(existing.data) > 0:
                         supabase.table("utility_bills").update(record).eq("id", existing.data[0]['id']).execute()
                     else:
@@ -2066,7 +2091,6 @@ def generate_report():
 
         enriched_bills.sort(key=lambda x: x.get('entity_name', ''))
         print(f"📊 Report generated with {len(enriched_bills)} bills")
-        # Return the bills array directly (no debug wrapper)
         return jsonify(enriched_bills)
     except Exception as e:
         print(f"❌ Generate report error: {e}")
