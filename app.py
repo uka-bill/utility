@@ -1448,18 +1448,11 @@ def batch_update_utility_bills():
                     meter_number = (bill_data.get('meter_number', '') or '').strip()
                     meter_lookup = meter_number if meter_number else None
 
-                    existing = supabase.table("utility_bills").select("id")\
-                        .eq("utility_type", "water")\
-                        .eq("entity_type", entity_type)\
-                        .eq("entity_id", entity_id)\
-                        .eq("month", month_val)\
-                        .eq("year", year_val)\
-                        .eq("account_number", account_number)\
-                        .eq("meter_number", meter_lookup)\
-                        .execute()
+                    print(f"🔍 WATER lookup: entity_id={entity_id}, account='{account_number}', meter='{meter_lookup}'")
 
-                    # If not found and meter_lookup is None, try without meter filter (fallback)
-                    if (not existing.data or len(existing.data) == 0) and meter_lookup is None:
+                    existing = None
+                    # 1. Try exact match (account + meter + month + year)
+                    if meter_lookup is not None:
                         existing = supabase.table("utility_bills").select("id")\
                             .eq("utility_type", "water")\
                             .eq("entity_type", entity_type)\
@@ -1467,8 +1460,33 @@ def batch_update_utility_bills():
                             .eq("month", month_val)\
                             .eq("year", year_val)\
                             .eq("account_number", account_number)\
-                            .is_("meter_number", None)\
+                            .eq("meter_number", meter_lookup)\
                             .execute()
+
+                    # 2. If not found and meter is empty or null, try match by account only
+                    if (not existing or not existing.data) and not meter_number:
+                        existing = supabase.table("utility_bills").select("id")\
+                            .eq("utility_type", "water")\
+                            .eq("entity_type", entity_type)\
+                            .eq("entity_id", entity_id)\
+                            .eq("month", month_val)\
+                            .eq("year", year_val)\
+                            .eq("account_number", account_number)\
+                            .execute()
+                        print(f"   ↳ Fallback: account-only match found {len(existing.data) if existing and existing.data else 0}")
+
+                    # 3. If still no match, try by entity_id + month + year (only if exactly one bill exists for that period)
+                    if (not existing or not existing.data) and (not meter_number or not account_number):
+                        entity_bills = supabase.table("utility_bills").select("id")\
+                            .eq("utility_type", "water")\
+                            .eq("entity_type", entity_type)\
+                            .eq("entity_id", entity_id)\
+                            .eq("month", month_val)\
+                            .eq("year", year_val)\
+                            .execute()
+                        if entity_bills.data and len(entity_bills.data) == 1:
+                            existing = entity_bills
+                            print(f"   ↳ Fallback: single entity bill found ID={existing.data[0]['id']}")
 
                     record = {
                         "utility_type": "water",
@@ -1489,30 +1507,27 @@ def batch_update_utility_bills():
                         "updated_at": datetime.now().isoformat()
                     }
 
-                    if existing.data and len(existing.data) > 0:
-                        supabase.table("utility_bills").update(record).eq("id", existing.data[0]['id']).execute()
+                    if existing and existing.data and len(existing.data) > 0:
+                        bill_id = existing.data[0]['id']
+                        print(f"   ✅ UPDATING water bill ID {bill_id}")
+                        supabase.table("utility_bills").update(record).eq("id", bill_id).execute()
                     else:
+                        print(f"   📝 INSERTING new water bill")
                         record["created_at"] = datetime.now().isoformat()
                         supabase.table("utility_bills").insert(record).execute()
                     success_count += 1
-                
+
                 elif utility_type == 'electricity':
                     # Normalize account and meter numbers
                     account_number = (bill_data.get('account_number', '') or '').strip()
                     meter_number = (bill_data.get('meter_number', '') or '').strip()
                     meter_lookup = meter_number if meter_number else None
 
-                    existing = supabase.table("utility_bills").select("id")\
-                        .eq("utility_type", "electricity")\
-                        .eq("entity_type", entity_type)\
-                        .eq("entity_id", entity_id)\
-                        .eq("month", month_val)\
-                        .eq("year", year_val)\
-                        .eq("account_number", account_number)\
-                        .eq("meter_number", meter_lookup)\
-                        .execute()
+                    print(f"🔍 ELECTRICITY lookup: entity_id={entity_id}, account='{account_number}', meter='{meter_lookup}'")
 
-                    if (not existing.data or len(existing.data) == 0) and meter_lookup is None:
+                    existing = None
+                    # 1. Try exact match (account + meter + month + year)
+                    if meter_lookup is not None:
                         existing = supabase.table("utility_bills").select("id")\
                             .eq("utility_type", "electricity")\
                             .eq("entity_type", entity_type)\
@@ -1520,8 +1535,33 @@ def batch_update_utility_bills():
                             .eq("month", month_val)\
                             .eq("year", year_val)\
                             .eq("account_number", account_number)\
-                            .is_("meter_number", None)\
+                            .eq("meter_number", meter_lookup)\
                             .execute()
+
+                    # 2. If not found and meter is empty or null, try match by account only
+                    if (not existing or not existing.data) and not meter_number:
+                        existing = supabase.table("utility_bills").select("id")\
+                            .eq("utility_type", "electricity")\
+                            .eq("entity_type", entity_type)\
+                            .eq("entity_id", entity_id)\
+                            .eq("month", month_val)\
+                            .eq("year", year_val)\
+                            .eq("account_number", account_number)\
+                            .execute()
+                        print(f"   ↳ Fallback: account-only match found {len(existing.data) if existing and existing.data else 0}")
+
+                    # 3. If still no match, try by entity_id + month + year (only if exactly one bill exists for that period)
+                    if (not existing or not existing.data) and (not meter_number or not account_number):
+                        entity_bills = supabase.table("utility_bills").select("id")\
+                            .eq("utility_type", "electricity")\
+                            .eq("entity_type", entity_type)\
+                            .eq("entity_id", entity_id)\
+                            .eq("month", month_val)\
+                            .eq("year", year_val)\
+                            .execute()
+                        if entity_bills.data and len(entity_bills.data) == 1:
+                            existing = entity_bills
+                            print(f"   ↳ Fallback: single entity bill found ID={existing.data[0]['id']}")
 
                     record = {
                         "utility_type": "electricity",
@@ -1542,12 +1582,16 @@ def batch_update_utility_bills():
                         "updated_at": datetime.now().isoformat()
                     }
 
-                    if existing.data and len(existing.data) > 0:
-                        supabase.table("utility_bills").update(record).eq("id", existing.data[0]['id']).execute()
+                    if existing and existing.data and len(existing.data) > 0:
+                        bill_id = existing.data[0]['id']
+                        print(f"   ✅ UPDATING electricity bill ID {bill_id}")
+                        supabase.table("utility_bills").update(record).eq("id", bill_id).execute()
                     else:
+                        print(f"   📝 INSERTING new electricity bill")
                         record["created_at"] = datetime.now().isoformat()
                         supabase.table("utility_bills").insert(record).execute()
                     success_count += 1
+
                 else:
                     error_count += 1
             except Exception as e:
