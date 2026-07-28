@@ -981,7 +981,7 @@
         return m.trim();
     }
 
-    // ========== FIXED findBillForMeter (NO FALLBACK) ==========
+    // ========== FIXED findBillForMeter (NO entity_id fallback) ==========
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
         const cleanAccount = (accountNumber || '').trim();
         const normalizeAccount = (acc) => {
@@ -1004,20 +1004,6 @@
             const billAccount = normalizeAccount(bill.account_number);
             if (bill.entity_type === entityType &&
                 billAccount === normAccount &&
-                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                return bill;
-            }
-        }
-        
-        // 2. Try match by entity_id + month + year
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType && bill.entity_id == entityId &&
-                bill.month == month && bill.year == year) {
-                return bill;
-            }
-        }
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType && bill.entity_id == entityId &&
                 (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
                 return bill;
             }
@@ -1483,9 +1469,10 @@
             meterRow.setAttribute('data-meter', escapeHtml(meterData.meterNumber));
             if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
 
+            // ===== FIX: amount-paid-input changed to type="text" =====
             let amountPaidHtml = '';
             if (isFirstMeter) {
-                amountPaidHtml = '<input type="number" step="0.01" class="inline-input amount-paid-input" value="' + formatNumberWithCommas(meterData.amountPaid) + '" placeholder="$">';
+                amountPaidHtml = '<input type="text" class="inline-input amount-paid-input" value="' + formatNumberWithCommas(meterData.amountPaid) + '" placeholder="$">';
                 isFirstMeter = false;
             } else {
                 amountPaidHtml = '<div class="amount-paid-disabled">—</div>';
