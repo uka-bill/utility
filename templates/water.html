@@ -445,43 +445,8 @@
         return m.trim();
     }
 
-    // ========== FIXED findBillForMeter (matches account + meter) ==========
-    function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
-        const normalizeAccount = (acc) => {
-            if (!acc) return '';
-            return String(acc).replace(/[()\s\-]/g, '').trim();
-        };
-        const normalizeMeter = (m) => {
-            if (!m) return '';
-            return String(m).replace(/[()\s\-]/g, '').trim();
-        };
-        const normAccount = normalizeAccount(accountNumber);
-        const normMeter = normalizeMeter(meterNumber);
-        
-        // 1. Try match by account_number + meter_number + month + year
-        for (let bill of existingBills) {
-            const billAccount = normalizeAccount(bill.account_number);
-            const billMeter = normalizeMeter(bill.meter_number);
-            if (bill.entity_type === entityType &&
-                billAccount === normAccount &&
-                billMeter === normMeter &&
-                bill.month == month && bill.year == year) {
-                return bill;
-            }
-        }
-        // fallback to bill_month/bill_year
-        for (let bill of existingBills) {
-            const billAccount = normalizeAccount(bill.account_number);
-            const billMeter = normalizeMeter(bill.meter_number);
-            if (bill.entity_type === entityType &&
-                billAccount === normAccount &&
-                billMeter === normMeter &&
-                (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
-                return bill;
-            }
-        }
-        return null;
-    }
+    // ========== FIXED: No frontend bill lookup – always send id:null ==========
+    // The backend will upsert based on the composite key
 
     function matchesSearch(entity, searchTerm) {
         if (!searchTerm) return true;
@@ -531,8 +496,8 @@
             const row = meterRows[i];
             const accountNumber = row.getAttribute('data-account') || '';
             const meterNumber = row.getAttribute('data-meter') || '';
-            const existingBill = findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year);
-            const existingBillId = existingBill ? existingBill.id : null;
+            // Always set id: null
+            const existingBillId = null;
             const consumptionInput = row.querySelector('.consumption-input');
             const currentInput = row.querySelector('.current-charge-input');
             const outstandingInput = row.querySelector('.outstanding-input');
@@ -581,6 +546,7 @@
             hideSavingToast();
             if (result.success) {
                 showToast(entityName + ': Saved ' + result.success_count + ' record(s) successfully (' + totalTime + 'ms)', false);
+                await loadExistingBills(month, year);
                 updateEntityTotalDisplay(entityId, batchBills);
             } else {
                 showToast(entityName + ': Saved ' + result.success_count + ' records, ' + result.error_count + ' failed', true);
@@ -735,20 +701,27 @@
                     const meters = account.meters || [];
                     const visibleMeters = [];
                     if (meters.length === 0) {
-                        const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, '', month, year);
                         visibleMeters.push({
                             meterNumber: '',
                             location: '',
                             notes: '',
-                            existing: existing,
-                            billId: existing ? existing.id : null,
+                            existing: null,
+                            billId: null,
                             isPlaceholder: true
                         });
                     } else {
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            const existing = findBillForMeter(entity.type, entity.id, account.accountNumber, meterNum, month, year);
+                            const existing = existingBills.find(bill => {
+                                const accNorm = (bill.account_number || '').replace(/[()\s\-]/g, '').trim();
+                                const meterNorm = (bill.meter_number || '').replace(/[()\s\-]/g, '').trim();
+                                return bill.entity_type === entity.type &&
+                                    bill.entity_id === entity.id &&
+                                    accNorm === (account.accountNumber || '').replace(/[()\s\-]/g, '').trim() &&
+                                    meterNorm === meterNum.replace(/[()\s\-]/g, '').trim() &&
+                                    bill.month == month && bill.year == year;
+                            });
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
@@ -969,158 +942,4 @@
                     meterData.locationDisplay +
                 '</td>' +
                 '<td style="text-align:right;"><input type="text" class="inline-input consumption-input" value="' + formatConsumption(consumptionDisplay) + '" placeholder="m³"></td>' +
-                '<td style="text-align:right;"><input type="text" class="inline-input current-charge-input" value="' + formatNumberWithCommas(currentChargesDisplay) + '" placeholder="$"></td>' +
-                '<td style="text-align:right;"><input type="text" class="inline-input outstanding-input" value="' + formatNumberWithCommas(outstandingDisplay) + '" placeholder="$"></td>' +
-                '<td style="text-align:right;"><input type="text" class="inline-input previous-paid-input" value="' + formatNumberWithCommas(meterData.previousPayment) + '" placeholder="$"></td>' +
-                '<td style="text-align:right;" class="amount-paid-cell">' + amountPaidHtml + '</td>' +
-                '<td class="notes-cell"><input type="text" class="inline-input notes-input" value="' + escapeHtml(meterData.notes) + '" placeholder="Notes..."></td>' +
-                '<td style="text-align:center;"></td>' +
-                '<td style="text-align:center;"></td>';
-            tbody.appendChild(meterRow);
-            meterRowElements.push(meterRow);
-
-            const consumptionInput = meterRow.querySelector('.consumption-input');
-            if (consumptionInput) {
-                consumptionInput.addEventListener('blur', function() {
-                    if (this.value && this.value.trim() !== '') {
-                        const raw = parseNumberFromDisplay(this.value);
-                        this.value = formatConsumption(raw);
-                    }
-                });
-                consumptionInput.addEventListener('focus', function() {
-                    const raw = parseNumberFromDisplay(this.value);
-                    this.value = raw.toString();
-                });
-            }
-
-            const otherNumericInputs = meterRow.querySelectorAll('.inline-input:not(.notes-input):not(.consumption-input)');
-            otherNumericInputs.forEach(inp => {
-                inp.addEventListener('blur', function() {
-                    if (this.value && this.value.trim() !== '') {
-                        const raw = parseNumberFromDisplay(this.value);
-                        this.value = formatNumberWithCommas(raw);
-                    }
-                });
-                inp.addEventListener('focus', function() {
-                    const raw = parseNumberFromDisplay(this.value);
-                    this.value = raw.toString();
-                });
-            });
-
-            currentAccount = accountNum;
-        }
-
-        let totalConsumption = 0, totalBillAmount = 0, totalOutstanding = 0;
-        meterRowsData.forEach(m => {
-            totalConsumption += m.consumption;
-            totalBillAmount += m.currentCharges;
-            totalOutstanding += m.outstandingCharges;
-        });
-
-        const summaryRow = document.createElement('tr');
-        summaryRow.className = 'entity-summary-row';
-        summaryRow.setAttribute('data-entity-id', entity.id);
-        summaryRow.innerHTML = `
-            <td class="summary-label" style="text-align:center;">Total</td>
-            <td colspan="3" style="text-align:center;"></td>
-            <td class="summary-total" id="summary-consumption-${entity.id}" style="text-align:center;">${formatConsumption(totalConsumption)}</td>
-            <td class="summary-total" id="summary-bill-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalBillAmount)}</td>
-            <td class="summary-total" id="summary-outstanding-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalOutstanding)}</td>
-            <td class="summary-dash" style="text-align:center;">—</td>
-            <td class="summary-dash" style="text-align:center;">—</td>
-            <td style="text-align:center;"></td>
-            <td style="text-align:center;"></td>
-            <td style="text-align:center;"></td>
-        `;
-        tbody.appendChild(summaryRow);
-
-        meterRowElements.forEach(row => {
-            const consumptionInput = row.querySelector('.consumption-input');
-            const billInput = row.querySelector('.current-charge-input');
-            const outstandingInput = row.querySelector('.outstanding-input');
-            const updateFunction = function() {
-                let totalCons = 0, totalBill = 0, totalOut = 0;
-                meterRowElements.forEach(mRow => {
-                    const cInput = mRow.querySelector('.consumption-input');
-                    const bInput = mRow.querySelector('.current-charge-input');
-                    const oInput = mRow.querySelector('.outstanding-input');
-                    totalCons += parseNumberFromDisplay(cInput ? cInput.value : 0);
-                    totalBill += parseNumberFromDisplay(bInput ? bInput.value : 0);
-                    totalOut += parseNumberFromDisplay(oInput ? oInput.value : 0);
-                });
-                const summaryCons = document.getElementById(`summary-consumption-${entity.id}`);
-                const summaryBill = document.getElementById(`summary-bill-${entity.id}`);
-                const summaryOut = document.getElementById(`summary-outstanding-${entity.id}`);
-                if (summaryCons) summaryCons.textContent = formatConsumption(totalCons);
-                if (summaryBill) summaryBill.textContent = formatNumberWithCommas(totalBill);
-                if (summaryOut) summaryOut.textContent = formatNumberWithCommas(totalOut);
-            };
-            if (consumptionInput) consumptionInput.addEventListener('input', updateFunction);
-            if (billInput) billInput.addEventListener('input', updateFunction);
-            if (outstandingInput) outstandingInput.addEventListener('input', updateFunction);
-        });
-
-        return serial;
-    }
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str).replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
-
-    function attachEventListeners() {
-        document.getElementById('billsTableBody').addEventListener('click', async function(e) {
-            const saveBtn = e.target.closest('.save-entity-btn');
-            if (saveBtn && !saveBtn.disabled) {
-                const entityRow = saveBtn.closest('tr.entity-row');
-                if (entityRow) {
-                    await saveEntityDataBackground(entityRow, currentMonth, currentYear);
-                }
-                return;
-            }
-        });
-
-        const monthSelect = document.getElementById('globalMonth');
-        const yearSelect = document.getElementById('globalYear');
-        monthSelect.addEventListener('change', function() {
-            const month = parseInt(this.value);
-            const year = parseInt(document.getElementById('globalYear').value);
-            renderWaterTable(month, year);
-        });
-        yearSelect.addEventListener('change', function() {
-            const month = parseInt(document.getElementById('globalMonth').value);
-            const year = parseInt(this.value);
-            renderWaterTable(month, year);
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', async function() {
-        populateYears();
-        const now = new Date();
-        const monthSelect = document.getElementById('globalMonth');
-        const yearSelect = document.getElementById('globalYear');
-        if (monthSelect) monthSelect.value = now.getMonth() + 1;
-        if (yearSelect) yearSelect.value = now.getFullYear();
-        attachEventListeners();
-        await renderWaterTable();
-        const refreshBtn = document.getElementById('refreshTableBtn');
-        if (refreshBtn) {
-            refreshBtn.addEventListener('click', async function() {
-                await renderWaterTable();
-            });
-        }
-        const applyFiltersBtn = document.getElementById('applyFiltersBtn');
-        if (applyFiltersBtn) {
-            applyFiltersBtn.addEventListener('click', async function() {
-                await renderWaterTable();
-            });
-        }
-    });
-</script>
-</body>
-</html>
+                '<td style
