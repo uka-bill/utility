@@ -981,20 +981,26 @@
         return m.trim();
     }
 
-    // ========== FIXED findBillForMeter (NO entity_id fallback) ==========
+    // ========== FIXED findBillForMeter (matches account + meter) ==========
     function findBillForMeter(entityType, entityId, accountNumber, meterNumber, month, year) {
-        const cleanAccount = (accountNumber || '').trim();
         const normalizeAccount = (acc) => {
             if (!acc) return '';
             return String(acc).replace(/[()\s\-]/g, '').trim();
         };
-        const normAccount = normalizeAccount(cleanAccount);
+        const normalizeMeter = (m) => {
+            if (!m) return '';
+            return String(m).replace(/[()\s\-]/g, '').trim();
+        };
+        const normAccount = normalizeAccount(accountNumber);
+        const normMeter = normalizeMeter(meterNumber);
         
-        // 1. Try match by account_number (normalized) + month + year
+        // 1. Try match by account_number + meter_number + month + year
         for (let bill of existingBills) {
             const billAccount = normalizeAccount(bill.account_number);
+            const billMeter = normalizeMeter(bill.meter_number);
             if (bill.entity_type === entityType &&
                 billAccount === normAccount &&
+                billMeter === normMeter &&
                 bill.month == month && bill.year == year) {
                 return bill;
             }
@@ -1002,14 +1008,14 @@
         // fallback to bill_month/bill_year
         for (let bill of existingBills) {
             const billAccount = normalizeAccount(bill.account_number);
+            const billMeter = normalizeMeter(bill.meter_number);
             if (bill.entity_type === entityType &&
                 billAccount === normAccount &&
+                billMeter === normMeter &&
                 (bill.bill_month || bill.month) == month && (bill.bill_year || bill.year) == year) {
                 return bill;
             }
         }
-        
-        // No more fallback – return null if nothing matches
         return null;
     }
 
@@ -1469,7 +1475,6 @@
             meterRow.setAttribute('data-meter', escapeHtml(meterData.meterNumber));
             if (meterData.billId) meterRow.setAttribute('data-bill-id', meterData.billId);
 
-            // ===== FIX: amount-paid-input changed to type="text" =====
             let amountPaidHtml = '';
             if (isFirstMeter) {
                 amountPaidHtml = '<input type="text" class="inline-input amount-paid-input" value="' + formatNumberWithCommas(meterData.amountPaid) + '" placeholder="$">';
