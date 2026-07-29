@@ -391,7 +391,6 @@
                 accounts = raw;
             }
 
-            // If no accounts found, try top-level fields
             if (accounts.length === 0 && entity.electricity_account && entity.electricity_account !== '—') {
                 const meters = [];
                 if (entity.electricity_meter && entity.electricity_meter !== '—') {
@@ -402,21 +401,16 @@
                 accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
             }
 
-            // Normalise each account
             accounts.forEach(acc => {
-                // If the account has a direct `meterNumber` property, convert to meters array
                 if (acc.meterNumber && !acc.meters) {
                     acc.meters = [{ meterNumber: acc.meterNumber, location: acc.location || '', notes: acc.notes || '' }];
                 }
-                // Ensure meters is an array
                 if (!acc.meters || !Array.isArray(acc.meters)) {
                     acc.meters = [];
                 }
-                // If meters is empty, add a placeholder
                 if (acc.meters.length === 0) {
                     acc.meters.push({ meterNumber: '', location: '', notes: '' });
                 }
-                // Ensure each meter has required fields
                 acc.meters.forEach(m => {
                     if (!m.meterNumber) m.meterNumber = '';
                     if (!m.location) m.location = '';
@@ -424,7 +418,6 @@
                 });
             });
 
-            // If still no accounts, add placeholder
             if (accounts.length === 0) {
                 accounts = [{
                     accountNumber: '—',
@@ -1028,6 +1021,37 @@
                 '<td style="text-align:center;"></td>';
             tbody.appendChild(meterRow);
             meterRowElements.push(meterRow);
+
+            // ---- SAFETY: explicitly set values after creation ----
+            const consumptInput = meterRow.querySelector('.consumption-input');
+            if (consumptInput) {
+                consumptInput.value = formatConsumption(meterData.consumption);
+                console.log('📝 Set consumption to:', formatConsumption(meterData.consumption));
+            }
+            const billInput = meterRow.querySelector('.current-charge-input');
+            if (billInput) {
+                billInput.value = formatNumberWithCommas(meterData.currentCharges);
+                console.log('📝 Set bill amount to:', formatNumberWithCommas(meterData.currentCharges));
+            }
+            const outInput = meterRow.querySelector('.outstanding-input');
+            if (outInput) {
+                outInput.value = formatNumberWithCommas(meterData.outstandingCharges);
+                console.log('📝 Set outstanding to:', formatNumberWithCommas(meterData.outstandingCharges));
+            }
+            const prevInput = meterRow.querySelector('.previous-paid-input');
+            if (prevInput) {
+                prevInput.value = formatNumberWithCommas(meterData.previousPayment);
+                console.log('📝 Set previous payment to:', formatNumberWithCommas(meterData.previousPayment));
+            }
+            const paidInput = meterRow.querySelector('.amount-paid-input');
+            if (paidInput) {
+                paidInput.value = formatNumberWithCommas(meterData.amountPaid);
+                console.log('📝 Set amount paid to:', formatNumberWithCommas(meterData.amountPaid));
+            }
+            const notesInput = meterRow.querySelector('.notes-input');
+            if (notesInput) {
+                notesInput.value = meterData.notes;
+            }
 
             const consumptionInput = meterRow.querySelector('.consumption-input');
             if (consumptionInput) {
