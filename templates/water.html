@@ -451,6 +451,94 @@
         return false;
     }
 
+    // ========== IMPROVED MATCHING FUNCTION (same as electricity) ==========
+    function findMatchingBill(entityType, entityId, accountNumber, meterNumber, month, year) {
+        function norm(str) {
+            if (!str) return '';
+            return String(str).replace(/[()\s\-]/g, '').trim();
+        }
+        function contains(needle, haystack) {
+            if (!needle || !haystack) return false;
+            const n = norm(needle).toLowerCase();
+            const h = norm(haystack).toLowerCase();
+            return h.includes(n) || n.includes(h);
+        }
+
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month && bill.year === year &&
+                norm(bill.account_number) === norm(accountNumber) &&
+                norm(bill.meter_number) === norm(meterNumber)) {
+                return bill;
+            }
+        }
+
+        let accountMatches = [];
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month && bill.year === year &&
+                norm(bill.account_number) === norm(accountNumber)) {
+                accountMatches.push(bill);
+            }
+        }
+        if (accountMatches.length === 1) {
+            return accountMatches[0];
+        } else if (accountMatches.length > 1) {
+            for (let bill of accountMatches) {
+                if (contains(meterNumber, bill.meter_number)) {
+                    return bill;
+                }
+            }
+            return accountMatches[0];
+        }
+
+        let meterMatches = [];
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month && bill.year === year &&
+                norm(bill.meter_number) === norm(meterNumber)) {
+                meterMatches.push(bill);
+            }
+        }
+        if (meterMatches.length === 1) {
+            return meterMatches[0];
+        } else if (meterMatches.length > 1) {
+            for (let bill of meterMatches) {
+                if (contains(accountNumber, bill.account_number)) {
+                    return bill;
+                }
+            }
+            return meterMatches[0];
+        }
+
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month && bill.year === year &&
+                contains(accountNumber, bill.account_number) &&
+                contains(meterNumber, bill.meter_number)) {
+                return bill;
+            }
+        }
+
+        let entityBills = [];
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month && bill.year === year) {
+                entityBills.push(bill);
+            }
+        }
+        if (entityBills.length === 1) {
+            return entityBills[0];
+        }
+
+        return null;
+    }
+
     // ========== Save functions ==========
     async function saveEntityDataBackground(entityRow, month, year) {
         const startTime = performance.now();
@@ -480,9 +568,7 @@
         const batchBills = [];
         for (let i = 0; i < meterRows.length; i++) {
             const row = meterRows[i];
-            // ---- NEW: read bill ID from data attribute ----
             const billId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
-            // --------------------------------------------
             const accountNumber = row.getAttribute('data-account') || '';
             const meterNumber = row.getAttribute('data-meter') || '';
             const consumptionInput = row.querySelector('.consumption-input');
@@ -498,7 +584,7 @@
             const amountPaid = parseNumberFromDisplay(amountPaidInput ? amountPaidInput.value : 0);
             const notes = notesInput ? notesInput.value : '';
             batchBills.push({
-                id: billId,   // <-- now sending the actual bill ID if known
+                id: billId,
                 account_number: accountNumber === '—' ? '' : accountNumber.trim(),
                 meter_number: meterNumber === '—' ? '' : meterNumber.trim(),
                 consumption_m3: consumption,
@@ -699,51 +785,7 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            let existing = null;
-
-                            function normalizeAccount(acc) {
-                                if (!acc) return '';
-                                return String(acc).replace(/[()\s\-]/g, '').trim();
-                            }
-                            function normalizeMeter(mtr) {
-                                if (!mtr) return '';
-                                return String(mtr).replace(/[()\s\-]/g, '').trim();
-                            }
-
-                            const accountNorm = normalizeAccount(account.accountNumber);
-                            const meterNorm = normalizeMeter(meterNum);
-
-                            existing = existingBills.find(bill => {
-                                const billAcc = normalizeAccount(bill.account_number);
-                                const billMeter = normalizeMeter(bill.meter_number);
-                                return bill.entity_type === entity.type &&
-                                    bill.entity_id === entity.id &&
-                                    billAcc === accountNorm &&
-                                    billMeter === meterNorm &&
-                                    bill.month == month && bill.year == year;
-                            });
-
-                            if (!existing && !meterNum) {
-                                existing = existingBills.find(bill => {
-                                    const billAcc = normalizeAccount(bill.account_number);
-                                    return bill.entity_type === entity.type &&
-                                        bill.entity_id === entity.id &&
-                                        billAcc === accountNorm &&
-                                        bill.month == month && bill.year == year;
-                                });
-                            }
-
-                            if (!existing) {
-                                const entityBills = existingBills.filter(bill => {
-                                    return bill.entity_type === entity.type &&
-                                        bill.entity_id === entity.id &&
-                                        bill.month == month && bill.year == year;
-                                });
-                                if (entityBills.length === 1) {
-                                    existing = entityBills[0];
-                                }
-                            }
-
+                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
@@ -870,7 +912,7 @@
                     previousPayment: previousPayment,
                     amountPaid: amountPaid,
                     notes: notes,
-                    billId: meter.billId,   // <-- store bill ID from existing
+                    billId: meter.billId,
                     isFirstMeterForAccount: isFirstMeterForAccount,
                     existingBill: existing
                 });
@@ -931,11 +973,9 @@
             meterRow.className = 'meter-row';
             meterRow.setAttribute('data-account', escapeHtml(meterData.accountNumber));
             meterRow.setAttribute('data-meter', escapeHtml(meterData.meterNumber));
-            // ---- NEW: set data-bill-id if we have one ----
             if (meterData.billId) {
                 meterRow.setAttribute('data-bill-id', meterData.billId);
             }
-            // --------------------------------------------
 
             let amountPaidHtml = '';
             if (isFirstMeter) {
