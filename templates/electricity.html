@@ -590,6 +590,106 @@
         }
     }
 
+    // ========== IMPROVED MATCHING FUNCTION ==========
+    function findMatchingBill(entityType, entityId, accountNumber, meterNumber, month, year) {
+        // Normalize both account and meter
+        function norm(str) {
+            if (!str) return '';
+            return String(str).replace(/[()\s\-]/g, '').trim();
+        }
+
+        // Check if one string contains the other (case-insensitive, after normalisation)
+        function contains(needle, haystack) {
+            if (!needle || !haystack) return false;
+            const n = norm(needle).toLowerCase();
+            const h = norm(haystack).toLowerCase();
+            return h.includes(n) || n.includes(h);
+        }
+
+        // First, try exact match on account and meter (normalised)
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month && bill.year === year &&
+                norm(bill.account_number) === norm(accountNumber) &&
+                norm(bill.meter_number) === norm(meterNumber)) {
+                return bill;
+            }
+        }
+
+        // Second, try account-only match (normalised)
+        let accountMatches = [];
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month && bill.year === year &&
+                norm(bill.account_number) === norm(accountNumber)) {
+                accountMatches.push(bill);
+            }
+        }
+        if (accountMatches.length === 1) {
+            return accountMatches[0];
+        } else if (accountMatches.length > 1) {
+            // If multiple, try to find one where meter contains the entity's meter or vice versa
+            for (let bill of accountMatches) {
+                if (contains(meterNumber, bill.meter_number)) {
+                    return bill;
+                }
+            }
+            // If still multiple, return first
+            return accountMatches[0];
+        }
+
+        // Third, try meter-only match (normalised)
+        let meterMatches = [];
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month && bill.year === year &&
+                norm(bill.meter_number) === norm(meterNumber)) {
+                meterMatches.push(bill);
+            }
+        }
+        if (meterMatches.length === 1) {
+            return meterMatches[0];
+        } else if (meterMatches.length > 1) {
+            // Try to find one where account contains the entity's account or vice versa
+            for (let bill of meterMatches) {
+                if (contains(accountNumber, bill.account_number)) {
+                    return bill;
+                }
+            }
+            return meterMatches[0];
+        }
+
+        // Fourth, try matching by account and meter using "contains"
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month && bill.year === year &&
+                contains(accountNumber, bill.account_number) &&
+                contains(meterNumber, bill.meter_number)) {
+                return bill;
+            }
+        }
+
+        // Fifth, if exactly one bill for this entity+month+year, use it
+        let entityBills = [];
+        for (let bill of existingBills) {
+            if (bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month && bill.year === year) {
+                entityBills.push(bill);
+            }
+        }
+        if (entityBills.length === 1) {
+            return entityBills[0];
+        }
+
+        // No match found
+        return null;
+    }
+
     // ========== Render Table ==========
     async function renderElectricityTable() {
         const month = parseInt(document.getElementById('globalMonth').value);
@@ -721,51 +821,9 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            let existing = null;
-
-                            function normalizeAccount(acc) {
-                                if (!acc) return '';
-                                return String(acc).replace(/[()\s\-]/g, '').trim();
-                            }
-                            function normalizeMeter(mtr) {
-                                if (!mtr) return '';
-                                return String(mtr).replace(/[()\s\-]/g, '').trim();
-                            }
-
-                            const accountNorm = normalizeAccount(account.accountNumber);
-                            const meterNorm = normalizeMeter(meterNum);
-
-                            existing = existingBills.find(bill => {
-                                const billAcc = normalizeAccount(bill.account_number);
-                                const billMeter = normalizeMeter(bill.meter_number);
-                                return bill.entity_type === entity.type &&
-                                    bill.entity_id === entity.id &&
-                                    billAcc === accountNorm &&
-                                    billMeter === meterNorm &&
-                                    bill.month == month && bill.year == year;
-                            });
-
-                            if (!existing && !meterNum) {
-                                existing = existingBills.find(bill => {
-                                    const billAcc = normalizeAccount(bill.account_number);
-                                    return bill.entity_type === entity.type &&
-                                        bill.entity_id === entity.id &&
-                                        billAcc === accountNorm &&
-                                        bill.month == month && bill.year == year;
-                                });
-                            }
-
-                            if (!existing) {
-                                const entityBills = existingBills.filter(bill => {
-                                    return bill.entity_type === entity.type &&
-                                        bill.entity_id === entity.id &&
-                                        bill.month == month && bill.year == year;
-                                });
-                                if (entityBills.length === 1) {
-                                    existing = entityBills[0];
-                                }
-                            }
-
+                            // ---- USE IMPROVED MATCHING ----
+                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
+                            // --------------------------------
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
