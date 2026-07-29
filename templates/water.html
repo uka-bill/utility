@@ -265,7 +265,6 @@
         return parseFloat(cleaned) || 0;
     }
 
-    // ========== MAIN SCRIPT ==========
     let allSchools = [];
     let allDepartments = [];
     let existingBills = [];
@@ -452,38 +451,39 @@
         return false;
     }
 
-    // ========== SIMPLIFIED MATCHING ==========
-    function findMatchingBill(entityType, entityId, accountNumber, month, year) {
-        function norm(str) {
-            if (!str) return '';
-            return String(str).replace(/[()\s\-]/g, '').trim();
+    // ========== IMPROVED MATCHING: build lookup map by account number ==========
+    function buildBillLookup(month, year) {
+        const map = {};
+        for (let bill of existingBills) {
+            const key = bill.entity_type + '|' + bill.entity_id + '|' + normalizeAccount(bill.account_number);
+            map[key] = bill;
         }
-        const normAcc = norm(accountNumber);
+        console.log('📊 Bill lookup map built with', Object.keys(map).length, 'entries for water');
+        return map;
+    }
+
+    function normalizeAccount(acc) {
+        if (!acc) return '';
+        return String(acc).replace(/[()\s\-]/g, '').trim();
+    }
+
+    function findMatchingBill(entityType, entityId, accountNumber, month, year, billMap) {
+        const key = entityType + '|' + entityId + '|' + normalizeAccount(accountNumber);
+        if (billMap && billMap[key]) {
+            console.log('✅ Found water bill by account:', billMap[key].id, 'for account', accountNumber);
+            return billMap[key];
+        }
         const candidates = existingBills.filter(bill =>
             bill.entity_type === entityType &&
             bill.entity_id === entityId &&
             bill.month === month &&
             bill.year === year
         );
-        if (candidates.length === 0) {
-            console.log('⚠️ No bills found for entity', entityId, month, year);
-            return null;
-        }
-        for (let bill of candidates) {
-            if (norm(bill.account_number) === normAcc) {
-                console.log('✅ Found bill by account:', bill.id, bill.account_number);
-                return bill;
-            }
-        }
         if (candidates.length === 1) {
-            console.log('✅ Only one bill for entity, using it:', candidates[0].id);
+            console.log('⚠️ Using fallback: single water bill for entity:', candidates[0].id);
             return candidates[0];
         }
-        if (!accountNumber || accountNumber === '—') {
-            console.log('⚠️ No account, using first candidate:', candidates[0].id);
-            return candidates[0];
-        }
-        console.log('❌ No matching bill found for account', accountNumber, 'among', candidates.length, 'bills');
+        console.log('❌ No matching water bill found for account', accountNumber, 'entity', entityId);
         return null;
     }
 
@@ -615,6 +615,8 @@
         await loadAllEntities();
         await loadExistingBills(month, year);
 
+        const billMap = buildBillLookup(month, year);
+
         let allEntities = buildEntityList();
         const entityFilter = document.getElementById('entityTypeFilter').value;
         const searchTerm = document.getElementById('searchFilter').value;
@@ -733,7 +735,7 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, month, year);
+                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, month, year, billMap);
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
@@ -776,7 +778,7 @@
                 separatorRow.innerHTML = '<td colspan="12"><div class="cluster-info"><span>🏫 ' + cluster + '</span><span class="cluster-count">' + visibleClusterEntities.length + ' entit' + (visibleClusterEntities.length > 1 ? 'ies' : 'y') + ', ' + totalMeters + ' meter' + (totalMeters > 1 ? 's' : '') + '</span></div></td>';
                 tbody.appendChild(separatorRow);
                 for (let i = 0; i < visibleClusterEntities.length; i++) {
-                    globalSerial = await renderEntity(tbody, visibleClusterEntities[i], month, year, globalSerial, entityNumber);
+                    globalSerial = await renderEntity(tbody, visibleClusterEntities[i], month, year, globalSerial, entityNumber, billMap);
                     entityNumber++;
                 }
             }
@@ -797,7 +799,7 @@
             for (const divData of divisions) {
                 const units = divData.units;
                 for (const entity of units) {
-                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, entityNumber);
+                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, entityNumber, billMap);
                     entityNumber++;
                 }
             }
@@ -808,7 +810,7 @@
         showLoading(false);
     }
 
-    async function renderEntity(tbody, entity, month, year, startSerial, entityNumber) {
+    async function renderEntity(tbody, entity, month, year, startSerial, entityNumber, billMap) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
