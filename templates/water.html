@@ -474,10 +474,15 @@
         return false;
     }
 
-    // ========== MATCHING ==========
+    // ========== ENHANCED MATCHING ==========
     function normalizeAccount(acc) {
         if (!acc) return '';
         return String(acc).replace(/[^a-zA-Z0-9]/g, '').trim();
+    }
+
+    function normalizeMeter(mtr) {
+        if (!mtr) return '';
+        return String(mtr).replace(/[()\s\-]/g, '').trim();
     }
 
     function buildBillLookup(month, year) {
@@ -485,20 +490,22 @@
         for (let bill of existingBills) {
             const key = bill.entity_type + '|' + bill.entity_id + '|' + normalizeAccount(bill.account_number);
             map[key] = bill;
-            console.log('🔑 Water bill map entry:', key, '→', bill.id);
+            console.log('🔑 Water bill map entry (account):', key, '→', bill.id);
         }
         console.log('📊 Water bill lookup map built with', Object.keys(map).length, 'entries');
         return map;
     }
 
-    function findMatchingBill(entityType, entityId, accountNumber, month, year, billMap) {
+    function findMatchingBill(entityType, entityId, accountNumber, meterNumber, month, year, billMap) {
         const normAcc = normalizeAccount(accountNumber);
         const key = entityType + '|' + entityId + '|' + normAcc;
-        console.log('🔍 Looking for water bill with key:', key);
+        console.log('🔍 Looking for water bill with account key:', key);
         if (billMap && billMap[key]) {
             console.log('✅ Found water bill by account:', billMap[key].id, 'for account', accountNumber, '(normalised:', normAcc, ')');
             return billMap[key];
         }
+
+        // Account failed – try matching by meter
         const candidates = existingBills.filter(bill =>
             bill.entity_type === entityType &&
             bill.entity_id === entityId &&
@@ -509,11 +516,20 @@
             console.log('⚠️ Using fallback: single water bill for entity:', candidates[0].id, 'account:', candidates[0].account_number);
             return candidates[0];
         } else if (candidates.length > 1) {
-            console.log('❌ Multiple bills found for entity', entityId, 'in month', month, year, '– cannot fallback');
+            const normMeter = normalizeMeter(meterNumber);
+            for (let bill of candidates) {
+                const billMeter = normalizeMeter(bill.meter_number);
+                if (billMeter === normMeter || billMeter.includes(normMeter) || normMeter.includes(billMeter)) {
+                    console.log('✅ Found water bill by meter:', bill.id, 'meter:', bill.meter_number);
+                    return bill;
+                }
+            }
+            console.log('❌ Multiple bills, no meter match. Using first candidate:', candidates[0].id);
+            return candidates[0];
         } else {
             console.log('❌ No bills found for entity', entityId, 'in month', month, year);
+            return null;
         }
-        return null;
     }
 
     // ========== Save functions ==========
@@ -764,7 +780,7 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, month, year, billMap);
+                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year, billMap);
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
@@ -853,7 +869,7 @@
             for (let m = 0; m < account.meters.length; m++) {
                 const meter = account.meters[m];
                 console.log('🔍 Processing meter', m, 'for account', account.accountNumber, 'meter:', meter.meterNumber);
-                const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, month, year, billMap);
+                const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meter.meterNumber, month, year, billMap);
                 let parsedNotes = {};
                 if (existing && existing.notes && existing.notes.startsWith('{')) {
                     try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
