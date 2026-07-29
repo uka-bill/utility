@@ -451,26 +451,29 @@
         return false;
     }
 
-    // ========== IMPROVED MATCHING: build lookup map by account number ==========
+    // ========== IMPROVED MATCHING: remove all non-alphanumeric characters ==========
+    function normalizeAccount(acc) {
+        if (!acc) return '';
+        return String(acc).replace(/[^a-zA-Z0-9]/g, '').trim();
+    }
+
     function buildBillLookup(month, year) {
         const map = {};
         for (let bill of existingBills) {
             const key = bill.entity_type + '|' + bill.entity_id + '|' + normalizeAccount(bill.account_number);
             map[key] = bill;
+            console.log('🔑 Water bill map entry:', key, '→', bill.id);
         }
-        console.log('📊 Bill lookup map built with', Object.keys(map).length, 'entries for water');
+        console.log('📊 Water bill lookup map built with', Object.keys(map).length, 'entries');
         return map;
     }
 
-    function normalizeAccount(acc) {
-        if (!acc) return '';
-        return String(acc).replace(/[()\s\-]/g, '').trim();
-    }
-
     function findMatchingBill(entityType, entityId, accountNumber, month, year, billMap) {
-        const key = entityType + '|' + entityId + '|' + normalizeAccount(accountNumber);
+        const normAcc = normalizeAccount(accountNumber);
+        const key = entityType + '|' + entityId + '|' + normAcc;
+        console.log('🔍 Looking for water bill with key:', key);
         if (billMap && billMap[key]) {
-            console.log('✅ Found water bill by account:', billMap[key].id, 'for account', accountNumber);
+            console.log('✅ Found water bill by account:', billMap[key].id, 'for account', accountNumber, '(normalised:', normAcc, ')');
             return billMap[key];
         }
         const candidates = existingBills.filter(bill =>
@@ -480,10 +483,13 @@
             bill.year === year
         );
         if (candidates.length === 1) {
-            console.log('⚠️ Using fallback: single water bill for entity:', candidates[0].id);
+            console.log('⚠️ Using fallback: single water bill for entity:', candidates[0].id, 'account:', candidates[0].account_number);
             return candidates[0];
+        } else if (candidates.length > 1) {
+            console.log('❌ Multiple bills found for entity', entityId, 'in month', month, year, '– cannot fallback');
+        } else {
+            console.log('❌ No bills found for entity', entityId, 'in month', month, year);
         }
-        console.log('❌ No matching water bill found for account', accountNumber, 'entity', entityId);
         return null;
     }
 
