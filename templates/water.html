@@ -6,7 +6,7 @@
     <title>Water Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== Same CSS as electricity.html – for brevity, I'll include it fully in the final code ===== */
+        /* ===== Same CSS as electricity.html – but I'll include a compact version ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -100,6 +100,7 @@
         .status-badge { padding: 4px 14px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; display: inline-block; }
         .status-paid { background: #d1fae5; color: #0d9488; }
         .status-pending { background: #fef3c7; color: #d97706; }
+        .status-partial { background: #dbeafe; color: #1a56db; }
         .no-data { text-align: center; padding: 48px 20px; color: var(--gray); font-size: 0.95rem; }
         .success-toast { position: fixed; bottom: 24px; right: 24px; background: var(--success); color: white; padding: 14px 24px; border-radius: var(--radius-sm); font-size: 0.9rem; z-index: 2000; animation: fadeOut 3s ease forwards; box-shadow: var(--shadow-xl); font-weight: 500; }
         .error-toast { position: fixed; bottom: 24px; right: 24px; background: var(--danger); color: white; padding: 14px 24px; border-radius: var(--radius-sm); font-size: 0.9rem; z-index: 2000; animation: fadeOut 4s ease forwards; box-shadow: var(--shadow-xl); font-weight: 500; }
@@ -251,7 +252,6 @@
             maximumFractionDigits: 2
         });
     }
-
     function formatConsumption(num) {
         if (num === undefined || num === null || isNaN(num)) return '0';
         return Number(num).toLocaleString('en-US', {
@@ -259,14 +259,12 @@
             maximumFractionDigits: 2
         });
     }
-
     function parseNumberFromDisplay(str) {
         if (!str) return 0;
         const cleaned = String(str).replace(/,/g, '').trim();
         return parseFloat(cleaned) || 0;
     }
 
-    // ========== MAIN SCRIPT ==========
     let allSchools = [];
     let allDepartments = [];
     let existingBills = [];
@@ -281,18 +279,15 @@
         const wrapper = document.querySelector('.table-wrapper');
         if (wrapper) savedScrollPosition = wrapper.scrollTop;
     }
-
     function restoreScrollPosition() {
         const wrapper = document.querySelector('.table-wrapper');
         if (wrapper && savedScrollPosition > 0) {
             setTimeout(() => wrapper.scrollTop = savedScrollPosition, 50);
         }
     }
-
     function showLoading(show) {
         document.getElementById('loadingOverlay').classList.toggle('active', show);
     }
-
     function showSavingToast(entityName) {
         if (activeSavingToast) activeSavingToast.remove();
         const toast = document.createElement('div');
@@ -302,11 +297,9 @@
         activeSavingToast = toast;
         return toast;
     }
-
     function hideSavingToast() {
         if (activeSavingToast) { activeSavingToast.remove(); activeSavingToast = null; }
     }
-
     function showToast(message, isError) {
         if (isError === undefined) isError = false;
         const toast = document.createElement('div');
@@ -489,7 +482,6 @@
             const row = meterRows[i];
             const accountNumber = row.getAttribute('data-account') || '';
             const meterNumber = row.getAttribute('data-meter') || '';
-            const existingBillId = null;
             const consumptionInput = row.querySelector('.consumption-input');
             const currentInput = row.querySelector('.current-charge-input');
             const outstandingInput = row.querySelector('.outstanding-input');
@@ -503,7 +495,7 @@
             const amountPaid = parseNumberFromDisplay(amountPaidInput ? amountPaidInput.value : 0);
             const notes = notesInput ? notesInput.value : '';
             batchBills.push({
-                id: existingBillId,
+                id: null,
                 account_number: accountNumber === '—' ? '' : accountNumber.trim(),
                 meter_number: meterNumber === '—' ? '' : meterNumber.trim(),
                 consumption_m3: consumption,
@@ -622,7 +614,6 @@
             return (a.originalId || a.id) - (b.originalId || b.id);
         });
 
-        // Department grouping
         const deptMap = new Map();
         departmentsList.forEach(dept => {
             const deptName = dept.departmentName || 'Other';
@@ -705,36 +696,40 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            // ===== IMPROVED MATCHING (same as electricity) =====
                             let existing = null;
 
-                            // 1. Try account-only match (ignore meter)
-                            const accountMatches = existingBills.filter(bill => {
-                                const accNorm = (bill.account_number || '').replace(/[()\s\-]/g, '').trim();
-                                const accountNorm = (account.accountNumber || '').replace(/[()\s\-]/g, '').trim();
+                            function normalizeAccount(acc) {
+                                if (!acc) return '';
+                                return String(acc).replace(/[()\s\-]/g, '').trim();
+                            }
+                            function normalizeMeter(mtr) {
+                                if (!mtr) return '';
+                                return String(mtr).replace(/[()\s\-]/g, '').trim();
+                            }
+
+                            const accountNorm = normalizeAccount(account.accountNumber);
+                            const meterNorm = normalizeMeter(meterNum);
+
+                            existing = existingBills.find(bill => {
+                                const billAcc = normalizeAccount(bill.account_number);
+                                const billMeter = normalizeMeter(bill.meter_number);
                                 return bill.entity_type === entity.type &&
                                     bill.entity_id === entity.id &&
-                                    accNorm === accountNorm &&
+                                    billAcc === accountNorm &&
+                                    billMeter === meterNorm &&
                                     bill.month == month && bill.year == year;
                             });
-                            if (accountMatches.length === 1) {
-                                existing = accountMatches[0];
-                            } else {
-                                // 2. If multiple or none, try account + meter
+
+                            if (!existing && !meterNum) {
                                 existing = existingBills.find(bill => {
-                                    const accNorm = (bill.account_number || '').replace(/[()\s\-]/g, '').trim();
-                                    const meterNorm = (bill.meter_number || '').replace(/[()\s\-]/g, '').trim();
-                                    const accountNorm = (account.accountNumber || '').replace(/[()\s\-]/g, '').trim();
-                                    const meterNumNorm = (meterNum || '').replace(/[()\s\-]/g, '').trim();
+                                    const billAcc = normalizeAccount(bill.account_number);
                                     return bill.entity_type === entity.type &&
                                         bill.entity_id === entity.id &&
-                                        accNorm === accountNorm &&
-                                        meterNorm === meterNumNorm &&
+                                        billAcc === accountNorm &&
                                         bill.month == month && bill.year == year;
                                 });
                             }
 
-                            // 3. Fallback: if still no match, try entity_id + month + year (only if exactly one bill)
                             if (!existing) {
                                 const entityBills = existingBills.filter(bill => {
                                     return bill.entity_type === entity.type &&
@@ -745,7 +740,6 @@
                                     existing = entityBills[0];
                                 }
                             }
-                            // ===== END IMPROVED MATCHING =====
 
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
@@ -795,7 +789,6 @@
             }
         }
 
-        // Render departments
         for (const deptData of sortedDeptData) {
             const deptName = deptData.departmentName;
             const divisions = deptData.divisions;
@@ -1008,11 +1001,12 @@
             currentAccount = accountNum;
         }
 
-        let totalConsumption = 0, totalBillAmount = 0, totalOutstanding = 0;
+        let totalConsumption = 0, totalBillAmount = 0, totalOutstanding = 0, totalPreviousPayment = 0;
         meterRowsData.forEach(m => {
             totalConsumption += m.consumption;
             totalBillAmount += m.currentCharges;
             totalOutstanding += m.outstandingCharges;
+            totalPreviousPayment += m.previousPayment;
         });
 
         const summaryRow = document.createElement('tr');
@@ -1024,7 +1018,7 @@
             <td class="summary-total" id="summary-consumption-${entity.id}" style="text-align:center;">${formatConsumption(totalConsumption)}</td>
             <td class="summary-total" id="summary-bill-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalBillAmount)}</td>
             <td class="summary-total" id="summary-outstanding-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalOutstanding)}</td>
-            <td class="summary-dash" style="text-align:center;">—</td>
+            <td class="summary-total" id="summary-previouspayment-${entity.id}" style="text-align:center;">${formatNumberWithCommas(totalPreviousPayment)}</td>
             <td class="summary-dash" style="text-align:center;">—</td>
             <td style="text-align:center;"></td>
             <td style="text-align:center;"></td>
@@ -1036,26 +1030,32 @@
             const consumptionInput = row.querySelector('.consumption-input');
             const billInput = row.querySelector('.current-charge-input');
             const outstandingInput = row.querySelector('.outstanding-input');
+            const prevPaymentInput = row.querySelector('.previous-paid-input');
             const updateFunction = function() {
-                let totalCons = 0, totalBill = 0, totalOut = 0;
+                let totalCons = 0, totalBill = 0, totalOut = 0, totalPrev = 0;
                 meterRowElements.forEach(mRow => {
                     const cInput = mRow.querySelector('.consumption-input');
                     const bInput = mRow.querySelector('.current-charge-input');
                     const oInput = mRow.querySelector('.outstanding-input');
+                    const pInput = mRow.querySelector('.previous-paid-input');
                     totalCons += parseNumberFromDisplay(cInput ? cInput.value : 0);
                     totalBill += parseNumberFromDisplay(bInput ? bInput.value : 0);
                     totalOut += parseNumberFromDisplay(oInput ? oInput.value : 0);
+                    totalPrev += parseNumberFromDisplay(pInput ? pInput.value : 0);
                 });
                 const summaryCons = document.getElementById(`summary-consumption-${entity.id}`);
                 const summaryBill = document.getElementById(`summary-bill-${entity.id}`);
                 const summaryOut = document.getElementById(`summary-outstanding-${entity.id}`);
+                const summaryPrev = document.getElementById(`summary-previouspayment-${entity.id}`);
                 if (summaryCons) summaryCons.textContent = formatConsumption(totalCons);
                 if (summaryBill) summaryBill.textContent = formatNumberWithCommas(totalBill);
                 if (summaryOut) summaryOut.textContent = formatNumberWithCommas(totalOut);
+                if (summaryPrev) summaryPrev.textContent = formatNumberWithCommas(totalPrev);
             };
             if (consumptionInput) consumptionInput.addEventListener('input', updateFunction);
             if (billInput) billInput.addEventListener('input', updateFunction);
             if (outstandingInput) outstandingInput.addEventListener('input', updateFunction);
+            if (prevPaymentInput) prevPaymentInput.addEventListener('input', updateFunction);
         });
 
         return serial;
