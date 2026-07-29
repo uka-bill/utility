@@ -378,7 +378,6 @@
         let accounts = [];
         try {
             let raw = entity.electricity_accounts;
-            // If it's a string, try to parse JSON
             if (typeof raw === 'string') {
                 try {
                     const parsed = JSON.parse(raw);
@@ -392,7 +391,7 @@
                 accounts = raw;
             }
 
-            // If no accounts found, try to build from top-level fields
+            // If no accounts found, try top-level fields
             if (accounts.length === 0 && entity.electricity_account && entity.electricity_account !== '—') {
                 const meters = [];
                 if (entity.electricity_meter && entity.electricity_meter !== '—') {
@@ -403,8 +402,13 @@
                 accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
             }
 
-            // Ensure each account has a meters array
+            // Normalise each account
             accounts.forEach(acc => {
+                // If the account has a direct `meterNumber` property, convert to meters array
+                if (acc.meterNumber && !acc.meters) {
+                    acc.meters = [{ meterNumber: acc.meterNumber, location: acc.location || '', notes: acc.notes || '' }];
+                }
+                // Ensure meters is an array
                 if (!acc.meters || !Array.isArray(acc.meters)) {
                     acc.meters = [];
                 }
@@ -412,7 +416,7 @@
                 if (acc.meters.length === 0) {
                     acc.meters.push({ meterNumber: '', location: '', notes: '' });
                 }
-                // Ensure each meter has a meterNumber
+                // Ensure each meter has required fields
                 acc.meters.forEach(m => {
                     if (!m.meterNumber) m.meterNumber = '';
                     if (!m.location) m.location = '';
@@ -420,7 +424,7 @@
                 });
             });
 
-            // If still no accounts, add a placeholder
+            // If still no accounts, add placeholder
             if (accounts.length === 0) {
                 accounts = [{
                     accountNumber: '—',
@@ -430,6 +434,9 @@
             }
 
             console.log('📦 Parsed electricity accounts for', entity.name, ':', accounts.map(a => a.accountNumber));
+            accounts.forEach(acc => {
+                console.log('   📦 Account', acc.accountNumber, 'has meters:', acc.meters.map(m => m.meterNumber));
+            });
             return accounts;
         } catch(e) {
             console.error('Error parsing electricity accounts for', entity.name, ':', e);
@@ -495,7 +502,7 @@
         return false;
     }
 
-    // ========== IMPROVED MATCHING: remove all non-alphanumeric characters ==========
+    // ========== MATCHING ==========
     function normalizeAccount(acc) {
         if (!acc) return '';
         return String(acc).replace(/[^a-zA-Z0-9]/g, '').trim();
@@ -666,7 +673,6 @@
         await loadAllEntities();
         await loadExistingBills(month, year);
 
-        // Build lookup map
         const billMap = buildBillLookup(month, year);
 
         let allEntities = buildEntityList();
@@ -877,7 +883,8 @@
             let isFirstMeterForAccount = true;
             for (let m = 0; m < account.meters.length; m++) {
                 const meter = account.meters[m];
-                const existing = meter.existing;
+                console.log('🔍 Processing meter', m, 'for account', account.accountNumber, 'meter:', meter.meterNumber);
+                const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, month, year, billMap);
                 let parsedNotes = {};
                 if (existing && existing.notes && existing.notes.startsWith('{')) {
                     try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
