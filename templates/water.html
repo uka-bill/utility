@@ -381,6 +381,9 @@
             }
 
             accounts.forEach(acc => {
+                if (acc.meterNumber && !acc.meters) {
+                    acc.meters = [{ meterNumber: acc.meterNumber, location: acc.location || '', notes: acc.notes || '' }];
+                }
                 if (!acc.meters || !Array.isArray(acc.meters)) {
                     acc.meters = [];
                 }
@@ -403,6 +406,9 @@
             }
 
             console.log('📦 Parsed water accounts for', entity.name, ':', accounts.map(a => a.accountNumber));
+            accounts.forEach(acc => {
+                console.log('   📦 Account', acc.accountNumber, 'has meters:', acc.meters.map(m => m.meterNumber));
+            });
             return accounts;
         } catch(e) {
             console.error('Error parsing water accounts for', entity.name, ':', e);
@@ -468,7 +474,7 @@
         return false;
     }
 
-    // ========== IMPROVED MATCHING ==========
+    // ========== MATCHING ==========
     function normalizeAccount(acc) {
         if (!acc) return '';
         return String(acc).replace(/[^a-zA-Z0-9]/g, '').trim();
@@ -846,7 +852,8 @@
             let isFirstMeterForAccount = true;
             for (let m = 0; m < account.meters.length; m++) {
                 const meter = account.meters[m];
-                const existing = meter.existing;
+                console.log('🔍 Processing meter', m, 'for account', account.accountNumber, 'meter:', meter.meterNumber);
+                const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, month, year, billMap);
                 let parsedNotes = {};
                 if (existing && existing.notes && existing.notes.startsWith('{')) {
                     try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
@@ -990,6 +997,37 @@
                 '<td style="text-align:center;"></td>';
             tbody.appendChild(meterRow);
             meterRowElements.push(meterRow);
+
+            // ---- SAFETY: explicitly set values after creation ----
+            const consumptInput = meterRow.querySelector('.consumption-input');
+            if (consumptInput) {
+                consumptInput.value = formatConsumption(meterData.consumption);
+                console.log('📝 Set consumption to:', formatConsumption(meterData.consumption));
+            }
+            const billInput = meterRow.querySelector('.current-charge-input');
+            if (billInput) {
+                billInput.value = formatNumberWithCommas(meterData.currentCharges);
+                console.log('📝 Set bill amount to:', formatNumberWithCommas(meterData.currentCharges));
+            }
+            const outInput = meterRow.querySelector('.outstanding-input');
+            if (outInput) {
+                outInput.value = formatNumberWithCommas(meterData.outstandingCharges);
+                console.log('📝 Set outstanding to:', formatNumberWithCommas(meterData.outstandingCharges));
+            }
+            const prevInput = meterRow.querySelector('.previous-paid-input');
+            if (prevInput) {
+                prevInput.value = formatNumberWithCommas(meterData.previousPayment);
+                console.log('📝 Set previous payment to:', formatNumberWithCommas(meterData.previousPayment));
+            }
+            const paidInput = meterRow.querySelector('.amount-paid-input');
+            if (paidInput) {
+                paidInput.value = formatNumberWithCommas(meterData.amountPaid);
+                console.log('📝 Set amount paid to:', formatNumberWithCommas(meterData.amountPaid));
+            }
+            const notesInput = meterRow.querySelector('.notes-input');
+            if (notesInput) {
+                notesInput.value = meterData.notes;
+            }
 
             const consumptionInput = meterRow.querySelector('.consumption-input');
             if (consumptionInput) {
