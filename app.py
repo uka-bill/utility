@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response, Response, stream_with_context
 import os
 from supabase import create_client, Client
@@ -12,6 +13,7 @@ import sys
 import zipfile
 import base64
 import time
+import re  # <-- added for normalisation
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -1356,244 +1358,105 @@ def batch_update_utility_bills():
                 elif entity_type == 'department':
                     entity_name = dept_names.get(entity_id, '')
                 
-                if utility_type == 'telephone':
-                    account_number = bill_data.get('account_number', '')
-                    bill_number = bill_data.get('bill_number', '')
-                    existing_id = None
-                    existing_record = None
-                    print(f"🔍 Looking for bill: entity_id={entity_id}, entity={entity_name}, month={month_val}, year={year_val}")
-                    
-                    try:
-                        query = supabase.table("utility_bills").select("id, *")\
-                            .eq("utility_type", "telephone")\
-                            .eq("entity_type", entity_type)\
-                            .eq("entity_id", entity_id)\
-                            .eq("month", month_val)\
-                            .eq("year", year_val)
-                        check_response = query.execute()
-                        if check_response.data and len(check_response.data) > 0:
-                            existing_id = check_response.data[0]['id']
-                            existing_record = check_response.data[0]
-                            print(f"📍 Found by month + year: {existing_id}")
-                    except Exception as e:
-                        print(f"⚠️ Error in exact match: {e}")
-                    
-                    if not existing_id:
-                        try:
-                            query = supabase.table("utility_bills").select("id, *")\
-                                .eq("utility_type", "telephone")\
-                                .eq("entity_type", entity_type)\
-                                .eq("entity_id", entity_id)\
-                                .eq("bill_month", month_val)\
-                                .eq("bill_year", year_val)
-                            check_response = query.execute()
-                            if check_response.data and len(check_response.data) > 0:
-                                existing_id = check_response.data[0]['id']
-                                existing_record = check_response.data[0]
-                                print(f"📍 Found by bill_month + bill_year: {existing_id}")
-                        except Exception as e:
-                            print(f"⚠️ Error in bill_month match: {e}")
-                    
-                    if not existing_id:
-                        print(f"📝 No existing bill for month={month_val}, year={year_val}. Will insert new.")
-                    
-                    notes_data = {}
-                    try:
-                        if bill_data.get('notes'):
-                            notes_data = json.loads(bill_data.get('notes'))
-                    except Exception as e:
-                        print(f"⚠️ Error parsing notes: {e}")
-                    if not notes_data.get('phones'):
-                        notes_data['phones'] = []
-                    
-                    final_month = month_val
-                    final_year = year_val
-                    
-                    record = {
-                        "utility_type": "telephone",
-                        "entity_type": entity_type,
-                        "entity_id": entity_id,
-                        "entity_name": entity_name,
-                        "account_number": account_number,
-                        "phone_number": '',
-                        "meter_number": bill_number,
-                        "bill_number": bill_number,
-                        "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
-                        "current_charges": float(bill_data.get('current_charges', 0)),
-                        "amount_paid": float(bill_data.get('amount_paid', 0)),
-                        "month": final_month,
-                        "year": final_year,
-                        "bill_month": final_month,
-                        "bill_year": final_year,
-                        "notes": json.dumps(notes_data),
-                        "updated_at": datetime.now().isoformat()
-                    }
-                    
-                    if existing_id:
-                        print(f"🔄 UPDATING bill ID {existing_id} for {entity_name} (month={final_month}, year={final_year})")
-                        supabase.table("utility_bills").update(record).eq("id", existing_id).execute()
-                        print(f"✅ Updated telephone bill ID {existing_id}")
-                    else:
-                        print(f"📝 INSERTING NEW bill for {entity_name} (month={final_month}, year={final_year})")
-                        record["created_at"] = datetime.now().isoformat()
-                        result = supabase.table("utility_bills").insert(record).execute()
-                        print(f"✅ Created NEW telephone bill for {entity_name}")
-                        if result.data:
-                            print(f"   📊 New bill ID: {result.data[0]['id']}")
-                    success_count += 1
+                # Normalize account and meter for matching
+                account_number = (bill_data.get('account_number', '') or '').strip()
+                meter_number = (bill_data.get('meter_number', '') or '').strip()
                 
-                elif utility_type == 'water':
-                    # Normalize account and meter numbers
-                    account_number = (bill_data.get('account_number', '') or '').strip()
-                    meter_number = (bill_data.get('meter_number', '') or '').strip()
-                    meter_lookup = meter_number if meter_number else None
-
-                    print(f"🔍 WATER lookup: entity_id={entity_id}, account='{account_number}', meter='{meter_lookup}'")
-
-                    existing = None
-                    # 1. Try exact match (account + meter + month + year)
-                    if meter_lookup is not None:
-                        existing = supabase.table("utility_bills").select("id")\
-                            .eq("utility_type", "water")\
-                            .eq("entity_type", entity_type)\
-                            .eq("entity_id", entity_id)\
-                            .eq("month", month_val)\
-                            .eq("year", year_val)\
-                            .eq("account_number", account_number)\
-                            .eq("meter_number", meter_lookup)\
-                            .execute()
-
-                    # 2. If not found and meter is empty or null, try match by account only
-                    if (not existing or not existing.data) and not meter_number:
-                        existing = supabase.table("utility_bills").select("id")\
-                            .eq("utility_type", "water")\
-                            .eq("entity_type", entity_type)\
-                            .eq("entity_id", entity_id)\
-                            .eq("month", month_val)\
-                            .eq("year", year_val)\
-                            .eq("account_number", account_number)\
-                            .execute()
-                        print(f"   ↳ Fallback: account-only match found {len(existing.data) if existing and existing.data else 0}")
-
-                    # 3. If still no match, try by entity_id + month + year (only if exactly one bill exists for that period)
-                    if (not existing or not existing.data) and (not meter_number or not account_number):
-                        entity_bills = supabase.table("utility_bills").select("id")\
-                            .eq("utility_type", "water")\
-                            .eq("entity_type", entity_type)\
-                            .eq("entity_id", entity_id)\
-                            .eq("month", month_val)\
-                            .eq("year", year_val)\
-                            .execute()
-                        if entity_bills.data and len(entity_bills.data) == 1:
-                            existing = entity_bills
-                            print(f"   ↳ Fallback: single entity bill found ID={existing.data[0]['id']}")
-
-                    record = {
-                        "utility_type": "water",
-                        "entity_type": entity_type,
-                        "entity_id": entity_id,
-                        "entity_name": entity_name,
-                        "account_number": account_number,
-                        "meter_number": meter_number if meter_number else None,
-                        "current_charges": float(bill_data.get('current_charges', 0)),
-                        "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
-                        "amount_paid": float(bill_data.get('amount_paid', 0)),
-                        "consumption_m3": float(bill_data.get('consumption_m3', 0)),
-                        "month": month_val,
-                        "year": year_val,
-                        "bill_month": month_val,
-                        "bill_year": year_val,
-                        "notes": bill_data.get('notes', ''),
-                        "updated_at": datetime.now().isoformat()
-                    }
-
-                    if existing and existing.data and len(existing.data) > 0:
-                        bill_id = existing.data[0]['id']
-                        print(f"   ✅ UPDATING water bill ID {bill_id}")
-                        supabase.table("utility_bills").update(record).eq("id", bill_id).execute()
-                    else:
-                        print(f"   📝 INSERTING new water bill")
-                        record["created_at"] = datetime.now().isoformat()
-                        supabase.table("utility_bills").insert(record).execute()
-                    success_count += 1
-
-                elif utility_type == 'electricity':
-                    # Normalize account and meter numbers
-                    account_number = (bill_data.get('account_number', '') or '').strip()
-                    meter_number = (bill_data.get('meter_number', '') or '').strip()
-                    meter_lookup = meter_number if meter_number else None
-
-                    print(f"🔍 ELECTRICITY lookup: entity_id={entity_id}, account='{account_number}', meter='{meter_lookup}'")
-
-                    existing = None
-                    # 1. Try exact match (account + meter + month + year)
-                    if meter_lookup is not None:
-                        existing = supabase.table("utility_bills").select("id")\
-                            .eq("utility_type", "electricity")\
-                            .eq("entity_type", entity_type)\
-                            .eq("entity_id", entity_id)\
-                            .eq("month", month_val)\
-                            .eq("year", year_val)\
-                            .eq("account_number", account_number)\
-                            .eq("meter_number", meter_lookup)\
-                            .execute()
-
-                    # 2. If not found and meter is empty or null, try match by account only
-                    if (not existing or not existing.data) and not meter_number:
-                        existing = supabase.table("utility_bills").select("id")\
-                            .eq("utility_type", "electricity")\
-                            .eq("entity_type", entity_type)\
-                            .eq("entity_id", entity_id)\
-                            .eq("month", month_val)\
-                            .eq("year", year_val)\
-                            .eq("account_number", account_number)\
-                            .execute()
-                        print(f"   ↳ Fallback: account-only match found {len(existing.data) if existing and existing.data else 0}")
-
-                    # 3. If still no match, try by entity_id + month + year (only if exactly one bill exists for that period)
-                    if (not existing or not existing.data) and (not meter_number or not account_number):
-                        entity_bills = supabase.table("utility_bills").select("id")\
-                            .eq("utility_type", "electricity")\
-                            .eq("entity_type", entity_type)\
-                            .eq("entity_id", entity_id)\
-                            .eq("month", month_val)\
-                            .eq("year", year_val)\
-                            .execute()
-                        if entity_bills.data and len(entity_bills.data) == 1:
-                            existing = entity_bills
-                            print(f"   ↳ Fallback: single entity bill found ID={existing.data[0]['id']}")
-
-                    record = {
-                        "utility_type": "electricity",
-                        "entity_type": entity_type,
-                        "entity_id": entity_id,
-                        "entity_name": entity_name,
-                        "account_number": account_number,
-                        "meter_number": meter_number if meter_number else None,
-                        "current_charges": float(bill_data.get('current_charges', 0)),
-                        "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
-                        "amount_paid": float(bill_data.get('amount_paid', 0)),
-                        "consumption_kwh": float(bill_data.get('consumption_kwh', 0)),
-                        "month": month_val,
-                        "year": year_val,
-                        "bill_month": month_val,
-                        "bill_year": year_val,
-                        "notes": bill_data.get('notes', ''),
-                        "updated_at": datetime.now().isoformat()
-                    }
-
-                    if existing and existing.data and len(existing.data) > 0:
-                        bill_id = existing.data[0]['id']
-                        print(f"   ✅ UPDATING electricity bill ID {bill_id}")
-                        supabase.table("utility_bills").update(record).eq("id", bill_id).execute()
-                    else:
-                        print(f"   📝 INSERTING new electricity bill")
-                        record["created_at"] = datetime.now().isoformat()
-                        supabase.table("utility_bills").insert(record).execute()
-                    success_count += 1
-
+                # Helper to strip non-digit characters for matching (except for full account?)
+                # We'll use a more lenient normalisation: remove spaces, dashes, parentheses
+                def normalize_account(acc):
+                    if not acc:
+                        return ''
+                    return re.sub(r'[()\s\-]', '', acc).strip()
+                
+                def normalize_meter(mtr):
+                    if not mtr:
+                        return ''
+                    return re.sub(r'[()\s\-]', '', mtr).strip()
+                
+                acc_norm = normalize_account(account_number)
+                meter_norm = normalize_meter(meter_number)
+                
+                # Build query to find existing bill
+                # Priority: exact account + meter (if meter provided) + month+year
+                # Fetch all bills for this entity/month/year to filter in Python
+                all_bills_resp = supabase.table("utility_bills") \
+                    .select("*") \
+                    .eq("utility_type", utility_type) \
+                    .eq("entity_type", entity_type) \
+                    .eq("entity_id", entity_id) \
+                    .eq("month", month_val) \
+                    .eq("year", year_val) \
+                    .execute()
+                
+                existing_bill = None
+                if all_bills_resp.data:
+                    # Try to find exact match (account and meter)
+                    for b in all_bills_resp.data:
+                        b_acc = normalize_account(b.get('account_number', ''))
+                        b_meter = normalize_meter(b.get('meter_number', ''))
+                        # If meter number provided, require exact meter match
+                        if meter_norm and b_meter == meter_norm and b_acc == acc_norm:
+                            existing_bill = b
+                            break
+                    # If meter is empty or not provided, match only account
+                    if not existing_bill and (not meter_norm):
+                        for b in all_bills_resp.data:
+                            b_acc = normalize_account(b.get('account_number', ''))
+                            if b_acc == acc_norm:
+                                existing_bill = b
+                                break
+                    # If still not found, try matching by account only (if account provided)
+                    if not existing_bill and acc_norm:
+                        for b in all_bills_resp.data:
+                            b_acc = normalize_account(b.get('account_number', ''))
+                            if b_acc == acc_norm:
+                                existing_bill = b
+                                break
+                    # If still not found, and there is exactly one bill, use that (safe fallback)
+                    if not existing_bill and len(all_bills_resp.data) == 1:
+                        existing_bill = all_bills_resp.data[0]
+                
+                if existing_bill:
+                    bill_id = existing_bill['id']
                 else:
-                    error_count += 1
+                    bill_id = None
+                
+                # Prepare record
+                record = {
+                    "utility_type": utility_type,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "entity_name": entity_name,
+                    "account_number": account_number,
+                    "meter_number": meter_number if meter_number else None,
+                    "current_charges": float(bill_data.get('current_charges', 0)),
+                    "unsettled_charges": float(bill_data.get('unsettled_charges', 0)),
+                    "amount_paid": float(bill_data.get('amount_paid', 0)),
+                    "month": month_val,
+                    "year": year_val,
+                    "bill_month": month_val,
+                    "bill_year": year_val,
+                    "notes": bill_data.get('notes', ''),
+                    "updated_at": datetime.now().isoformat()
+                }
+                
+                if utility_type == 'water':
+                    record["consumption_m3"] = float(bill_data.get('consumption_m3', 0))
+                elif utility_type == 'electricity':
+                    record["consumption_kwh"] = float(bill_data.get('consumption_kwh', 0))
+                # telephone is handled elsewhere
+                
+                if bill_id:
+                    print(f"   ✅ UPDATING bill ID {bill_id} for entity {entity_name} (month={month_val}, year={year_val})")
+                    supabase.table("utility_bills").update(record).eq("id", bill_id).execute()
+                else:
+                    print(f"   📝 INSERTING new bill for entity {entity_name} (month={month_val}, year={year_val})")
+                    record["created_at"] = datetime.now().isoformat()
+                    supabase.table("utility_bills").insert(record).execute()
+                
+                success_count += 1
+                
             except Exception as e:
                 error_count += 1
                 print(f"❌ Error processing bill: {e}")
