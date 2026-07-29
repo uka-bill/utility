@@ -373,15 +373,27 @@
         }
     }
 
+    // ===== ROBUST PARSING OF ELECTRICITY ACCOUNTS =====
     function extractElectricityAccounts(entity) {
         let accounts = [];
         try {
-            if (entity.electricity_accounts && typeof entity.electricity_accounts === 'string') {
-                const parsed = JSON.parse(entity.electricity_accounts);
-                if (Array.isArray(parsed) && parsed.length > 0) accounts = parsed;
-            } else if (entity.electricity_accounts && Array.isArray(entity.electricity_accounts)) {
-                accounts = entity.electricity_accounts;
-            } else if (entity.electricity_account && entity.electricity_account !== '—') {
+            let raw = entity.electricity_accounts;
+            // If it's a string, try to parse JSON
+            if (typeof raw === 'string') {
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        accounts = parsed;
+                    }
+                } catch (e) {
+                    // Not JSON – ignore
+                }
+            } else if (Array.isArray(raw)) {
+                accounts = raw;
+            }
+
+            // If no accounts found, try to build from top-level fields
+            if (accounts.length === 0 && entity.electricity_account && entity.electricity_account !== '—') {
                 const meters = [];
                 if (entity.electricity_meter && entity.electricity_meter !== '—') {
                     meters.push({ meterNumber: entity.electricity_meter, location: '', notes: '' });
@@ -390,10 +402,39 @@
                 }
                 accounts = [{ accountNumber: entity.electricity_account, meters: meters }];
             }
+
+            // Ensure each account has a meters array
+            accounts.forEach(acc => {
+                if (!acc.meters || !Array.isArray(acc.meters)) {
+                    acc.meters = [];
+                }
+                // If meters is empty, add a placeholder
+                if (acc.meters.length === 0) {
+                    acc.meters.push({ meterNumber: '', location: '', notes: '' });
+                }
+                // Ensure each meter has a meterNumber
+                acc.meters.forEach(m => {
+                    if (!m.meterNumber) m.meterNumber = '';
+                    if (!m.location) m.location = '';
+                    if (!m.notes) m.notes = '';
+                });
+            });
+
+            // If still no accounts, add a placeholder
+            if (accounts.length === 0) {
+                accounts = [{
+                    accountNumber: '—',
+                    meters: [{ meterNumber: '', location: '', notes: '' }],
+                    isPlaceholder: true
+                }];
+            }
+
+            console.log('📦 Parsed electricity accounts for', entity.name, ':', accounts.map(a => a.accountNumber));
+            return accounts;
         } catch(e) {
-            console.error('Error parsing electricity accounts:', e);
+            console.error('Error parsing electricity accounts for', entity.name, ':', e);
+            return [{ accountNumber: '—', meters: [{ meterNumber: '', location: '', notes: '' }], isPlaceholder: true }];
         }
-        return accounts;
     }
 
     function buildEntityList() {
@@ -401,15 +442,6 @@
         for (let idx = 0; idx < allSchools.length; idx++) {
             const school = allSchools[idx];
             const accounts = extractElectricityAccounts(school);
-            let accountGroups = accounts;
-            let hasAccounts = accounts.length > 0;
-            if (!hasAccounts) {
-                accountGroups = [{
-                    accountNumber: '—',
-                    meters: [{ meterNumber: '', location: '', notes: '' }],
-                    isPlaceholder: true
-                }];
-            }
             let cluster = school.cluster_number ? 'CLUSTER ' + school.cluster_number : 'Unassigned';
             entities.push({
                 id: school.id,
@@ -421,22 +453,13 @@
                 divisionName: null,
                 displayOrder: school.display_order || 999,
                 originalId: school.id,
-                accountGroups: accountGroups,
-                hasAccounts: hasAccounts
+                accountGroups: accounts,
+                hasAccounts: accounts.length > 0 && !accounts[0].isPlaceholder
             });
         }
         for (let idx = 0; idx < allDepartments.length; idx++) {
             const dept = allDepartments[idx];
             const accounts = extractElectricityAccounts(dept);
-            let accountGroups = accounts;
-            let hasAccounts = accounts.length > 0;
-            if (!hasAccounts) {
-                accountGroups = [{
-                    accountNumber: '—',
-                    meters: [{ meterNumber: '', location: '', notes: '' }],
-                    isPlaceholder: true
-                }];
-            }
             const displayName = dept.unit_name || dept.department_name || dept.name || 'Dept #' + dept.id;
             entities.push({
                 id: dept.id,
@@ -448,8 +471,8 @@
                 divisionName: dept.division_name || 'Other',
                 displayOrder: dept.display_order || 999,
                 originalId: dept.id,
-                accountGroups: accountGroups,
-                hasAccounts: hasAccounts
+                accountGroups: accounts,
+                hasAccounts: accounts.length > 0 && !accounts[0].isPlaceholder
             });
         }
         return entities;
@@ -483,7 +506,6 @@
         for (let bill of existingBills) {
             const key = bill.entity_type + '|' + bill.entity_id + '|' + normalizeAccount(bill.account_number);
             map[key] = bill;
-            // Log the mapping for debugging
             console.log('🔑 Bill map entry:', key, '→', bill.id);
         }
         console.log('📊 Bill lookup map built with', Object.keys(map).length, 'entries for electricity');
@@ -493,7 +515,7 @@
     function findMatchingBill(entityType, entityId, accountNumber, month, year, billMap) {
         const normAcc = normalizeAccount(accountNumber);
         const key = entityType + '|' + entityId + '|' + normAcc;
-        console.log('🔍 Looking for bill with key:', key);
+        console.log('🔍 Looking for electricity bill with key:', key);
         if (billMap && billMap[key]) {
             console.log('✅ Found electricity bill by account:', billMap[key].id, 'for account', accountNumber, '(normalised:', normAcc, ')');
             return billMap[key];
@@ -766,9 +788,7 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            // ---- USE MAP-BASED MATCHING ----
                             const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, month, year, billMap);
-                            // --------------------------------
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
@@ -845,6 +865,7 @@
     }
 
     async function renderEntity(tbody, entity, month, year, startSerial, entityNumber, billMap) {
+        console.log('🔍 renderEntity for entity:', entity.id, entity.name, 'accounts:', entity.accountGroups.map(a => a.accountNumber));
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
