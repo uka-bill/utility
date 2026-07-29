@@ -6,7 +6,7 @@
     <title>Water Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== Same CSS as electricity.html – but I'll include a compact version ===== */
+        /* ===== CSS unchanged – same as before ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -265,6 +265,7 @@
         return parseFloat(cleaned) || 0;
     }
 
+    // ========== MAIN SCRIPT ==========
     let allSchools = [];
     let allDepartments = [];
     let existingBills = [];
@@ -451,91 +452,38 @@
         return false;
     }
 
-    // ========== IMPROVED MATCHING FUNCTION (same as electricity) ==========
-    function findMatchingBill(entityType, entityId, accountNumber, meterNumber, month, year) {
+    // ========== SIMPLIFIED MATCHING ==========
+    function findMatchingBill(entityType, entityId, accountNumber, month, year) {
         function norm(str) {
             if (!str) return '';
             return String(str).replace(/[()\s\-]/g, '').trim();
         }
-        function contains(needle, haystack) {
-            if (!needle || !haystack) return false;
-            const n = norm(needle).toLowerCase();
-            const h = norm(haystack).toLowerCase();
-            return h.includes(n) || n.includes(h);
+        const normAcc = norm(accountNumber);
+        const candidates = existingBills.filter(bill =>
+            bill.entity_type === entityType &&
+            bill.entity_id === entityId &&
+            bill.month === month &&
+            bill.year === year
+        );
+        if (candidates.length === 0) {
+            console.log('⚠️ No bills found for entity', entityId, month, year);
+            return null;
         }
-
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType &&
-                bill.entity_id === entityId &&
-                bill.month === month && bill.year === year &&
-                norm(bill.account_number) === norm(accountNumber) &&
-                norm(bill.meter_number) === norm(meterNumber)) {
+        for (let bill of candidates) {
+            if (norm(bill.account_number) === normAcc) {
+                console.log('✅ Found bill by account:', bill.id, bill.account_number);
                 return bill;
             }
         }
-
-        let accountMatches = [];
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType &&
-                bill.entity_id === entityId &&
-                bill.month === month && bill.year === year &&
-                norm(bill.account_number) === norm(accountNumber)) {
-                accountMatches.push(bill);
-            }
+        if (candidates.length === 1) {
+            console.log('✅ Only one bill for entity, using it:', candidates[0].id);
+            return candidates[0];
         }
-        if (accountMatches.length === 1) {
-            return accountMatches[0];
-        } else if (accountMatches.length > 1) {
-            for (let bill of accountMatches) {
-                if (contains(meterNumber, bill.meter_number)) {
-                    return bill;
-                }
-            }
-            return accountMatches[0];
+        if (!accountNumber || accountNumber === '—') {
+            console.log('⚠️ No account, using first candidate:', candidates[0].id);
+            return candidates[0];
         }
-
-        let meterMatches = [];
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType &&
-                bill.entity_id === entityId &&
-                bill.month === month && bill.year === year &&
-                norm(bill.meter_number) === norm(meterNumber)) {
-                meterMatches.push(bill);
-            }
-        }
-        if (meterMatches.length === 1) {
-            return meterMatches[0];
-        } else if (meterMatches.length > 1) {
-            for (let bill of meterMatches) {
-                if (contains(accountNumber, bill.account_number)) {
-                    return bill;
-                }
-            }
-            return meterMatches[0];
-        }
-
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType &&
-                bill.entity_id === entityId &&
-                bill.month === month && bill.year === year &&
-                contains(accountNumber, bill.account_number) &&
-                contains(meterNumber, bill.meter_number)) {
-                return bill;
-            }
-        }
-
-        let entityBills = [];
-        for (let bill of existingBills) {
-            if (bill.entity_type === entityType &&
-                bill.entity_id === entityId &&
-                bill.month === month && bill.year === year) {
-                entityBills.push(bill);
-            }
-        }
-        if (entityBills.length === 1) {
-            return entityBills[0];
-        }
-
+        console.log('❌ No matching bill found for account', accountNumber, 'among', candidates.length, 'bills');
         return null;
     }
 
@@ -785,7 +733,7 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year);
+                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, month, year);
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
