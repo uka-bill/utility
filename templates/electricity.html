@@ -472,43 +472,47 @@
         return false;
     }
 
-    // ========== SIMPLIFIED MATCHING: find bill by entity + month + year + account (normalised) ==========
-    function findMatchingBill(entityType, entityId, accountNumber, month, year) {
-        // Normalise account: remove spaces, dashes, parentheses
-        function norm(str) {
-            if (!str) return '';
-            return String(str).replace(/[()\s\-]/g, '').trim();
+    // ========== IMPROVED MATCHING: remove all non-alphanumeric characters ==========
+    function normalizeAccount(acc) {
+        if (!acc) return '';
+        return String(acc).replace(/[^a-zA-Z0-9]/g, '').trim();
+    }
+
+    function buildBillLookup(month, year) {
+        const map = {};
+        for (let bill of existingBills) {
+            const key = bill.entity_type + '|' + bill.entity_id + '|' + normalizeAccount(bill.account_number);
+            map[key] = bill;
+            // Log the mapping for debugging
+            console.log('🔑 Bill map entry:', key, '→', bill.id);
         }
-        const normAcc = norm(accountNumber);
-        // Filter bills for this entity, month, year
+        console.log('📊 Bill lookup map built with', Object.keys(map).length, 'entries for electricity');
+        return map;
+    }
+
+    function findMatchingBill(entityType, entityId, accountNumber, month, year, billMap) {
+        const normAcc = normalizeAccount(accountNumber);
+        const key = entityType + '|' + entityId + '|' + normAcc;
+        console.log('🔍 Looking for bill with key:', key);
+        if (billMap && billMap[key]) {
+            console.log('✅ Found electricity bill by account:', billMap[key].id, 'for account', accountNumber, '(normalised:', normAcc, ')');
+            return billMap[key];
+        }
+        // Fallback: if not found in map, try entity_id + month/year (only if exactly one)
         const candidates = existingBills.filter(bill =>
             bill.entity_type === entityType &&
             bill.entity_id === entityId &&
             bill.month === month &&
             bill.year === year
         );
-        if (candidates.length === 0) {
-            console.log('⚠️ No bills found for entity', entityId, month, year);
-            return null;
-        }
-        // Try to find by normalised account
-        for (let bill of candidates) {
-            if (norm(bill.account_number) === normAcc) {
-                console.log('✅ Found bill by account:', bill.id, bill.account_number);
-                return bill;
-            }
-        }
-        // If multiple candidates and account is empty, just return the first one
         if (candidates.length === 1) {
-            console.log('✅ Only one bill for entity, using it:', candidates[0].id);
+            console.log('⚠️ Using fallback: single electricity bill for entity:', candidates[0].id, 'account:', candidates[0].account_number);
             return candidates[0];
+        } else if (candidates.length > 1) {
+            console.log('❌ Multiple bills found for entity', entityId, 'in month', month, year, '– cannot fallback');
+        } else {
+            console.log('❌ No bills found for entity', entityId, 'in month', month, year);
         }
-        // Fallback: if account is empty, return first candidate
-        if (!accountNumber || accountNumber === '—') {
-            console.log('⚠️ No account, using first candidate:', candidates[0].id);
-            return candidates[0];
-        }
-        console.log('❌ No matching bill found for account', accountNumber, 'among', candidates.length, 'bills');
         return null;
     }
 
@@ -541,9 +545,7 @@
         const batchBills = [];
         for (let i = 0; i < meterRows.length; i++) {
             const row = meterRows[i];
-            // ---- read bill ID from data attribute ----
             const billId = row.getAttribute('data-bill-id') ? parseInt(row.getAttribute('data-bill-id')) : null;
-            // --------------------------------------------
             const accountNumber = row.getAttribute('data-account') || '';
             const meterNumber = row.getAttribute('data-meter') || '';
             const consumptionInput = row.querySelector('.consumption-input');
@@ -641,6 +643,9 @@
 
         await loadAllEntities();
         await loadExistingBills(month, year);
+
+        // Build lookup map
+        const billMap = buildBillLookup(month, year);
 
         let allEntities = buildEntityList();
         const entityFilter = document.getElementById('entityTypeFilter').value;
@@ -761,8 +766,8 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            // ---- USE SIMPLIFIED MATCHING ----
-                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, month, year);
+                            // ---- USE MAP-BASED MATCHING ----
+                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, month, year, billMap);
                             // --------------------------------
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
@@ -806,7 +811,7 @@
                 separatorRow.innerHTML = '<td colspan="12"><div class="cluster-info"><span>🏫 ' + cluster + '</span><span class="cluster-count">' + visibleClusterEntities.length + ' entit' + (visibleClusterEntities.length > 1 ? 'ies' : 'y') + ', ' + totalMeters + ' meter' + (totalMeters > 1 ? 's' : '') + '</span></div></td>';
                 tbody.appendChild(separatorRow);
                 for (let i = 0; i < visibleClusterEntities.length; i++) {
-                    globalSerial = await renderEntity(tbody, visibleClusterEntities[i], month, year, globalSerial, entityNumber);
+                    globalSerial = await renderEntity(tbody, visibleClusterEntities[i], month, year, globalSerial, entityNumber, billMap);
                     entityNumber++;
                 }
             }
@@ -828,7 +833,7 @@
             for (const divData of divisions) {
                 const units = divData.units;
                 for (const entity of units) {
-                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, entityNumber);
+                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, entityNumber, billMap);
                     entityNumber++;
                 }
             }
@@ -839,7 +844,7 @@
         showLoading(false);
     }
 
-    async function renderEntity(tbody, entity, month, year, startSerial, entityNumber) {
+    async function renderEntity(tbody, entity, month, year, startSerial, entityNumber, billMap) {
         let serial = startSerial;
         let entityTotalPaid = 0;
         let entityHasBills = false;
