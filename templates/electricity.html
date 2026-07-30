@@ -6,7 +6,7 @@
     <title>Electricity Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== CSS UNCHANGED – Same as before ===== */
+        /* ===== CSS unchanged ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -363,6 +363,9 @@
             if (resp.ok) {
                 existingBills = await resp.json();
                 console.log('📊 Loaded ' + existingBills.length + ' electricity bills for ' + month + '/' + year);
+                console.log('📋 All entity IDs in loaded bills:', existingBills.map(b => b.entity_id));
+                // Also log account numbers for debugging
+                console.log('📋 Sample account numbers:', existingBills.slice(0, 3).map(b => b.account_number));
             } else {
                 existingBills = [];
                 console.warn('⚠️ Failed to load bills, status:', resp.status);
@@ -493,7 +496,7 @@
         return false;
     }
 
-    // ========== MATCHING: METER-FIRST ==========
+    // ========== MATCHING: EXTENSIVE FALLBACKS ==========
     function normalizeAccount(acc) {
         if (!acc) return '';
         return String(acc).replace(/[^a-zA-Z0-9]/g, '').trim();
@@ -526,25 +529,73 @@
         const normMeter = normalizeMeter(meterNumber);
         const normAcc = normalizeAccount(accountNumber);
 
-        // 1. Try meter match (most reliable for departments)
+        // 1. Try meter match within entity
         if (normMeter) {
             const meterKey = entityType + '|' + entityId + '|' + normMeter;
-            console.log('🔍 Looking by meter:', meterKey);
+            console.log('🔍 Looking by meter (entity):', meterKey);
             if (lookup.byMeter && lookup.byMeter[meterKey]) {
-                console.log('✅ Found by meter:', lookup.byMeter[meterKey].id);
+                console.log('✅ Found by meter (entity):', lookup.byMeter[meterKey].id);
                 return lookup.byMeter[meterKey];
             }
         }
 
-        // 2. Try account match
+        // 2. Try account match within entity
         const accKey = entityType + '|' + entityId + '|' + normAcc;
-        console.log('🔍 Looking by account:', accKey);
+        console.log('🔍 Looking by account (entity):', accKey);
         if (lookup.byAccount && lookup.byAccount[accKey]) {
-            console.log('✅ Found by account:', lookup.byAccount[accKey].id);
+            console.log('✅ Found by account (entity):', lookup.byAccount[accKey].id);
             return lookup.byAccount[accKey];
         }
 
-        // 3. Fallback: single bill for entity/month/year
+        // 3. If no match within entity, try global search by account (ignoring entity_id)
+        if (normAcc) {
+            console.log('🔍 Global search by account (ignoring entity):', normAcc);
+            for (let bill of existingBills) {
+                if (bill.month === month && bill.year === year &&
+                    normalizeAccount(bill.account_number) === normAcc) {
+                    console.log('✅ Found globally by account:', bill.id, '(entity_id:', bill.entity_id, ')');
+                    return bill;
+                }
+            }
+        }
+
+        // 4. Global search by meter
+        if (normMeter) {
+            console.log('🔍 Global search by meter (ignoring entity):', normMeter);
+            for (let bill of existingBills) {
+                if (bill.month === month && bill.year === year &&
+                    normalizeMeter(bill.meter_number) === normMeter) {
+                    console.log('✅ Found globally by meter:', bill.id, '(entity_id:', bill.entity_id, ')');
+                    return bill;
+                }
+            }
+        }
+
+        // 5. Try exact string match (without normalisation) on account
+        if (accountNumber) {
+            console.log('🔍 Trying exact account string:', accountNumber);
+            for (let bill of existingBills) {
+                if (bill.month === month && bill.year === year &&
+                    bill.account_number === accountNumber) {
+                    console.log('✅ Found by exact account:', bill.id);
+                    return bill;
+                }
+            }
+        }
+
+        // 6. Try exact string match on meter
+        if (meterNumber) {
+            console.log('🔍 Trying exact meter string:', meterNumber);
+            for (let bill of existingBills) {
+                if (bill.month === month && bill.year === year &&
+                    bill.meter_number === meterNumber) {
+                    console.log('✅ Found by exact meter:', bill.id);
+                    return bill;
+                }
+            }
+        }
+
+        // 7. Fallback: if there are any bills for this entity in this month, use the first one
         const candidates = existingBills.filter(bill =>
             bill.entity_type === entityType &&
             bill.entity_id === entityId &&
@@ -552,13 +603,23 @@
             bill.year === year
         );
         if (candidates.length === 1) {
-            console.log('⚠️ Using fallback (single bill):', candidates[0].id);
+            console.log('⚠️ Using fallback (single bill for entity):', candidates[0].id);
             return candidates[0];
         } else if (candidates.length > 1) {
-            console.log('❌ Multiple bills for entity – cannot fallback');
-        } else {
-            console.log('❌ No bills for entity in this month');
+            console.log('⚠️ Multiple bills for entity – using first:', candidates[0].id);
+            return candidates[0];
         }
+
+        // 8. Last resort: if there are any bills for this month/year, use the first one
+        if (existingBills.length > 0) {
+            const anyBill = existingBills.find(b => b.month === month && b.year === year);
+            if (anyBill) {
+                console.log('⚠️ Last resort: using any bill from this month:', anyBill.id);
+                return anyBill;
+            }
+        }
+
+        console.log('❌ No bill found at all for month', month, year);
         return null;
     }
 
