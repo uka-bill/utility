@@ -495,7 +495,7 @@
         return false;
     }
 
-    // ========== MATCHING: RESTRICTED TO THE SAME ENTITY ==========
+    // ========== MATCHING: NO RANDOM FALLBACK ==========
     function normalizeAccount(acc) {
         if (!acc) return '';
         return String(acc).replace(/[^a-zA-Z0-9]/g, '').trim();
@@ -515,7 +515,10 @@
             if (bill.meter_number) {
                 byMeter[meterKey] = bill;
             }
-            // We also keep a list of bills per entity for fallback
+            console.log('🔑 Account map:', accKey, '→', bill.id);
+            if (bill.meter_number) {
+                console.log('🔑 Meter map:', meterKey, '→', bill.id);
+            }
         }
         console.log('📊 Built', Object.keys(byAccount).length, 'account entries and', Object.keys(byMeter).length, 'meter entries');
         return { byAccount, byMeter };
@@ -536,42 +539,62 @@
         }
 
         // 2. Try account match within the same entity
+        const accKey = entityType + '|' + entityId + '|' + normAcc;
+        console.log('🔍 Looking by account (entity):', accKey);
+        if (lookup.byAccount && lookup.byAccount[accKey]) {
+            console.log('✅ Found by account (entity):', lookup.byAccount[accKey].id);
+            return lookup.byAccount[accKey];
+        }
+
+        // 3. Global search by account (across entities) – if the account number matches any bill in this month/year
         if (normAcc) {
-            const accKey = entityType + '|' + entityId + '|' + normAcc;
-            console.log('🔍 Looking by account (entity):', accKey);
-            if (lookup.byAccount && lookup.byAccount[accKey]) {
-                console.log('✅ Found by account (entity):', lookup.byAccount[accKey].id);
-                return lookup.byAccount[accKey];
+            console.log('🔍 Global search by account:', normAcc);
+            for (let bill of existingBills) {
+                if (bill.month === month && bill.year === year &&
+                    normalizeAccount(bill.account_number) === normAcc) {
+                    console.log('✅ Found globally by account:', bill.id, '(entity_id:', bill.entity_id, ')');
+                    return bill;
+                }
             }
         }
 
-        // 3. Try exact string match on account within the same entity
+        // 4. Global search by meter (across entities)
+        if (normMeter) {
+            console.log('🔍 Global search by meter:', normMeter);
+            for (let bill of existingBills) {
+                if (bill.month === month && bill.year === year &&
+                    normalizeMeter(bill.meter_number) === normMeter) {
+                    console.log('✅ Found globally by meter:', bill.id, '(entity_id:', bill.entity_id, ')');
+                    return bill;
+                }
+            }
+        }
+
+        // 5. Exact string match on account (across entities)
         if (accountNumber) {
-            console.log('🔍 Trying exact account string on entity:', accountNumber);
+            console.log('🔍 Exact account string:', accountNumber);
             for (let bill of existingBills) {
-                if (bill.entity_type === entityType && bill.entity_id === entityId &&
-                    bill.month === month && bill.year === year &&
+                if (bill.month === month && bill.year === year &&
                     bill.account_number === accountNumber) {
-                    console.log('✅ Found by exact account (entity):', bill.id);
+                    console.log('✅ Found by exact account:', bill.id);
                     return bill;
                 }
             }
         }
 
-        // 4. Try exact string match on meter within the same entity
+        // 6. Exact string match on meter (across entities)
         if (meterNumber) {
-            console.log('🔍 Trying exact meter string on entity:', meterNumber);
+            console.log('🔍 Exact meter string:', meterNumber);
             for (let bill of existingBills) {
-                if (bill.entity_type === entityType && bill.entity_id === entityId &&
-                    bill.month === month && bill.year === year &&
+                if (bill.month === month && bill.year === year &&
                     bill.meter_number === meterNumber) {
-                    console.log('✅ Found by exact meter (entity):', bill.id);
+                    console.log('✅ Found by exact meter:', bill.id);
                     return bill;
                 }
             }
         }
 
-        // 5. If exactly one bill for this entity in this month, use it (fallback)
+        // 7. Fallback: if there is exactly one bill for this entity in this month/year, use it
         const candidates = existingBills.filter(bill =>
             bill.entity_type === entityType &&
             bill.entity_id === entityId &&
@@ -582,13 +605,13 @@
             console.log('⚠️ Using fallback (single bill for entity):', candidates[0].id);
             return candidates[0];
         } else if (candidates.length > 1) {
-            // We have multiple bills for this entity – we cannot safely pick one.
-            console.log('❌ Multiple bills found for entity', entityId, 'in month', month, year, '– cannot fallback');
-        } else {
-            console.log('❌ No bills found for entity', entityId, 'in month', month, year);
+            console.log('⚠️ Multiple bills for entity – cannot pick one, will not use any');
+            // Do NOT pick a random one; return null to keep fields blank.
+            return null;
         }
 
-        return null; // No match found – show zeros
+        console.log('❌ No matching bill found for account', accountNumber, 'meter', meterNumber, 'entity', entityId);
+        return null;
     }
 
     // ========== Save functions ==========
@@ -766,8 +789,8 @@
         // Department grouping
         const deptMap = new Map();
         departmentsList.forEach(dept => {
-            const deptName = dept.departmentName || 'Other';
-            const divName = dept.divisionName || 'Other';
+            const deptName = dept.department_name || 'Other';
+            const divName = dept.division_name || 'Other';
             if (!deptMap.has(deptName)) deptMap.set(deptName, new Map());
             const divMap = deptMap.get(deptName);
             if (!divMap.has(divName)) divMap.set(divName, []);
