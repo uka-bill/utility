@@ -6,7 +6,7 @@
     <title>Electricity Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== CSS unchanged – same as before ===== */
+        /* ===== CSS unchanged – exactly the same as before ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -493,7 +493,7 @@
         return false;
     }
 
-    // ========== MATCHING with meter fallback ==========
+    // ========== MATCHING: METER-FIRST ==========
     function normalizeAccount(acc) {
         if (!acc) return '';
         return String(acc).replace(/[^a-zA-Z0-9]/g, '').trim();
@@ -523,18 +523,10 @@
     }
 
     function findMatchingBill(entityType, entityId, accountNumber, meterNumber, month, year, lookup) {
-        const normAcc = normalizeAccount(accountNumber);
         const normMeter = normalizeMeter(meterNumber);
+        const normAcc = normalizeAccount(accountNumber);
 
-        // 1. Try account match
-        const accKey = entityType + '|' + entityId + '|' + normAcc;
-        console.log('🔍 Looking by account:', accKey);
-        if (lookup.byAccount && lookup.byAccount[accKey]) {
-            console.log('✅ Found by account:', lookup.byAccount[accKey].id);
-            return lookup.byAccount[accKey];
-        }
-
-        // 2. Try meter match
+        // 1. Try meter match (most reliable for departments)
         if (normMeter) {
             const meterKey = entityType + '|' + entityId + '|' + normMeter;
             console.log('🔍 Looking by meter:', meterKey);
@@ -542,6 +534,14 @@
                 console.log('✅ Found by meter:', lookup.byMeter[meterKey].id);
                 return lookup.byMeter[meterKey];
             }
+        }
+
+        // 2. Try account match
+        const accKey = entityType + '|' + entityId + '|' + normAcc;
+        console.log('🔍 Looking by account:', accKey);
+        if (lookup.byAccount && lookup.byAccount[accKey]) {
+            console.log('✅ Found by account:', lookup.byAccount[accKey].id);
+            return lookup.byAccount[accKey];
         }
 
         // 3. Fallback: single bill for entity/month/year
@@ -715,6 +715,7 @@
         let globalSerial = 1;
         let entityNumber = 1;
 
+        // Group and sort logic (unchanged)
         let schoolsList = filteredEntities.filter(e => e.type === 'school');
         let departmentsList = filteredEntities.filter(e => e.type === 'department');
 
@@ -784,6 +785,7 @@
         }
         const clusterOrder = ['CLUSTER 1', 'CLUSTER 2', 'CLUSTER 3', 'CLUSTER 4', 'CLUSTER 5', 'CLUSTER 6', 'Unassigned'];
 
+        // Rendering loop (unchanged structure, only the matching call uses meter-first)
         for (let c = 0; c < clusterOrder.length; c++) {
             const cluster = clusterOrder[c];
             const clusterSchools = schoolsByCluster.get(cluster);
@@ -941,7 +943,7 @@
                     previousPayment: previousPayment,
                     amountPaid: amountPaid,
                     notes: notes,
-                    billId: meter.billId,
+                    billId: existing ? existing.id : null,
                     isFirstMeterForAccount: isFirstMeterForAccount,
                     existingBill: existing
                 });
