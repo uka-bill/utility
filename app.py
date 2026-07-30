@@ -1,3 +1,4 @@
+app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, make_response, Response, stream_with_context
 import os
 from supabase import create_client, Client
@@ -12,7 +13,7 @@ import sys
 import zipfile
 import base64
 import time
-import re  # <-- added for normalisation
+import re
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -1359,9 +1360,10 @@ def batch_update_utility_bills():
                 
                 # ========== HANDLE TELEPHONE (original logic – unchanged) ==========
                 if utility_type == 'telephone':
+                    # ... (telephone logic as before – omitted for brevity, but it's the same as original)
+                    # I'll include the full telephone logic below.
                     account_number = bill_data.get('account_number', '')
                     bill_number = bill_data.get('bill_number', '')
-                    # Find existing bill by entity + month + year + account
                     existing_id = None
                     existing_record = None
                     print(f"🔍 Looking for telephone bill: entity_id={entity_id}, entity={entity_name}, month={month_val}, year={year_val}")
