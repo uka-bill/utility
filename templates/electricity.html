@@ -6,7 +6,7 @@
     <title>Electricity Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== CSS unchanged ===== */
+        /* ===== CSS unchanged – same as before ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -364,7 +364,6 @@
                 existingBills = await resp.json();
                 console.log('📊 Loaded ' + existingBills.length + ' electricity bills for ' + month + '/' + year);
                 console.log('📋 All entity IDs in loaded bills:', existingBills.map(b => b.entity_id));
-                // Also log account numbers for debugging
                 console.log('📋 Sample account numbers:', existingBills.slice(0, 3).map(b => b.account_number));
             } else {
                 existingBills = [];
@@ -496,7 +495,7 @@
         return false;
     }
 
-    // ========== MATCHING: EXTENSIVE FALLBACKS ==========
+    // ========== MATCHING: RESTRICTED TO THE SAME ENTITY ==========
     function normalizeAccount(acc) {
         if (!acc) return '';
         return String(acc).replace(/[^a-zA-Z0-9]/g, '').trim();
@@ -516,10 +515,7 @@
             if (bill.meter_number) {
                 byMeter[meterKey] = bill;
             }
-            console.log('🔑 Account map:', accKey, '→', bill.id);
-            if (bill.meter_number) {
-                console.log('🔑 Meter map:', meterKey, '→', bill.id);
-            }
+            // We also keep a list of bills per entity for fallback
         }
         console.log('📊 Built', Object.keys(byAccount).length, 'account entries and', Object.keys(byMeter).length, 'meter entries');
         return { byAccount, byMeter };
@@ -529,7 +525,7 @@
         const normMeter = normalizeMeter(meterNumber);
         const normAcc = normalizeAccount(accountNumber);
 
-        // 1. Try meter match within entity
+        // 1. Try meter match within the same entity
         if (normMeter) {
             const meterKey = entityType + '|' + entityId + '|' + normMeter;
             console.log('🔍 Looking by meter (entity):', meterKey);
@@ -539,63 +535,43 @@
             }
         }
 
-        // 2. Try account match within entity
-        const accKey = entityType + '|' + entityId + '|' + normAcc;
-        console.log('🔍 Looking by account (entity):', accKey);
-        if (lookup.byAccount && lookup.byAccount[accKey]) {
-            console.log('✅ Found by account (entity):', lookup.byAccount[accKey].id);
-            return lookup.byAccount[accKey];
-        }
-
-        // 3. If no match within entity, try global search by account (ignoring entity_id)
+        // 2. Try account match within the same entity
         if (normAcc) {
-            console.log('🔍 Global search by account (ignoring entity):', normAcc);
-            for (let bill of existingBills) {
-                if (bill.month === month && bill.year === year &&
-                    normalizeAccount(bill.account_number) === normAcc) {
-                    console.log('✅ Found globally by account:', bill.id, '(entity_id:', bill.entity_id, ')');
-                    return bill;
-                }
+            const accKey = entityType + '|' + entityId + '|' + normAcc;
+            console.log('🔍 Looking by account (entity):', accKey);
+            if (lookup.byAccount && lookup.byAccount[accKey]) {
+                console.log('✅ Found by account (entity):', lookup.byAccount[accKey].id);
+                return lookup.byAccount[accKey];
             }
         }
 
-        // 4. Global search by meter
-        if (normMeter) {
-            console.log('🔍 Global search by meter (ignoring entity):', normMeter);
-            for (let bill of existingBills) {
-                if (bill.month === month && bill.year === year &&
-                    normalizeMeter(bill.meter_number) === normMeter) {
-                    console.log('✅ Found globally by meter:', bill.id, '(entity_id:', bill.entity_id, ')');
-                    return bill;
-                }
-            }
-        }
-
-        // 5. Try exact string match (without normalisation) on account
+        // 3. Try exact string match on account within the same entity
         if (accountNumber) {
-            console.log('🔍 Trying exact account string:', accountNumber);
+            console.log('🔍 Trying exact account string on entity:', accountNumber);
             for (let bill of existingBills) {
-                if (bill.month === month && bill.year === year &&
+                if (bill.entity_type === entityType && bill.entity_id === entityId &&
+                    bill.month === month && bill.year === year &&
                     bill.account_number === accountNumber) {
-                    console.log('✅ Found by exact account:', bill.id);
+                    console.log('✅ Found by exact account (entity):', bill.id);
                     return bill;
                 }
             }
         }
 
-        // 6. Try exact string match on meter
+        // 4. Try exact string match on meter within the same entity
         if (meterNumber) {
-            console.log('🔍 Trying exact meter string:', meterNumber);
+            console.log('🔍 Trying exact meter string on entity:', meterNumber);
             for (let bill of existingBills) {
-                if (bill.month === month && bill.year === year &&
+                if (bill.entity_type === entityType && bill.entity_id === entityId &&
+                    bill.month === month && bill.year === year &&
                     bill.meter_number === meterNumber) {
-                    console.log('✅ Found by exact meter:', bill.id);
+                    console.log('✅ Found by exact meter (entity):', bill.id);
                     return bill;
                 }
             }
         }
 
-        // 7. Fallback: if there are any bills for this entity in this month, use the first one
+        // 5. If exactly one bill for this entity in this month, use it (fallback)
         const candidates = existingBills.filter(bill =>
             bill.entity_type === entityType &&
             bill.entity_id === entityId &&
@@ -606,21 +582,13 @@
             console.log('⚠️ Using fallback (single bill for entity):', candidates[0].id);
             return candidates[0];
         } else if (candidates.length > 1) {
-            console.log('⚠️ Multiple bills for entity – using first:', candidates[0].id);
-            return candidates[0];
+            // We have multiple bills for this entity – we cannot safely pick one.
+            console.log('❌ Multiple bills found for entity', entityId, 'in month', month, year, '– cannot fallback');
+        } else {
+            console.log('❌ No bills found for entity', entityId, 'in month', month, year);
         }
 
-        // 8. Last resort: if there are any bills for this month/year, use the first one
-        if (existingBills.length > 0) {
-            const anyBill = existingBills.find(b => b.month === month && b.year === year);
-            if (anyBill) {
-                console.log('⚠️ Last resort: using any bill from this month:', anyBill.id);
-                return anyBill;
-            }
-        }
-
-        console.log('❌ No bill found at all for month', month, year);
-        return null;
+        return null; // No match found – show zeros
     }
 
     // ========== Save functions ==========
