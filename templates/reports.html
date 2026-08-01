@@ -8,7 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== All styles unchanged ===== */
+        /* ===== All styles unchanged – same as your original ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -1196,10 +1196,12 @@
 
                 let totalPages = pages.length;
                 let cumulativeTotal = 0;
+                let globalRowNumber = 1; // <-- Global row counter
 
-                function renderTelephonePage(groups, pageIndex, totalPages, cumulativeTotal) {
+                function renderTelephonePage(groups, pageIndex, totalPages, cumulativeTotal, startRowNumber) {
                     let pageHtml = '';
                     let pageTotalValue = 0;
+                    let rowNumber = startRowNumber; // start from the passed number
 
                     for (const group of groups) {
                         let groupTotal = group.totalAccountCharges || 0;
@@ -1264,7 +1266,6 @@
                         entityGroups.push({ entityName: currentEntity, rows: rowBuffer });
                     }
 
-                    let rowNumber = 1;
                     for (const eg of entityGroups) {
                         const rows = eg.rows;
                         const rowspan = rows.length;
@@ -1408,7 +1409,7 @@
                     }
 
                     pageHtml += '</div>';
-                    return pageHtml;
+                    return { html: pageHtml, nextRowNumber: rowNumber };
                 }
 
                 // Build the final HTML
@@ -1461,6 +1462,7 @@
                     '</style></head><body>';
 
                 let cumulative = 0;
+                let currentRowNumber = 1;
                 for (let i = 0; i < pages.length; i++) {
                     const groups = pages[i];
                     const pageIndex = i + 1;
@@ -1474,7 +1476,9 @@
                         }
                         pageTotal += gt;
                     }
-                    printHtml += renderTelephonePage(groups, pageIndex, pages.length, cumulative);
+                    const result = renderTelephonePage(groups, pageIndex, pages.length, cumulative, currentRowNumber);
+                    printHtml += result.html;
+                    currentRowNumber = result.nextRowNumber;
                     cumulative += pageTotal;
                 }
 
