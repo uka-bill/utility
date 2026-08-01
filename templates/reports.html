@@ -8,7 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== All styles unchanged – same as your original ===== */
+        /* ===== All styles unchanged ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -602,15 +602,18 @@
                         <thead id="reportTableHead">
                             <tr id="reportTableHeaderRow">
                                 <th>Entity Name</th><th>Type</th><th>Utility</th>
-                                <th>Account No.</th><th>Meter / Phone No.</th>
-                                <th>Consumption</th><th>Bill Amount</th>
-                                <th>Amount Paid</th>
-                                <th>Outstanding</th>
+                                <th>Account No.</th><th>Phone No.</th>
+                                <th>Bill No.</th>
+                                <th>Total Account Charges ($)</th>
+                                <th>Previous Outstanding ($)</th>
+                                <th>Previous Payment ($)</th>
+                                <th>Total Current Charges ($)</th>
+                                <th>Amount Paid ($)</th>
                                 <th class="period-column">Period</th>
                             </tr>
                         </thead>
                         <tbody id="reportData">
-                            <tr><td colspan="10" class="no-results">Click "Generate Report" to view data</td></tr>
+                            <tr><td colspan="12" class="no-results">Click "Generate Report" to view data</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -691,8 +694,6 @@
                 { key: 'accountNumber', label: 'Account No.', show: true },
                 { key: 'phoneNumber', label: 'Phone No.', show: true },
                 { key: 'billNumber', label: 'Bill No.', show: true },
-                { key: 'rentalAmount', label: 'Rental Amount ($)', show: true },
-                { key: 'totalAmount', label: 'Total Amount ($)', show: true },
                 { key: 'totalAccountCharges', label: 'Total Account Charges ($)', show: true },
                 { key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true },
                 { key: 'previousPayment', label: 'Previous Payment ($)', show: true },
@@ -959,7 +960,7 @@
             });
         });
 
-        // ========== GENERATE PRINT PREVIEW (with telephone account‑based pagination) ==========
+        // ========== GENERATE PRINT PREVIEW (telephone: one row per account) ==========
         function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, includeZeroBills, approvalDetails, subtotalOptions) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
@@ -1000,18 +1001,15 @@
 
             if (hasTelephone) {
                 if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
-                if (selectedColumns.phoneNumber !== false) colConfig.push({ key: 'meterTelNo', label: 'Phone No.', show: true });
+                if (selectedColumns.phoneNumber !== false) colConfig.push({ key: 'phoneNumber', label: 'Phone No.', show: true });
                 if (selectedColumns.billNumber !== false) colConfig.push({ key: 'billNumber', label: 'Bill No.', show: true });
-                if (selectedColumns.rentalAmount !== false) colConfig.push({ key: 'rentalAmount', label: 'Rental Amount ($)', show: true });
-                if (selectedColumns.totalAmount !== false) colConfig.push({ key: 'totalAmount', label: 'Total Amount ($)', show: true });
                 if (selectedColumns.totalAccountCharges !== false) colConfig.push({ key: 'totalAccountCharges', label: 'Total Account Charges ($)', show: true });
                 if (selectedColumns.previousOutstanding !== false) colConfig.push({ key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true });
                 if (selectedColumns.previousPayment !== false) colConfig.push({ key: 'previousPayment', label: 'Previous Payment ($)', show: true });
                 if (selectedColumns.totalCurrentCharges !== false) colConfig.push({ key: 'totalCurrentCharges', label: 'Total Current Charges ($)', show: true });
                 if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
+                if (selectedColumns.period !== false) colConfig.push({ key: 'period', label: 'Period', show: true });
             }
-
-            if (selectedColumns.period !== false) colConfig.push({ key: 'period', label: 'Period', show: true });
 
             const visibleCols = colConfig.filter(c => c.show !== false);
 
@@ -1045,18 +1043,16 @@
             }
             if (summaryColIndex < 0) summaryColIndex = 0;
 
-            // For telephone, set balance column index to second-last column
+            // For telephone, set balance column index to the last numeric column
             let balanceColIndex = -1;
             if (hasTelephone) {
-                // Find the last column that is numeric (totalAccountCharges or totalCurrentCharges)
                 const numericCols = visibleCols.filter(c => ['totalAccountCharges', 'totalCurrentCharges', 'billAmount', 'amountPaid', 'outstanding'].includes(c.key));
                 if (numericCols.length > 0) {
                     const lastNumeric = numericCols[numericCols.length - 1];
                     balanceColIndex = visibleCols.indexOf(lastNumeric);
                 } else {
-                    balanceColIndex = visibleCols.length - 2; // fallback
+                    balanceColIndex = visibleCols.length - 2;
                 }
-                // Ensure at least 2 columns before the balance label
                 if (balanceColIndex < 1) balanceColIndex = visibleCols.length - 2;
                 if (balanceColIndex < 0) balanceColIndex = 0;
             } else if (hasWaterElectricity) {
@@ -1087,7 +1083,7 @@
                 }
             }
 
-            // ===== BUILD ACCOUNT GROUPS FOR TELEPHONE =====
+            // ===== BUILD ACCOUNT GROUPS FOR TELEPHONE (one group per account) =====
             function buildTelephoneAccountGroups(entityData) {
                 const groups = [];
                 const groupMap = new Map();
@@ -1099,7 +1095,6 @@
                     const bills = entityGroup.bills || [];
 
                     for (const bill of bills) {
-                        // Expand telephone bills into phone rows
                         const notes = bill.notes;
                         if (notes && typeof notes === 'string') {
                             try {
@@ -1109,7 +1104,6 @@
                                     for (const accKey in accounts) {
                                         const accData = accounts[accKey];
                                         const accountNumber = accData.accountNumber || accKey;
-                                        // Build a key for grouping
                                         const groupKey = entityType + '|' + entity.id + '|' + accountNumber;
                                         if (!groupMap.has(groupKey)) {
                                             groupMap.set(groupKey, {
@@ -1124,26 +1118,16 @@
                                                 previousPayment: accData.previousPayment || 0,
                                                 totalCurrentCharges: accData.totalCurrentCharges || 0,
                                                 amountPaid: accData.amountPaid || 0,
-                                                notes: accData.notes || '',
-                                                phones: []
+                                                phoneNumbers: []
                                             });
                                         }
                                         const group = groupMap.get(groupKey);
                                         const phones = accData.phones || [];
                                         if (phones.length > 0) {
                                             phones.forEach(phone => {
-                                                group.phones.push({
-                                                    phoneNumber: phone.phoneNumber || '',
-                                                    rentalAmount: phone.rentalAmount || 0,
-                                                    totalAmount: phone.totalAmount || 0
-                                                });
-                                            });
-                                        } else {
-                                            // If no phones, add a placeholder
-                                            group.phones.push({
-                                                phoneNumber: '',
-                                                rentalAmount: 0,
-                                                totalAmount: 0
+                                                if (phone.phoneNumber) {
+                                                    group.phoneNumbers.push(phone.phoneNumber);
+                                                }
                                             });
                                         }
                                     }
@@ -1169,22 +1153,18 @@
                                 previousPayment: 0,
                                 totalCurrentCharges: (bill.current_charges || 0) + (bill.unsettled_charges || 0),
                                 amountPaid: bill.amount_paid || 0,
-                                notes: bill.notes || '',
-                                phones: []
+                                phoneNumbers: []
                             });
                         }
                         const group = groupMap.get(groupKey);
-                        group.phones.push({
-                            phoneNumber: bill.phone_number || bill.meter_number || '',
-                            rentalAmount: 0,
-                            totalAmount: 0
-                        });
+                        if (bill.phone_number || bill.meter_number) {
+                            group.phoneNumbers.push(bill.phone_number || bill.meter_number);
+                        }
                     }
                 }
 
                 // Convert map to array and sort
                 const groupsArray = Array.from(groupMap.values());
-                // Sort by entity display order, then account number
                 groupsArray.sort((a, b) => {
                     const orderA = a.entity.display_order !== undefined ? a.entity.display_order : a.entity.id;
                     const orderB = b.entity.display_order !== undefined ? b.entity.display_order : b.entity.id;
@@ -1204,7 +1184,6 @@
                     return;
                 }
 
-                // Force pagination if enabled
                 const groupsPerPage = Math.max(1, itemsPerPage);
                 let pages = [];
                 if (shouldPaginate && accountGroups.length > groupsPerPage) {
@@ -1221,7 +1200,7 @@
                 function renderTelephonePage(groups, pageIndex, totalPages, cumulativeTotal) {
                     let pageHtml = '';
                     let pageTotalValue = 0;
-                    // Calculate page total
+
                     for (const group of groups) {
                         let groupTotal = group.totalAccountCharges || 0;
                         if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
@@ -1241,7 +1220,7 @@
                         (totalPages > 1 ? '<p style="font-size:8pt;">Page ' + pageIndex + ' of ' + totalPages + '</p>' : '') +
                         '</div>';
 
-                    // Balance b/f (on pages after the first) – placed above the table
+                    // Balance b/f (on pages after the first)
                     if (pageIndex > 1) {
                         const bfAmount = cumulativeTotal;
                         pageHtml += '<div class="balance-bf-wrapper"><span class="bf-label">Balance b/f</span><span class="bf-amount">' + formatNumberWithCommas(bfAmount) + '</span></div>';
@@ -1252,7 +1231,7 @@
                         visibleCols.map(c => '<th style="font-size:8pt; white-space:normal; word-wrap:break-word; text-align:center;">' + c.label + '</th>').join('') +
                         '</tr></thead><tbody>';
 
-                    // ---- Group rows by entity for this page (to repeat entity names when split) ----
+                    // Group rows by entity for rowspan
                     let entityGroups = [];
                     let currentEntity = null;
                     let rowBuffer = [];
@@ -1262,37 +1241,29 @@
                             currentEntity = entityName;
                         }
                         if (entityName !== currentEntity) {
-                            // push previous entity rows
                             entityGroups.push({ entityName: currentEntity, rows: rowBuffer });
                             currentEntity = entityName;
                             rowBuffer = [];
                         }
-                        // For each phone in this group, add a row object
-                        const phones = group.phones || [];
-                        for (let p = 0; p < phones.length; p++) {
-                            const phone = phones[p];
-                            rowBuffer.push({
-                                entityName: group.entityName,
-                                entityType: group.entityType === 'school' ? '🏫 School' : '🏛️ Department',
-                                accountNumber: group.accountNumber,
-                                phoneNumber: phone.phoneNumber || '—',
-                                billNumber: group.billNumber,
-                                rentalAmount: phone.rentalAmount || 0,
-                                totalAmount: phone.totalAmount || 0,
-                                totalAccountCharges: group.totalAccountCharges || 0,
-                                previousOutstanding: group.previousOutstanding || 0,
-                                previousPayment: group.previousPayment || 0,
-                                totalCurrentCharges: group.totalCurrentCharges || 0,
-                                amountPaid: group.amountPaid || 0,
-                                period: monthName + ' ' + yearDisplay
-                            });
-                        }
+                        const phoneList = group.phoneNumbers.length > 0 ? group.phoneNumbers.join(', ') : '—';
+                        rowBuffer.push({
+                            entityName: group.entityName,
+                            entityType: group.entityType === 'school' ? '🏫 School' : '🏛️ Department',
+                            accountNumber: group.accountNumber,
+                            phoneNumber: phoneList,
+                            billNumber: group.billNumber,
+                            totalAccountCharges: group.totalAccountCharges || 0,
+                            previousOutstanding: group.previousOutstanding || 0,
+                            previousPayment: group.previousPayment || 0,
+                            totalCurrentCharges: group.totalCurrentCharges || 0,
+                            amountPaid: group.amountPaid || 0,
+                            period: monthName + ' ' + yearDisplay
+                        });
                     }
                     if (rowBuffer.length > 0) {
                         entityGroups.push({ entityName: currentEntity, rows: rowBuffer });
                     }
 
-                    // Now render rows with rowspan for entity name within this page
                     let rowNumber = 1;
                     for (const eg of entityGroups) {
                         const rows = eg.rows;
@@ -1316,14 +1287,10 @@
                                     if (r === 0) {
                                         pageHtml += '<td class="mono-cell" style="font-size:8pt; text-align:center;" rowspan="' + rowspan + '">' + escapeHtml(row.accountNumber) + '</td>';
                                     }
-                                } else if (key === 'meterTelNo') {
+                                } else if (key === 'phoneNumber') {
                                     pageHtml += '<td style="font-size:7.5pt; text-align:center;">' + escapeHtml(row.phoneNumber) + '</td>';
                                 } else if (key === 'billNumber') {
                                     pageHtml += '<td style="font-size:7.5pt; text-align:center;">' + escapeHtml(row.billNumber) + '</td>';
-                                } else if (key === 'rentalAmount') {
-                                    pageHtml += '<td class="currency-cell" style="font-size:7.5pt; text-align:center;">' + formatNumberWithCommas(row.rentalAmount) + '</td>';
-                                } else if (key === 'totalAmount') {
-                                    pageHtml += '<td class="currency-cell" style="font-size:7.5pt; text-align:center;">' + formatNumberWithCommas(row.totalAmount) + '</td>';
                                 } else if (key === 'totalAccountCharges') {
                                     pageHtml += '<td class="currency-cell" style="font-size:7.5pt; text-align:center;">' + formatNumberWithCommas(row.totalAccountCharges) + '</td>';
                                 } else if (key === 'previousOutstanding') {
@@ -1362,31 +1329,25 @@
                     });
                     pageHtml += '</tr>';
 
-                    // Balance c/f (on pages before the last) – placed as a row inside the table
+                    // Balance c/f (on pages before the last)
                     if (pageIndex < totalPages) {
                         const cfAmount = cumulativeTotal + pageTotalValue;
-                        // Use balanceColIndex to place label in second-last column and amount in last column
                         const lastColIndex = visibleCols.length - 1;
                         const labelColIndex = Math.min(balanceColIndex, lastColIndex - 1);
                         pageHtml += '<tr class="balance-row">';
-                        // Empty cells before label
                         for (let i = 0; i < labelColIndex; i++) {
                             pageHtml += '<td>&nbsp;</td>';
                         }
-                        // Label cell
                         pageHtml += '<td style="text-align:right; font-weight:700; padding-right:30px;"><span class="balance-label">Balance c/f</span></td>';
-                        // Fill remaining columns between label and last
                         for (let i = labelColIndex + 1; i < lastColIndex; i++) {
                             pageHtml += '<td>&nbsp;</td>';
                         }
-                        // Last column: amount
                         pageHtml += '<td class="currency-cell" style="font-weight:700; text-align:center;">' + formatNumberWithCommas(cfAmount) + '</td>';
                         pageHtml += '</tr>';
                     }
 
                     // Grand total on last page
                     if (pageIndex === totalPages) {
-                        // Compute grand total from all groups across all pages
                         let grandTotal = 0;
                         for (const g of accountGroups) {
                             let gt = g.totalAccountCharges || 0;
@@ -1446,7 +1407,7 @@
                             '</div></div></div>';
                     }
 
-                    pageHtml += '</div>'; // end print-page
+                    pageHtml += '</div>';
                     return pageHtml;
                 }
 
@@ -1503,7 +1464,6 @@
                 for (let i = 0; i < pages.length; i++) {
                     const groups = pages[i];
                     const pageIndex = i + 1;
-                    // Compute page total for cumulative
                     let pageTotal = 0;
                     for (const g of groups) {
                         let gt = g.totalAccountCharges || 0;
