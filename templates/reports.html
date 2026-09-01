@@ -1266,7 +1266,10 @@
                 let cumulativeTotal = 0;
                 let globalRowNumber = 1;
 
-                function renderTelephonePage(rows, pageIndex, totalPages, cumulativeTotal, startRowNumber) {
+                // Compute overall grand total
+                let overallGrandTotal = allRows.reduce((sum, row) => sum + row.totalAccountCharges, 0);
+
+                function renderTelephonePage(rows, pageIndex, totalPages, cumulativeTotal, startRowNumber, overallGrandTotal) {
                     let pageHtml = '';
                     let pageTotalValue = 0;
                     let rowNumber = startRowNumber;
@@ -1396,16 +1399,12 @@
                         pageHtml += '</tr>';
                     }
 
-                    // Grand total on last page
+                    // Grand total on last page – use overallGrandTotal
                     if (pageIndex === totalPages) {
-                        let grandTotal = 0;
-                        for (const row of rows) {
-                            grandTotal += row.totalAccountCharges || 0;
-                        }
                         pageHtml += '<tr class="total-sum-row">';
                         visibleCols.forEach((col, idx) => {
                             if (idx === summaryColIndex) {
-                                pageHtml += '<td class="currency-cell" style="font-weight:700; text-align:center;">' + formatNumberWithCommas(grandTotal) + '</td>';
+                                pageHtml += '<td class="currency-cell" style="font-weight:700; text-align:center;">' + formatNumberWithCommas(overallGrandTotal) + '</td>';
                             } else if (idx < summaryColIndex) {
                                 if (idx === summaryColIndex - 1) {
                                     pageHtml += '<td style="font-weight:700; text-align:right;">Total Sum:</td>';
@@ -1513,7 +1512,7 @@
                     for (const row of rows) {
                         pageTotal += row.totalAccountCharges || 0;
                     }
-                    const result = renderTelephonePage(rows, pageIndex, pages.length, cumulative, currentRowNumber);
+                    const result = renderTelephonePage(rows, pageIndex, pages.length, cumulative, currentRowNumber, overallGrandTotal);
                     printHtml += result.html;
                     currentRowNumber = result.nextRowNumber;
                     cumulative += pageTotal;
