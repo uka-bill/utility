@@ -41,7 +41,22 @@
         ::-webkit-scrollbar-track { background:var(--gray-50); }
         ::-webkit-scrollbar-thumb { background:var(--gray-light); border-radius:10px; }
         ::-webkit-scrollbar-thumb:hover { background:var(--gray); }
-        .navbar { background:rgba(255,255,255,0.85); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%); box-shadow:0 1px 0 rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.02); padding:0 32px; position:fixed; top:0; left:0; right:0; z-index:1000; display:flex; justify-content:space-between; align-items:center; height:76px; border-bottom:1px solid rgba(26,86,219,0.06); }
+
+        .navbar {
+            background:rgba(255,255,255,0.85);
+            backdrop-filter:blur(20px) saturate(180%);
+            -webkit-backdrop-filter:blur(20px) saturate(180%);
+            box-shadow:0 1px 0 rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.02);
+            padding:0 32px;
+            position:fixed;
+            top:0; left:0; right:0;
+            z-index:1000;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            height:76px;
+            border-bottom:1px solid rgba(26,86,219,0.06);
+        }
         .logo { display:flex; align-items:center; gap:12px; font-weight:800; font-size:1.2rem; letter-spacing:-0.5px; }
         .logo-icon { width:40px; height:40px; background:var(--primary-gradient); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; color:white; font-size:1.2rem; box-shadow:0 4px 12px rgba(26,86,219,0.30); }
         .logo span { background:var(--primary-gradient); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; font-weight:700; }
@@ -51,6 +66,7 @@
         .nav-tabs a { text-decoration:none; color:var(--gray); padding:8px 18px; border-radius:var(--radius-xs); transition:var(--transition); font-weight:500; font-size:0.82rem; letter-spacing:0.15px; }
         .nav-tabs a:hover { color:var(--primary); background:rgba(26,86,219,0.06); }
         .nav-tabs a.active { background:var(--primary-gradient); color:white; box-shadow:0 4px 16px rgba(26,86,219,0.30); }
+
         .container { margin-top:96px; padding:28px 36px 40px; max-width:1440px; margin-left:auto; margin-right:auto; }
         .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; flex-wrap:wrap; gap:16px; }
         .page-title { font-size:2rem; font-weight:800; letter-spacing:-0.7px; background:var(--primary-gradient); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
@@ -774,7 +790,8 @@
             return Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
         function getMonthName(month) {
-            const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            const months = ['January','February','March','April','May','June',
+                            'July','August','September','October','November','December'];
             return months[month - 1] || 'Unknown';
         }
         function getUtilityHeader(utilityTypes) {
@@ -1085,6 +1102,13 @@
             // ===== FIXED: BUILD TELEPHONE ROWS – ONE PER BILL, ACCOUNT FROM NOTES =====
             function buildTelephoneRows(entityData, includeZero) {
                 const rows = [];
+
+                // Helper to normalise account number (remove spaces, dashes, brackets)
+                function normalizeAcc(acc) {
+                    if (!acc) return '';
+                    return String(acc).replace(/[()\s\-]/g, '').trim();
+                }
+
                 for (const entityGroup of entityData) {
                     const entity = entityGroup.entity;
                     const entityType = entityGroup.type;
@@ -1101,35 +1125,39 @@
                         let previousPayment = 0;
                         let amountPaid = bill.amount_paid || 0;
 
-                        // Try to get detailed data from notes
                         const notes = bill.notes;
                         if (notes && typeof notes === 'string') {
                             try {
                                 const parsed = JSON.parse(notes);
                                 const accounts = parsed.accounts;
                                 if (accounts && typeof accounts === 'object') {
-                                    // Find the account that matches this bill's account number, or take the first one
+                                    // Normalise the bill's account number for matching
+                                    const normAcc = normalizeAcc(accountNumber);
                                     let matchedAcc = null;
+
+                                    // Try to match by normalised account number
                                     for (const accKey in accounts) {
                                         const accData = accounts[accKey];
-                                        // If top-level account number matches, use it
-                                        if (accData.accountNumber === accountNumber || accKey === accountNumber) {
+                                        if (normalizeAcc(accData.accountNumber) === normAcc || normalizeAcc(accKey) === normAcc) {
                                             matchedAcc = accData;
                                             break;
                                         }
                                     }
-                                    // If no match, take the first account (if there is only one)
-                                    if (!matchedAcc && Object.keys(accounts).length === 1) {
-                                        const firstKey = Object.keys(accounts)[0];
-                                        matchedAcc = accounts[firstKey];
+
+                                    // If not found, take the first account (if only one)
+                                    if (!matchedAcc) {
+                                        const keys = Object.keys(accounts);
+                                        if (keys.length === 1) {
+                                            matchedAcc = accounts[keys[0]];
+                                        }
                                     }
+
                                     if (matchedAcc) {
                                         totalAccountCharges = matchedAcc.totalAccountCharges || 0;
                                         totalCurrentCharges = matchedAcc.totalCurrentCharges || 0;
                                         previousOutstanding = matchedAcc.previousOutstanding || 0;
                                         previousPayment = matchedAcc.previousPayment || 0;
                                         amountPaid = matchedAcc.amountPaid || 0;
-                                        // Use account number from matched account
                                         accountNumber = matchedAcc.accountNumber || accountNumber;
                                         billNumber = matchedAcc.billNumber || billNumber;
                                         if (matchedAcc.phones && matchedAcc.phones.length > 0) {
@@ -1137,8 +1165,9 @@
                                         }
                                     }
                                 }
-                                // Fallback to legacy fields
-                                if (!totalAccountCharges) {
+
+                                // Fallback to legacy fields if still zero
+                                if (totalAccountCharges === 0) {
                                     totalAccountCharges = parsed.totalAccountCharges || 0;
                                     totalCurrentCharges = parsed.totalCurrentCharges || 0;
                                     previousPayment = parsed.previousPayment || 0;
@@ -1148,16 +1177,13 @@
                             }
                         }
 
-                        // If still not set, use bill top-level
-                        if (!totalAccountCharges) {
+                        // Ultimate fallback: use top-level fields (if non-zero)
+                        if (totalAccountCharges === 0) {
                             totalAccountCharges = bill.current_charges || 0;
                             totalCurrentCharges = (bill.current_charges || 0) + (bill.unsettled_charges || 0);
                         }
-                        if (!phoneNumber) {
-                            phoneNumber = bill.phone_number || bill.meter_number || '';
-                        }
 
-                        // Apply zero filter
+                        // Decide whether to include zero‑amount rows
                         const isZero = (totalAccountCharges === 0 && totalCurrentCharges === 0);
                         if (!includeZero && isZero) continue;
 
@@ -1175,24 +1201,45 @@
                             amountPaid: amountPaid,
                             period: monthName + ' ' + yearDisplay,
                             billId: bill.id,
-                            entity: entity
+                            entity: entity,          // keep full entity for sorting
+                            cluster: entity.clusterNumber || null,
+                            departmentName: entity.departmentName || null,
+                            displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
                         });
                     }
                 }
 
-                // Sort by entity display_order, then entity id, then account number, then bill id
+                // ---------- SORTING: preserve cluster/department grouping ----------
                 rows.sort((a, b) => {
-                    const orderA = a.entity.display_order !== undefined ? a.entity.display_order : a.entity.id;
-                    const orderB = b.entity.display_order !== undefined ? b.entity.display_order : b.entity.id;
+                    // Schools first, then departments
+                    if (a.entityType !== b.entityType) {
+                        return a.entityType === 'school' ? -1 : 1;
+                    }
+
+                    if (a.entityType === 'school') {
+                        // Schools: sort by cluster number, then display_order, then id
+                        const clusterA = parseInt(a.cluster) || 999;
+                        const clusterB = parseInt(b.cluster) || 999;
+                        if (clusterA !== clusterB) return clusterA - clusterB;
+                    } else {
+                        // Departments: sort by department name, then display_order, then id
+                        const deptA = a.departmentName || '';
+                        const deptB = b.departmentName || '';
+                        if (deptA !== deptB) return deptA.localeCompare(deptB);
+                    }
+
+                    // Fallback: display_order, then id
+                    const orderA = a.displayOrder !== undefined ? a.displayOrder : a.entityId;
+                    const orderB = b.displayOrder !== undefined ? b.displayOrder : b.entityId;
                     if (orderA !== orderB) return orderA - orderB;
-                    const idA = a.entity.id;
-                    const idB = b.entity.id;
-                    if (idA !== idB) return idA - idB;
+
+                    // Within same entity, sort by account number then bill ID
                     const accA = a.accountNumber || '';
                     const accB = b.accountNumber || '';
                     if (accA !== accB) return accA.localeCompare(accB);
                     return (a.billId || 0) - (b.billId || 0);
                 });
+
                 return rows;
             }
 
@@ -1621,11 +1668,13 @@
                     if (eType === 'school') {
                         const school = allSchoolsData.find(s => s.id === eId);
                         if (school) entityObj.name = school.name;
-                        if (school) entityObj.cluster_number = school.cluster_number;
+                        if (school) entityObj.clusterNumber = school.cluster_number;
+                        if (school) entityObj.displayOrder = school.display_order || eId;
                     } else {
                         const dept = allDepartmentsData.find(d => d.id === eId);
                         if (dept) entityObj.name = dept.unit_name || dept.name || entityObj.name;
-                        if (dept) entityObj.department_name = dept.department_name;
+                        if (dept) entityObj.departmentName = dept.department_name;
+                        if (dept) entityObj.displayOrder = dept.display_order || eId;
                     }
 
                     entityList.push({
@@ -1674,34 +1723,41 @@
                     });
                 }
 
-                entityList.sort((a, b) => {
-                    if (a.type !== b.type) return a.type === 'school' ? -1 : 1;
-                    if (a.type === 'school') {
-                        const cA = parseInt(a.entity.cluster_number) || 999;
-                        const cB = parseInt(b.entity.cluster_number) || 999;
-                        if (cA !== cB) return cA - cB;
-                    }
-                    return a.entity.id - b.entity.id;
-                });
-
-                console.log('📄 Final entities before fallback:', entityList.length);
-
+                // --- Enrich entities with cluster/department for sorting ---
                 entityList = entityList.map(item => {
                     const entity = item.entity;
                     const type = item.type;
-                    let accountField = '';
-                    if (utilityTypes.includes('water')) accountField = 'water_account';
-                    else if (utilityTypes.includes('electricity')) accountField = 'electricity_account';
-                    else if (utilityTypes.includes('telephone')) accountField = 'telephone_account';
-                    if (accountField && entity[accountField]) {
-                        item.bills = item.bills.map(bill => {
-                            if (!bill.account_number || bill.account_number === '—' || bill.account_number === '') {
-                                bill.account_number = entity[accountField];
-                            }
-                            return bill;
-                        });
+                    if (type === 'school') {
+                        const school = allSchoolsData.find(s => s.id === entity.id);
+                        if (school) {
+                            entity.clusterNumber = school.cluster_number || null;
+                            entity.displayOrder = school.display_order || entity.id;
+                        }
+                    } else if (type === 'department') {
+                        const dept = allDepartmentsData.find(d => d.id === entity.id);
+                        if (dept) {
+                            entity.departmentName = dept.department_name || null;
+                            entity.displayOrder = dept.display_order || entity.id;
+                        }
                     }
                     return item;
+                });
+
+                entityList.sort((a, b) => {
+                    if (a.type !== b.type) return a.type === 'school' ? -1 : 1;
+                    if (a.type === 'school') {
+                        const cA = parseInt(a.entity.clusterNumber) || 999;
+                        const cB = parseInt(b.entity.clusterNumber) || 999;
+                        if (cA !== cB) return cA - cB;
+                    } else {
+                        const deptA = a.entity.departmentName || '';
+                        const deptB = b.entity.departmentName || '';
+                        if (deptA !== deptB) return deptA.localeCompare(deptB);
+                    }
+                    const orderA = a.entity.displayOrder !== undefined ? a.entity.displayOrder : a.entity.id;
+                    const orderB = b.entity.displayOrder !== undefined ? b.entity.displayOrder : b.entity.id;
+                    if (orderA !== orderB) return orderA - orderB;
+                    return a.entity.id - b.entity.id;
                 });
 
                 console.log('📄 Final entities after fallback:', entityList.length);
