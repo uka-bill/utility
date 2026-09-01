@@ -1357,10 +1357,8 @@ def batch_update_utility_bills():
                 elif entity_type == 'department':
                     entity_name = dept_names.get(entity_id, '')
                 
-                # ========== HANDLE TELEPHONE (original logic – unchanged) ==========
+                # ========== HANDLE TELEPHONE (unchanged) ==========
                 if utility_type == 'telephone':
-                    # ... (telephone logic as before – omitted for brevity, but it's the same as original)
-                    # I'll include the full telephone logic below.
                     account_number = bill_data.get('account_number', '')
                     bill_number = bill_data.get('bill_number', '')
                     existing_id = None
@@ -1447,7 +1445,7 @@ def batch_update_utility_bills():
                     success_count += 1
                     continue  # skip water/electricity handling
                 
-                # ========== HANDLE WATER & ELECTRICITY (improved with ID & normalisation) ==========
+                # ========== HANDLE WATER & ELECTRICITY (FIXED – fallback removed) ==========
                 # Normalize account and meter for matching
                 account_number = (bill_data.get('account_number', '') or '').strip()
                 meter_number = (bill_data.get('meter_number', '') or '').strip()
@@ -1498,9 +1496,9 @@ def batch_update_utility_bills():
                                 if b_acc == acc_norm:
                                     existing_bill = b
                                     break
-                        # If still not found and there's exactly one bill, use it
-                        if not existing_bill and len(all_bills_resp.data) == 1:
-                            existing_bill = all_bills_resp.data[0]
+                        # REMOVED FALLBACK: do NOT use a single bill if no match
+                        # if not existing_bill and len(all_bills_resp.data) == 1:
+                        #     existing_bill = all_bills_resp.data[0]
                     
                     if existing_bill:
                         existing_id = existing_bill['id']
