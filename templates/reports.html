@@ -1099,15 +1099,9 @@
                 }
             }
 
-            // ===== FIXED: BUILD TELEPHONE ROWS – ONE PER BILL, ACCOUNT FROM NOTES =====
+            // ===== FIXED: BUILD TELEPHONE ROWS – ONE PER ACCOUNT IN NOTES =====
             function buildTelephoneRows(entityData, includeZero) {
                 const rows = [];
-
-                // Helper to normalise account number (remove spaces, dashes, brackets)
-                function normalizeAcc(acc) {
-                    if (!acc) return '';
-                    return String(acc).replace(/[()\s\-]/g, '').trim();
-                }
 
                 for (const entityGroup of entityData) {
                     const entity = entityGroup.entity;
@@ -1116,101 +1110,128 @@
                     const bills = entityGroup.bills || [];
 
                     for (const bill of bills) {
-                        let totalAccountCharges = 0;
-                        let totalCurrentCharges = 0;
-                        let billNumber = bill.bill_number || '';
-                        let accountNumber = bill.account_number || '';
-                        let phoneNumber = bill.phone_number || '';
-                        let previousOutstanding = bill.unsettled_charges || 0;
-                        let previousPayment = 0;
-                        let amountPaid = bill.amount_paid || 0;
+                        const billMonth = bill.month;
+                        const billYear = bill.year;
+                        const period = (billMonth && billYear) ? getMonthName(parseInt(billMonth)) + ' ' + billYear : (monthName + ' ' + yearDisplay);
 
+                        // Get notes and parse
+                        let parsedNotes = {};
+                        let hasAccounts = false;
                         const notes = bill.notes;
                         if (notes && typeof notes === 'string') {
                             try {
-                                const parsed = JSON.parse(notes);
-                                const accounts = parsed.accounts;
-                                if (accounts && typeof accounts === 'object') {
-                                    const normAcc = normalizeAcc(accountNumber);
-                                    let matchedAcc = null;
-                                    // Try to match by normalized account number
-                                    for (const accKey in accounts) {
-                                        const accData = accounts[accKey];
-                                        if (normalizeAcc(accData.accountNumber) === normAcc || normalizeAcc(accKey) === normAcc) {
-                                            matchedAcc = accData;
-                                            break;
-                                        }
-                                    }
-                                    // If not found, and there's only one account, use it
-                                    if (!matchedAcc) {
-                                        const keys = Object.keys(accounts);
-                                        if (keys.length === 1) {
-                                            matchedAcc = accounts[keys[0]];
-                                        } else {
-                                            // Multiple accounts but no match – fallback to first (log warning)
-                                            console.warn('No matching account for bill', bill.id, 'accountNumber:', accountNumber, 'keys:', keys);
-                                            matchedAcc = accounts[keys[0]];
-                                        }
-                                    }
+                                parsedNotes = JSON.parse(notes);
+                                if (parsedNotes.accounts && typeof parsedNotes.accounts === 'object' && Object.keys(parsedNotes.accounts).length > 0) {
+                                    hasAccounts = true;
+                                }
+                            } catch (e) { /* ignore */ }
+                        }
 
-                                    if (matchedAcc) {
-                                        totalAccountCharges = matchedAcc.totalAccountCharges || 0;
-                                        totalCurrentCharges = matchedAcc.totalCurrentCharges || 0;
-                                        previousOutstanding = matchedAcc.previousOutstanding || 0;
-                                        previousPayment = matchedAcc.previousPayment || 0;
-                                        amountPaid = matchedAcc.amountPaid || 0;
-                                        accountNumber = matchedAcc.accountNumber || accountNumber;
-                                        billNumber = matchedAcc.billNumber || billNumber;
-                                        if (matchedAcc.phones && matchedAcc.phones.length > 0) {
-                                            phoneNumber = matchedAcc.phones.map(p => p.phoneNumber).join(', ');
-                                        }
-                                    }
+                        // If we have multiple accounts in notes, iterate over them
+                        if (hasAccounts) {
+                            const accountsObj = parsedNotes.accounts;
+                            for (const accKey in accountsObj) {
+                                const accData = accountsObj[accKey];
+                                if (!accData || typeof accData !== 'object') continue;
+
+                                // Extract account data
+                                let totalAccountCharges = accData.totalAccountCharges || 0;
+                                let totalCurrentCharges = accData.totalCurrentCharges || 0;
+                                let previousOutstanding = accData.previousOutstanding || 0;
+                                let previousPayment = accData.previousPayment || 0;
+                                let amountPaid = accData.amountPaid || 0;
+                                let accountNumber = accData.accountNumber || accKey || bill.account_number || '';
+                                let billNumber = accData.billNumber || bill.bill_number || '';
+                                let phoneNumber = '';
+                                if (accData.phones && accData.phones.length > 0) {
+                                    phoneNumber = accData.phones.map(p => p.phoneNumber).join(', ');
+                                } else {
+                                    phoneNumber = bill.phone_number || '';
                                 }
 
-                                // Fallback to legacy fields if still zero
-                                if (totalAccountCharges === 0) {
-                                    totalAccountCharges = parsed.totalAccountCharges || 0;
-                                    totalCurrentCharges = parsed.totalCurrentCharges || 0;
-                                    previousPayment = parsed.previousPayment || 0;
-                                }
-                            } catch (e) {
-                                // ignore parse errors
+                                // Determine if row should be included (zero check)
+                                const isZero = (totalAccountCharges === 0 && totalCurrentCharges === 0);
+                                if (!includeZero && isZero) continue;
+
+                                rows.push({
+                                    entityId: entity.id,
+                                    entityType: entityType,
+                                    entityName: entityName,
+                                    accountNumber: accountNumber,
+                                    phoneNumber: phoneNumber,
+                                    billNumber: billNumber,
+                                    totalAccountCharges: totalAccountCharges,
+                                    previousOutstanding: previousOutstanding,
+                                    previousPayment: previousPayment,
+                                    totalCurrentCharges: totalCurrentCharges,
+                                    amountPaid: amountPaid,
+                                    period: period,
+                                    billId: bill.id,
+                                    entity: entity,
+                                    cluster: entity.clusterNumber || null,
+                                    departmentName: entity.departmentName || null,
+                                    displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
+                                });
                             }
+                        } else {
+                            // Fallback: single row from bill (no accounts object)
+                            let totalAccountCharges = bill.current_charges || 0;
+                            let totalCurrentCharges = (bill.current_charges || 0) + (bill.unsettled_charges || 0);
+                            let previousOutstanding = bill.unsettled_charges || 0;
+                            let previousPayment = 0;
+                            let amountPaid = bill.amount_paid || 0;
+                            let accountNumber = bill.account_number || '';
+                            let billNumber = bill.bill_number || '';
+                            let phoneNumber = bill.phone_number || '';
+
+                            // Try to extract legacy fields from parsedNotes if available
+                            if (parsedNotes) {
+                                if (parsedNotes.totalAccountCharges !== undefined) totalAccountCharges = parsedNotes.totalAccountCharges;
+                                if (parsedNotes.totalCurrentCharges !== undefined) totalCurrentCharges = parsedNotes.totalCurrentCharges;
+                                if (parsedNotes.previousPayment !== undefined) previousPayment = parsedNotes.previousPayment;
+                                if (parsedNotes._legacy_notes) {
+                                    // If there are phone details, we might want to use them
+                                }
+                            }
+
+                            const isZero = (totalAccountCharges === 0 && totalCurrentCharges === 0);
+                            if (!includeZero && isZero) continue;
+
+                            rows.push({
+                                entityId: entity.id,
+                                entityType: entityType,
+                                entityName: entityName,
+                                accountNumber: accountNumber,
+                                phoneNumber: phoneNumber,
+                                billNumber: billNumber,
+                                totalAccountCharges: totalAccountCharges,
+                                previousOutstanding: previousOutstanding,
+                                previousPayment: previousPayment,
+                                totalCurrentCharges: totalCurrentCharges,
+                                amountPaid: amountPaid,
+                                period: period,
+                                billId: bill.id,
+                                entity: entity,
+                                cluster: entity.clusterNumber || null,
+                                departmentName: entity.departmentName || null,
+                                displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
+                            });
                         }
-
-                        // Ultimate fallback: use top-level fields (if non-zero)
-                        if (totalAccountCharges === 0) {
-                            totalAccountCharges = bill.current_charges || 0;
-                            totalCurrentCharges = (bill.current_charges || 0) + (bill.unsettled_charges || 0);
-                        }
-
-                        // Decide whether to include zero‑amount rows
-                        const isZero = (totalAccountCharges === 0 && totalCurrentCharges === 0);
-                        if (!includeZero && isZero) continue;
-
-                        rows.push({
-                            entityId: entity.id,
-                            entityType: entityType,
-                            entityName: entityName,
-                            accountNumber: accountNumber,
-                            phoneNumber: phoneNumber,
-                            billNumber: billNumber,
-                            totalAccountCharges: totalAccountCharges,
-                            previousOutstanding: previousOutstanding,
-                            previousPayment: previousPayment,
-                            totalCurrentCharges: totalCurrentCharges,
-                            amountPaid: amountPaid,
-                            period: monthName + ' ' + yearDisplay,
-                            billId: bill.id,
-                            entity: entity,
-                            cluster: entity.clusterNumber || null,
-                            departmentName: entity.departmentName || null,
-                            displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
-                        });
                     }
                 }
 
                 // ---------- SORTING: preserve cluster/department grouping ----------
+                // First compute group order for departments: min displayOrder per departmentName
+                const deptGroupOrder = {};
+                for (const row of rows) {
+                    if (row.entityType === 'department' && row.departmentName) {
+                        const key = row.departmentName;
+                        if (!deptGroupOrder[key] || row.displayOrder < deptGroupOrder[key]) {
+                            deptGroupOrder[key] = row.displayOrder;
+                        }
+                    }
+                }
+
                 rows.sort((a, b) => {
                     // Schools first, then departments
                     if (a.entityType !== b.entityType) {
@@ -1223,10 +1244,10 @@
                         const clusterB = parseInt(b.cluster) || 999;
                         if (clusterA !== clusterB) return clusterA - clusterB;
                     } else {
-                        // Departments: sort by department name, then display_order, then id
-                        const deptA = a.departmentName || '';
-                        const deptB = b.departmentName || '';
-                        if (deptA !== deptB) return deptA.localeCompare(deptB);
+                        // Departments: sort by group order (min displayOrder of the department name)
+                        const groupA = deptGroupOrder[a.departmentName] || a.displayOrder;
+                        const groupB = deptGroupOrder[b.departmentName] || b.displayOrder;
+                        if (groupA !== groupB) return groupA - groupB;
                     }
 
                     // Fallback: display_order, then id
@@ -1244,7 +1265,7 @@
                 return rows;
             }
 
-            // ===== If telephone is selected, use row‑per‑bill =====
+            // ===== If telephone is selected, use row‑per‑account =====
             if (hasTelephone) {
                 const includeZero = document.getElementById('showAllEntities').checked;
                 const allRows = buildTelephoneRows(entityData, includeZero);
