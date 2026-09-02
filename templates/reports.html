@@ -1131,11 +1131,9 @@
                                 const parsed = JSON.parse(notes);
                                 const accounts = parsed.accounts;
                                 if (accounts && typeof accounts === 'object') {
-                                    // Normalise the bill's account number for matching
                                     const normAcc = normalizeAcc(accountNumber);
                                     let matchedAcc = null;
-
-                                    // Try to match by normalised account number
+                                    // Try to match by normalized account number
                                     for (const accKey in accounts) {
                                         const accData = accounts[accKey];
                                         if (normalizeAcc(accData.accountNumber) === normAcc || normalizeAcc(accKey) === normAcc) {
@@ -1143,11 +1141,14 @@
                                             break;
                                         }
                                     }
-
-                                    // If not found, take the first account (if only one)
+                                    // If not found, and there's only one account, use it
                                     if (!matchedAcc) {
                                         const keys = Object.keys(accounts);
                                         if (keys.length === 1) {
+                                            matchedAcc = accounts[keys[0]];
+                                        } else {
+                                            // Multiple accounts but no match – fallback to first (log warning)
+                                            console.warn('No matching account for bill', bill.id, 'accountNumber:', accountNumber, 'keys:', keys);
                                             matchedAcc = accounts[keys[0]];
                                         }
                                     }
@@ -1201,7 +1202,7 @@
                             amountPaid: amountPaid,
                             period: monthName + ' ' + yearDisplay,
                             billId: bill.id,
-                            entity: entity,          // keep full entity for sorting
+                            entity: entity,
                             cluster: entity.clusterNumber || null,
                             departmentName: entity.departmentName || null,
                             displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
