@@ -994,112 +994,38 @@
             });
             const currentDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-            const subtotalKeys = [];
-            if (subtotalOptions.showConsumption) subtotalKeys.push('totalConsumption');
-            if (subtotalOptions.showBillAmount) subtotalKeys.push('totalBillAmount');
-            if (subtotalOptions.showOutstanding) subtotalKeys.push('totalOutstanding');
-
-            let colConfig = [];
-            colConfig.push({ key: 'no', label: 'No.', show: true, required: true });
-            if (selectedColumns.entityName !== false) colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
-            if (selectedColumns.entityType !== false) colConfig.push({ key: 'entityType', label: 'Type', show: true });
-
-            if (hasWaterElectricity) {
-                if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
-                if (selectedColumns.meterNumber !== false) colConfig.push({ key: 'meterTelNo', label: 'Meter No.', show: true });
-                if (selectedColumns.consumption !== false) colConfig.push({ key: 'consumption', label: hasWater ? 'Consumption (m³)' : 'Consumption (kWh)', show: true });
-                if (selectedColumns.billAmount !== false) colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
-                if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
-                if (selectedColumns.outstanding !== false) colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
-                if (subtotalOptions.showConsumption) colConfig.push({ key: 'totalConsumption', label: 'Total Consumption', show: true });
-                if (subtotalOptions.showBillAmount) colConfig.push({ key: 'totalBillAmount', label: 'Total Bill Amount ($)', show: true });
-                if (subtotalOptions.showOutstanding) colConfig.push({ key: 'totalOutstanding', label: 'Total Outstanding ($)', show: true });
-            }
-
-            if (hasTelephone) {
-                if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
-                if (selectedColumns.phoneNumber !== false) colConfig.push({ key: 'phoneNumber', label: 'Phone No.', show: true });
-                if (selectedColumns.billNumber !== false) colConfig.push({ key: 'billNumber', label: 'Bill No.', show: true });
-                if (selectedColumns.totalAccountCharges !== false) colConfig.push({ key: 'totalAccountCharges', label: 'Total Account Charges ($)', show: true });
-                if (selectedColumns.previousOutstanding !== false) colConfig.push({ key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true });
-                if (selectedColumns.previousPayment !== false) colConfig.push({ key: 'previousPayment', label: 'Previous Payment ($)', show: true });
-                if (selectedColumns.totalCurrentCharges !== false) colConfig.push({ key: 'totalCurrentCharges', label: 'Total Current Charges ($)', show: true });
-                if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
-                if (selectedColumns.period !== false) colConfig.push({ key: 'period', label: 'Period', show: true });
-            }
-
-            const visibleCols = colConfig.filter(c => c.show !== false);
-
-            const utilityTypeLabels = utilityTypes ? utilityTypes.map(u => {
-                if (u === 'water') return '💧 Water';
-                if (u === 'electricity') return '⚡ Electricity';
-                if (u === 'telephone') return '📞 Telephone';
-                return u;
-            }).join(', ') : '';
-
-            let summaryColIndex = visibleCols.length - 1;
-            if (hasTelephone) {
-                const totalCurrentIdx = visibleCols.findIndex(c => c.key === 'totalCurrentCharges');
-                if (totalCurrentIdx !== -1) summaryColIndex = totalCurrentIdx;
-                else {
-                    const totalAccountIdx = visibleCols.findIndex(c => c.key === 'totalAccountCharges');
-                    if (totalAccountIdx !== -1) summaryColIndex = totalAccountIdx;
+            // Pre-compute department group order from all departments (not just rows)
+            const deptGroupOrder = {};
+            const deptGroupMinId = {};
+            allDepartmentsData.forEach(dept => {
+                const deptName = dept.department_name || 'Other';
+                const order = dept.display_order !== undefined ? dept.display_order : dept.id;
+                if (!deptGroupOrder[deptName] || order < deptGroupOrder[deptName]) {
+                    deptGroupOrder[deptName] = order;
                 }
-            } else if (hasWaterElectricity) {
-                const totalBillIdx = visibleCols.findIndex(c => c.key === 'totalBillAmount');
-                if (totalBillIdx !== -1) {
-                    summaryColIndex = totalBillIdx;
-                } else {
-                    const billIdx = visibleCols.findIndex(c => c.key === 'billAmount');
-                    if (billIdx !== -1) summaryColIndex = billIdx;
-                    else {
-                        const consIdx = visibleCols.findIndex(c => c.key === 'consumption' || c.key === 'totalConsumption');
-                        if (consIdx !== -1) summaryColIndex = consIdx;
-                    }
+                if (!deptGroupMinId[deptName] || dept.id < deptGroupMinId[deptName]) {
+                    deptGroupMinId[deptName] = dept.id;
                 }
-            }
-            if (summaryColIndex < 0) summaryColIndex = 0;
+            });
+            const sortedDeptGroups = Object.keys(deptGroupOrder).sort((a, b) => {
+                if (deptGroupOrder[a] !== deptGroupOrder[b]) return deptGroupOrder[a] - deptGroupOrder[b];
+                return deptGroupMinId[a] - deptGroupMinId[b];
+            });
 
-            let balanceColIndex = -1;
-            if (hasTelephone) {
-                const numericCols = visibleCols.filter(c => ['totalAccountCharges', 'totalCurrentCharges', 'billAmount', 'amountPaid', 'outstanding'].includes(c.key));
-                if (numericCols.length > 0) {
-                    const lastNumeric = numericCols[numericCols.length - 1];
-                    balanceColIndex = visibleCols.indexOf(lastNumeric);
-                } else {
-                    balanceColIndex = visibleCols.length - 2;
-                }
-                if (balanceColIndex < 1) balanceColIndex = visibleCols.length - 2;
-                if (balanceColIndex < 0) balanceColIndex = 0;
-            } else if (hasWaterElectricity) {
-                const totalBillIdx = visibleCols.findIndex(c => c.key === 'totalBillAmount');
-                if (totalBillIdx !== -1) {
-                    balanceColIndex = totalBillIdx;
-                } else {
-                    const billIdx = visibleCols.findIndex(c => c.key === 'billAmount');
-                    if (billIdx !== -1) balanceColIndex = billIdx;
-                }
-            }
+            // Pre-compute school cluster order from all schools
+            const clusterMap = {};
+            allSchoolsData.forEach(school => {
+                const cluster = school.cluster_number || 'Unassigned';
+                if (!clusterMap[cluster]) clusterMap[cluster] = [];
+                clusterMap[cluster].push(school);
+            });
+            const sortedClusters = Object.keys(clusterMap).sort((a, b) => {
+                if (a === 'Unassigned') return 1;
+                if (b === 'Unassigned') return -1;
+                return parseInt(a) - parseInt(b);
+            });
 
-            let tableClass = 'print-table-water';
-            if (hasTelephone) tableClass = 'print-table-telephone';
-            else if (hasElectricity) tableClass = 'print-table-electricity';
-
-            function getBillAmount(bill) {
-                if (hasTelephone) {
-                    if (visibleCols.some(c => c.key === 'totalAccountCharges')) {
-                        return bill.totalAccountCharges || 0;
-                    } else if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
-                        return bill.totalCurrentCharges || 0;
-                    } else {
-                        return bill.totalAccountCharges || 0;
-                    }
-                } else {
-                    return bill.current_charges || bill.bill_amount || 0;
-                }
-            }
-
-            // ===== BUILD TELEPHONE ROWS – SCHOOLS BY CLUSTER, DEPARTMENTS BY GLOBAL DISPLAY_ORDER =====
+            // Pass these to buildTelephoneRows
             function buildTelephoneRows(entityData, includeZero) {
                 const rows = [];
 
@@ -1167,9 +1093,10 @@
                                     amountPaid: amountPaid,
                                     period: period,
                                     billId: bill.id,
+                                    entity: entity,
                                     cluster: entity.clusterNumber || null,
                                     departmentName: entity.departmentName || null,
-                                    displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : 999
+                                    displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
                                 });
                             }
                         } else {
@@ -1207,15 +1134,16 @@
                                 amountPaid: amountPaid,
                                 period: period,
                                 billId: bill.id,
+                                entity: entity,
                                 cluster: entity.clusterNumber || null,
                                 departmentName: entity.departmentName || null,
-                                displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : 999
+                                displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
                             });
                         }
                     }
                 }
 
-                // ---------- SORT: Schools by cluster, Departments by global display_order ----------
+                // ---------- SORTING: preserve cluster/department grouping ----------
                 rows.sort((a, b) => {
                     // Schools first, then departments
                     if (a.entityType !== b.entityType) {
@@ -1223,17 +1151,31 @@
                     }
 
                     if (a.entityType === 'school') {
-                        // Schools: sort by cluster number, then display_order, then id
-                        const clusterA = parseInt(a.cluster) || 999;
-                        const clusterB = parseInt(b.cluster) || 999;
-                        if (clusterA !== clusterB) return clusterA - clusterB;
-                        if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
-                        return a.entityId - b.entityId;
+                        // Schools: sort by cluster order (from all schools), then display_order, then id
+                        const clusterA = a.cluster || 'Unassigned';
+                        const clusterB = b.cluster || 'Unassigned';
+                        const idxA = sortedClusters.indexOf(clusterA);
+                        const idxB = sortedClusters.indexOf(clusterB);
+                        if (idxA !== idxB) return idxA - idxB;
                     } else {
-                        // Departments: sort by global display_order, then id
-                        if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
-                        return a.entityId - b.entityId;
+                        // Departments: sort by group order (from all departments), then display_order, then id
+                        const deptA = a.departmentName || 'Other';
+                        const deptB = b.departmentName || 'Other';
+                        const idxA = sortedDeptGroups.indexOf(deptA);
+                        const idxB = sortedDeptGroups.indexOf(deptB);
+                        if (idxA !== idxB) return idxA - idxB;
                     }
+
+                    // Fallback: display_order, then id
+                    const orderA = a.displayOrder !== undefined ? a.displayOrder : a.entityId;
+                    const orderB = b.displayOrder !== undefined ? b.displayOrder : b.entityId;
+                    if (orderA !== orderB) return orderA - orderB;
+
+                    // Within same entity, sort by account number then bill ID
+                    const accA = a.accountNumber || '';
+                    const accB = b.accountNumber || '';
+                    if (accA !== accB) return accA.localeCompare(accB);
+                    return (a.billId || 0) - (b.billId || 0);
                 });
 
                 return rows;
@@ -1661,18 +1603,14 @@
 
                     if (eType === 'school') {
                         const school = allSchoolsData.find(s => s.id === eId);
-                        if (school) {
-                            entityObj.name = school.name;
-                            entityObj.clusterNumber = school.cluster_number;
-                            entityObj.displayOrder = school.display_order !== undefined ? school.display_order : 999;
-                        }
+                        if (school) entityObj.name = school.name;
+                        if (school) entityObj.clusterNumber = school.cluster_number;
+                        if (school) entityObj.displayOrder = school.display_order || eId;
                     } else {
                         const dept = allDepartmentsData.find(d => d.id === eId);
-                        if (dept) {
-                            entityObj.name = dept.unit_name || dept.name || entityObj.name;
-                            entityObj.departmentName = dept.department_name;
-                            entityObj.displayOrder = dept.display_order !== undefined ? dept.display_order : 999;
-                        }
+                        if (dept) entityObj.name = dept.unit_name || dept.name || entityObj.name;
+                        if (dept) entityObj.departmentName = dept.department_name;
+                        if (dept) entityObj.displayOrder = dept.display_order || eId;
                     }
 
                     entityList.push({
@@ -1700,7 +1638,6 @@
 
                     allSchools.forEach(school => {
                         if (!entityList.some(e => e.type === 'school' && e.entity.id === school.id)) {
-                            school.displayOrder = school.display_order !== undefined ? school.display_order : 999;
                             entityList.push({
                                 entity: school,
                                 type: 'school',
@@ -1712,7 +1649,6 @@
 
                     allDepts.forEach(dept => {
                         if (!entityList.some(e => e.type === 'department' && e.entity.id === dept.id)) {
-                            dept.displayOrder = dept.display_order !== undefined ? dept.display_order : 999;
                             entityList.push({
                                 entity: dept,
                                 type: 'department',
@@ -1723,28 +1659,31 @@
                     });
                 }
 
-                // Sort entityList by global display_order (for departments) but keep schools clustering later
-                // We'll sort by type (schools first) and then within each type by appropriate order.
-                entityList.sort((a, b) => {
-                    if (a.type !== b.type) return a.type === 'school' ? -1 : 1;
-                    if (a.type === 'school') {
-                        const cA = parseInt(a.entity.clusterNumber) || 999;
-                        const cB = parseInt(b.entity.clusterNumber) || 999;
-                        if (cA !== cB) return cA - cB;
-                        const orderA = a.entity.displayOrder !== undefined ? a.entity.displayOrder : 999;
-                        const orderB = b.entity.displayOrder !== undefined ? b.entity.displayOrder : 999;
-                        if (orderA !== orderB) return orderA - orderB;
-                        return a.entity.id - b.entity.id;
-                    } else {
-                        // Departments: sort by global display_order, then id
-                        const orderA = a.entity.displayOrder !== undefined ? a.entity.displayOrder : 999;
-                        const orderB = b.entity.displayOrder !== undefined ? b.entity.displayOrder : 999;
-                        if (orderA !== orderB) return orderA - orderB;
-                        return a.entity.id - b.entity.id;
+                // --- Enrich entities with cluster/department for sorting ---
+                entityList = entityList.map(item => {
+                    const entity = item.entity;
+                    const type = item.type;
+                    if (type === 'school') {
+                        const school = allSchoolsData.find(s => s.id === entity.id);
+                        if (school) {
+                            entity.clusterNumber = school.cluster_number || null;
+                            entity.displayOrder = school.display_order || entity.id;
+                        }
+                    } else if (type === 'department') {
+                        const dept = allDepartmentsData.find(d => d.id === entity.id);
+                        if (dept) {
+                            entity.departmentName = dept.department_name || null;
+                            entity.displayOrder = dept.display_order || entity.id;
+                        }
                     }
+                    return item;
                 });
 
-                console.log('📄 Final entities after sorting:', entityList.length);
+                // We don't need to sort entityList here because the telephone-specific sorting in buildTelephoneRows will handle it.
+                // But we keep a basic sort for non-telephone? Actually we will rely on the sorting inside buildTelephoneRows.
+                // For safety, we still sort entityList roughly, but the real order is determined by buildTelephoneRows.
+
+                console.log('📄 Final entities after fallback:', entityList.length);
 
                 if (entityList.length === 0) {
                     updateProcessingStep(1, 'No data to print', 100);
