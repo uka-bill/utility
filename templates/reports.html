@@ -1170,7 +1170,7 @@
                                     entity: entity,
                                     cluster: entity.clusterNumber || null,
                                     departmentName: entity.departmentName || null,
-                                    displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
+                                    displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : 999
                                 });
                             }
                         } else {
@@ -1211,7 +1211,7 @@
                                 entity: entity,
                                 cluster: entity.clusterNumber || null,
                                 departmentName: entity.departmentName || null,
-                                displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
+                                displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : 999
                             });
                         }
                     }
@@ -1224,10 +1224,11 @@
                 for (const row of rows) {
                     if (row.entityType === 'department' && row.departmentName) {
                         const key = row.departmentName.trim();
-                        if (!deptGroupOrder[key] || row.displayOrder < deptGroupOrder[key]) {
-                            deptGroupOrder[key] = row.displayOrder;
+                        const order = row.displayOrder !== undefined ? row.displayOrder : 999;
+                        if (!deptGroupOrder[key] || order < deptGroupOrder[key]) {
+                            deptGroupOrder[key] = order;
                             deptGroupMinId[key] = row.entityId;
-                        } else if (row.displayOrder === deptGroupOrder[key] && row.entityId < deptGroupMinId[key]) {
+                        } else if (order === deptGroupOrder[key] && row.entityId < deptGroupMinId[key]) {
                             deptGroupMinId[key] = row.entityId;
                         }
                     }
@@ -1260,7 +1261,9 @@
                     }
 
                     // Fallback: display_order, then id
-                    if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
+                    const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
+                    const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
+                    if (orderA !== orderB) return orderA - orderB;
                     return a.entityId - b.entityId;
                 });
 
@@ -1691,12 +1694,12 @@
                         const school = allSchoolsData.find(s => s.id === eId);
                         if (school) entityObj.name = school.name;
                         if (school) entityObj.clusterNumber = school.cluster_number;
-                        if (school) entityObj.displayOrder = school.display_order || eId;
+                        if (school) entityObj.displayOrder = school.display_order || 999;
                     } else {
                         const dept = allDepartmentsData.find(d => d.id === eId);
                         if (dept) entityObj.name = dept.unit_name || dept.name || entityObj.name;
                         if (dept) entityObj.departmentName = dept.department_name;
-                        if (dept) entityObj.displayOrder = dept.display_order || eId;
+                        if (dept) entityObj.displayOrder = dept.display_order || 999;
                     }
 
                     entityList.push({
@@ -1753,18 +1756,21 @@
                         const school = allSchoolsData.find(s => s.id === entity.id);
                         if (school) {
                             entity.clusterNumber = school.cluster_number || null;
-                            entity.displayOrder = school.display_order || entity.id;
+                            entity.displayOrder = school.display_order || 999;
                         }
                     } else if (type === 'department') {
                         const dept = allDepartmentsData.find(d => d.id === entity.id);
                         if (dept) {
                             entity.departmentName = dept.department_name || null;
-                            entity.displayOrder = dept.display_order || entity.id;
+                            entity.displayOrder = dept.display_order || 999;
                         }
                     }
                     return item;
                 });
 
+                // Sort entityList by the same logic as the Telephone tab
+                // This is a fallback, but buildTelephoneRows will re-sort anyway.
+                // We'll keep it for consistency.
                 entityList.sort((a, b) => {
                     if (a.type !== b.type) return a.type === 'school' ? -1 : 1;
                     if (a.type === 'school') {
@@ -1776,8 +1782,8 @@
                         const deptB = b.entity.departmentName || '';
                         if (deptA !== deptB) return deptA.localeCompare(deptB);
                     }
-                    const orderA = a.entity.displayOrder !== undefined ? a.entity.displayOrder : a.entity.id;
-                    const orderB = b.entity.displayOrder !== undefined ? b.entity.displayOrder : b.entity.id;
+                    const orderA = a.entity.displayOrder !== undefined ? a.entity.displayOrder : 999;
+                    const orderB = b.entity.displayOrder !== undefined ? b.entity.displayOrder : 999;
                     if (orderA !== orderB) return orderA - orderB;
                     return a.entity.id - b.entity.id;
                 });
