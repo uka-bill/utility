@@ -1189,9 +1189,6 @@
                                 if (parsedNotes.totalAccountCharges !== undefined) totalAccountCharges = parsedNotes.totalAccountCharges;
                                 if (parsedNotes.totalCurrentCharges !== undefined) totalCurrentCharges = parsedNotes.totalCurrentCharges;
                                 if (parsedNotes.previousPayment !== undefined) previousPayment = parsedNotes.previousPayment;
-                                if (parsedNotes._legacy_notes) {
-                                    // If there are phone details, we might want to use them
-                                }
                             }
 
                             const isZero = (totalAccountCharges === 0 && totalCurrentCharges === 0);
@@ -1221,17 +1218,27 @@
                 }
 
                 // ---------- SORTING: preserve cluster/department grouping ----------
-                // First compute group order for departments: min displayOrder per departmentName
+                // Compute group order for departments: min displayOrder, then min id
                 const deptGroupOrder = {};
+                const deptGroupMinId = {};
                 for (const row of rows) {
                     if (row.entityType === 'department' && row.departmentName) {
                         const key = row.departmentName;
                         if (!deptGroupOrder[key] || row.displayOrder < deptGroupOrder[key]) {
                             deptGroupOrder[key] = row.displayOrder;
+                            deptGroupMinId[key] = row.entityId;
+                        } else if (row.displayOrder === deptGroupOrder[key] && row.entityId < deptGroupMinId[key]) {
+                            deptGroupMinId[key] = row.entityId;
                         }
                     }
                 }
+                // Sort department names by (minOrder, minId)
+                const sortedDeptGroups = Object.keys(deptGroupOrder).sort((a, b) => {
+                    if (deptGroupOrder[a] !== deptGroupOrder[b]) return deptGroupOrder[a] - deptGroupOrder[b];
+                    return deptGroupMinId[a] - deptGroupMinId[b];
+                });
 
+                // Sort rows
                 rows.sort((a, b) => {
                     // Schools first, then departments
                     if (a.entityType !== b.entityType) {
@@ -1244,22 +1251,15 @@
                         const clusterB = parseInt(b.cluster) || 999;
                         if (clusterA !== clusterB) return clusterA - clusterB;
                     } else {
-                        // Departments: sort by group order (min displayOrder of the department name)
-                        const groupA = deptGroupOrder[a.departmentName] || a.displayOrder;
-                        const groupB = deptGroupOrder[b.departmentName] || b.displayOrder;
-                        if (groupA !== groupB) return groupA - groupB;
+                        // Departments: sort by group index, then display_order, then id
+                        const idxA = sortedDeptGroups.indexOf(a.departmentName);
+                        const idxB = sortedDeptGroups.indexOf(b.departmentName);
+                        if (idxA !== idxB) return idxA - idxB;
                     }
 
                     // Fallback: display_order, then id
-                    const orderA = a.displayOrder !== undefined ? a.displayOrder : a.entityId;
-                    const orderB = b.displayOrder !== undefined ? b.displayOrder : b.entityId;
-                    if (orderA !== orderB) return orderA - orderB;
-
-                    // Within same entity, sort by account number then bill ID
-                    const accA = a.accountNumber || '';
-                    const accB = b.accountNumber || '';
-                    if (accA !== accB) return accA.localeCompare(accB);
-                    return (a.billId || 0) - (b.billId || 0);
+                    if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
+                    return a.entityId - b.entityId;
                 });
 
                 return rows;
