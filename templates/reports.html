@@ -994,6 +994,112 @@
             });
             const currentDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+            const subtotalKeys = [];
+            if (subtotalOptions.showConsumption) subtotalKeys.push('totalConsumption');
+            if (subtotalOptions.showBillAmount) subtotalKeys.push('totalBillAmount');
+            if (subtotalOptions.showOutstanding) subtotalKeys.push('totalOutstanding');
+
+            let colConfig = [];
+            colConfig.push({ key: 'no', label: 'No.', show: true, required: true });
+            if (selectedColumns.entityName !== false) colConfig.push({ key: 'entityName', label: 'Entity Name', show: true });
+            if (selectedColumns.entityType !== false) colConfig.push({ key: 'entityType', label: 'Type', show: true });
+
+            if (hasWaterElectricity) {
+                if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
+                if (selectedColumns.meterNumber !== false) colConfig.push({ key: 'meterTelNo', label: 'Meter No.', show: true });
+                if (selectedColumns.consumption !== false) colConfig.push({ key: 'consumption', label: hasWater ? 'Consumption (m³)' : 'Consumption (kWh)', show: true });
+                if (selectedColumns.billAmount !== false) colConfig.push({ key: 'billAmount', label: 'Bill Amount ($)', show: true });
+                if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
+                if (selectedColumns.outstanding !== false) colConfig.push({ key: 'outstanding', label: 'Outstanding ($)', show: true });
+                if (subtotalOptions.showConsumption) colConfig.push({ key: 'totalConsumption', label: 'Total Consumption', show: true });
+                if (subtotalOptions.showBillAmount) colConfig.push({ key: 'totalBillAmount', label: 'Total Bill Amount ($)', show: true });
+                if (subtotalOptions.showOutstanding) colConfig.push({ key: 'totalOutstanding', label: 'Total Outstanding ($)', show: true });
+            }
+
+            if (hasTelephone) {
+                if (selectedColumns.accountNumber !== false) colConfig.push({ key: 'accountNumber', label: 'Account No.', show: true });
+                if (selectedColumns.phoneNumber !== false) colConfig.push({ key: 'phoneNumber', label: 'Phone No.', show: true });
+                if (selectedColumns.billNumber !== false) colConfig.push({ key: 'billNumber', label: 'Bill No.', show: true });
+                if (selectedColumns.totalAccountCharges !== false) colConfig.push({ key: 'totalAccountCharges', label: 'Total Account Charges ($)', show: true });
+                if (selectedColumns.previousOutstanding !== false) colConfig.push({ key: 'previousOutstanding', label: 'Previous Outstanding ($)', show: true });
+                if (selectedColumns.previousPayment !== false) colConfig.push({ key: 'previousPayment', label: 'Previous Payment ($)', show: true });
+                if (selectedColumns.totalCurrentCharges !== false) colConfig.push({ key: 'totalCurrentCharges', label: 'Total Current Charges ($)', show: true });
+                if (selectedColumns.amountPaid !== false) colConfig.push({ key: 'amountPaid', label: 'Amount Paid ($)', show: true });
+                if (selectedColumns.period !== false) colConfig.push({ key: 'period', label: 'Period', show: true });
+            }
+
+            const visibleCols = colConfig.filter(c => c.show !== false);
+
+            // Define utilityTypeLabels here so it's in scope
+            const utilityTypeLabels = utilityTypes ? utilityTypes.map(u => {
+                if (u === 'water') return '💧 Water';
+                if (u === 'electricity') return '⚡ Electricity';
+                if (u === 'telephone') return '📞 Telephone';
+                return u;
+            }).join(', ') : '';
+
+            let summaryColIndex = visibleCols.length - 1;
+            if (hasTelephone) {
+                const totalCurrentIdx = visibleCols.findIndex(c => c.key === 'totalCurrentCharges');
+                if (totalCurrentIdx !== -1) summaryColIndex = totalCurrentIdx;
+                else {
+                    const totalAccountIdx = visibleCols.findIndex(c => c.key === 'totalAccountCharges');
+                    if (totalAccountIdx !== -1) summaryColIndex = totalAccountIdx;
+                }
+            } else if (hasWaterElectricity) {
+                const totalBillIdx = visibleCols.findIndex(c => c.key === 'totalBillAmount');
+                if (totalBillIdx !== -1) {
+                    summaryColIndex = totalBillIdx;
+                } else {
+                    const billIdx = visibleCols.findIndex(c => c.key === 'billAmount');
+                    if (billIdx !== -1) summaryColIndex = billIdx;
+                    else {
+                        const consIdx = visibleCols.findIndex(c => c.key === 'consumption' || c.key === 'totalConsumption');
+                        if (consIdx !== -1) summaryColIndex = consIdx;
+                    }
+                }
+            }
+            if (summaryColIndex < 0) summaryColIndex = 0;
+
+            let balanceColIndex = -1;
+            if (hasTelephone) {
+                const numericCols = visibleCols.filter(c => ['totalAccountCharges', 'totalCurrentCharges', 'billAmount', 'amountPaid', 'outstanding'].includes(c.key));
+                if (numericCols.length > 0) {
+                    const lastNumeric = numericCols[numericCols.length - 1];
+                    balanceColIndex = visibleCols.indexOf(lastNumeric);
+                } else {
+                    balanceColIndex = visibleCols.length - 2;
+                }
+                if (balanceColIndex < 1) balanceColIndex = visibleCols.length - 2;
+                if (balanceColIndex < 0) balanceColIndex = 0;
+            } else if (hasWaterElectricity) {
+                const totalBillIdx = visibleCols.findIndex(c => c.key === 'totalBillAmount');
+                if (totalBillIdx !== -1) {
+                    balanceColIndex = totalBillIdx;
+                } else {
+                    const billIdx = visibleCols.findIndex(c => c.key === 'billAmount');
+                    if (billIdx !== -1) balanceColIndex = billIdx;
+                }
+            }
+
+            let tableClass = 'print-table-water';
+            if (hasTelephone) tableClass = 'print-table-telephone';
+            else if (hasElectricity) tableClass = 'print-table-electricity';
+
+            function getBillAmount(bill) {
+                if (hasTelephone) {
+                    if (visibleCols.some(c => c.key === 'totalAccountCharges')) {
+                        return bill.totalAccountCharges || 0;
+                    } else if (visibleCols.some(c => c.key === 'totalCurrentCharges')) {
+                        return bill.totalCurrentCharges || 0;
+                    } else {
+                        return bill.totalAccountCharges || 0;
+                    }
+                } else {
+                    return bill.current_charges || bill.bill_amount || 0;
+                }
+            }
+
             // Pre-compute department group order from all departments (not just rows)
             const deptGroupOrder = {};
             const deptGroupMinId = {};
@@ -1025,7 +1131,7 @@
                 return parseInt(a) - parseInt(b);
             });
 
-            // Pass these to buildTelephoneRows
+            // Build telephone rows with the precomputed orders
             function buildTelephoneRows(entityData, includeZero) {
                 const rows = [];
 
@@ -1207,7 +1313,7 @@
                 // Compute overall grand total
                 let overallGrandTotal = allRows.reduce((sum, row) => sum + row.totalAccountCharges, 0);
 
-                function renderTelephonePage(rows, pageIndex, totalPages, cumulativeTotal, startRowNumber, overallGrandTotal) {
+                function renderTelephonePage(rows, pageIndex, totalPages, cumulativeTotal, startRowNumber, overallGrandTotal, utilityTypeLabels) {
                     let pageHtml = '';
                     let pageTotalValue = 0;
                     let rowNumber = startRowNumber;
@@ -1449,7 +1555,7 @@
                     for (const row of rows) {
                         pageTotal += row.totalAccountCharges || 0;
                     }
-                    const result = renderTelephonePage(rows, pageIndex, pages.length, cumulative, currentRowNumber, overallGrandTotal);
+                    const result = renderTelephonePage(rows, pageIndex, pages.length, cumulative, currentRowNumber, overallGrandTotal, utilityTypeLabels);
                     printHtml += result.html;
                     currentRowNumber = result.nextRowNumber;
                     cumulative += pageTotal;
@@ -1678,10 +1784,6 @@
                     }
                     return item;
                 });
-
-                // We don't need to sort entityList here because the telephone-specific sorting in buildTelephoneRows will handle it.
-                // But we keep a basic sort for non-telephone? Actually we will rely on the sorting inside buildTelephoneRows.
-                // For safety, we still sort entityList roughly, but the real order is determined by buildTelephoneRows.
 
                 console.log('📄 Final entities after fallback:', entityList.length);
 
