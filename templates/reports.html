@@ -1099,7 +1099,7 @@
                 }
             }
 
-            // ===== BUILD TELEPHONE ROWS – SORTED BY GLOBAL DISPLAY_ORDER =====
+            // ===== BUILD TELEPHONE ROWS – SCHOOLS BY CLUSTER, DEPARTMENTS BY GLOBAL DISPLAY_ORDER =====
             function buildTelephoneRows(entityData, includeZero) {
                 const rows = [];
 
@@ -1167,6 +1167,8 @@
                                     amountPaid: amountPaid,
                                     period: period,
                                     billId: bill.id,
+                                    cluster: entity.clusterNumber || null,
+                                    departmentName: entity.departmentName || null,
                                     displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : 999
                                 });
                             }
@@ -1205,16 +1207,33 @@
                                 amountPaid: amountPaid,
                                 period: period,
                                 billId: bill.id,
+                                cluster: entity.clusterNumber || null,
+                                departmentName: entity.departmentName || null,
                                 displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : 999
                             });
                         }
                     }
                 }
 
-                // ---------- SORT BY GLOBAL DISPLAY_ORDER ----------
+                // ---------- SORT: Schools by cluster, Departments by global display_order ----------
                 rows.sort((a, b) => {
-                    if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
-                    return a.entityId - b.entityId;
+                    // Schools first, then departments
+                    if (a.entityType !== b.entityType) {
+                        return a.entityType === 'school' ? -1 : 1;
+                    }
+
+                    if (a.entityType === 'school') {
+                        // Schools: sort by cluster number, then display_order, then id
+                        const clusterA = parseInt(a.cluster) || 999;
+                        const clusterB = parseInt(b.cluster) || 999;
+                        if (clusterA !== clusterB) return clusterA - clusterB;
+                        if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
+                        return a.entityId - b.entityId;
+                    } else {
+                        // Departments: sort by global display_order, then id
+                        if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
+                        return a.entityId - b.entityId;
+                    }
                 });
 
                 return rows;
@@ -1704,12 +1723,25 @@
                     });
                 }
 
-                // Sort entityList by global display_order (exactly like Departments tab)
+                // Sort entityList by global display_order (for departments) but keep schools clustering later
+                // We'll sort by type (schools first) and then within each type by appropriate order.
                 entityList.sort((a, b) => {
-                    const orderA = a.entity.displayOrder !== undefined ? a.entity.displayOrder : 999;
-                    const orderB = b.entity.displayOrder !== undefined ? b.entity.displayOrder : 999;
-                    if (orderA !== orderB) return orderA - orderB;
-                    return a.entity.id - b.entity.id;
+                    if (a.type !== b.type) return a.type === 'school' ? -1 : 1;
+                    if (a.type === 'school') {
+                        const cA = parseInt(a.entity.clusterNumber) || 999;
+                        const cB = parseInt(b.entity.clusterNumber) || 999;
+                        if (cA !== cB) return cA - cB;
+                        const orderA = a.entity.displayOrder !== undefined ? a.entity.displayOrder : 999;
+                        const orderB = b.entity.displayOrder !== undefined ? b.entity.displayOrder : 999;
+                        if (orderA !== orderB) return orderA - orderB;
+                        return a.entity.id - b.entity.id;
+                    } else {
+                        // Departments: sort by global display_order, then id
+                        const orderA = a.entity.displayOrder !== undefined ? a.entity.displayOrder : 999;
+                        const orderB = b.entity.displayOrder !== undefined ? b.entity.displayOrder : 999;
+                        if (orderA !== orderB) return orderA - orderB;
+                        return a.entity.id - b.entity.id;
+                    }
                 });
 
                 console.log('📄 Final entities after sorting:', entityList.length);
