@@ -1131,57 +1131,95 @@
                 return parseInt(a) - parseInt(b);
             });
 
-            // Build telephone rows with the precomputed orders
-            function buildTelephoneRows(entityData, includeZero) {
-                const rows = [];
+            // ===== TELEPHONE BRANCH (unchanged) =====
+            if (hasTelephone) {
+                function buildTelephoneRows(entityData, includeZero) {
+                    const rows = [];
 
-                for (const entityGroup of entityData) {
-                    const entity = entityGroup.entity;
-                    const entityType = entityGroup.type;
-                    const entityName = entity.name || (entityType === 'school' ? 'School #' + entity.id : 'Dept #' + entity.id);
-                    const bills = entityGroup.bills || [];
+                    for (const entityGroup of entityData) {
+                        const entity = entityGroup.entity;
+                        const entityType = entityGroup.type;
+                        const entityName = entity.name || (entityType === 'school' ? 'School #' + entity.id : 'Dept #' + entity.id);
+                        const bills = entityGroup.bills || [];
 
-                    for (const bill of bills) {
-                        const billMonth = bill.month;
-                        const billYear = bill.year;
-                        const period = (billMonth && billYear) ? getMonthName(parseInt(billMonth)) + ' ' + billYear : (monthName + ' ' + yearDisplay);
+                        for (const bill of bills) {
+                            const billMonth = bill.month;
+                            const billYear = bill.year;
+                            const period = (billMonth && billYear) ? getMonthName(parseInt(billMonth)) + ' ' + billYear : (monthName + ' ' + yearDisplay);
 
-                        // Get notes and parse
-                        let parsedNotes = {};
-                        let hasAccounts = false;
-                        const notes = bill.notes;
-                        if (notes && typeof notes === 'string') {
-                            try {
-                                parsedNotes = JSON.parse(notes);
-                                if (parsedNotes.accounts && typeof parsedNotes.accounts === 'object' && Object.keys(parsedNotes.accounts).length > 0) {
-                                    hasAccounts = true;
+                            // Get notes and parse
+                            let parsedNotes = {};
+                            let hasAccounts = false;
+                            const notes = bill.notes;
+                            if (notes && typeof notes === 'string') {
+                                try {
+                                    parsedNotes = JSON.parse(notes);
+                                    if (parsedNotes.accounts && typeof parsedNotes.accounts === 'object' && Object.keys(parsedNotes.accounts).length > 0) {
+                                        hasAccounts = true;
+                                    }
+                                } catch (e) { /* ignore */ }
+                            }
+
+                            // If we have multiple accounts in notes, iterate over them
+                            if (hasAccounts) {
+                                const accountsObj = parsedNotes.accounts;
+                                for (const accKey in accountsObj) {
+                                    const accData = accountsObj[accKey];
+                                    if (!accData || typeof accData !== 'object') continue;
+
+                                    let totalAccountCharges = accData.totalAccountCharges || 0;
+                                    let totalCurrentCharges = accData.totalCurrentCharges || 0;
+                                    let previousOutstanding = accData.previousOutstanding || 0;
+                                    let previousPayment = accData.previousPayment || 0;
+                                    let amountPaid = accData.amountPaid || 0;
+                                    let accountNumber = accData.accountNumber || accKey || bill.account_number || '';
+                                    let billNumber = accData.billNumber || bill.bill_number || '';
+                                    let phoneNumber = '';
+                                    if (accData.phones && accData.phones.length > 0) {
+                                        phoneNumber = accData.phones.map(p => p.phoneNumber).join(', ');
+                                    } else {
+                                        phoneNumber = bill.phone_number || '';
+                                    }
+
+                                    const isZero = (totalAccountCharges === 0 && totalCurrentCharges === 0);
+                                    if (!includeZero && isZero) continue;
+
+                                    rows.push({
+                                        entityId: entity.id,
+                                        entityType: entityType,
+                                        entityName: entityName,
+                                        accountNumber: accountNumber,
+                                        phoneNumber: phoneNumber,
+                                        billNumber: billNumber,
+                                        totalAccountCharges: totalAccountCharges,
+                                        previousOutstanding: previousOutstanding,
+                                        previousPayment: previousPayment,
+                                        totalCurrentCharges: totalCurrentCharges,
+                                        amountPaid: amountPaid,
+                                        period: period,
+                                        billId: bill.id,
+                                        entity: entity,
+                                        cluster: entity.clusterNumber || null,
+                                        departmentName: entity.departmentName || null,
+                                        displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
+                                    });
                                 }
-                            } catch (e) { /* ignore */ }
-                        }
+                            } else {
+                                let totalAccountCharges = bill.current_charges || 0;
+                                let totalCurrentCharges = (bill.current_charges || 0) + (bill.unsettled_charges || 0);
+                                let previousOutstanding = bill.unsettled_charges || 0;
+                                let previousPayment = 0;
+                                let amountPaid = bill.amount_paid || 0;
+                                let accountNumber = bill.account_number || '';
+                                let billNumber = bill.bill_number || '';
+                                let phoneNumber = bill.phone_number || '';
 
-                        // If we have multiple accounts in notes, iterate over them
-                        if (hasAccounts) {
-                            const accountsObj = parsedNotes.accounts;
-                            for (const accKey in accountsObj) {
-                                const accData = accountsObj[accKey];
-                                if (!accData || typeof accData !== 'object') continue;
-
-                                // Extract account data
-                                let totalAccountCharges = accData.totalAccountCharges || 0;
-                                let totalCurrentCharges = accData.totalCurrentCharges || 0;
-                                let previousOutstanding = accData.previousOutstanding || 0;
-                                let previousPayment = accData.previousPayment || 0;
-                                let amountPaid = accData.amountPaid || 0;
-                                let accountNumber = accData.accountNumber || accKey || bill.account_number || '';
-                                let billNumber = accData.billNumber || bill.bill_number || '';
-                                let phoneNumber = '';
-                                if (accData.phones && accData.phones.length > 0) {
-                                    phoneNumber = accData.phones.map(p => p.phoneNumber).join(', ');
-                                } else {
-                                    phoneNumber = bill.phone_number || '';
+                                if (parsedNotes) {
+                                    if (parsedNotes.totalAccountCharges !== undefined) totalAccountCharges = parsedNotes.totalAccountCharges;
+                                    if (parsedNotes.totalCurrentCharges !== undefined) totalCurrentCharges = parsedNotes.totalCurrentCharges;
+                                    if (parsedNotes.previousPayment !== undefined) previousPayment = parsedNotes.previousPayment;
                                 }
 
-                                // Determine if row should be included (zero check)
                                 const isZero = (totalAccountCharges === 0 && totalCurrentCharges === 0);
                                 if (!includeZero && isZero) continue;
 
@@ -1205,90 +1243,41 @@
                                     displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
                                 });
                             }
-                        } else {
-                            // Fallback: single row from bill (no accounts object)
-                            let totalAccountCharges = bill.current_charges || 0;
-                            let totalCurrentCharges = (bill.current_charges || 0) + (bill.unsettled_charges || 0);
-                            let previousOutstanding = bill.unsettled_charges || 0;
-                            let previousPayment = 0;
-                            let amountPaid = bill.amount_paid || 0;
-                            let accountNumber = bill.account_number || '';
-                            let billNumber = bill.bill_number || '';
-                            let phoneNumber = bill.phone_number || '';
-
-                            // Try to extract legacy fields from parsedNotes if available
-                            if (parsedNotes) {
-                                if (parsedNotes.totalAccountCharges !== undefined) totalAccountCharges = parsedNotes.totalAccountCharges;
-                                if (parsedNotes.totalCurrentCharges !== undefined) totalCurrentCharges = parsedNotes.totalCurrentCharges;
-                                if (parsedNotes.previousPayment !== undefined) previousPayment = parsedNotes.previousPayment;
-                            }
-
-                            const isZero = (totalAccountCharges === 0 && totalCurrentCharges === 0);
-                            if (!includeZero && isZero) continue;
-
-                            rows.push({
-                                entityId: entity.id,
-                                entityType: entityType,
-                                entityName: entityName,
-                                accountNumber: accountNumber,
-                                phoneNumber: phoneNumber,
-                                billNumber: billNumber,
-                                totalAccountCharges: totalAccountCharges,
-                                previousOutstanding: previousOutstanding,
-                                previousPayment: previousPayment,
-                                totalCurrentCharges: totalCurrentCharges,
-                                amountPaid: amountPaid,
-                                period: period,
-                                billId: bill.id,
-                                entity: entity,
-                                cluster: entity.clusterNumber || null,
-                                departmentName: entity.departmentName || null,
-                                displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
-                            });
                         }
                     }
+
+                    rows.sort((a, b) => {
+                        if (a.entityType !== b.entityType) {
+                            return a.entityType === 'school' ? -1 : 1;
+                        }
+
+                        if (a.entityType === 'school') {
+                            const clusterA = a.cluster || 'Unassigned';
+                            const clusterB = b.cluster || 'Unassigned';
+                            const idxA = sortedClusters.indexOf(clusterA);
+                            const idxB = sortedClusters.indexOf(clusterB);
+                            if (idxA !== idxB) return idxA - idxB;
+                        } else {
+                            const deptA = a.departmentName || 'Other';
+                            const deptB = b.departmentName || 'Other';
+                            const idxA = sortedDeptGroups.indexOf(deptA);
+                            const idxB = sortedDeptGroups.indexOf(deptB);
+                            if (idxA !== idxB) return idxA - idxB;
+                        }
+
+                        const orderA = a.displayOrder !== undefined ? a.displayOrder : a.entityId;
+                        const orderB = b.displayOrder !== undefined ? b.displayOrder : b.entityId;
+                        if (orderA !== orderB) return orderA - orderB;
+
+                        const accA = a.accountNumber || '';
+                        const accB = b.accountNumber || '';
+                        if (accA !== accB) return accA.localeCompare(accB);
+                        return (a.billId || 0) - (b.billId || 0);
+                    });
+
+                    return rows;
                 }
 
-                // ---------- SORTING: preserve cluster/department grouping ----------
-                rows.sort((a, b) => {
-                    // Schools first, then departments
-                    if (a.entityType !== b.entityType) {
-                        return a.entityType === 'school' ? -1 : 1;
-                    }
-
-                    if (a.entityType === 'school') {
-                        // Schools: sort by cluster order (from all schools), then display_order, then id
-                        const clusterA = a.cluster || 'Unassigned';
-                        const clusterB = b.cluster || 'Unassigned';
-                        const idxA = sortedClusters.indexOf(clusterA);
-                        const idxB = sortedClusters.indexOf(clusterB);
-                        if (idxA !== idxB) return idxA - idxB;
-                    } else {
-                        // Departments: sort by group order (from all departments), then display_order, then id
-                        const deptA = a.departmentName || 'Other';
-                        const deptB = b.departmentName || 'Other';
-                        const idxA = sortedDeptGroups.indexOf(deptA);
-                        const idxB = sortedDeptGroups.indexOf(deptB);
-                        if (idxA !== idxB) return idxA - idxB;
-                    }
-
-                    // Fallback: display_order, then id
-                    const orderA = a.displayOrder !== undefined ? a.displayOrder : a.entityId;
-                    const orderB = b.displayOrder !== undefined ? b.displayOrder : b.entityId;
-                    if (orderA !== orderB) return orderA - orderB;
-
-                    // Within same entity, sort by account number then bill ID
-                    const accA = a.accountNumber || '';
-                    const accB = b.accountNumber || '';
-                    if (accA !== accB) return accA.localeCompare(accB);
-                    return (a.billId || 0) - (b.billId || 0);
-                });
-
-                return rows;
-            }
-
-            // ===== If telephone is selected, use row‑per‑account =====
-            if (hasTelephone) {
                 const includeZero = document.getElementById('showAllEntities').checked;
                 const allRows = buildTelephoneRows(entityData, includeZero);
                 if (allRows.length === 0) {
@@ -1309,8 +1298,6 @@
                 let totalPages = pages.length;
                 let cumulativeTotal = 0;
                 let globalRowNumber = 1;
-
-                // Compute overall grand total
                 let overallGrandTotal = allRows.reduce((sum, row) => sum + row.totalAccountCharges, 0);
 
                 function renderTelephonePage(rows, pageIndex, totalPages, cumulativeTotal, startRowNumber, overallGrandTotal, utilityTypeLabels) {
@@ -1318,12 +1305,10 @@
                     let pageTotalValue = 0;
                     let rowNumber = startRowNumber;
 
-                    // Compute page total
                     for (const row of rows) {
                         pageTotalValue += row.totalAccountCharges || 0;
                     }
 
-                    // Page header
                     pageHtml += '<div class="print-page"><div class="print-header">' +
                         '<div class="report-title-print">KEMENTERIAN PENDIDIKAN</div>' +
                         '<div class="report-subtitle-print">' + titleText + '</div>' +
@@ -1332,18 +1317,15 @@
                         (totalPages > 1 ? '<p style="font-size:8pt;">Page ' + pageIndex + ' of ' + totalPages + '</p>' : '') +
                         '</div>';
 
-                    // Balance b/f
                     if (pageIndex > 1) {
                         const bfAmount = cumulativeTotal;
                         pageHtml += '<div class="balance-bf-wrapper"><span class="bf-label">Balance b/f</span><span class="bf-amount">' + formatNumberWithCommas(bfAmount) + '</span></div>';
                     }
 
-                    // Start table
                     pageHtml += '<div class="table-wrapper-scroll"><table class="print-table ' + tableClass + '"><thead><tr>' +
                         visibleCols.map(c => '<th style="font-size:8pt; white-space:normal; word-wrap:break-word; text-align:center;">' + c.label + '</th>').join('') +
                         '</tr></thead><tbody>';
 
-                    // Group rows by entity for rowspan (only for entity name)
                     let entityGroups = [];
                     let currentEntity = null;
                     let rowBuffer = [];
@@ -1381,7 +1363,6 @@
                                         pageHtml += '<td style="text-align:center; font-size:7.5pt;" rowspan="' + rowspan + '">' + (row.entityType === 'school' ? '🏫 School' : '🏛️ Department') + '</td>';
                                     }
                                 } else if (key === 'accountNumber') {
-                                    // Always show account number for each row (no rowspan)
                                     pageHtml += '<td class="mono-cell" style="font-size:8pt; text-align:center;">' + escapeHtml(row.accountNumber) + '</td>';
                                 } else if (key === 'phoneNumber') {
                                     pageHtml += '<td style="font-size:7.5pt; text-align:center;">' + escapeHtml(row.phoneNumber) + '</td>';
@@ -1408,7 +1389,6 @@
                         }
                     }
 
-                    // Page total row
                     pageHtml += '<tr class="summary-row">';
                     visibleCols.forEach((col, idx) => {
                         if (idx === summaryColIndex) {
@@ -1425,7 +1405,6 @@
                     });
                     pageHtml += '</tr>';
 
-                    // Balance c/f
                     if (pageIndex < totalPages) {
                         const cfAmount = cumulativeTotal + pageTotalValue;
                         const lastColIndex = visibleCols.length - 1;
@@ -1442,7 +1421,6 @@
                         pageHtml += '</tr>';
                     }
 
-                    // Grand total on last page – use overallGrandTotal
                     if (pageIndex === totalPages) {
                         pageHtml += '<tr class="total-sum-row">';
                         visibleCols.forEach((col, idx) => {
@@ -1463,13 +1441,11 @@
 
                     pageHtml += '</tbody></table></div>';
 
-                    // Footer
                     pageHtml += '<div class="footer-note">' +
                         (totalPages > 1 ? 'Page ' + pageIndex + ' of ' + totalPages + ' | ' : '') +
                         'Total Accounts: ' + rows.length + ' | This is a computer-generated document.' +
                         '</div>';
 
-                    // Approval footer on last page
                     if (pageIndex === totalPages) {
                         pageHtml += '<div class="approval-page"><div class="approval-footer"><div style="text-align:left; font-weight:700; font-size:11pt; margin-bottom:10px;">PENGESAHAN OLEH</div><div class="approval-grid">' +
                             '<div class="approval-item"><div class="label">Disediakan oleh</div>' +
@@ -1497,7 +1473,6 @@
                     return { html: pageHtml, nextRowNumber: rowNumber };
                 }
 
-                // Build the final HTML
                 let printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>&nbsp;</title><style>' +
                     'body { font-family: "Inter", sans-serif; font-size: 9pt; margin: 0; }' +
                     '.print-page { page-break-after: always; }' +
@@ -1574,9 +1549,360 @@
                 return;
             }
 
-            // ===== NON‑TELEPHONE (water / electricity) – unchanged =====
-            // (The original code for water/electricity is preserved, not shown for brevity)
-            // [Full non-telephone logic would go here, but since the user only wants telephone fix, we keep it as is.]
+            // ===== WATER / ELECTRICITY BRANCH (new) =====
+            if (hasWaterElectricity) {
+                const includeZero = document.getElementById('showAllEntities').checked;
+
+                // Build rows for water/electricity: one row per bill
+                function buildWaterElectricityRows(entityData, includeZero) {
+                    const rows = [];
+                    for (const entityGroup of entityData) {
+                        const entity = entityGroup.entity;
+                        const entityType = entityGroup.type;
+                        const entityName = entity.name || (entityType === 'school' ? 'School #' + entity.id : 'Dept #' + entity.id);
+                        const bills = entityGroup.bills || [];
+
+                        for (const bill of bills) {
+                            const billMonth = bill.month;
+                            const billYear = bill.year;
+                            const period = (billMonth && billYear) ? getMonthName(parseInt(billMonth)) + ' ' + billYear : (monthName + ' ' + yearDisplay);
+
+                            let accountNumber = bill.account_number || '';
+                            let meterNumber = bill.meter_number || '';
+                            let consumption = bill.consumption_m3 || bill.consumption_kwh || 0;
+                            let currentCharges = bill.current_charges || 0;
+                            let unsettledCharges = bill.unsettled_charges || 0;
+                            let amountPaid = bill.amount_paid || 0;
+
+                            const isZero = (currentCharges === 0 && consumption === 0);
+                            if (!includeZero && isZero) continue;
+
+                            rows.push({
+                                entityId: entity.id,
+                                entityType: entityType,
+                                entityName: entityName,
+                                accountNumber: accountNumber,
+                                meterNumber: meterNumber,
+                                consumption: consumption,
+                                billAmount: currentCharges,
+                                outstanding: unsettledCharges,
+                                amountPaid: amountPaid,
+                                period: period,
+                                billId: bill.id,
+                                entity: entity,
+                                cluster: entity.clusterNumber || null,
+                                departmentName: entity.departmentName || null,
+                                displayOrder: entity.displayOrder !== undefined ? entity.displayOrder : entity.id
+                            });
+                        }
+                    }
+
+                    // Sort using same cluster/department order
+                    rows.sort((a, b) => {
+                        if (a.entityType !== b.entityType) {
+                            return a.entityType === 'school' ? -1 : 1;
+                        }
+
+                        if (a.entityType === 'school') {
+                            const clusterA = a.cluster || 'Unassigned';
+                            const clusterB = b.cluster || 'Unassigned';
+                            const idxA = sortedClusters.indexOf(clusterA);
+                            const idxB = sortedClusters.indexOf(clusterB);
+                            if (idxA !== idxB) return idxA - idxB;
+                        } else {
+                            const deptA = a.departmentName || 'Other';
+                            const deptB = b.departmentName || 'Other';
+                            const idxA = sortedDeptGroups.indexOf(deptA);
+                            const idxB = sortedDeptGroups.indexOf(deptB);
+                            if (idxA !== idxB) return idxA - idxB;
+                        }
+
+                        const orderA = a.displayOrder !== undefined ? a.displayOrder : a.entityId;
+                        const orderB = b.displayOrder !== undefined ? b.displayOrder : b.entityId;
+                        if (orderA !== orderB) return orderA - orderB;
+
+                        const accA = a.accountNumber || '';
+                        const accB = b.accountNumber || '';
+                        if (accA !== accB) return accA.localeCompare(accB);
+                        return (a.billId || 0) - (b.billId || 0);
+                    });
+
+                    return rows;
+                }
+
+                const allRows = buildWaterElectricityRows(entityData, includeZero);
+                if (allRows.length === 0) {
+                    alert('No water/electricity bills found for the selected criteria.');
+                    return;
+                }
+
+                const rowsPerPage = Math.max(1, itemsPerPage);
+                let pages = [];
+                if (shouldPaginate && allRows.length > rowsPerPage) {
+                    for (let i = 0; i < allRows.length; i += rowsPerPage) {
+                        pages.push(allRows.slice(i, i + rowsPerPage));
+                    }
+                } else {
+                    pages = [allRows];
+                }
+
+                let totalPages = pages.length;
+                let cumulativeTotal = 0;
+                let globalRowNumber = 1;
+                let overallGrandTotal = allRows.reduce((sum, row) => sum + row.billAmount, 0);
+
+                function renderWaterElectricityPage(rows, pageIndex, totalPages, cumulativeTotal, startRowNumber, overallGrandTotal) {
+                    let pageHtml = '';
+                    let pageTotalValue = 0;
+                    let rowNumber = startRowNumber;
+
+                    for (const row of rows) {
+                        pageTotalValue += row.billAmount || 0;
+                    }
+
+                    pageHtml += '<div class="print-page"><div class="print-header">' +
+                        '<div class="report-title-print">KEMENTERIAN PENDIDIKAN</div>' +
+                        '<div class="report-subtitle-print">' + titleText + '</div>' +
+                        '<div class="report-date-print">For ' + monthName + ' ' + yearDisplay + ' | Generated: ' + reportDate + '</div>' +
+                        '<p style="font-size:8pt; margin-top:2px;">Utilities: ' + utilityTypeLabels + '</p>' +
+                        (totalPages > 1 ? '<p style="font-size:8pt;">Page ' + pageIndex + ' of ' + totalPages + '</p>' : '') +
+                        '</div>';
+
+                    if (pageIndex > 1) {
+                        const bfAmount = cumulativeTotal;
+                        pageHtml += '<div class="balance-bf-wrapper"><span class="bf-label">Balance b/f</span><span class="bf-amount">' + formatNumberWithCommas(bfAmount) + '</span></div>';
+                    }
+
+                    pageHtml += '<div class="table-wrapper-scroll"><table class="print-table ' + tableClass + '"><thead><tr>' +
+                        visibleCols.map(c => '<th style="font-size:8pt; white-space:normal; word-wrap:break-word; text-align:center;">' + c.label + '</th>').join('') +
+                        '</tr></thead><tbody>';
+
+                    // Group by entity name for rowspan
+                    let entityGroups = [];
+                    let currentEntity = null;
+                    let rowBuffer = [];
+                    for (const row of rows) {
+                        if (currentEntity === null) {
+                            currentEntity = row.entityName;
+                        }
+                        if (row.entityName !== currentEntity) {
+                            entityGroups.push({ entityName: currentEntity, rows: rowBuffer });
+                            currentEntity = row.entityName;
+                            rowBuffer = [];
+                        }
+                        rowBuffer.push(row);
+                    }
+                    if (rowBuffer.length > 0) {
+                        entityGroups.push({ entityName: currentEntity, rows: rowBuffer });
+                    }
+
+                    for (const eg of entityGroups) {
+                        const rowsInGroup = eg.rows;
+                        const rowspan = rowsInGroup.length;
+                        for (let r = 0; r < rowsInGroup.length; r++) {
+                            const row = rowsInGroup[r];
+                            pageHtml += '<tr>';
+                            visibleCols.forEach((col, idx) => {
+                                const key = col.key;
+                                if (key === 'no') {
+                                    pageHtml += '<td style="text-align:center; font-size:7.5pt;">' + rowNumber + '</td>';
+                                } else if (key === 'entityName') {
+                                    if (r === 0) {
+                                        pageHtml += '<td class="entity-name-cell" style="vertical-align:middle; font-weight:700; font-size:8.5pt; text-align:left;" rowspan="' + rowspan + '">' + escapeHtml(row.entityName) + '</td>';
+                                    }
+                                } else if (key === 'entityType') {
+                                    if (r === 0) {
+                                        pageHtml += '<td style="text-align:center; font-size:7.5pt;" rowspan="' + rowspan + '">' + (row.entityType === 'school' ? '🏫 School' : '🏛️ Department') + '</td>';
+                                    }
+                                } else if (key === 'accountNumber') {
+                                    // Show account number for every row
+                                    pageHtml += '<td class="mono-cell" style="font-size:8pt; text-align:center;">' + escapeHtml(row.accountNumber) + '</td>';
+                                } else if (key === 'meterTelNo' || key === 'meterNumber') {
+                                    pageHtml += '<td style="font-size:7.5pt; text-align:center;">' + escapeHtml(row.meterNumber) + '</td>';
+                                } else if (key === 'consumption') {
+                                    pageHtml += '<td style="font-size:7.5pt; text-align:center;">' + formatNumberWithCommas(row.consumption) + '</td>';
+                                } else if (key === 'billAmount') {
+                                    pageHtml += '<td class="currency-cell" style="font-size:7.5pt; text-align:center;">' + formatNumberWithCommas(row.billAmount) + '</td>';
+                                } else if (key === 'amountPaid') {
+                                    pageHtml += '<td class="currency-cell" style="font-size:7.5pt; text-align:center;">' + formatNumberWithCommas(row.amountPaid) + '</td>';
+                                } else if (key === 'outstanding') {
+                                    pageHtml += '<td class="currency-cell" style="font-size:7.5pt; text-align:center;">' + formatNumberWithCommas(row.outstanding) + '</td>';
+                                } else if (key === 'period') {
+                                    pageHtml += '<td class="period-column" style="font-size:7.5pt; text-align:center;">' + row.period + '</td>';
+                                } else {
+                                    pageHtml += '<td>&nbsp;</td>';
+                                }
+                            });
+                            pageHtml += '</tr>';
+                            rowNumber++;
+                        }
+                    }
+
+                    // Page total row
+                    pageHtml += '<tr class="summary-row">';
+                    visibleCols.forEach((col, idx) => {
+                        if (idx === summaryColIndex) {
+                            pageHtml += '<td class="currency-cell" style="font-weight:600; text-align:center;">' + formatNumberWithCommas(pageTotalValue) + '</td>';
+                        } else if (idx < summaryColIndex) {
+                            if (idx === summaryColIndex - 1) {
+                                pageHtml += '<td style="font-weight:600; text-align:right;">Page Total:</td>';
+                            } else {
+                                pageHtml += '<td>&nbsp;</td>';
+                            }
+                        } else {
+                            pageHtml += '<td>&nbsp;</td>';
+                        }
+                    });
+                    pageHtml += '</tr>';
+
+                    // Balance c/f
+                    if (pageIndex < totalPages) {
+                        const cfAmount = cumulativeTotal + pageTotalValue;
+                        const lastColIndex = visibleCols.length - 1;
+                        const labelColIndex = Math.min(balanceColIndex, lastColIndex - 1);
+                        pageHtml += '<tr class="balance-row">';
+                        for (let i = 0; i < labelColIndex; i++) {
+                            pageHtml += '<td>&nbsp;</td>';
+                        }
+                        pageHtml += '<td style="text-align:right; font-weight:700; padding-right:30px;"><span class="balance-label">Balance c/f</span></td>';
+                        for (let i = labelColIndex + 1; i < lastColIndex; i++) {
+                            pageHtml += '<td>&nbsp;</td>';
+                        }
+                        pageHtml += '<td class="currency-cell" style="font-weight:700; text-align:center;">' + formatNumberWithCommas(cfAmount) + '</td>';
+                        pageHtml += '</tr>';
+                    }
+
+                    // Grand total on last page
+                    if (pageIndex === totalPages) {
+                        pageHtml += '<tr class="total-sum-row">';
+                        visibleCols.forEach((col, idx) => {
+                            if (idx === summaryColIndex) {
+                                pageHtml += '<td class="currency-cell" style="font-weight:700; text-align:center;">' + formatNumberWithCommas(overallGrandTotal) + '</td>';
+                            } else if (idx < summaryColIndex) {
+                                if (idx === summaryColIndex - 1) {
+                                    pageHtml += '<td style="font-weight:700; text-align:right;">Total Sum:</td>';
+                                } else {
+                                    pageHtml += '<td>&nbsp;</td>';
+                                }
+                            } else {
+                                pageHtml += '<td>&nbsp;</td>';
+                            }
+                        });
+                        pageHtml += '</tr>';
+                    }
+
+                    pageHtml += '</tbody></table></div>';
+
+                    pageHtml += '<div class="footer-note">' +
+                        (totalPages > 1 ? 'Page ' + pageIndex + ' of ' + totalPages + ' | ' : '') +
+                        'Total Accounts: ' + rows.length + ' | This is a computer-generated document.' +
+                        '</div>';
+
+                    if (pageIndex === totalPages) {
+                        pageHtml += '<div class="approval-page"><div class="approval-footer"><div style="text-align:left; font-weight:700; font-size:11pt; margin-bottom:10px;">PENGESAHAN OLEH</div><div class="approval-grid">' +
+                            '<div class="approval-item"><div class="label">Disediakan oleh</div>' +
+                            '<div class="field"><span class="field-label">Nama:</span><span class="field-value">' + escapeHtml(approvalDetails.prepared.name) + '</span></div>' +
+                            '<div class="field"><span class="field-label">I/C:</span><span class="field-value">' + escapeHtml(approvalDetails.prepared.ic) + '</span></div>' +
+                            '<div class="field"><span class="field-label">Jawatan:</span><span class="field-value">' + escapeHtml(approvalDetails.prepared.position) + '</span></div>' +
+                            '<div class="signature-line">Tandatangan: _________________________</div>' +
+                            '<div class="date-line">Tarikh: ' + currentDate + '</div></div>' +
+                            '<div class="approval-item"><div class="label">Disemak oleh</div>' +
+                            '<div class="field"><span class="field-label">Nama:</span><span class="field-value">' + escapeHtml(approvalDetails.checked.name) + '</span></div>' +
+                            '<div class="field"><span class="field-label">I/C:</span><span class="field-value">' + escapeHtml(approvalDetails.checked.ic) + '</span></div>' +
+                            '<div class="field"><span class="field-label">Jawatan:</span><span class="field-value">' + escapeHtml(approvalDetails.checked.position) + '</span></div>' +
+                            '<div class="signature-line">Tandatangan: _________________________</div>' +
+                            '<div class="date-line">Tarikh: ' + currentDate + '</div></div>' +
+                            '<div class="approval-item"><div class="label">Disahkan oleh</div>' +
+                            '<div class="field"><span class="field-label">Nama:</span><span class="field-value">' + escapeHtml(approvalDetails.verified.name) + '</span></div>' +
+                            '<div class="field"><span class="field-label">I/C:</span><span class="field-value">' + escapeHtml(approvalDetails.verified.ic) + '</span></div>' +
+                            '<div class="field"><span class="field-label">Jawatan:</span><span class="field-value">' + escapeHtml(approvalDetails.verified.position) + '</span></div>' +
+                            '<div class="signature-line">Tandatangan: _________________________</div>' +
+                            '<div class="date-line">Tarikh: ' + currentDate + '</div></div>' +
+                            '</div></div></div>';
+                    }
+
+                    pageHtml += '</div>';
+                    return { html: pageHtml, nextRowNumber: rowNumber };
+                }
+
+                let printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>&nbsp;</title><style>' +
+                    'body { font-family: "Inter", sans-serif; font-size: 9pt; margin: 0; }' +
+                    '.print-page { page-break-after: always; }' +
+                    '.print-page:last-child { page-break-after: auto; }' +
+                    '.print-header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #1a56db; padding-bottom: 12px; }' +
+                    '.report-title-print { font-size: 14pt; font-weight: 700; color: #1a56db; }' +
+                    '.report-subtitle-print { font-size: 12pt; font-weight: 600; color: #1e3a5f; margin-top: 4px; }' +
+                    '.report-date-print { font-size: 8.5pt; color: #475569; margin-top: 4px; }' +
+                    '@page { margin: 0.4in; @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #666; } }' +
+                    'table { width: 100%; border-collapse: collapse; font-size: 8pt; border-color: #000; table-layout: fixed; }' +
+                    'th, td { border: 2px solid #000; padding: 6px 10px; text-align: center; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; }' +
+                    'thead th { background: #dbeafe !important; color: #000; font-weight: 600; white-space: normal; word-wrap: break-word; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }' +
+                    'thead { background: #dbeafe; }' +
+                    'th:first-child, td:first-child { width: 20px !important; min-width: 20px !important; max-width: 20px !important; padding: 2px 0 !important; text-align: center; white-space: nowrap; overflow: hidden; font-size: 7pt; }' +
+                    'th:nth-child(2), td:nth-child(2) { width: 25%; text-align: left; }' +
+                    'th:nth-child(4), td:nth-child(4) { width: 17%; min-width: 100px; text-align: center; }' +
+                    'th:not(:first-child):not(:nth-child(2)):not(:nth-child(4)), td:not(:first-child):not(:nth-child(2)):not(:nth-child(4)) { width: auto; }' +
+                    '.currency-cell { font-weight: 500; }' +
+                    '.mono-cell { font-family: monospace; }' +
+                    '.entity-name-cell { font-weight: 600; max-width: 120px; word-break: break-word; text-align: left; }' +
+                    '.balance-row td:first-child { padding-right: 30px !important; }' +
+                    '.balance-row td:last-child { text-align: center; }' +
+                    '.balance-row .balance-label { font-weight: 700; color: #92400e; }' +
+                    '.balance-row .currency-cell { font-weight: 700; color: #92400e; }' +
+                    '.summary-row { background: #f8fafc; font-weight: 600; }' +
+                    '.summary-row td { border-top: 2px solid #000; }' +
+                    '.total-sum-row { background: #e8f4fd; font-weight: 700; }' +
+                    '.total-sum-row td { border-top: 3px double #000; }' +
+                    '.period-column { white-space: nowrap; }' +
+                    '.balance-bf-wrapper { text-align: right; padding: 4px 10px; margin-bottom: 4px; font-weight: 700; font-size: 8.5pt; border: 2px solid #000; background: #fef3c7; display: flex; justify-content: flex-end; align-items: center; gap: 20px; padding-right: 20px; }' +
+                    '.balance-bf-wrapper .bf-label { color: #92400e; }' +
+                    '.balance-bf-wrapper .bf-amount { font-weight: 700; color: #92400e; min-width: 80px; text-align: center; }' +
+                    '.approval-page { page-break-before: always; page-break-after: avoid; page-break-inside: avoid; margin-top: 20px; padding-top: 10px; }' +
+                    '.approval-footer { margin-top: 30px; padding-top: 20px; border-top: 2px solid #1a56db; width: 100%; font-size: 9pt; page-break-inside: avoid; page-break-after: avoid; }' +
+                    '.approval-footer .approval-grid { display: flex; flex-direction: column; gap: 20px; margin-top: 15px; align-items: flex-start; }' +
+                    '.approval-footer .approval-item { border: 1px solid #000; padding: 14px 20px; border-radius: 4px; background: #f8fafc; max-width: 500px; width: 100%; page-break-inside: avoid; }' +
+                    '.approval-footer .approval-item .label { font-weight: 700; font-size: 10pt; color: #1a56db; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; }' +
+                    '.approval-footer .approval-item .field { font-size: 8.5pt; margin: 4px 0; display: flex; align-items: baseline; }' +
+                    '.approval-footer .approval-item .field .field-label { font-weight: 600; color: #475569; width: 70px; flex-shrink: 0; }' +
+                    '.approval-footer .approval-item .field .field-value { font-weight: 500; color: #1e293b; padding-left: 8px; }' +
+                    '.approval-footer .approval-item .signature-line { margin-top: 10px; padding-bottom: 2px; min-height: 22px; color: #000; font-size: 8.5pt; text-align: left; border-bottom: none; font-style: normal; }' +
+                    '.approval-footer .approval-item .date-line { margin-top: 0px; padding-bottom: 4px; min-height: 18px; color: #000; font-size: 8.5pt; text-align: left; border-bottom: none; font-style: normal; }' +
+                    '.footer-note { margin-top: 16px; text-align: center; font-size: 7.5pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 8px; }' +
+                    '.render-url { display: none !important; }' +
+                    '@page { size: portrait; margin: 0.4in; }' +
+                    '@media print { body { margin: 0; } .print-page { page-break-after: always; } .render-url { display: none !important; } }' +
+                    '</style></head><body>';
+
+                let cumulative = 0;
+                let currentRowNumber = 1;
+                for (let i = 0; i < pages.length; i++) {
+                    const rows = pages[i];
+                    const pageIndex = i + 1;
+                    let pageTotal = 0;
+                    for (const row of rows) {
+                        pageTotal += row.billAmount || 0;
+                    }
+                    const result = renderWaterElectricityPage(rows, pageIndex, pages.length, cumulative, currentRowNumber, overallGrandTotal);
+                    printHtml += result.html;
+                    currentRowNumber = result.nextRowNumber;
+                    cumulative += pageTotal;
+                }
+
+                printHtml += '<script>window.onload=function(){setTimeout(function(){window.print();},500);};<\/script></body></html>';
+
+                const previewWindow = window.open('', '_blank');
+                if (previewWindow) {
+                    previewWindow.document.write(printHtml);
+                    previewWindow.document.close();
+                    previewWindow.focus();
+                } else {
+                    alert('⚠️ Please allow pop-ups for this site to print.');
+                }
+                return;
+            }
+
+            // Fallback if neither telephone nor water/electricity (should not happen)
+            alert('No utility type selected for printing.');
         }
 
         // ====== PRINT BUTTON CLICK HANDLER ======
