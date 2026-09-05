@@ -755,9 +755,16 @@
         let schoolsList = filteredEntities.filter(e => e.type === 'school');
         let departmentsList = filteredEntities.filter(e => e.type === 'department');
 
+        // ===== SCHOOL SORTING (unchanged, but ensure display_order is used) =====
         schoolsList.sort((a, b) => {
-            const clusterA = a.clusterNumber ? parseInt(a.clusterNumber.replace('CLUSTER ', '')) : 999;
-            const clusterB = b.clusterNumber ? parseInt(b.clusterNumber.replace('CLUSTER ', '')) : 999;
+            // Convert cluster to number for sorting
+            const getClusterNum = (clusterStr) => {
+                if (!clusterStr || clusterStr === 'Unassigned') return 999;
+                const num = parseInt(clusterStr.replace('CLUSTER ', ''));
+                return isNaN(num) ? 999 : num;
+            };
+            const clusterA = getClusterNum(a.clusterNumber);
+            const clusterB = getClusterNum(b.clusterNumber);
             if (clusterA !== clusterB) return clusterA - clusterB;
             const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
             const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
@@ -765,48 +772,57 @@
             return (a.originalId || a.id) - (b.originalId || b.id);
         });
 
-        // ===== FIXED DEPARTMENT GROUPING AND SORTING =====
-        // Sort all departments by (display_order, department_name, id) first
-        const allDepartmentsSorted = [...allDepartments].sort((a, b) => {
-            const orderA = a.display_order !== undefined ? a.display_order : a.id;
-            const orderB = b.display_order !== undefined ? b.display_order : b.id;
-            if (orderA !== orderB) return orderA - orderB;
-            const nameA = (a.department_name || '').toLowerCase();
-            const nameB = (b.department_name || '').toLowerCase();
-            if (nameA !== nameB) return nameA.localeCompare(nameB);
-            return a.id - b.id;
+        // ===== DEPARTMENT GROUPING (using the working logic from Telephone tab) =====
+        // Group departments by department_name, then division_name
+        const deptMap = new Map();
+        departmentsList.forEach(dept => {
+            const deptName = dept.departmentName || 'Other';
+            const divName = dept.divisionName || 'Other';
+            if (!deptMap.has(deptName)) deptMap.set(deptName, new Map());
+            const divMap = deptMap.get(deptName);
+            if (!divMap.has(divName)) divMap.set(divName, []);
+            divMap.get(divName).push(dept);
         });
 
-        // Group by department_name, preserving order of first occurrence (which is by display_order)
-        const deptMap = new Map();
-        const deptOrder = [];
-        for (const dept of allDepartmentsSorted) {
-            const key = dept.department_name || 'Other';
-            if (!deptMap.has(key)) {
-                deptMap.set(key, []);
-                deptOrder.push(key);
-            }
-            deptMap.get(key).push(dept);
-        }
+        // Sort department groups by min display_order (or min id)
+        const sortedDeptNames = Array.from(deptMap.keys()).sort((a, b) => {
+            const deptA = deptMap.get(a);
+            const deptB = deptMap.get(b);
+            const minOrderA = Math.min(...Array.from(deptA.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+            const minOrderB = Math.min(...Array.from(deptB.values()).flat().map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+            if (minOrderA !== minOrderB) return minOrderA - minOrderB;
+            const minIdA = Math.min(...Array.from(deptA.values()).flat().map(d => d.originalId || d.id));
+            const minIdB = Math.min(...Array.from(deptB.values()).flat().map(d => d.originalId || d.id));
+            return minIdA - minIdB;
+        });
 
-        // Now filter to only those departments that have accounts in departmentsList
-        // But we need to keep the order from deptOrder
-        const deptGroups = [];
-        const deptIdsInList = new Set(departmentsList.map(d => d.id));
-        for (const key of deptOrder) {
-            const units = deptMap.get(key);
-            const filteredUnits = units.filter(d => deptIdsInList.has(d.id));
-            if (filteredUnits.length > 0) {
-                // Sort units by display_order (already sorted but ensure)
-                filteredUnits.sort((a, b) => {
-                    const orderA = a.display_order !== undefined ? a.display_order : a.id;
-                    const orderB = b.display_order !== undefined ? b.display_order : b.id;
+        // Build sorted department data with divisions
+        const sortedDeptData = [];
+        sortedDeptNames.forEach(deptName => {
+            const divMap = deptMap.get(deptName);
+            const sortedDivNames = Array.from(divMap.keys()).sort((a, b) => {
+                const unitsA = divMap.get(a);
+                const unitsB = divMap.get(b);
+                const minOrderA = Math.min(...unitsA.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+                const minOrderB = Math.min(...unitsB.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
+                if (minOrderA !== minOrderB) return minOrderA - minOrderB;
+                const minIdA = Math.min(...unitsA.map(d => d.originalId || d.id));
+                const minIdB = Math.min(...unitsB.map(d => d.originalId || d.id));
+                return minIdA - minIdB;
+            });
+            const divisions = [];
+            sortedDivNames.forEach(divName => {
+                const units = divMap.get(divName);
+                units.sort((a, b) => {
+                    const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
+                    const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
                     if (orderA !== orderB) return orderA - orderB;
-                    return a.id - b.id;
+                    return (a.originalId || a.id) - (b.originalId || b.id);
                 });
-                deptGroups.push({ departmentName: key, units: filteredUnits });
-            }
-        }
+                divisions.push({ divisionName: divName, units: units });
+            });
+            sortedDeptData.push({ departmentName: deptName, divisions: divisions });
+        });
 
         // Render clusters (schools)
         const schoolsByCluster = new Map();
@@ -894,32 +910,77 @@
             }
         }
 
-        // Render departments using the new deptGroups order
-        for (const deptGroup of deptGroups) {
-            const deptName = deptGroup.departmentName;
-            const units = deptGroup.units;
+        // Render departments using the sortedDeptData
+        for (const deptData of sortedDeptData) {
+            const deptName = deptData.departmentName;
+            const divisions = deptData.divisions;
             let totalAccountsInDept = 0;
-            // Count only units that have visible accounts after filtering
-            const visibleUnits = [];
-            for (const unit of units) {
-                // We need to check if this unit has any visible accounts after status filter
-                // We'll reuse the existing logic, but for now we'll just render it if it has accounts
-                // The renderEntity function will handle visibility internally.
-                // So we just pass all units and let renderEntity filter.
-                visibleUnits.push(unit);
+            let totalUnitsInDept = 0;
+            // Count visible units and accounts after status filter
+            const visibleDivisions = [];
+            for (const divData of divisions) {
+                const units = divData.units;
+                const visibleUnits = [];
+                for (const entity of units) {
+                    // Check if this entity has any visible meters after status filter
+                    // We'll use the same visibility logic as above
+                    let hasVisible = false;
+                    for (let a = 0; a < entity.accountGroups.length; a++) {
+                        const account = entity.accountGroups[a];
+                        const meters = account.meters || [];
+                        for (let m = 0; m < meters.length; m++) {
+                            const meter = meters[m];
+                            const meterNum = meter.meterNumber || '';
+                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year, lookup);
+                            if (statusFilter === 'all' ||
+                                (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
+                                (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
+                                hasVisible = true;
+                                break;
+                            }
+                        }
+                        if (hasVisible) break;
+                    }
+                    if (hasVisible) {
+                        visibleUnits.push(entity);
+                    }
+                }
+                if (visibleUnits.length > 0) {
+                    visibleDivisions.push({ divisionName: divData.divisionName, units: visibleUnits });
+                    totalUnitsInDept += visibleUnits.length;
+                    visibleUnits.forEach(entity => {
+                        let accountCount = 0;
+                        for (let a = 0; a < entity.accountGroups.length; a++) {
+                            const account = entity.accountGroups[a];
+                            const meters = account.meters || [];
+                            for (let m = 0; m < meters.length; m++) {
+                                const meter = meters[m];
+                                const meterNum = meter.meterNumber || '';
+                                const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year, lookup);
+                                if (statusFilter === 'all' ||
+                                    (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
+                                    (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
+                                    accountCount++;
+                                }
+                            }
+                        }
+                        totalAccountsInDept += accountCount;
+                    });
+                }
             }
-            if (visibleUnits.length === 0) continue;
-            // Count total accounts for display
-            for (const unit of visibleUnits) {
-                totalAccountsInDept += unit.accountGroups.length;
-            }
+
+            if (visibleDivisions.length === 0) continue;
+
             const deptSep = document.createElement('tr');
             deptSep.className = 'department-group-separator';
-            deptSep.innerHTML = `<td colspan="12"><div class="dept-group-info"><span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span><span class="dept-group-count">${visibleUnits.length} unit${visibleUnits.length>1?'s':''}, ${totalAccountsInDept} account${totalAccountsInDept>1?'s':''}</span></div></td>`;
+            deptSep.innerHTML = `<td colspan="12"><div class="dept-group-info"><span class="department-name-badge">🏢 ${escapeHtml(deptName)}</span><span class="dept-group-count">${totalUnitsInDept} unit${totalUnitsInDept>1?'s':''}, ${totalAccountsInDept} account${totalAccountsInDept>1?'s':''}</span></div></td>`;
             tbody.appendChild(deptSep);
-            for (const entity of visibleUnits) {
-                globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, entityNumber, lookup);
-                entityNumber++;
+
+            for (const divData of visibleDivisions) {
+                for (const entity of divData.units) {
+                    globalSerial = await renderEntity(tbody, entity, month, year, globalSerial, entityNumber, lookup);
+                    entityNumber++;
+                }
             }
         }
 
