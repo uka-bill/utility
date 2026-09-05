@@ -1131,7 +1131,7 @@
                 return parseInt(a) - parseInt(b);
             });
 
-            // ===== TELEPHONE BRANCH (unchanged) =====
+            // ===== TELEPHONE BRANCH (unchanged except balance labels swapped) =====
             if (hasTelephone) {
                 function buildTelephoneRows(entityData, includeZero) {
                     const rows = [];
@@ -1317,9 +1317,10 @@
                         (totalPages > 1 ? '<p style="font-size:8pt;">Page ' + pageIndex + ' of ' + totalPages + '</p>' : '') +
                         '</div>';
 
+                    // --- At the top: Balance c/f (carried forward from previous pages) ---
                     if (pageIndex > 1) {
-                        const bfAmount = cumulativeTotal;
-                        pageHtml += '<div class="balance-bf-wrapper"><span class="bf-label">Balance b/f</span><span class="bf-amount">' + formatNumberWithCommas(bfAmount) + '</span></div>';
+                        const cfAmount = cumulativeTotal;
+                        pageHtml += '<div class="balance-bf-wrapper"><span class="bf-label">Balance c/f</span><span class="bf-amount">' + formatNumberWithCommas(cfAmount) + '</span></div>';
                     }
 
                     pageHtml += '<div class="table-wrapper-scroll"><table class="print-table ' + tableClass + '"><thead><tr>' +
@@ -1405,22 +1406,24 @@
                     });
                     pageHtml += '</tr>';
 
+                    // --- At the bottom: Balance b/f (to be brought forward to next page) ---
                     if (pageIndex < totalPages) {
-                        const cfAmount = cumulativeTotal + pageTotalValue;
+                        const bfAmount = cumulativeTotal + pageTotalValue;
                         const lastColIndex = visibleCols.length - 1;
                         const labelColIndex = Math.min(balanceColIndex, lastColIndex - 1);
                         pageHtml += '<tr class="balance-row">';
                         for (let i = 0; i < labelColIndex; i++) {
                             pageHtml += '<td>&nbsp;</td>';
                         }
-                        pageHtml += '<td style="text-align:right; font-weight:700; padding-right:30px;"><span class="balance-label">Balance c/f</span></td>';
+                        pageHtml += '<td style="text-align:right; font-weight:700; padding-right:30px;"><span class="balance-label">Balance b/f</span></td>';
                         for (let i = labelColIndex + 1; i < lastColIndex; i++) {
                             pageHtml += '<td>&nbsp;</td>';
                         }
-                        pageHtml += '<td class="currency-cell" style="font-weight:700; text-align:center;">' + formatNumberWithCommas(cfAmount) + '</td>';
+                        pageHtml += '<td class="currency-cell" style="font-weight:700; text-align:center;">' + formatNumberWithCommas(bfAmount) + '</td>';
                         pageHtml += '</tr>';
                     }
 
+                    // Grand total on last page
                     if (pageIndex === totalPages) {
                         pageHtml += '<tr class="total-sum-row">';
                         visibleCols.forEach((col, idx) => {
@@ -1446,6 +1449,7 @@
                         'Total Accounts: ' + rows.length + ' | This is a computer-generated document.' +
                         '</div>';
 
+                    // Approval footer on last page (date left blank)
                     if (pageIndex === totalPages) {
                         pageHtml += '<div class="approval-page"><div class="approval-footer"><div style="text-align:left; font-weight:700; font-size:11pt; margin-bottom:10px;">PENGESAHAN OLEH</div><div class="approval-grid">' +
                             '<div class="approval-item"><div class="label">Disediakan oleh</div>' +
@@ -1453,19 +1457,19 @@
                             '<div class="field"><span class="field-label">I/C:</span><span class="field-value">' + escapeHtml(approvalDetails.prepared.ic) + '</span></div>' +
                             '<div class="field"><span class="field-label">Jawatan:</span><span class="field-value">' + escapeHtml(approvalDetails.prepared.position) + '</span></div>' +
                             '<div class="signature-line">Tandatangan: _________________________</div>' +
-                            '<div class="date-line">Tarikh: ' + currentDate + '</div></div>' +
+                            '<div class="date-line">Tarikh: </div></div>' +
                             '<div class="approval-item"><div class="label">Disemak oleh</div>' +
                             '<div class="field"><span class="field-label">Nama:</span><span class="field-value">' + escapeHtml(approvalDetails.checked.name) + '</span></div>' +
                             '<div class="field"><span class="field-label">I/C:</span><span class="field-value">' + escapeHtml(approvalDetails.checked.ic) + '</span></div>' +
                             '<div class="field"><span class="field-label">Jawatan:</span><span class="field-value">' + escapeHtml(approvalDetails.checked.position) + '</span></div>' +
                             '<div class="signature-line">Tandatangan: _________________________</div>' +
-                            '<div class="date-line">Tarikh: ' + currentDate + '</div></div>' +
+                            '<div class="date-line">Tarikh: </div></div>' +
                             '<div class="approval-item"><div class="label">Disahkan oleh</div>' +
                             '<div class="field"><span class="field-label">Nama:</span><span class="field-value">' + escapeHtml(approvalDetails.verified.name) + '</span></div>' +
                             '<div class="field"><span class="field-label">I/C:</span><span class="field-value">' + escapeHtml(approvalDetails.verified.ic) + '</span></div>' +
                             '<div class="field"><span class="field-label">Jawatan:</span><span class="field-value">' + escapeHtml(approvalDetails.verified.position) + '</span></div>' +
                             '<div class="signature-line">Tandatangan: _________________________</div>' +
-                            '<div class="date-line">Tarikh: ' + currentDate + '</div></div>' +
+                            '<div class="date-line">Tarikh: </div></div>' +
                             '</div></div></div>';
                     }
 
@@ -1668,9 +1672,10 @@
                         (totalPages > 1 ? '<p style="font-size:8pt;">Page ' + pageIndex + ' of ' + totalPages + '</p>' : '') +
                         '</div>';
 
+                    // --- At the top: Balance c/f ---
                     if (pageIndex > 1) {
-                        const bfAmount = cumulativeTotal;
-                        pageHtml += '<div class="balance-bf-wrapper"><span class="bf-label">Balance b/f</span><span class="bf-amount">' + formatNumberWithCommas(bfAmount) + '</span></div>';
+                        const cfAmount = cumulativeTotal;
+                        pageHtml += '<div class="balance-bf-wrapper"><span class="bf-label">Balance c/f</span><span class="bf-amount">' + formatNumberWithCommas(cfAmount) + '</span></div>';
                     }
 
                     pageHtml += '<div class="table-wrapper-scroll"><table class="print-table ' + tableClass + '"><thead><tr>' +
@@ -1715,7 +1720,6 @@
                                         pageHtml += '<td style="text-align:center; font-size:7.5pt;" rowspan="' + rowspan + '">' + (row.entityType === 'school' ? '🏫 School' : '🏛️ Department') + '</td>';
                                     }
                                 } else if (key === 'accountNumber') {
-                                    // Show account number for every row
                                     pageHtml += '<td class="mono-cell" style="font-size:8pt; text-align:center;">' + escapeHtml(row.accountNumber) + '</td>';
                                 } else if (key === 'meterTelNo' || key === 'meterNumber') {
                                     pageHtml += '<td style="font-size:7.5pt; text-align:center;">' + escapeHtml(row.meterNumber) + '</td>';
@@ -1755,20 +1759,20 @@
                     });
                     pageHtml += '</tr>';
 
-                    // Balance c/f
+                    // --- At the bottom: Balance b/f ---
                     if (pageIndex < totalPages) {
-                        const cfAmount = cumulativeTotal + pageTotalValue;
+                        const bfAmount = cumulativeTotal + pageTotalValue;
                         const lastColIndex = visibleCols.length - 1;
                         const labelColIndex = Math.min(balanceColIndex, lastColIndex - 1);
                         pageHtml += '<tr class="balance-row">';
                         for (let i = 0; i < labelColIndex; i++) {
                             pageHtml += '<td>&nbsp;</td>';
                         }
-                        pageHtml += '<td style="text-align:right; font-weight:700; padding-right:30px;"><span class="balance-label">Balance c/f</span></td>';
+                        pageHtml += '<td style="text-align:right; font-weight:700; padding-right:30px;"><span class="balance-label">Balance b/f</span></td>';
                         for (let i = labelColIndex + 1; i < lastColIndex; i++) {
                             pageHtml += '<td>&nbsp;</td>';
                         }
-                        pageHtml += '<td class="currency-cell" style="font-weight:700; text-align:center;">' + formatNumberWithCommas(cfAmount) + '</td>';
+                        pageHtml += '<td class="currency-cell" style="font-weight:700; text-align:center;">' + formatNumberWithCommas(bfAmount) + '</td>';
                         pageHtml += '</tr>';
                     }
 
@@ -1798,6 +1802,7 @@
                         'Total Accounts: ' + rows.length + ' | This is a computer-generated document.' +
                         '</div>';
 
+                    // Approval footer on last page (date left blank)
                     if (pageIndex === totalPages) {
                         pageHtml += '<div class="approval-page"><div class="approval-footer"><div style="text-align:left; font-weight:700; font-size:11pt; margin-bottom:10px;">PENGESAHAN OLEH</div><div class="approval-grid">' +
                             '<div class="approval-item"><div class="label">Disediakan oleh</div>' +
@@ -1805,19 +1810,19 @@
                             '<div class="field"><span class="field-label">I/C:</span><span class="field-value">' + escapeHtml(approvalDetails.prepared.ic) + '</span></div>' +
                             '<div class="field"><span class="field-label">Jawatan:</span><span class="field-value">' + escapeHtml(approvalDetails.prepared.position) + '</span></div>' +
                             '<div class="signature-line">Tandatangan: _________________________</div>' +
-                            '<div class="date-line">Tarikh: ' + currentDate + '</div></div>' +
+                            '<div class="date-line">Tarikh: </div></div>' +
                             '<div class="approval-item"><div class="label">Disemak oleh</div>' +
                             '<div class="field"><span class="field-label">Nama:</span><span class="field-value">' + escapeHtml(approvalDetails.checked.name) + '</span></div>' +
                             '<div class="field"><span class="field-label">I/C:</span><span class="field-value">' + escapeHtml(approvalDetails.checked.ic) + '</span></div>' +
                             '<div class="field"><span class="field-label">Jawatan:</span><span class="field-value">' + escapeHtml(approvalDetails.checked.position) + '</span></div>' +
                             '<div class="signature-line">Tandatangan: _________________________</div>' +
-                            '<div class="date-line">Tarikh: ' + currentDate + '</div></div>' +
+                            '<div class="date-line">Tarikh: </div></div>' +
                             '<div class="approval-item"><div class="label">Disahkan oleh</div>' +
                             '<div class="field"><span class="field-label">Nama:</span><span class="field-value">' + escapeHtml(approvalDetails.verified.name) + '</span></div>' +
                             '<div class="field"><span class="field-label">I/C:</span><span class="field-value">' + escapeHtml(approvalDetails.verified.ic) + '</span></div>' +
                             '<div class="field"><span class="field-label">Jawatan:</span><span class="field-value">' + escapeHtml(approvalDetails.verified.position) + '</span></div>' +
                             '<div class="signature-line">Tandatangan: _________________________</div>' +
-                            '<div class="date-line">Tarikh: ' + currentDate + '</div></div>' +
+                            '<div class="date-line">Tarikh: </div></div>' +
                             '</div></div></div>';
                     }
 
