@@ -6,7 +6,6 @@
     <title>Telephone Utility - Direct Bill Entry</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== Same CSS as before – unchanged ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -540,7 +539,6 @@
         return entities;
     }
 
-    // ===== IMPROVED MATCHING: build a lookup map by account number =====
     function buildBillLookup(month, year) {
         const map = {};
         for (let bill of existingBills) {
@@ -555,14 +553,11 @@
         return String(acc).replace(/[()\s\-]/g, '').trim();
     }
 
-    // ===== Find bill by entity + account using the map =====
     function findBillByAccount(entityType, entityId, accountNumber, month, year, billMap) {
         const key = entityType + '|' + entityId + '|' + normalizeAccount(accountNumber);
         if (billMap && billMap[key]) {
-            console.log('✅ Found bill by account in map:', billMap[key].id, 'for account', accountNumber);
             return billMap[key];
         }
-        // Fallback: if not found in map, try to find by entity_id + month/year (only if exactly one)
         const candidates = existingBills.filter(bill =>
             bill.entity_type === entityType &&
             bill.entity_id === entityId &&
@@ -570,10 +565,8 @@
             bill.year === year
         );
         if (candidates.length === 1) {
-            console.log('⚠️ Using fallback: single bill for entity:', candidates[0].id);
             return candidates[0];
         }
-        console.log('❌ No matching bill found for account', accountNumber, 'entity', entityId);
         return null;
     }
 
@@ -656,7 +649,6 @@
             phoneDetails.push({ phoneNumber, rentalAmount: rental, totalAmount: totalAmt });
         });
 
-        // Get existing bill if any (using the same lookup logic)
         const billMap = buildBillLookup(month, year);
         const existingBill = findBillByAccount(entityType, entityId, accountNumber, month, year, billMap);
         let existingNotes = {};
@@ -816,9 +808,7 @@
         await loadAllEntities();
         await loadExistingBills(month, year);
 
-        // Build lookup map for bills by account
         const billMap = buildBillLookup(month, year);
-        console.log('📊 Bill lookup map built with', Object.keys(billMap).length, 'entries');
 
         let allEntities = buildEntityList();
         const entityListForTermination = allEntities.map(e => ({ id: e.id, name: e.name }));
@@ -854,7 +844,7 @@
             return (a.displayOrder || 999) - (b.displayOrder || 999) || (a.originalId || a.id) - (b.originalId || b.id);
         });
 
-        // Department grouping
+        // ===== DEPARTMENT GROUPING (group order = min id only) =====
         const deptMap = new Map();
         departmentsList.forEach(dept => {
             const deptName = dept.departmentName || 'Other';
@@ -864,9 +854,6 @@
 
         const sortedDeptNames = Array.from(deptMap.keys()).sort((a, b) => {
             const deptA = deptMap.get(a), deptB = deptMap.get(b);
-            const minOrderA = Math.min(...deptA.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
-            const minOrderB = Math.min(...deptB.map(d => d.displayOrder !== undefined ? d.displayOrder : 999));
-            if (minOrderA !== minOrderB) return minOrderA - minOrderB;
             const minIdA = Math.min(...deptA.map(d => d.originalId || d.id));
             const minIdB = Math.min(...deptB.map(d => d.originalId || d.id));
             return minIdA - minIdB;
@@ -933,7 +920,6 @@
 
         for (let account of entity.accountGroups) {
             const accountNumber = account.accountNumber || '—';
-            // Use the map to find the bill
             const existingBill = findBillByAccount(entity.type, entity.id, accountNumber, month, year, billMap);
             let parsedNotes = {};
             if (existingBill && existingBill.notes) {
@@ -1059,7 +1045,6 @@
             row.setAttribute('data-entity-type', acc.entityType);
             row.setAttribute('data-entity-name', acc.entityName);
             row.setAttribute('data-account', escapeHtml(acc.accountNumber));
-            // Store the bill ID on the row for saving
             if (acc.billId) {
                 row.setAttribute('data-bill-id', acc.billId);
             }
