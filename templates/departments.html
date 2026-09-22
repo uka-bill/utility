@@ -840,7 +840,6 @@
                 if (d.display_order === undefined || d.display_order === null) {
                     d.display_order = d.id;
                 }
-                // Ensure account arrays are parsed
                 if (d.water_accounts && typeof d.water_accounts === 'string') {
                     try { d.water_accounts = JSON.parse(d.water_accounts); } catch(e){ d.water_accounts = []; }
                 }
@@ -884,11 +883,9 @@
         });
     }
 
-    // ===== ENHANCED SEARCH: checks account numbers, meter numbers, phone numbers =====
     function departmentMatchesSearch(dept, searchTerm) {
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
-        // Basic fields
         if ((dept.unit_name || '').toLowerCase().includes(term)) return true;
         if ((dept.division_name || '').toLowerCase().includes(term)) return true;
         if ((dept.department_name || '').toLowerCase().includes(term)) return true;
@@ -896,7 +893,6 @@
         if ((dept.address || '').toLowerCase().includes(term)) return true;
         if ((dept.notes || '').toLowerCase().includes(term)) return true;
 
-        // Water accounts
         if (dept.water_accounts && Array.isArray(dept.water_accounts)) {
             for (let acc of dept.water_accounts) {
                 if ((acc.accountNumber || '').toLowerCase().includes(term)) return true;
@@ -909,7 +905,6 @@
             }
         }
 
-        // Electricity accounts
         if (dept.electricity_accounts && Array.isArray(dept.electricity_accounts)) {
             for (let acc of dept.electricity_accounts) {
                 if ((acc.accountNumber || '').toLowerCase().includes(term)) return true;
@@ -922,7 +917,6 @@
             }
         }
 
-        // Telephone accounts
         if (dept.telephone_accounts && Array.isArray(dept.telephone_accounts)) {
             for (let acc of dept.telephone_accounts) {
                 if ((acc.accountNumber || '').toLowerCase().includes(term)) return true;
@@ -961,10 +955,8 @@
             grouped[key].push(d);
         });
 
+        // ===== CHANGED: sort department groups by min id only =====
         const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
-            const minOrderA = Math.min(...grouped[a].map(d => d.display_order !== undefined ? d.display_order : d.id));
-            const minOrderB = Math.min(...grouped[b].map(d => d.display_order !== undefined ? d.display_order : d.id));
-            if (minOrderA !== minOrderB) return minOrderA - minOrderB;
             const minIdA = Math.min(...grouped[a].map(d => d.id));
             const minIdB = Math.min(...grouped[b].map(d => d.id));
             return minIdA - minIdB;
@@ -1079,23 +1071,14 @@
         });
     }
 
-    // ===== MOVE UP/DOWN (unchanged) =====
     async function moveDepartmentUp(deptId) { await moveDepartment(deptId, -1); }
     async function moveDepartmentDown(deptId) { await moveDepartment(deptId, 1); }
 
     async function moveDepartment(deptId, direction) {
-        console.log(`🔄 moveDepartment called: deptId=${deptId}, direction=${direction}`);
-
         const deptIndex = allDepartments.findIndex(d => d.id === deptId);
-        if (deptIndex === -1) {
-            console.error('❌ Department not found in allDepartments');
-            showMessage('Department not found', true);
-            return;
-        }
+        if (deptIndex === -1) { showMessage('Department not found', true); return; }
 
         const groupName = allDepartments[deptIndex].department_name || 'Other';
-        console.log(`📂 Group name: "${groupName}"`);
-
         const group = allDepartments
             .filter(d => (d.department_name || 'Other') === groupName)
             .sort((a, b) => {
@@ -1105,46 +1088,25 @@
                 return a.id - b.id;
             });
 
-        console.log('📋 Group order before move:');
-        group.forEach((d, idx) => {
-            console.log(`  ${idx}: ID=${d.id}, name="${d.unit_name}", display_order=${d.display_order}`);
-        });
-
         const currentPos = group.findIndex(d => d.id === deptId);
-        if (currentPos === -1) {
-            console.error('❌ Department not found in group');
-            showMessage('Department not found in group', true);
-            return;
-        }
+        if (currentPos === -1) { showMessage('Department not found in group', true); return; }
         const newPos = currentPos + direction;
-        if (newPos < 0 || newPos >= group.length) {
-            console.log('⛔ Cannot move further (already at edge)');
-            showMessage('Cannot move further', true);
-            return;
-        }
+        if (newPos < 0 || newPos >= group.length) { showMessage('Cannot move further', true); return; }
 
         const currentDept = group[currentPos];
         const neighborDept = group[newPos];
 
-        console.log(`🔄 Swapping ${currentDept.id} (${currentDept.unit_name}) with ${neighborDept.id} (${neighborDept.unit_name})`);
-
         if (currentDept.display_order === undefined) currentDept.display_order = currentDept.id;
         if (neighborDept.display_order === undefined) neighborDept.display_order = neighborDept.id;
 
-        console.log(`  Before swap: current.display_order=${currentDept.display_order}, neighbor.display_order=${neighborDept.display_order}`);
-
-        // ----- DUPLICATE DETECTION -----
         if (currentDept.display_order === neighborDept.display_order) {
-            console.warn('⚠️ Duplicate display_order values – renumbering the whole group.');
             const sortedGroup = group.slice().sort((a, b) => {
                 const orderA = a.display_order !== undefined ? a.display_order : a.id;
                 const orderB = b.display_order !== undefined ? b.display_order : b.id;
                 if (orderA !== orderB) return orderA - orderB;
                 return a.id - b.id;
             });
-            sortedGroup.forEach((d, idx) => {
-                d.display_order = idx + 1;
-            });
+            sortedGroup.forEach((d, idx) => { d.display_order = idx + 1; });
             try {
                 showLoading(true);
                 for (let d of sortedGroup) {
@@ -1167,9 +1129,7 @@
                 }
                 renderDepartments();
                 showMessage('Group reordered automatically');
-                console.log('✅ Group renumbered successfully');
             } catch (err) {
-                console.error('❌ Error renumbering group:', err);
                 showMessage('Error fixing duplicate order', true);
                 await loadDepartments();
             } finally {
@@ -1178,12 +1138,9 @@
             return;
         }
 
-        // ----- Normal swap -----
         const tempOrder = currentDept.display_order;
         currentDept.display_order = neighborDept.display_order;
         neighborDept.display_order = tempOrder;
-
-        console.log(`  After swap: current.display_order=${currentDept.display_order}, neighbor.display_order=${neighborDept.display_order}`);
 
         renderDepartments();
 
@@ -1234,7 +1191,6 @@
                 throw new Error(`Server returned ${resp2.status}: ${errText}`);
             }
 
-            console.log('✅ Move successful');
             showMessage('Order updated successfully');
 
         } catch (error) {
@@ -1246,7 +1202,6 @@
         }
     }
 
-    // ===== EDIT MODAL (unchanged) =====
     function openEditModal(deptId) {
         const dept = allDepartments.find(d => d.id === deptId);
         if (!dept) return;
@@ -1469,17 +1424,6 @@
 
     function collectFormData() {
         syncFormDataToObject();
-        console.log('📤 Sending department data:', {
-            unitName: document.getElementById('editUnitName')?.value || '',
-            divisionName: document.getElementById('editDivisionName')?.value || '',
-            departmentName: document.getElementById('editDepartmentName')?.value || '',
-            hotlineNumbers: document.getElementById('editHotlineNumbers')?.value || '',
-            address: document.getElementById('editAddress')?.value || '',
-            notes: document.getElementById('editNotes')?.value || '',
-            waterAccounts: currentEditingDept.water_accounts || [],
-            electricityAccounts: currentEditingDept.electricity_accounts || [],
-            telephoneAccounts: currentEditingDept.telephone_accounts || []
-        });
         return {
             unitName: document.getElementById('editUnitName')?.value || '',
             divisionName: document.getElementById('editDivisionName')?.value || '',
@@ -1566,7 +1510,6 @@
                 const newDeptId = result.department?.id;
                 if (!newDeptId) {
                     showMessage('Department created but no ID returned!', true);
-                    console.error('No ID in response:', result);
                     await loadDepartments();
                     return;
                 }
@@ -1590,16 +1533,14 @@
                         setTimeout(() => openEditModal(newDeptId), 500);
                     } else {
                         showMessage(`Department ID ${newDeptId} created but not found in list. Try refreshing.`, true);
-                        console.warn('New department not found in allDepartments after reload');
                     }
                 }, 300);
             } else {
                 showMessage(result.error || 'Failed to create department', true);
-                console.error('Creation error:', result);
             }
         } catch (error) {
             showMessage('Network error', true);
-            console.error('Network error:', error);
+            console.error(error);
         } finally {
             showLoading(false);
         }
