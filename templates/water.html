@@ -243,7 +243,6 @@
 </div>
 
 <script>
-    // ========== NUMBER FORMATTING HELPERS ==========
     function formatNumberWithCommas(num) {
         if (num === undefined || num === null || isNaN(num)) return '0.00';
         return Number(num).toLocaleString('en-US', {
@@ -264,7 +263,6 @@
         return parseFloat(cleaned) || 0;
     }
 
-    // ========== MAIN SCRIPT ==========
     let allSchools = [];
     let allDepartments = [];
     let existingBills = [];
@@ -711,17 +709,16 @@
         let schoolsList = filteredEntities.filter(e => e.type === 'school');
         let departmentsList = filteredEntities.filter(e => e.type === 'department');
 
+        // ===== FIXED SCHOOL SORT: display_order<=0 → use id (creation order) =====
         schoolsList.sort((a, b) => {
             const clusterA = a.clusterNumber ? parseInt(a.clusterNumber.replace('CLUSTER ', '')) : 999;
             const clusterB = b.clusterNumber ? parseInt(b.clusterNumber.replace('CLUSTER ', '')) : 999;
             if (clusterA !== clusterB) return clusterA - clusterB;
-            const orderA = a.displayOrder !== undefined ? a.displayOrder : 999;
-            const orderB = b.displayOrder !== undefined ? b.displayOrder : 999;
-            if (orderA !== orderB) return orderA - orderB;
-            return (a.originalId || a.id) - (b.originalId || b.id);
+            const orderA = (a.displayOrder && a.displayOrder > 0) ? a.displayOrder : (a.originalId || a.id);
+            const orderB = (b.displayOrder && b.displayOrder > 0) ? b.displayOrder : (b.originalId || b.id);
+            return orderA - orderB;
         });
 
-        // ===== DEPARTMENT GROUPING (group order = min id only) =====
         const deptMap = new Map();
         departmentsList.forEach(dept => {
             const deptName = dept.departmentName || 'Other';
