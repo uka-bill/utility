@@ -314,18 +314,20 @@
             background: white;
         }
         
-        .id-cell {
+        /* Consistent "No." cell styling (matches departments ID cell) */
+        .seq-cell {
             font-weight: 600;
             color: var(--primary);
             text-align: center;
         }
         
-        .seq-cell {
-            font-weight: bold;
-            color: #2c5282;
-            text-align: center;
-            background-color: #f8f9fa;
-            border-right: 2px solid #dee2e6;
+        .db-id-label {
+            display: block;
+            font-size: 0.75rem;
+            color: #6c757d;
+            font-weight: normal;
+            font-style: italic;
+            margin-top: 2px;
         }
         
         .no-data-row {
@@ -365,23 +367,6 @@
             border-radius: 10px;
             font-size: 0.8rem;
             font-weight: normal;
-        }
-        
-        .sequence-info {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 2px;
-        }
-        
-        .sequence-number {
-            font-size: 1.1rem;
-            font-weight: bold;
-        }
-        
-        .db-id-label {
-            font-size: 0.7rem;
-            color: #6c757d;
         }
     </style>
 </head>
@@ -686,9 +671,6 @@
             }
             
             // Sort schools
-            // IMPORTANT: The main sort is BY ID (creation order).
-            // Even if you choose another option, the final grouping in renderSchoolsTable
-            // still groups by cluster, and within each cluster, by ID.
             filteredSchools.sort((a, b) => {
                 switch(sortBy) {
                     case 'id':
@@ -728,16 +710,10 @@
             
             tableBody.innerHTML = '';
             
-            // ============================================================
-            // STEP 1: Sort ALL schools by ID (creation order) FIRST
-            // This ensures that within each cluster, schools are ordered
-            // by the time they were created (their database ID).
-            // ============================================================
+            // STEP 1: Sort ALL schools by ID (creation order)
             const sortedSchools = [...schools].sort((a, b) => a.id - b.id);
             
-            // ============================================================
             // STEP 2: Group by cluster, keeping creation order inside
-            // ============================================================
             const schoolsByCluster = {};
             sortedSchools.forEach(school => {
                 const cluster = school.cluster_number || 'Unknown';
@@ -747,10 +723,7 @@
                 schoolsByCluster[cluster].push(school);
             });
             
-            // ============================================================
-            // STEP 3: Sort the clusters themselves numerically
-            // So they appear as Cluster 1, Cluster 2, Cluster 3, ...
-            // ============================================================
+            // STEP 3: Sort clusters numerically (Cluster 1, 2, 3...)
             const clusters = Object.keys(schoolsByCluster).sort((a, b) => {
                 const numA = parseInt(a);
                 const numB = parseInt(b);
@@ -763,9 +736,7 @@
             // Track sequence number across all clusters
             let sequenceNumber = 1;
             
-            // ============================================================
-            // STEP 4: Render each cluster (with its schools in creation order)
-            // ============================================================
+            // STEP 4: Render each cluster
             clusters.forEach((cluster) => {
                 const clusterSchools = schoolsByCluster[cluster];
                 
@@ -787,10 +758,8 @@
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td class="seq-cell">
-                            <div class="sequence-info">
-                                <span class="sequence-number">${sequenceNumber}</span>
-                                <span class="db-id-label">ID: ${school.id}</span>
-                            </div>
+                            ${sequenceNumber}
+                            <span class="db-id-label">ID: ${school.id}</span>
                         </td>
                         <td>${school.name}</td>
                         <td><span class="badge badge-cluster">${school.cluster_number}</span></td>
