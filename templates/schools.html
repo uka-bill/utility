@@ -842,6 +842,15 @@
         });
     }
 
+    // ===== HELPER: Get effective display order =====
+    // If display_order is missing, null, or 0 → fall back to id (creation order)
+    function getEffectiveOrder(school) {
+        if (school.display_order && school.display_order > 0) {
+            return school.display_order;
+        }
+        return school.id;
+    }
+
     // ===== LOAD SCHOOLS =====
     async function loadSchools() {
         try {
@@ -967,8 +976,9 @@
         const result = [];
         sortedKeys.forEach(key => {
             const schools = grouped[key].sort((a, b) => {
-                const orderA = a.display_order !== undefined ? a.display_order : a.id;
-                const orderB = b.display_order !== undefined ? b.display_order : b.id;
+                // FIX: Treat display_order of 0, null, or undefined as "use id (creation order)"
+                const orderA = (a.display_order && a.display_order > 0) ? a.display_order : a.id;
+                const orderB = (b.display_order && b.display_order > 0) ? b.display_order : b.id;
                 return orderA - orderB;
             });
             result.push(...schools);
@@ -1093,8 +1103,9 @@
         const group = allSchools
             .filter(s => (s.cluster_number || 'Unassigned') === cluster)
             .sort((a, b) => {
-                const orderA = a.display_order !== undefined ? a.display_order : a.id;
-                const orderB = b.display_order !== undefined ? b.display_order : b.id;
+                // FIX: Treat display_order of 0, null, or undefined as "use id (creation order)"
+                const orderA = (a.display_order && a.display_order > 0) ? a.display_order : a.id;
+                const orderB = (b.display_order && b.display_order > 0) ? b.display_order : b.id;
                 return orderA - orderB;
             });
 
@@ -1112,8 +1123,13 @@
         const currentSchool = group[currentPos];
         const neighborSchool = group[newPos];
 
-        if (currentSchool.display_order === undefined) currentSchool.display_order = currentSchool.id;
-        if (neighborSchool.display_order === undefined) neighborSchool.display_order = neighborSchool.id;
+        // Ensure both have an effective order value (fall back to id)
+        if (!currentSchool.display_order || currentSchool.display_order <= 0) {
+            currentSchool.display_order = currentSchool.id;
+        }
+        if (!neighborSchool.display_order || neighborSchool.display_order <= 0) {
+            neighborSchool.display_order = neighborSchool.id;
+        }
 
         const tempOrder = currentSchool.display_order;
         currentSchool.display_order = neighborSchool.display_order;
