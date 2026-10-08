@@ -487,7 +487,11 @@
         return { byAccount, byMeter };
     }
 
-    function findMatchingBill(entityType, entityId, accountNumber, meterNumber, month, year, lookup) {
+    // ===== FIXED: findMatchingBill with allowFallback guard =====
+    // When a school has MORE THAN ONE meter in total, we do NOT use the
+    // "only one candidate" fallback, because it returns the same bill
+    // to multiple account rows (causing values to appear duplicated).
+    function findMatchingBill(entityType, entityId, accountNumber, meterNumber, month, year, lookup, allowFallback) {
         const normMeter = normalizeMeter(meterNumber);
         const normAcc = normalizeAccount(accountNumber);
 
@@ -503,55 +507,76 @@
             return lookup.byAccount[accKey];
         }
 
-        if (normAcc) {
-            for (let bill of existingBills) {
-                if (bill.month === month && bill.year === year &&
-                    normalizeAccount(bill.account_number) === normAcc) {
-                    return bill;
+        // Only use these loose fallbacks when there is only 1 meter total for this entity
+        if (allowFallback) {
+            if (normAcc) {
+                for (let bill of existingBills) {
+                    if (bill.entity_type === entityType &&
+                        bill.entity_id === entityId &&
+                        bill.month === month && bill.year === year &&
+                        normalizeAccount(bill.account_number) === normAcc) {
+                        return bill;
+                    }
                 }
             }
-        }
 
-        if (normMeter) {
-            for (let bill of existingBills) {
-                if (bill.month === month && bill.year === year &&
-                    normalizeMeter(bill.meter_number) === normMeter) {
-                    return bill;
+            if (normMeter) {
+                for (let bill of existingBills) {
+                    if (bill.entity_type === entityType &&
+                        bill.entity_id === entityId &&
+                        bill.month === month && bill.year === year &&
+                        normalizeMeter(bill.meter_number) === normMeter) {
+                        return bill;
+                    }
                 }
             }
-        }
 
-        if (accountNumber) {
-            for (let bill of existingBills) {
-                if (bill.month === month && bill.year === year &&
-                    bill.account_number === accountNumber) {
-                    return bill;
+            if (accountNumber) {
+                for (let bill of existingBills) {
+                    if (bill.entity_type === entityType &&
+                        bill.entity_id === entityId &&
+                        bill.month === month && bill.year === year &&
+                        bill.account_number === accountNumber) {
+                        return bill;
+                    }
                 }
             }
-        }
 
-        if (meterNumber) {
-            for (let bill of existingBills) {
-                if (bill.month === month && bill.year === year &&
-                    bill.meter_number === meterNumber) {
-                    return bill;
+            if (meterNumber) {
+                for (let bill of existingBills) {
+                    if (bill.entity_type === entityType &&
+                        bill.entity_id === entityId &&
+                        bill.month === month && bill.year === year &&
+                        bill.meter_number === meterNumber) {
+                        return bill;
+                    }
                 }
             }
-        }
 
-        const candidates = existingBills.filter(bill =>
-            bill.entity_type === entityType &&
-            bill.entity_id === entityId &&
-            bill.month === month &&
-            bill.year === year
-        );
-        if (candidates.length === 1) {
-            return candidates[0];
-        } else if (candidates.length > 1) {
-            return null;
+            const candidates = existingBills.filter(bill =>
+                bill.entity_type === entityType &&
+                bill.entity_id === entityId &&
+                bill.month === month &&
+                bill.year === year
+            );
+            if (candidates.length === 1) {
+                return candidates[0];
+            } else if (candidates.length > 1) {
+                return null;
+            }
         }
 
         return null;
+    }
+
+    // Helper: total meters in an entity (used to decide if fallback is safe)
+    function countTotalMeters(entity) {
+        let total = 0;
+        if (!entity || !entity.accountGroups) return 0;
+        for (let a = 0; a < entity.accountGroups.length; a++) {
+            total += (entity.accountGroups[a].meters || []).length;
+        }
+        return total;
     }
 
     async function saveEntityDataBackground(entityRow, month, year) {
@@ -780,6 +805,7 @@
             const visibleClusterEntities = [];
             for (let i = 0; i < clusterSchools.length; i++) {
                 const entity = clusterSchools[i];
+                const allowFallback = (countTotalMeters(entity) === 1);
                 const visibleAccounts = [];
                 let hasAnyVisible = false;
                 for (let a = 0; a < entity.accountGroups.length; a++) {
@@ -799,7 +825,7 @@
                         for (let m = 0; m < meters.length; m++) {
                             const meter = meters[m];
                             const meterNum = meter.meterNumber || '';
-                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year, lookup);
+                            const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meterNum, month, year, lookup, allowFallback);
                             if (statusFilter === 'all' ||
                                 (statusFilter === 'paid' && existing && (existing.amount_paid || 0) > 0) ||
                                 (statusFilter === 'pending' && (!existing || (existing.amount_paid || 0) === 0))) {
@@ -881,12 +907,15 @@
         let isFirstMeter = true;
         let meterRowsData = [];
 
+        // Determine if fallback matching is safe for this entity
+        const allowFallback = (countTotalMeters(entity) === 1);
+
         for (let a = 0; a < entity.accountGroups.length; a++) {
             const account = entity.accountGroups[a];
             let isFirstMeterForAccount = true;
             for (let m = 0; m < account.meters.length; m++) {
                 const meter = account.meters[m];
-                const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meter.meterNumber, month, year, lookup);
+                const existing = findMatchingBill(entity.type, entity.id, account.accountNumber, meter.meterNumber, month, year, lookup, allowFallback);
                 let parsedNotes = {};
                 if (existing && existing.notes && existing.notes.startsWith('{')) {
                     try { parsedNotes = JSON.parse(existing.notes); } catch(e) {}
