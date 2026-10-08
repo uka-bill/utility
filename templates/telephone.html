@@ -837,14 +837,16 @@
         let schoolsList = filteredEntities.filter(e => e.type === 'school');
         let departmentsList = filteredEntities.filter(e => e.type === 'department');
 
-        schoolsList.sort((a,b) => {
+        // ===== FIXED SCHOOL SORT: display_order<=0 → use id (creation order) =====
+        schoolsList.sort((a, b) => {
             const cA = a.clusterNumber ? parseInt(a.clusterNumber.replace('CLUSTER ','')) : 999;
             const cB = b.clusterNumber ? parseInt(b.clusterNumber.replace('CLUSTER ','')) : 999;
             if (cA !== cB) return cA - cB;
-            return (a.displayOrder || 999) - (b.displayOrder || 999) || (a.originalId || a.id) - (b.originalId || b.id);
+            const orderA = (a.displayOrder && a.displayOrder > 0) ? a.displayOrder : (a.originalId || a.id);
+            const orderB = (b.displayOrder && b.displayOrder > 0) ? b.displayOrder : (b.originalId || b.id);
+            return orderA - orderB;
         });
 
-        // ===== DEPARTMENT GROUPING (group order = min id only) =====
         const deptMap = new Map();
         departmentsList.forEach(dept => {
             const deptName = dept.departmentName || 'Other';
