@@ -324,9 +324,7 @@
             background: var(--gray-50);
         }
 
-        .edit-form-group {
-            margin-bottom: 12px;
-        }
+        .edit-form-group { margin-bottom: 12px; }
         .edit-form-group label {
             display: block;
             font-size: 0.72rem;
@@ -361,9 +359,7 @@
             border: 1px solid var(--gray-light);
             transition: var(--transition);
         }
-        .utility-section:hover {
-            border-color: var(--primary-light);
-        }
+        .utility-section:hover { border-color: var(--primary-light); }
         .utility-title {
             font-weight: 600;
             font-size: 0.9rem;
@@ -502,9 +498,7 @@
             margin-bottom: 4px;
             font-size: 0.78rem;
         }
-        .view-account-item:last-child {
-            border-bottom: none;
-        }
+        .view-account-item:last-child { border-bottom: none; }
         .view-meter {
             font-size: 0.7rem;
             color: var(--gray);
@@ -527,9 +521,7 @@
             box-shadow: var(--shadow-xl);
             font-weight: 500;
         }
-        .toast-message.error {
-            background: var(--danger);
-        }
+        .toast-message.error { background: var(--danger); }
         @keyframes fadeOut {
             0% { opacity: 1; transform: translateY(0); }
             80% { opacity: 1; }
@@ -562,10 +554,7 @@
 
         .loading-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(15, 23, 42, 0.60);
             backdrop-filter: blur(8px);
             z-index: 9999;
@@ -574,12 +563,9 @@
             justify-content: center;
             visibility: hidden;
         }
-        .loading-overlay.active {
-            visibility: visible;
-        }
+        .loading-overlay.active { visibility: visible; }
         .spinner {
-            width: 48px;
-            height: 48px;
+            width: 48px; height: 48px;
             border: 4px solid var(--gray-light);
             border-top: 4px solid var(--primary);
             border-radius: 50%;
@@ -595,10 +581,7 @@
 
         .modal-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(15, 23, 42, 0.60);
             backdrop-filter: blur(12px);
             z-index: 3000;
@@ -610,10 +593,7 @@
             transition: all 0.3s ease;
             padding: 20px;
         }
-        .modal-overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
         .edit-modal {
             background: var(--white);
             border-radius: var(--radius);
@@ -652,20 +632,14 @@
             cursor: pointer;
             color: var(--gray);
             transition: var(--transition);
-            width: 40px;
-            height: 40px;
+            width: 40px; height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
         }
-        .close-modal:hover {
-            background: var(--gray-50);
-            color: var(--dark);
-        }
-        .modal-body {
-            padding: 24px 28px;
-        }
+        .close-modal:hover { background: var(--gray-50); color: var(--dark); }
+        .modal-body { padding: 24px 28px; }
         .modal-footer {
             padding: 16px 28px;
             border-top: 1px solid var(--gray-light);
@@ -683,9 +657,7 @@
             gap: 16px;
             margin-bottom: 16px;
         }
-        .form-group-full {
-            margin-bottom: 16px;
-        }
+        .form-group-full { margin-bottom: 16px; }
         .form-label {
             display: block;
             margin-bottom: 5px;
@@ -694,10 +666,7 @@
             color: var(--dark);
             letter-spacing: 0.2px;
         }
-        .form-label .required {
-            color: var(--danger);
-            margin-left: 2px;
-        }
+        .form-label .required { color: var(--danger); margin-left: 2px; }
 
         @media (max-width: 1024px) {
             .container { padding: 20px 24px; }
@@ -754,7 +723,6 @@
             <span class="page-subtitle">Manage all schools, clusters, and their utility accounts</span>
         </div>
         <div style="display: flex; gap: 10px;">
-            <button class="btn btn-info btn-sm" id="fixOrderBtn">🔧 Fix Order</button>
             <button class="btn btn-primary" id="addNewSchoolBtn">➕ Add New School</button>
         </div>
     </div>
@@ -802,9 +770,7 @@
             <h3 id="modalTitle">Edit School</h3>
             <button class="close-modal" onclick="closeEditModal()">&times;</button>
         </div>
-        <div class="modal-body" id="modalBody">
-            <!-- Dynamic form -->
-        </div>
+        <div class="modal-body" id="modalBody"></div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
             <button class="btn btn-primary" id="saveSchoolBtn">Save Changes</button>
@@ -842,13 +808,30 @@
         });
     }
 
-    // ===== HELPER: Get effective display order =====
-    // If display_order is missing, null, or 0 → fall back to id (creation order)
-    function getEffectiveOrder(school) {
-        if (school.display_order && school.display_order > 0) {
-            return school.display_order;
+    // ===== AUTO-FIX: silently reset display_order if corrupted =====
+    async function autoFixOrderIfNeeded() {
+        // Detect corrupted state: any school with display_order = 0, null, undefined, or negative
+        const corrupted = allSchools.some(s =>
+            s.display_order === null ||
+            s.display_order === undefined ||
+            s.display_order === 0 ||
+            s.display_order < 0
+        );
+        if (!corrupted) return false;
+
+        console.log('🔧 Auto-fixing display_order (corrupted values detected)...');
+        try {
+            const resp = await fetch('/api/schools/ensure-order', { method: 'POST' });
+            if (!resp.ok) throw new Error('Server rejected fix');
+            // Reload data after fix
+            const res2 = await fetch('/api/schools');
+            if (res2.ok) allSchools = await res2.json();
+            console.log('✅ Auto-fix complete');
+            return true;
+        } catch (err) {
+            console.error('⚠️ Auto-fix failed:', err);
+            return false;
         }
-        return school.id;
     }
 
     // ===== LOAD SCHOOLS =====
@@ -859,12 +842,17 @@
             allSchools = await res.json();
             console.log(`✅ Loaded ${allSchools.length} schools`);
 
+            // Silent auto-fix for corrupted display_order
+            const fixed = await autoFixOrderIfNeeded();
+            if (fixed) {
+                showMessage('Display order corrected');
+            }
+
             // Ensure every school has display_order (fallback to id)
             allSchools.forEach(s => {
                 if (s.display_order === undefined || s.display_order === null) {
                     s.display_order = s.id;
                 }
-                // Ensure account arrays are parsed
                 if (s.water_accounts && typeof s.water_accounts === 'string') {
                     try { s.water_accounts = JSON.parse(s.water_accounts); } catch(e){ s.water_accounts = []; }
                 }
@@ -897,11 +885,9 @@
         });
     }
 
-    // ===== ENHANCED SEARCH =====
     function schoolMatchesSearch(school, searchTerm) {
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
-
         if ((school.name || '').toLowerCase().includes(term)) return true;
         if ((school.cluster_number || '').toLowerCase().includes(term)) return true;
         if ((school.school_number || '').toLowerCase().includes(term)) return true;
@@ -921,7 +907,6 @@
                 }
             }
         }
-
         if (school.electricity_accounts && Array.isArray(school.electricity_accounts)) {
             for (let acc of school.electricity_accounts) {
                 if ((acc.accountNumber || '').toLowerCase().includes(term)) return true;
@@ -933,7 +918,6 @@
                 }
             }
         }
-
         if (school.telephone_accounts && Array.isArray(school.telephone_accounts)) {
             for (let acc of school.telephone_accounts) {
                 if ((acc.accountNumber || '').toLowerCase().includes(term)) return true;
@@ -945,22 +929,16 @@
                 }
             }
         }
-
         return false;
     }
 
-    // ===== FILTERED & SORTED =====
     function getFilteredSchools() {
         let filtered = [...allSchools];
         const search = document.getElementById('searchFilter').value.toLowerCase();
         const cluster = document.getElementById('clusterFilter').value;
 
-        if (search) {
-            filtered = filtered.filter(s => schoolMatchesSearch(s, search));
-        }
-        if (cluster !== 'all') {
-            filtered = filtered.filter(s => s.cluster_number === cluster);
-        }
+        if (search) filtered = filtered.filter(s => schoolMatchesSearch(s, search));
+        if (cluster !== 'all') filtered = filtered.filter(s => s.cluster_number === cluster);
 
         const grouped = {};
         filtered.forEach(s => {
@@ -976,7 +954,6 @@
         const result = [];
         sortedKeys.forEach(key => {
             const schools = grouped[key].sort((a, b) => {
-                // FIX: Treat display_order of 0, null, or undefined as "use id (creation order)"
                 const orderA = (a.display_order && a.display_order > 0) ? a.display_order : a.id;
                 const orderB = (b.display_order && b.display_order > 0) ? b.display_order : b.id;
                 return orderA - orderB;
@@ -986,7 +963,6 @@
         return result;
     }
 
-    // ===== RENDER TABLE =====
     function renderSchools() {
         const filtered = getFilteredSchools();
         const tbody = document.getElementById('schoolsTbody');
@@ -1084,7 +1060,6 @@
         return html;
     }
 
-    // ===== MOVE SCHOOL =====
     async function moveSchoolUp(schoolId) {
         await moveSchool(schoolId, -1);
     }
@@ -1103,27 +1078,19 @@
         const group = allSchools
             .filter(s => (s.cluster_number || 'Unassigned') === cluster)
             .sort((a, b) => {
-                // FIX: Treat display_order of 0, null, or undefined as "use id (creation order)"
                 const orderA = (a.display_order && a.display_order > 0) ? a.display_order : a.id;
                 const orderB = (b.display_order && b.display_order > 0) ? b.display_order : b.id;
                 return orderA - orderB;
             });
 
         const currentPos = group.findIndex(s => s.id === schoolId);
-        if (currentPos === -1) {
-            showMessage('School not found in cluster', true);
-            return;
-        }
+        if (currentPos === -1) { showMessage('School not found in cluster', true); return; }
         const newPos = currentPos + direction;
-        if (newPos < 0 || newPos >= group.length) {
-            showMessage('Cannot move further', true);
-            return;
-        }
+        if (newPos < 0 || newPos >= group.length) { showMessage('Cannot move further', true); return; }
 
         const currentSchool = group[currentPos];
         const neighborSchool = group[newPos];
 
-        // Ensure both have an effective order value (fall back to id)
         if (!currentSchool.display_order || currentSchool.display_order <= 0) {
             currentSchool.display_order = currentSchool.id;
         }
@@ -1196,30 +1163,6 @@
         }
     }
 
-    // ===== FIX ORDER =====
-    async function fixOrder() {
-        if (!confirm('⚠️ This will reset ALL schools to their original creation order.\nAny custom ordering will be lost.\n\nAre you sure you want to continue?')) {
-            return;
-        }
-        showLoading(true);
-        try {
-            const resp = await fetch('/api/schools/ensure-order', { method: 'POST' });
-            const result = await resp.json();
-            if (resp.ok && result.success) {
-                showMessage(result.message, false);
-                await loadSchools();
-            } else {
-                showMessage(result.error || 'Failed to fix order', true);
-            }
-        } catch (err) {
-            showMessage('Network error', true);
-            console.error(err);
-        } finally {
-            showLoading(false);
-        }
-    }
-
-    // ===== EDIT MODAL =====
     function openEditModal(schoolId) {
         const school = allSchools.find(s => s.id === schoolId);
         if (!school) return;
@@ -1242,62 +1185,39 @@
         if (!currentEditingSchool) return;
 
         function readMeters(accIdx, type) {
-            const meterInputs = document.querySelectorAll(
-                `.meter-number-input[data-acc-idx="${accIdx}"][data-type="${type}"]`
-            );
+            const meterInputs = document.querySelectorAll(`.meter-number-input[data-acc-idx="${accIdx}"][data-type="${type}"]`);
             const meters = [];
             meterInputs.forEach((input, mIdx) => {
-                const locationInput = document.querySelector(
-                    `.meter-location-input[data-acc-idx="${accIdx}"][data-type="${type}"][data-meter-idx="${mIdx}"]`
-                );
-                meters.push({
-                    meterNumber: input.value || '',
-                    location: locationInput?.value || ''
-                });
+                const locationInput = document.querySelector(`.meter-location-input[data-acc-idx="${accIdx}"][data-type="${type}"][data-meter-idx="${mIdx}"]`);
+                meters.push({ meterNumber: input.value || '', location: locationInput?.value || '' });
             });
             return meters;
         }
-
         function readPhoneNumbers(accIdx) {
-            const phoneInputs = document.querySelectorAll(
-                `.phone-number-input[data-acc-idx="${accIdx}"][data-type="telephone"]`
-            );
+            const phoneInputs = document.querySelectorAll(`.phone-number-input[data-acc-idx="${accIdx}"][data-type="telephone"]`);
             const numbers = [];
             phoneInputs.forEach((input, pIdx) => {
-                const locationInput = document.querySelector(
-                    `.phone-location-input[data-acc-idx="${accIdx}"][data-type="telephone"][data-num-idx="${pIdx}"]`
-                );
-                numbers.push({
-                    phoneNumber: input.value || '',
-                    location: locationInput?.value || ''
-                });
+                const locationInput = document.querySelector(`.phone-location-input[data-acc-idx="${accIdx}"][data-type="telephone"][data-num-idx="${pIdx}"]`);
+                numbers.push({ phoneNumber: input.value || '', location: locationInput?.value || '' });
             });
             return numbers;
         }
 
         const waterAccounts = currentEditingSchool.water_accounts || [];
         for (let i = 0; i < waterAccounts.length; i++) {
-            const accInput = document.querySelector(
-                `.account-number-input[data-acc-idx="${i}"][data-type="water"]`
-            );
+            const accInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="water"]`);
             if (accInput) waterAccounts[i].accountNumber = accInput.value || '';
             waterAccounts[i].meters = readMeters(i, 'water');
         }
-
         const electricityAccounts = currentEditingSchool.electricity_accounts || [];
         for (let i = 0; i < electricityAccounts.length; i++) {
-            const accInput = document.querySelector(
-                `.account-number-input[data-acc-idx="${i}"][data-type="electricity"]`
-            );
+            const accInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="electricity"]`);
             if (accInput) electricityAccounts[i].accountNumber = accInput.value || '';
             electricityAccounts[i].meters = readMeters(i, 'electricity');
         }
-
         const telephoneAccounts = currentEditingSchool.telephone_accounts || [];
         for (let i = 0; i < telephoneAccounts.length; i++) {
-            const accInput = document.querySelector(
-                `.account-number-input[data-acc-idx="${i}"][data-type="telephone"]`
-            );
+            const accInput = document.querySelector(`.account-number-input[data-acc-idx="${i}"][data-type="telephone"]`);
             if (accInput) telephoneAccounts[i].accountNumber = accInput.value || '';
             telephoneAccounts[i].numbers = readPhoneNumbers(i);
         }
@@ -1305,28 +1225,18 @@
 
     window.addAccount = function(type) {
         syncFormDataToObject();
-        if (type === 'water') {
-            currentEditingSchool.water_accounts.push({ accountNumber: '', meters: [] });
-        } else if (type === 'electricity') {
-            currentEditingSchool.electricity_accounts.push({ accountNumber: '', meters: [] });
-        } else if (type === 'telephone') {
-            currentEditingSchool.telephone_accounts.push({ accountNumber: '', numbers: [] });
-        }
+        if (type === 'water') currentEditingSchool.water_accounts.push({ accountNumber: '', meters: [] });
+        else if (type === 'electricity') currentEditingSchool.electricity_accounts.push({ accountNumber: '', meters: [] });
+        else if (type === 'telephone') currentEditingSchool.telephone_accounts.push({ accountNumber: '', numbers: [] });
         renderEditForm();
     };
-
     window.removeAccount = function(accountIndex, type) {
         syncFormDataToObject();
-        if (type === 'water') {
-            currentEditingSchool.water_accounts.splice(accountIndex, 1);
-        } else if (type === 'electricity') {
-            currentEditingSchool.electricity_accounts.splice(accountIndex, 1);
-        } else if (type === 'telephone') {
-            currentEditingSchool.telephone_accounts.splice(accountIndex, 1);
-        }
+        if (type === 'water') currentEditingSchool.water_accounts.splice(accountIndex, 1);
+        else if (type === 'electricity') currentEditingSchool.electricity_accounts.splice(accountIndex, 1);
+        else if (type === 'telephone') currentEditingSchool.telephone_accounts.splice(accountIndex, 1);
         renderEditForm();
     };
-
     window.addMeter = function(accountIndex, type) {
         syncFormDataToObject();
         if (type === 'water') {
@@ -1338,24 +1248,18 @@
         }
         renderEditForm();
     };
-
     window.removeMeter = function(accountIndex, meterIndex, type) {
         syncFormDataToObject();
-        if (type === 'water') {
-            currentEditingSchool.water_accounts[accountIndex].meters.splice(meterIndex, 1);
-        } else if (type === 'electricity') {
-            currentEditingSchool.electricity_accounts[accountIndex].meters.splice(meterIndex, 1);
-        }
+        if (type === 'water') currentEditingSchool.water_accounts[accountIndex].meters.splice(meterIndex, 1);
+        else if (type === 'electricity') currentEditingSchool.electricity_accounts[accountIndex].meters.splice(meterIndex, 1);
         renderEditForm();
     };
-
     window.addPhoneNumber = function(accountIndex) {
         syncFormDataToObject();
         if (!currentEditingSchool.telephone_accounts[accountIndex].numbers) currentEditingSchool.telephone_accounts[accountIndex].numbers = [];
         currentEditingSchool.telephone_accounts[accountIndex].numbers.push({ phoneNumber: '', location: '' });
         renderEditForm();
     };
-
     window.removePhoneNumber = function(accountIndex, numberIndex) {
         syncFormDataToObject();
         currentEditingSchool.telephone_accounts[accountIndex].numbers.splice(numberIndex, 1);
@@ -1403,7 +1307,6 @@
                     html += `<button type="button" class="add-btn" onclick="addMeter(${accIdx}, '${type}')">+ Add Meter</button>`;
                     html += `</div>`;
                 }
-
                 html += `</div>`;
             });
             html += `<button type="button" class="btn btn-info btn-sm" style="margin-top:10px;" onclick="addAccount('${type}')">+ Add ${label} Account</button>`;
@@ -1428,11 +1331,9 @@
                     <input type="text" id="editSchoolNumber" class="edit-input" value="${escapeHtml(currentEditingSchool.school_number || '')}">
                 </div>
             </div>
-
             ${renderUtilityAccounts(currentEditingSchool.water_accounts, 'water', '💧 Water Accounts')}
             ${renderUtilityAccounts(currentEditingSchool.electricity_accounts, 'electricity', '⚡ Electricity Accounts')}
             ${renderUtilityAccounts(currentEditingSchool.telephone_accounts, 'telephone', '📞 Telephone Accounts')}
-
             <div class="form-row">
                 <div class="form-group-full">
                     <label class="form-label">BMO Name</label>
@@ -1452,13 +1353,11 @@
                 <textarea id="editNotes" class="edit-textarea" rows="2">${escapeHtml(currentEditingSchool.notes || '')}</textarea>
             </div>
         `;
-
         container.innerHTML = html;
     }
 
     function collectFormData() {
         syncFormDataToObject();
-
         function cleanAccounts(accounts) {
             return accounts.filter(acc => {
                 if (acc.accountNumber && acc.accountNumber.trim() !== '') return true;
@@ -1467,7 +1366,6 @@
                 return false;
             });
         }
-
         const schoolData = {
             name: document.getElementById('editSchoolName')?.value || '',
             clusterNumber: document.getElementById('editClusterNumber')?.value || '',
@@ -1480,42 +1378,33 @@
             electricityAccounts: cleanAccounts(currentEditingSchool.electricity_accounts || []),
             telephoneAccounts: cleanAccounts(currentEditingSchool.telephone_accounts || [])
         };
-
         return schoolData;
     }
 
     async function saveSchool() {
         if (!currentEditingSchool) return;
-
         const schoolData = collectFormData();
-
         if (!schoolData.name || !schoolData.clusterNumber || !schoolData.schoolNumber) {
             showMessage('Please fill in School Name, Cluster Number, and School Number', true);
             return;
         }
-
         showLoading(true);
         try {
-            console.log('📤 Sending school data:', schoolData);
             const response = await fetch(`/api/schools/${currentEditingSchool.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(schoolData)
             });
             const result = await response.json();
-            console.log('📥 Server response:', result);
-
             if (response.ok && result.success) {
                 showMessage('School updated successfully');
                 closeEditModal();
                 await loadSchools();
             } else {
                 showMessage(result.error || 'Failed to update school', true);
-                console.error('❌ Save failed:', result);
             }
         } catch (error) {
             showMessage('Network error', true);
-            console.error(error);
         } finally {
             showLoading(false);
         }
@@ -1552,7 +1441,6 @@
             electricityAccounts: [],
             telephoneAccounts: []
         };
-
         showLoading(true);
         try {
             const response = await fetch('/api/schools', {
@@ -1584,7 +1472,6 @@
     document.getElementById('saveSchoolBtn').addEventListener('click', saveSchool);
     document.getElementById('addNewSchoolBtn').addEventListener('click', addNewSchool);
     document.getElementById('refreshBtn').addEventListener('click', loadSchools);
-    document.getElementById('fixOrderBtn').addEventListener('click', fixOrder);
     document.getElementById('searchFilter').addEventListener('input', () => renderSchools());
     document.getElementById('clusterFilter').addEventListener('change', () => renderSchools());
 
