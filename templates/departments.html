@@ -830,12 +830,43 @@
         });
     }
 
+    // ===== AUTO-FIX: only fires if display_order is 0, null, or negative =====
+    async function autoFixOrderIfNeeded() {
+        const corrupted = allDepartments.some(d =>
+            d.display_order === null ||
+            d.display_order === undefined ||
+            d.display_order === 0 ||
+            d.display_order < 0
+        );
+        if (!corrupted) return false;
+
+        console.log('🔧 Auto-fixing department display_order (corrupted values detected)...');
+        try {
+            const resp = await fetch('/api/departments/ensure-order', { method: 'POST' });
+            if (!resp.ok) throw new Error('Server rejected fix');
+            const res2 = await fetch('/api/departments');
+            if (res2.ok) allDepartments = await res2.json();
+            console.log('✅ Auto-fix complete');
+            return true;
+        } catch (err) {
+            console.error('⚠️ Auto-fix failed:', err);
+            return false;
+        }
+    }
+
     async function loadDepartments() {
         try {
             const res = await fetch('/api/departments');
             if (!res.ok) throw new Error('Fetch failed');
             allDepartments = await res.json();
             console.log(`✅ Loaded ${allDepartments.length} departments`);
+
+            // Silent auto-fix for corrupted display_order
+            const fixed = await autoFixOrderIfNeeded();
+            if (fixed) {
+                showMessage('Display order corrected');
+            }
+
             allDepartments.forEach(d => {
                 if (d.display_order === undefined || d.display_order === null) {
                     d.display_order = d.id;
@@ -932,7 +963,7 @@
         return false;
     }
 
-    // ===== FILTERED & SORTED — SORTED BY ID ONLY =====
+    // ===== FILTERED & SORTED — sort by display_order (fallback to id) =====
     function getFilteredDepartments() {
         let filtered = [...allDepartments];
         const search = document.getElementById('searchFilter').value.toLowerCase();
@@ -956,17 +987,27 @@
             grouped[key].push(d);
         });
 
-        // Group order = by min id in group
+        // Group order = by the smallest display_order of any unit in the group
+        // (Falls back to id if display_order is 0/null)
+        const getOrderValue = (d) => {
+            if (d.display_order && d.display_order > 0) return d.display_order;
+            return d.id;
+        };
+
         const sortedGroupKeys = Object.keys(grouped).sort((a, b) => {
-            const minIdA = Math.min(...grouped[a].map(d => d.id));
-            const minIdB = Math.min(...grouped[b].map(d => d.id));
-            return minIdA - minIdB;
+            const minOrderA = Math.min(...grouped[a].map(getOrderValue));
+            const minOrderB = Math.min(...grouped[b].map(getOrderValue));
+            return minOrderA - minOrderB;
         });
 
         const result = [];
         sortedGroupKeys.forEach(key => {
-            // Within each group: sort by ID (creation order) — always
-            const depts = grouped[key].sort((a, b) => a.id - b.id);
+            const depts = grouped[key].sort((a, b) => {
+                const orderA = getOrderValue(a);
+                const orderB = getOrderValue(b);
+                if (orderA !== orderB) return orderA - orderB;
+                return a.id - b.id;
+            });
             result.push(...depts);
         });
         return result;
@@ -1068,12 +1109,116 @@
         });
     }
 
-    // ===== NOTE: Move Up/Down buttons no longer affect visual order (sorted by id) =====
-    async function moveDepartmentUp(deptId) {
-        showMessage('Manual reordering is disabled. Departments always display in creation order.', true);
-    }
-    async function moveDepartmentDown(deptId) {
-        showMessage('Manual reordering is disabled. Departments always display in creation order.', true);
+    async function moveDepartmentUp(deptId) { await moveDepartment(deptId, -1); }
+    async function moveDepartmentDown(deptId) { await moveDepartment(deptId, 1); }
+
+    async function moveDepartment(deptId, direction) {
+        const deptIndex = allDepartments.findIndex(d => d.id === deptId);
+        if (deptIndex === -1) { showMessage('Department not found', true); return; }
+
+        const groupName = allDepartments[deptIndex].department_name || 'Other';
+        const getOrderValue = (d) => {
+            if (d.display_order && d.display_order > 0) return d.display_order;
+            return d.id;
+        };
+
+        const group = allDepartments
+            .filter(d => (d.department_name || 'Other') === groupName)
+            .sort((a, b) => {
+                const orderA = getOrderValue(a);
+                const orderB = getOrderValue(b);
+                if (orderA !== orderB) return orderA - orderB;
+                return a.id - b.id;
+            });
+
+        const currentPos = group.findIndex(d => d.id === deptId);
+        if (currentPos === -1) { showMessage('Department not found in group', true); return; }
+        const newPos = currentPos + direction;
+        if (newPos < 0 || newPos >= group.length) {
+            showMessage('Cannot move further', true);
+            return;
+        }
+
+        const currentDept = group[currentPos];
+        const neighborDept = group[newPos];
+
+        // Ensure both have valid display_order values
+        if (!currentDept.display_order || currentDept.display_order <= 0) {
+            currentDept.display_order = currentDept.id;
+        }
+        if (!neighborDept.display_order || neighborDept.display_order <= 0) {
+            neighborDept.display_order = neighborDept.id;
+        }
+
+        // If they have the same display_order, give the whole group fresh sequential values
+        if (currentDept.display_order === neighborDept.display_order) {
+            group.forEach((d, idx) => { d.display_order = (idx + 1) * 1000; });
+        }
+
+        // Swap display_order values between the two
+        const tempOrder = currentDept.display_order;
+        currentDept.display_order = neighborDept.display_order;
+        neighborDept.display_order = tempOrder;
+
+        // Optimistic update — show immediately
+        renderDepartments();
+
+        try {
+            showLoading(true);
+
+            const updateCurrent = {
+                unitName: currentDept.unit_name || '',
+                divisionName: currentDept.division_name || '',
+                departmentName: currentDept.department_name || '',
+                hotlineNumbers: currentDept.hotline_numbers || '',
+                address: currentDept.address || '',
+                notes: currentDept.notes || '',
+                waterAccounts: currentDept.water_accounts || [],
+                electricityAccounts: currentDept.electricity_accounts || [],
+                telephoneAccounts: currentDept.telephone_accounts || [],
+                displayOrder: currentDept.display_order
+            };
+            const resp1 = await fetch(`/api/departments/${currentDept.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updateCurrent)
+            });
+            if (!resp1.ok) {
+                const errText = await resp1.text();
+                throw new Error(`Server returned ${resp1.status}: ${errText}`);
+            }
+
+            const updateNeighbor = {
+                unitName: neighborDept.unit_name || '',
+                divisionName: neighborDept.division_name || '',
+                departmentName: neighborDept.department_name || '',
+                hotlineNumbers: neighborDept.hotline_numbers || '',
+                address: neighborDept.address || '',
+                notes: neighborDept.notes || '',
+                waterAccounts: neighborDept.water_accounts || [],
+                electricityAccounts: neighborDept.electricity_accounts || [],
+                telephoneAccounts: neighborDept.telephone_accounts || [],
+                displayOrder: neighborDept.display_order
+            };
+            const resp2 = await fetch(`/api/departments/${neighborDept.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updateNeighbor)
+            });
+            if (!resp2.ok) {
+                const errText = await resp2.text();
+                throw new Error(`Server returned ${resp2.status}: ${errText}`);
+            }
+
+            showMessage('Order updated successfully');
+
+        } catch (error) {
+            console.error('❌ Move error:', error);
+            showMessage('Error updating order: ' + error.message, true);
+            await loadDepartments();
+        } finally {
+            showLoading(false);
+        }
     }
 
     function openEditModal(deptId) {
