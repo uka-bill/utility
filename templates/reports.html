@@ -8,7 +8,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* ===== All styles unchanged – same as your original ===== */
         :root {
             --primary: #1a56db;
             --primary-light: #3b82f6;
@@ -148,7 +147,7 @@
         .column-checkbox-item input[type="checkbox"] { margin-right:5px; width:14px; height:14px; accent-color:var(--primary); cursor:pointer; }
         .column-checkbox-item label { cursor:pointer; }
         .hidden { display:none !important; }
-        #entityDisplayOptions { display:flex; gap:24px; align-items:center; margin-top:8px; }
+        #entityDisplayOptions { display:flex; gap:24px; align-items:center; margin-top:8px; flex-wrap:wrap; }
         #subtotalOptions { display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-top:6px; }
         #subtotalOptions .column-checkbox-item { font-size:0.78rem; font-weight:500; }
         #subtotalOptions .column-checkbox-item input[type="checkbox"] { margin-right:5px; width:14px; height:14px; accent-color:var(--primary); cursor:pointer; }
@@ -350,7 +349,6 @@
     </style>
 </head>
 <body>
-    <!-- ===== NAVBAR ===== -->
     <nav class="navbar">
         <div class="logo">
             <div class="logo-icon">⚡</div>
@@ -373,7 +371,6 @@
     </nav>
 
     <div class="container">
-        <!-- ===== PAGE HEADER ===== -->
         <div class="page-header">
             <div>
                 <h1 class="page-title">📊 Reports & Print Center</h1>
@@ -381,7 +378,6 @@
             </div>
         </div>
 
-        <!-- ===== PRINT SECTION ===== -->
         <div class="print-section no-print">
             <h3>🖨️ Print Utility Bills</h3>
             <div class="utility-selector">
@@ -482,6 +478,10 @@
                         <input type="checkbox" id="groupByEntity" checked>
                         <label for="groupByEntity">👥 Group by Entity (entity name once)</label>
                     </div>
+                    <div class="column-checkbox-item">
+                        <input type="checkbox" id="hideNegativeBills">
+                        <label for="hideNegativeBills">🚫 Hide negative bills (Water: use outstanding amount · Electricity: skip row)</label>
+                    </div>
                 </div>
                 <div class="approval-details-section">
                     <div class="section-title">📝 Approval Details (appears on last page)</div>
@@ -512,13 +512,11 @@
             </div>
         </div>
 
-        <!-- ===== INFO NOTE ===== -->
         <div class="info-note no-print">
             <span>📄</span>
             <div><strong>Generate Reports</strong> — Select filters below to generate utility bills reports. You can print, export as PDF, or export as Excel/CSV for further analysis.</div>
         </div>
 
-        <!-- ===== REPORT CONTROLS ===== -->
         <div class="report-controls no-print">
             <div class="selection-options">
                 <div class="selection-option">
@@ -597,7 +595,6 @@
         </div>
         <div class="loading no-print" id="loadingIndicator"><span>⏳ Generating report, please wait...</span></div>
 
-        <!-- ===== REPORT RESULTS ===== -->
         <div class="report-results" id="reportResults">
             <div class="results-header">
                 <h3 class="results-title" id="reportTitle">Report Results</h3>
@@ -637,7 +634,6 @@
         </div>
     </div>
 
-    <!-- ===== PROCESSING OVERLAY ===== -->
     <div class="processing-overlay" id="processingOverlay">
         <div class="processing-box">
             <div class="processing-spinner"></div>
@@ -667,7 +663,6 @@
     <div id="printPreviewContainer" style="display:none;"></div>
 
     <script>
-        // ====== GLOBALS & HELPERS ======
         let allSchoolsData = [];
         let allDepartmentsData = [];
         let allSchools = [];
@@ -801,7 +796,6 @@
             return UTILITY_HEADERS[utilityTypes[0]] || UTILITY_HEADERS.water;
         }
 
-        // ====== LOAD CHECKBOX LISTS ======
         async function loadCheckboxLists() {
             try {
                 const schoolsRes = await fetch('/api/schools');
@@ -928,7 +922,6 @@
             }
         });
 
-        // ====== LOAD ENTITIES FOR SPECIFIC SELECTION ======
         async function loadEntitiesForSelection() {
             try {
                 const schoolsRes = await fetch('/api/entities?type=school');
@@ -977,8 +970,7 @@
             });
         });
 
-        // ========== GENERATE PRINT PREVIEW – FIXED TELEPHONE ==========
-        function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, includeZeroBills, approvalDetails, subtotalOptions) {
+        function generatePrintPreviewWithEntities(entityData, month, year, selectedColumns, itemsPerPage, utilityTypes, shouldPaginate, showSubtotals, groupByEntity, includeZeroBills, approvalDetails, subtotalOptions, hideNegativeBills) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthName = month !== 'all' ? monthNames[parseInt(month) - 1] : 'All Months';
             const yearDisplay = year !== 'all' ? year : 'All Years';
@@ -1030,7 +1022,6 @@
 
             const visibleCols = colConfig.filter(c => c.show !== false);
 
-            // Define utilityTypeLabels here so it's in scope
             const utilityTypeLabels = utilityTypes ? utilityTypes.map(u => {
                 if (u === 'water') return '💧 Water';
                 if (u === 'electricity') return '⚡ Electricity';
@@ -1100,7 +1091,6 @@
                 }
             }
 
-            // Pre-compute department group order from all departments (not just rows)
             const deptGroupOrder = {};
             const deptGroupMinId = {};
             allDepartmentsData.forEach(dept => {
@@ -1118,7 +1108,6 @@
                 return deptGroupMinId[a] - deptGroupMinId[b];
             });
 
-            // Pre-compute school cluster order from all schools
             const clusterMap = {};
             allSchoolsData.forEach(school => {
                 const cluster = school.cluster_number || 'Unassigned';
@@ -1131,7 +1120,6 @@
                 return parseInt(a) - parseInt(b);
             });
 
-            // ===== TELEPHONE BRANCH (unchanged except balance labels swapped) =====
             if (hasTelephone) {
                 function buildTelephoneRows(entityData, includeZero) {
                     const rows = [];
@@ -1147,7 +1135,6 @@
                             const billYear = bill.year;
                             const period = (billMonth && billYear) ? getMonthName(parseInt(billMonth)) + ' ' + billYear : (monthName + ' ' + yearDisplay);
 
-                            // Get notes and parse
                             let parsedNotes = {};
                             let hasAccounts = false;
                             const notes = bill.notes;
@@ -1157,10 +1144,9 @@
                                     if (parsedNotes.accounts && typeof parsedNotes.accounts === 'object' && Object.keys(parsedNotes.accounts).length > 0) {
                                         hasAccounts = true;
                                     }
-                                } catch (e) { /* ignore */ }
+                                } catch (e) { }
                             }
 
-                            // If we have multiple accounts in notes, iterate over them
                             if (hasAccounts) {
                                 const accountsObj = parsedNotes.accounts;
                                 for (const accKey in accountsObj) {
@@ -1317,7 +1303,6 @@
                         (totalPages > 1 ? '<p style="font-size:8pt;">Page ' + pageIndex + ' of ' + totalPages + '</p>' : '') +
                         '</div>';
 
-                    // --- At the top: Balance c/f (carried forward from previous pages) ---
                     if (pageIndex > 1) {
                         const cfAmount = cumulativeTotal;
                         pageHtml += '<div class="balance-bf-wrapper"><span class="bf-label">Balance c/f</span><span class="bf-amount">' + formatNumberWithCommas(cfAmount) + '</span></div>';
@@ -1406,7 +1391,6 @@
                     });
                     pageHtml += '</tr>';
 
-                    // --- At the bottom: Balance b/f (to be brought forward to next page) ---
                     if (pageIndex < totalPages) {
                         const bfAmount = cumulativeTotal + pageTotalValue;
                         const lastColIndex = visibleCols.length - 1;
@@ -1423,7 +1407,6 @@
                         pageHtml += '</tr>';
                     }
 
-                    // Grand total on last page
                     if (pageIndex === totalPages) {
                         pageHtml += '<tr class="total-sum-row">';
                         visibleCols.forEach((col, idx) => {
@@ -1449,7 +1432,6 @@
                         'Total Accounts: ' + rows.length + ' | This is a computer-generated document.' +
                         '</div>';
 
-                    // Approval footer on last page (date left blank)
                     if (pageIndex === totalPages) {
                         pageHtml += '<div class="approval-page"><div class="approval-footer"><div style="text-align:left; font-weight:700; font-size:11pt; margin-bottom:10px;">PENGESAHAN OLEH</div><div class="approval-grid">' +
                             '<div class="approval-item"><div class="label">Disediakan oleh</div>' +
@@ -1553,12 +1535,10 @@
                 return;
             }
 
-            // ===== WATER / ELECTRICITY BRANCH (new) =====
             if (hasWaterElectricity) {
                 const includeZero = document.getElementById('showAllEntities').checked;
 
-                // Build rows for water/electricity: one row per bill
-                function buildWaterElectricityRows(entityData, includeZero) {
+                function buildWaterElectricityRows(entityData, includeZero, hideNegativeBills) {
                     const rows = [];
                     for (const entityGroup of entityData) {
                         const entity = entityGroup.entity;
@@ -1577,6 +1557,21 @@
                             let currentCharges = bill.current_charges || 0;
                             let unsettledCharges = bill.unsettled_charges || 0;
                             let amountPaid = bill.amount_paid || 0;
+
+                            // ===== Negative bill handling (only when checkbox is ticked) =====
+                            if (hideNegativeBills) {
+                                const primaryUtility = utilityTypes && utilityTypes.length > 0 ? utilityTypes[0] : '';
+                                const isElectricityRow = primaryUtility === 'electricity';
+                                const isWaterRow = primaryUtility === 'water';
+
+                                if (isElectricityRow && currentCharges < 0) {
+                                    continue;
+                                }
+                                if (isWaterRow && currentCharges < 0) {
+                                    currentCharges = (unsettledCharges > 0) ? unsettledCharges : 0;
+                                }
+                            }
+                            // ===== End negative bill handling =====
 
                             const isZero = (currentCharges === 0 && consumption === 0);
                             if (!includeZero && isZero) continue;
@@ -1601,7 +1596,6 @@
                         }
                     }
 
-                    // Sort using same cluster/department order
                     rows.sort((a, b) => {
                         if (a.entityType !== b.entityType) {
                             return a.entityType === 'school' ? -1 : 1;
@@ -1634,7 +1628,7 @@
                     return rows;
                 }
 
-                const allRows = buildWaterElectricityRows(entityData, includeZero);
+                const allRows = buildWaterElectricityRows(entityData, includeZero, hideNegativeBills);
                 if (allRows.length === 0) {
                     alert('No water/electricity bills found for the selected criteria.');
                     return;
@@ -1672,7 +1666,6 @@
                         (totalPages > 1 ? '<p style="font-size:8pt;">Page ' + pageIndex + ' of ' + totalPages + '</p>' : '') +
                         '</div>';
 
-                    // --- At the top: Balance c/f ---
                     if (pageIndex > 1) {
                         const cfAmount = cumulativeTotal;
                         pageHtml += '<div class="balance-bf-wrapper"><span class="bf-label">Balance c/f</span><span class="bf-amount">' + formatNumberWithCommas(cfAmount) + '</span></div>';
@@ -1682,7 +1675,6 @@
                         visibleCols.map(c => '<th style="font-size:8pt; white-space:normal; word-wrap:break-word; text-align:center;">' + c.label + '</th>').join('') +
                         '</tr></thead><tbody>';
 
-                    // Group by entity name for rowspan
                     let entityGroups = [];
                     let currentEntity = null;
                     let rowBuffer = [];
@@ -1742,7 +1734,6 @@
                         }
                     }
 
-                    // Page total row
                     pageHtml += '<tr class="summary-row">';
                     visibleCols.forEach((col, idx) => {
                         if (idx === summaryColIndex) {
@@ -1759,7 +1750,6 @@
                     });
                     pageHtml += '</tr>';
 
-                    // --- At the bottom: Balance b/f ---
                     if (pageIndex < totalPages) {
                         const bfAmount = cumulativeTotal + pageTotalValue;
                         const lastColIndex = visibleCols.length - 1;
@@ -1776,7 +1766,6 @@
                         pageHtml += '</tr>';
                     }
 
-                    // Grand total on last page
                     if (pageIndex === totalPages) {
                         pageHtml += '<tr class="total-sum-row">';
                         visibleCols.forEach((col, idx) => {
@@ -1802,7 +1791,6 @@
                         'Total Accounts: ' + rows.length + ' | This is a computer-generated document.' +
                         '</div>';
 
-                    // Approval footer on last page (date left blank)
                     if (pageIndex === totalPages) {
                         pageHtml += '<div class="approval-page"><div class="approval-footer"><div style="text-align:left; font-weight:700; font-size:11pt; margin-bottom:10px;">PENGESAHAN OLEH</div><div class="approval-grid">' +
                             '<div class="approval-item"><div class="label">Disediakan oleh</div>' +
@@ -1906,11 +1894,9 @@
                 return;
             }
 
-            // Fallback if neither telephone nor water/electricity (should not happen)
             alert('No utility type selected for printing.');
         }
 
-        // ====== PRINT BUTTON CLICK HANDLER ======
         document.getElementById('printUtilityBtn').addEventListener('click', async function() {
             console.log('🖨️ Print Selected button clicked');
 
@@ -1964,6 +1950,7 @@
             const hasSubtotal = showConsumption || showBillAmount || showOutstanding;
             const showAllEntities = document.getElementById('showAllEntities').checked;
             const groupByEntity = document.getElementById('groupByEntity').checked;
+            const hideNegativeBills = document.getElementById('hideNegativeBills').checked;
 
             if (schoolIds.length === 0 && departmentIds.length === 0) {
                 alert('⚠️ Please select at least one school or department.');
@@ -2096,7 +2083,6 @@
                     });
                 }
 
-                // --- Enrich entities with cluster/department for sorting ---
                 entityList = entityList.map(item => {
                     const entity = item.entity;
                     const type = item.type;
@@ -2140,7 +2126,7 @@
                 generatePrintPreviewWithEntities(
                     entityList, month, year, selectedColumns, itemsPerPage,
                     utilityTypes, shouldPaginate, hasSubtotal, groupByEntity,
-                    showAllEntities, approvalDetails, subtotalOptions
+                    showAllEntities, approvalDetails, subtotalOptions, hideNegativeBills
                 );
 
                 updateProcessingStep(2, '✅ Done! Opening print preview...', 100);
