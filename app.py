@@ -195,6 +195,10 @@ def restore_all_data_stream(backup_data):
     """
     Generator that yields progress messages as it restores data.
     Each yield is a JSON string like {"progress": 10, "message": "Clearing tables..."}
+
+    CHANGED: Now PRESERVES original IDs from the backup file so that
+    entity_id references in utility_bills remain valid after restore.
+    Also resets sequences at the end to prevent future ID collisions.
     """
     errors = []
     try:
@@ -243,26 +247,29 @@ def restore_all_data_stream(backup_data):
 
         print(f"📊 Data counts: FY={len(financial_years)}, Schools={len(schools)}, Depts={len(departments)}, Bills={len(bills)}, SUT={len(sut_expenses)}")
 
-        def remove_id(records):
-            return [{k: v for k, v in r.items() if k != 'id'} for r in records]
+        # ============ CHANGED: Preserve IDs from backup ============
+        def keep_ids(records):
+            # Preserve all fields INCLUDING id, so entity_id references stay valid
+            return [dict(r) for r in records]
+        # ============ END CHANGE ============
 
-        # Prepare functions for nested JSON
+        # Prepare functions for nested JSON (also preserve id now)
         def prepare_school(school):
-            school_copy = {k: v for k, v in school.items() if k != 'id'}
+            school_copy = dict(school)  # keep id and all fields
             for field in ['water_accounts', 'electricity_accounts', 'telephone_accounts']:
                 if field in school_copy and isinstance(school_copy[field], (list, dict)):
                     school_copy[field] = json.dumps(school_copy[field])
             return school_copy
 
         def prepare_department(dept):
-            dept_copy = {k: v for k, v in dept.items() if k != 'id'}
+            dept_copy = dict(dept)  # keep id and all fields
             for field in ['water_accounts', 'electricity_accounts', 'telephone_accounts']:
                 if field in dept_copy and isinstance(dept_copy[field], (list, dict)):
                     dept_copy[field] = json.dumps(dept_copy[field])
             return dept_copy
 
         def prepare_bill(bill):
-            bill_copy = {k: v for k, v in bill.items() if k != 'id'}
+            bill_copy = dict(bill)  # keep id and all fields
             # Ensure numeric fields are floats
             numeric_fields = ['current_charges', 'late_charges', 'unsettled_charges', 
                               'amount_paid', 'consumption_m3', 'consumption_kwh']
@@ -338,7 +345,7 @@ def restore_all_data_stream(backup_data):
         current_progress = 30
 
         if financial_years:
-            yield from batch_insert('financial_years', remove_id(financial_years), chunk_size=10,
+            yield from batch_insert('financial_years', keep_ids(financial_years), chunk_size=10,
                                     progress_start=current_progress, progress_step=10)
             current_progress += 10
         else:
@@ -373,12 +380,22 @@ def restore_all_data_stream(backup_data):
             yield {"progress": current_progress, "message": "No bills to insert"}
 
         if sut_expenses:
-            yield from batch_insert('sut_office_expenses', remove_id(sut_expenses), chunk_size=10,
+            yield from batch_insert('sut_office_expenses', keep_ids(sut_expenses), chunk_size=10,
                                     progress_start=current_progress, progress_step=10)
             current_progress += 10
         else:
             current_progress += 10
             yield {"progress": current_progress, "message": "No SUT expenses to insert"}
+
+        # ============ CHANGED: Reset sequences so future inserts don't collide ============
+        try:
+            print("🔧 Resetting database sequences...")
+            supabase.rpc('reset_sequences').execute()
+            print("✅ Sequences reset successfully")
+        except Exception as e:
+            print(f"⚠️ Could not reset sequences: {e}")
+            errors.append(f"Sequence reset failed: {e}. Please run 'SELECT reset_sequences();' in Supabase SQL Editor.")
+        # ============ END CHANGE ============
 
         if errors:
             yield {"progress": 100, "message": "Restore completed with errors", "errors": errors}
@@ -1113,7 +1130,7 @@ def export_electricity_bills_csv_to_string():
         ])
     return output.getvalue()
 
-# ============ EXPORT TELEPHONE BILLS CSV (flattened by phone) ============
+# ============ EXPORT TELEPHONE BILLS CSV ============
 def export_telephone_bills_csv():
     output = io.StringIO()
     writer = csv.writer(output)
@@ -1146,29 +1163,13 @@ def export_telephone_bills_csv():
                                     'total': phone.get('totalAmount', 0)
                                 })
                         else:
-                            phone_rows.append({
-                                'number': '',
-                                'rental': 0,
-                                'total': 0
-                            })
+                            phone_rows.append({'number': '', 'rental': 0, 'total': 0})
                 else:
-                    phone_rows.append({
-                        'number': bill.get('phone_number', ''),
-                        'rental': 0,
-                        'total': 0
-                    })
+                    phone_rows.append({'number': bill.get('phone_number', ''), 'rental': 0, 'total': 0})
             except:
-                phone_rows.append({
-                    'number': bill.get('phone_number', ''),
-                    'rental': 0,
-                    'total': 0
-                })
+                phone_rows.append({'number': bill.get('phone_number', ''), 'rental': 0, 'total': 0})
         else:
-            phone_rows.append({
-                'number': bill.get('phone_number', ''),
-                'rental': 0,
-                'total': 0
-            })
+            phone_rows.append({'number': bill.get('phone_number', ''), 'rental': 0, 'total': 0})
 
         if not phone_rows:
             phone_rows.append({'number': '', 'rental': 0, 'total': 0})
@@ -1241,29 +1242,13 @@ def export_telephone_bills_csv_to_string():
                                     'total': phone.get('totalAmount', 0)
                                 })
                         else:
-                            phone_rows.append({
-                                'number': '',
-                                'rental': 0,
-                                'total': 0
-                            })
+                            phone_rows.append({'number': '', 'rental': 0, 'total': 0})
                 else:
-                    phone_rows.append({
-                        'number': bill.get('phone_number', ''),
-                        'rental': 0,
-                        'total': 0
-                    })
+                    phone_rows.append({'number': bill.get('phone_number', ''), 'rental': 0, 'total': 0})
             except:
-                phone_rows.append({
-                    'number': bill.get('phone_number', ''),
-                    'rental': 0,
-                    'total': 0
-                })
+                phone_rows.append({'number': bill.get('phone_number', ''), 'rental': 0, 'total': 0})
         else:
-            phone_rows.append({
-                'number': bill.get('phone_number', ''),
-                'rental': 0,
-                'total': 0
-            })
+            phone_rows.append({'number': bill.get('phone_number', ''), 'rental': 0, 'total': 0})
 
         if not phone_rows:
             phone_rows.append({'number': '', 'rental': 0, 'total': 0})
@@ -1305,7 +1290,7 @@ def format_file_size(size):
         size /= 1024.0
     return f"{size:.1f} TB"
 
-# ============ BATCH UPDATE API (FIXED – handles water, electricity, and telephone) ============
+# ============ BATCH UPDATE API ============
 @app.route('/api/utility-bills/batch-update', methods=['POST'])
 def batch_update_utility_bills():
     try:
@@ -1357,7 +1342,7 @@ def batch_update_utility_bills():
                 elif entity_type == 'department':
                     entity_name = dept_names.get(entity_id, '')
                 
-                # ========== HANDLE TELEPHONE (unchanged) ==========
+                # ========== HANDLE TELEPHONE ==========
                 if utility_type == 'telephone':
                     account_number = bill_data.get('account_number', '')
                     bill_number = bill_data.get('bill_number', '')
@@ -1443,14 +1428,12 @@ def batch_update_utility_bills():
                         if result.data:
                             print(f"   📊 New bill ID: {result.data[0]['id']}")
                     success_count += 1
-                    continue  # skip water/electricity handling
+                    continue
                 
-                # ========== HANDLE WATER & ELECTRICITY (FIXED – fallback removed) ==========
-                # Normalize account and meter for matching
+                # ========== HANDLE WATER & ELECTRICITY ==========
                 account_number = (bill_data.get('account_number', '') or '').strip()
                 meter_number = (bill_data.get('meter_number', '') or '').strip()
                 
-                # Helper to normalise (remove spaces, dashes, parentheses)
                 def normalize_account(acc):
                     if not acc:
                         return ''
@@ -1464,13 +1447,10 @@ def batch_update_utility_bills():
                 acc_norm = normalize_account(account_number)
                 meter_norm = normalize_meter(meter_number)
                 
-                # Try to find existing bill:
-                # 1. If bill_data has an id, use that directly
                 if bill_data.get('id'):
                     existing_id = bill_data['id']
                     print(f"📌 Using provided bill ID: {existing_id}")
                 else:
-                    # Fetch all bills for this entity/month/year to filter in Python
                     all_bills_resp = supabase.table("utility_bills") \
                         .select("*") \
                         .eq("utility_type", utility_type) \
@@ -1482,30 +1462,24 @@ def batch_update_utility_bills():
                     
                     existing_bill = None
                     if all_bills_resp.data:
-                        # Try exact match on account + meter (normalised)
                         for b in all_bills_resp.data:
                             b_acc = normalize_account(b.get('account_number', ''))
                             b_meter = normalize_meter(b.get('meter_number', ''))
                             if b_acc == acc_norm and b_meter == meter_norm:
                                 existing_bill = b
                                 break
-                        # If meter is empty, try account-only
                         if not existing_bill and not meter_norm:
                             for b in all_bills_resp.data:
                                 b_acc = normalize_account(b.get('account_number', ''))
                                 if b_acc == acc_norm:
                                     existing_bill = b
                                     break
-                        # REMOVED FALLBACK: do NOT use a single bill if no match
-                        # if not existing_bill and len(all_bills_resp.data) == 1:
-                        #     existing_bill = all_bills_resp.data[0]
                     
                     if existing_bill:
                         existing_id = existing_bill['id']
                     else:
                         existing_id = None
                 
-                # Prepare record
                 record = {
                     "utility_type": utility_type,
                     "entity_type": entity_type,
@@ -1860,7 +1834,7 @@ def data_management():
 def sut_office():
     return render_template('sut_office.html')
 
-# ============ ENTITIES API FOR REPORTS ============
+# ============ ENTITIES API ============
 @app.route('/api/entities', methods=['GET'])
 def get_entities():
     try:
@@ -1932,10 +1906,8 @@ def generate_report():
             response = query.execute()
             bills = response.data if response.data else []
 
-        # ====== Parse telephone notes to populate missing fields ======
         for idx, bill in enumerate(bills):
             if bill.get('utility_type') == 'telephone':
-                # Initialize defaults from top-level fields
                 bill['billNumber'] = bill.get('bill_number', '')
                 bill['totalAccountCharges'] = float(bill.get('current_charges', 0))
                 bill['previousOutstanding'] = float(bill.get('unsettled_charges', 0))
@@ -1957,11 +1929,9 @@ def generate_report():
                         account_number = bill.get('account_number')
                         acc_data = None
 
-                        # Try to find by account_number
                         if account_number and account_number in accounts:
                             acc_data = accounts[account_number]
                         else:
-                            # Fallback: use the first account that has a billNumber, or just the first
                             for acc_key, acc_val in accounts.items():
                                 if acc_val.get('billNumber'):
                                     acc_data = acc_val
@@ -1982,21 +1952,8 @@ def generate_report():
                                 bill['phoneNumber'] = phones[0].get('phoneNumber', bill['phoneNumber'])
                                 bill['rentalAmount'] = sum(float(p.get('rentalAmount', 0)) for p in phones)
                                 bill['totalAmount'] = sum(float(p.get('totalAmount', 0)) for p in phones)
-
-                            # Debug: print first few bills to server console
-                            if idx < 5:
-                                print(f"📞 Debug bill {idx+1}: ID={bill.get('id')}, account={account_number}, keys={list(accounts.keys())}, billNumber={bill['billNumber']}, totalAccountCharges={bill['totalAccountCharges']}")
-                        else:
-                            if idx < 5:
-                                print(f"⚠️ Debug bill {idx+1}: No account data found, using defaults")
                     except Exception as e:
-                        if idx < 5:
-                            print(f"❌ Debug bill {idx+1}: Error parsing notes: {e}")
-                else:
-                    if idx < 5:
-                        print(f"ℹ️ Debug bill {idx+1}: No notes field, using top-level defaults")
-
-        # ====== End of telephone parsing ======
+                        pass
 
         if selection_type == 'entityType':
             entity_type_filter = data.get('entity_type', 'all')
@@ -2017,9 +1974,7 @@ def generate_report():
             if not school_ids and not department_ids:
                 filtered_bills = bills
             bills = filtered_bills
-            print(f"📊 After specific entity filter: {len(bills)} bills")
 
-        # Build dictionaries for entity name lookup (both int and str keys)
         school_dict = {}
         dept_dict = {}
         try:
@@ -2044,7 +1999,6 @@ def generate_report():
         for bill in bills:
             bill_data = dict(bill)
             entity_id = bill_data.get('entity_id')
-            # Convert to int and str for lookup
             if entity_id is not None:
                 try:
                     entity_id_int = int(entity_id)
@@ -2056,7 +2010,6 @@ def generate_report():
                 entity_id_int = None
                 entity_id_str = None
 
-            # Try to get entity name from dictionaries, fallback to the bill's own entity_name
             if bill_data['entity_type'] == 'school':
                 bill_data['entity_name'] = school_dict.get(entity_id_int) or school_dict.get(entity_id_str) or bill_data.get('entity_name', 'Unknown School')
             elif bill_data['entity_type'] == 'department':
@@ -2064,13 +2017,11 @@ def generate_report():
             else:
                 bill_data['entity_name'] = bill_data.get('entity_name', 'Unknown')
 
-            # Ensure telephone fields are present
             if bill_data['utility_type'] == 'telephone':
                 bill_data['billNumber'] = bill_data.get('billNumber', '')
                 bill_data['totalAccountCharges'] = bill_data.get('totalAccountCharges', 0)
                 bill_data['phoneNumber'] = bill_data.get('phoneNumber', '')
 
-            # Convert numeric fields
             bill_data['current_charges'] = float(bill_data.get('current_charges') or 0)
             bill_data['late_charges'] = float(bill_data.get('late_charges') or 0)
             bill_data['unsettled_charges'] = float(bill_data.get('unsettled_charges') or 0)
@@ -2106,7 +2057,6 @@ def create_financial_year():
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         data = request.get_json()
-        print(f"📅 Received financial year data: {data}")
         financial_year_data = {
             "financial_year": data.get('financialYear'),
             "start_year": int(data.get('startYear')),
@@ -2120,27 +2070,22 @@ def create_financial_year():
         }
         response = supabase.table("financial_years").insert(financial_year_data).execute()
         if response.data:
-            print("✅ Financial year created successfully")
             return jsonify({
                 'message': 'Financial year created successfully',
                 'financial_year': response.data[0]
             })
         else:
-            print("❌ Financial year creation failed")
             return jsonify({'error': 'Failed to create financial year'}), 500
     except Exception as e:
         print(f"❌ Financial year POST error: {e}")
-        print(traceback.format_exc())
         return jsonify({'error': f'Failed to create financial year: {str(e)}'}), 500
 
 @app.route('/api/financial-years/<int:fy_id>', methods=['PUT'])
 def update_financial_year(fy_id):
     try:
-        print(f"📅 PUT /api/financial-years/{fy_id} called")
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         data = request.get_json()
-        print(f"📅 Update financial year data: {data}")
         financial_year_data = {}
         if data.get('financialYear'):
             financial_year_data["financial_year"] = data.get('financialYear')
@@ -2158,26 +2103,21 @@ def update_financial_year(fy_id):
             financial_year_data["telephone_allocated"] = float(data.get('telephoneAllocated', 10000))
         if data.get('sutOfficeAllocated') is not None:
             financial_year_data["sut_office_allocated"] = float(data.get('sutOfficeAllocated', 0))
-        print(f"📅 Final update data: {financial_year_data}")
         response = supabase.table("financial_years").update(financial_year_data).eq("id", fy_id).execute()
         if response.data:
-            print("✅ Financial year updated successfully")
             return jsonify({
                 'message': 'Financial year updated successfully',
                 'financial_year': response.data[0]
             })
         else:
-            print("❌ Financial year update failed")
             return jsonify({'error': 'Failed to update financial year'}), 500
     except Exception as e:
         print(f"❌ Financial year PUT error: {e}")
-        print(traceback.format_exc())
         return jsonify({'error': f'Failed to update financial year: {str(e)}'}), 500
 
 @app.route('/api/financial-years/current')
 def get_current_financial_year():
     try:
-        print("📅 GET /api/financial-years/current called")
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         current_date = datetime.now()
@@ -2216,7 +2156,6 @@ def get_current_financial_year():
 @app.route('/api/financial-years/<int:fy_id>', methods=['DELETE'])
 def delete_financial_year(fy_id):
     try:
-        print(f"📅 DELETE /api/financial-years/{fy_id} called")
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         response = supabase.table("financial_years").delete().eq("id", fy_id).execute()
@@ -2235,7 +2174,6 @@ def delete_financial_year(fy_id):
 @app.route('/api/sut-office-expenses', methods=['GET'])
 def get_sut_office_expenses():
     try:
-        print("💰 GET /api/sut-office-expenses called")
         if not supabase:
             return jsonify({'data': []}), 500
         response = supabase.table("sut_office_expenses").select("*").order("expense_date", desc=True).execute()
@@ -2247,11 +2185,9 @@ def get_sut_office_expenses():
 @app.route('/api/sut-office-expenses', methods=['POST'])
 def create_sut_office_expense():
     try:
-        print("💰 POST /api/sut-office-expenses called")
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         data = request.get_json()
-        print(f"💰 Received expense data: {data}")
         expense_date = data.get('expenseDate')
         if expense_date:
             date_obj = datetime.strptime(expense_date, '%Y-%m-%d')
@@ -2272,28 +2208,23 @@ def create_sut_office_expense():
         }
         response = supabase.table("sut_office_expenses").insert(expense_data).execute()
         if response.data:
-            print("✅ SUT Office expense created successfully")
             return jsonify({
                 'success': True,
                 'message': 'Expense recorded successfully',
                 'expense': response.data[0]
             })
         else:
-            print("❌ Expense creation failed")
             return jsonify({'error': 'Failed to create expense'}), 500
     except Exception as e:
         print(f"❌ SUT Office expense POST error: {e}")
-        print(traceback.format_exc())
         return jsonify({'error': f'Failed to create expense: {str(e)}'}), 500
 
 @app.route('/api/sut-office-expenses/<int:expense_id>', methods=['PUT'])
 def update_sut_office_expense(expense_id):
     try:
-        print(f"💰 PUT /api/sut-office-expenses/{expense_id} called")
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         data = request.get_json()
-        print(f"💰 Update expense data: {data}")
         expense_date = data.get('expenseDate')
         if expense_date:
             date_obj = datetime.strptime(expense_date, '%Y-%m-%d')
@@ -2312,24 +2243,20 @@ def update_sut_office_expense(expense_id):
         }
         response = supabase.table("sut_office_expenses").update(expense_data).eq("id", expense_id).execute()
         if response.data:
-            print("✅ SUT Office expense updated successfully")
             return jsonify({
                 'success': True,
                 'message': 'Expense updated successfully',
                 'expense': response.data[0]
             })
         else:
-            print("❌ Expense update failed")
             return jsonify({'error': 'Failed to update expense'}), 500
     except Exception as e:
         print(f"❌ SUT Office expense PUT error: {e}")
-        print(traceback.format_exc())
         return jsonify({'error': f'Failed to update expense: {str(e)}'}), 500
 
 @app.route('/api/sut-office-expenses/<int:expense_id>', methods=['DELETE'])
 def delete_sut_office_expense(expense_id):
     try:
-        print(f"💰 DELETE /api/sut-office-expenses/{expense_id} called")
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         response = supabase.table("sut_office_expenses").delete().eq("id", expense_id).execute()
@@ -2348,7 +2275,8 @@ def delete_sut_office_expense(expense_id):
 @app.route('/api/dashboard-data')
 def dashboard_data():
     try:
-        print("📈 GET /api/dashboard-data called")
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
         fy_response = supabase.table("financial_years").select("*").order("start_year", desc=True).limit(1).execute()
         if not fy_response.data or len(fy_response.data) == 0:
             current_date = datetime.now()
@@ -2375,19 +2303,9 @@ def dashboard_data():
             if fy_create_response.data:
                 current_fy = fy_create_response.data[0]
             else:
-                current_fy = {
-                    'financial_year': f'{start_year}-{end_year}',
-                    'start_year': start_year,
-                    'end_year': end_year,
-                    'total_allocated': 60000.00,
-                    'water_allocated': 15000.00,
-                    'electricity_allocated': 35000.00,
-                    'telephone_allocated': 10000.00,
-                    'sut_office_allocated': 0.00
-                }
+                current_fy = default_fy
         else:
             current_fy = fy_response.data[0]
-        print(f"📈 Current financial year: {current_fy['financial_year']}")
         start_year = current_fy['start_year']
         end_year = current_fy['end_year']
         query = supabase.table("utility_bills").select("*")
@@ -2487,26 +2405,22 @@ def dashboard_data():
         })
     except Exception as e:
         print(f"❌ Dashboard data error: {e}")
-        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 # ============ SCHOOLS API ============
 @app.route('/api/schools', methods=['GET'])
 def api_schools():
     try:
-        print("🏫 GET /api/schools called")
         if not supabase:
             return jsonify([]), 500
         response = supabase.table("schools").select("*").order("display_order").order("cluster_number").order("id").execute()
-        schools = response.data if response.data else []
-        return jsonify(schools)
+        return jsonify(response.data if response.data else [])
     except Exception as e:
         print(f"❌ Schools GET error: {e}")
         return jsonify([]), 500
 
 @app.route('/api/schools/ensure-order', methods=['POST'])
 def ensure_school_order():
-    """Reset ALL schools to creation order (display_order = id)."""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
@@ -2518,7 +2432,7 @@ def ensure_school_order():
             updated += 1
         return jsonify({
             'success': True,
-            'message': f'Reset {updated} schools to creation order (display_order = id)'
+            'message': f'Reset {updated} schools to creation order'
         })
     except Exception as e:
         print(f"❌ Error resetting school order: {e}")
@@ -2527,7 +2441,6 @@ def ensure_school_order():
 @app.route('/api/schools', methods=['POST'])
 def create_school():
     try:
-        print("🏫 POST /api/schools called")
         data = request.get_json()
         if not data.get('name'):
             return jsonify({'success': False, 'error': 'School name is required'}), 400
@@ -2587,7 +2500,6 @@ def create_school():
 def update_school(school_id):
     try:
         data = request.get_json()
-        print(f"📥 Updating school ID {school_id} with data: {data}")
         water_accounts = data.get('waterAccounts', [])
         electricity_accounts = data.get('electricityAccounts', [])
         telephone_accounts = data.get('telephoneAccounts', [])
@@ -2611,13 +2523,8 @@ def update_school(school_id):
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and len(telephone_accounts) > 0 and telephone_accounts[0].get('numbers') and len(telephone_accounts[0]['numbers']) > 0 else '',
             "display_order": data.get('displayOrder')
         }
-        
-        # Remove None values so they don't overwrite existing data
         school_data = {k: v for k, v in school_data.items() if v is not None}
-
-        print(f"📦 Prepared school_data: {school_data}")
         response = supabase.table("schools").update(school_data).eq("id", school_id).execute()
-        print(f"✅ Supabase response: {response}")
         if hasattr(response, 'data') and response.data:
             return jsonify({
                 'success': True,
@@ -2628,7 +2535,6 @@ def update_school(school_id):
             return jsonify({'success': False, 'error': 'Failed to update school'}), 500
     except Exception as e:
         print(f"❌ Update school error: {e}")
-        import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'Failed to update school: {str(e)}'}), 500
 
@@ -2656,7 +2562,6 @@ def delete_school(school_id):
 @app.route('/api/departments', methods=['GET'])
 def api_departments():
     try:
-        print("🏢 GET /api/departments called")
         if not supabase:
             return jsonify([]), 500
         response = supabase.table("departments").select("*").order("display_order").order("department_name").order("id").execute()
@@ -2667,25 +2572,20 @@ def api_departments():
 
 @app.route('/api/departments/ensure-order', methods=['POST'])
 def ensure_department_order():
-    """Reset ALL departments to creation order (display_order = id)."""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
-
-        # Get all department IDs
         response = supabase.table("departments").select("id").execute()
         depts = response.data if response.data else []
         if not depts:
             return jsonify({'success': True, 'message': 'No departments to update'})
-
         updated = 0
         for dept in depts:
             supabase.table("departments").update({"display_order": dept['id']}).eq("id", dept['id']).execute()
             updated += 1
-
         return jsonify({
             'success': True,
-            'message': f'Reset {updated} departments to creation order (display_order = id)'
+            'message': f'Reset {updated} departments to creation order'
         })
     except Exception as e:
         print(f"❌ Error resetting order: {e}")
@@ -2695,7 +2595,6 @@ def ensure_department_order():
 @app.route('/api/departments', methods=['POST'])
 def create_department():
     try:
-        print("🏢 POST /api/departments called")
         data = request.get_json()
         if not data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
@@ -2823,10 +2722,7 @@ def update_department(department_id):
             "telephone_number": telephone_accounts[0].get('numbers', [{}])[0].get('phoneNumber', '') if telephone_accounts and telephone_accounts[0].get('numbers') else '',
             "display_order": data.get('displayOrder')
         }
-        
-        # Remove None values so they don't overwrite existing data
         department_data = {k: v for k, v in department_data.items() if v is not None}
-        
         response = supabase.table("departments").update(department_data).eq("id", department_id).execute()
         if hasattr(response, 'data') and response.data:
             return jsonify({
@@ -2861,11 +2757,10 @@ def delete_department(department_id):
     except Exception as e:
         return jsonify({'success': False, 'error': f'Failed to delete department: {str(e)}'}), 500
 
-# ============ UTILITY BILLS API (CREATE) ============
+# ============ UTILITY BILLS (CREATE) ============
 @app.route('/api/utility-bills', methods=['POST'])
 def create_utility_bill():
     try:
-        print("💡 POST /api/utility-bills called")
         data = request.get_json()
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -2947,18 +2842,14 @@ def create_utility_bill():
             return jsonify({'error': 'Failed to create utility bill'}), 500
     except Exception as e:
         print(f"❌ Create utility bill error: {e}")
-        print(traceback.format_exc())
         return jsonify({'error': f'Failed to create utility bill: {str(e)}'}), 500
 
-# ============ UPDATE UTILITY BILL (PUT) ============
 @app.route('/api/utility-bills/<int:bill_id>', methods=['PUT'])
 def update_utility_bill(bill_id):
     try:
-        print(f"💡 PUT /api/utility-bills/{bill_id} called")
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         data = request.get_json()
-        print(f"💡 Update bill data: {data}")
         bill_data = {
             "current_charges": float(data.get('current_charges', 0)),
             "late_charges": float(data.get('late_charges', 0)),
@@ -2979,45 +2870,36 @@ def update_utility_bill(bill_id):
             bill_data["notes"] = data.get('notes')
         response = supabase.table("utility_bills").update(bill_data).eq("id", bill_id).execute()
         if response.data:
-            print("✅ Utility bill updated successfully")
             return jsonify({
                 'success': True,
                 'message': 'Bill updated successfully',
                 'bill': response.data[0]
             })
         else:
-            print("❌ Bill update failed")
             return jsonify({'error': 'Failed to update bill'}), 500
     except Exception as e:
         print(f"❌ Utility bill PUT error: {e}")
-        print(traceback.format_exc())
         return jsonify({'error': f'Failed to update bill: {str(e)}'}), 500
 
-# ============ DELETE UTILITY BILL ============
 @app.route('/api/utility-bills/<int:bill_id>', methods=['DELETE'])
 def delete_utility_bill(bill_id):
     try:
-        print(f"💡 DELETE /api/utility-bills/{bill_id} called")
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         check_response = supabase.table("utility_bills").select("id").eq("id", bill_id).execute()
         if not check_response.data or len(check_response.data) == 0:
-            print(f"❌ Bill with ID {bill_id} not found")
             return jsonify({'error': 'Bill not found'}), 404
         response = supabase.table("utility_bills").delete().eq("id", bill_id).execute()
         if response.data:
-            print(f"✅ Bill with ID {bill_id} deleted successfully")
             return jsonify({
                 'success': True,
                 'message': 'Bill deleted successfully',
                 'deleted_id': bill_id
             })
         else:
-            print(f"❌ Failed to delete bill with ID {bill_id}")
             return jsonify({'error': 'Failed to delete bill'}), 500
     except Exception as e:
         print(f"❌ Utility bill DELETE error: {e}")
-        print(traceback.format_exc())
         return jsonify({'error': f'Failed to delete bill: {str(e)}'}), 500
 
 # ============ STATISTICS API ============
